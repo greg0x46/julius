@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -325,6 +326,75 @@ func TestProviderErrorFallsBackToStaleStoredRate(t *testing.T) {
 		// Never a rate from after the asked day.
 		if _, err := s.On(ctx, "USD", "BRL", wed.AddDate(0, 0, -1)); !errors.Is(err, ErrUnavailable) {
 			t.Fatalf("err = %v, want ErrUnavailable", err)
+		}
+	})
+}
+
+func TestProviderFailureCooldownIsScopedToPair(t *testing.T) {
+	dbtest.Each(t, func(t *testing.T, conn *sql.DB) {
+		p := &fakeProvider{}
+		p.set("EUR", "BRL", sun, "6.25", fri)
+		p.set("USD", "BRL", sun, "5", fri)
+		s, _ := newService(conn, p, sun.Add(13*time.Hour))
+		ctx := context.Background()
+
+		if _, err := s.Latest(ctx, "ARS", "BRL"); !errors.Is(err, ErrUnavailable) {
+			t.Fatalf("unsupported pair: %v, want ErrUnavailable", err)
+		}
+		for _, base := range []string{"EUR", "USD"} {
+			rate, err := s.Latest(ctx, base, "BRL")
+			if err != nil || rate.Stale || rate.Source != "fake" {
+				t.Fatalf("%s/BRL after unsupported pair = %+v, %v", base, rate, err)
+			}
+		}
+		if _, err := s.Latest(ctx, "ars", "brl"); !errors.Is(err, ErrUnavailable) {
+			t.Fatalf("unsupported pair repeated: %v, want ErrUnavailable", err)
+		}
+		if p.calls != 3 {
+			t.Fatalf("provider calls = %d, want 3", p.calls)
+		}
+	})
+}
+
+func TestProviderFailureCooldownIsScopedToDay(t *testing.T) {
+	dbtest.Each(t, func(t *testing.T, conn *sql.DB) {
+		p := &fakeProvider{}
+		p.set("USD", "BRL", wed, "5.4", wed)
+		s, _ := newService(conn, p, sun)
+		ctx := context.Background()
+		unavailable := day(1990, 1, 1)
+
+		if _, err := s.On(ctx, "USD", "BRL", unavailable); !errors.Is(err, ErrUnavailable) {
+			t.Fatalf("unavailable historical day: %v, want ErrUnavailable", err)
+		}
+		rate, err := s.On(ctx, "USD", "BRL", wed)
+		if err != nil || rate.Stale || !rate.Value.Equal(dec("5.4")) || !rate.EffectiveOn.Equal(wed) {
+			t.Fatalf("available historical day = %+v, %v", rate, err)
+		}
+		if _, err := s.On(ctx, "USD", "BRL", unavailable); !errors.Is(err, ErrUnavailable) {
+			t.Fatalf("unavailable historical day repeated: %v, want ErrUnavailable", err)
+		}
+		if p.calls != 2 {
+			t.Fatalf("provider calls = %d, want 2", p.calls)
+		}
+	})
+}
+
+func TestConcurrentFailedLookupsReuseCooldown(t *testing.T) {
+	dbtest.Each(t, func(t *testing.T, conn *sql.DB) {
+		p := &fakeProvider{err: errors.New("offline")}
+		s, _ := newService(conn, p, sun)
+		var wg sync.WaitGroup
+		for range 16 {
+			wg.Go(func() {
+				if _, err := s.Latest(context.Background(), "USD", "BRL"); !errors.Is(err, ErrUnavailable) {
+					t.Errorf("err = %v, want ErrUnavailable", err)
+				}
+			})
+		}
+		wg.Wait()
+		if p.calls != 1 {
+			t.Fatalf("provider calls = %d, want 1", p.calls)
 		}
 	})
 }

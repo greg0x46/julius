@@ -89,7 +89,7 @@ type Service struct {
 	// mu serializes provider calls, so concurrent reads of the same missing
 	// rate cost one request.
 	mu       sync.Mutex
-	failedAt time.Time
+	failedAt map[string]time.Time
 }
 
 // New builds a Service. A nil provider uses Frankfurter.
@@ -104,6 +104,7 @@ func New(conn *sql.DB, provider Provider) *Service {
 		TTL:      time.Hour,
 		MaxLag:   7 * 24 * time.Hour,
 		Cooldown: time.Minute,
+		failedAt: make(map[string]time.Time),
 	}
 }
 
@@ -147,17 +148,24 @@ func (s *Service) resolve(ctx context.Context, base, quote string, day time.Time
 	}
 
 	var fetchErr error
-	if !s.failedAt.IsZero() && s.now().Sub(s.failedAt) < s.Cooldown {
+	now := s.now()
+	for key, failedAt := range s.failedAt {
+		if now.Sub(failedAt) >= s.Cooldown {
+			delete(s.failedAt, key)
+		}
+	}
+	key := base + "/" + quote + "/" + formatDate(day)
+	if _, coolingDown := s.failedAt[key]; coolingDown {
 		fetchErr = errors.New("provider cooling down after a failure")
 	} else {
 		var rate Rate
 		rate, fetchErr = s.fetch(ctx, base, quote, day)
 		if fetchErr == nil {
-			s.failedAt = time.Time{}
+			delete(s.failedAt, key)
 			return s.finish(&rate, nil)
 		}
 		if ctx.Err() == nil {
-			s.failedAt = s.now()
+			s.failedAt[key] = s.now()
 		}
 	}
 
