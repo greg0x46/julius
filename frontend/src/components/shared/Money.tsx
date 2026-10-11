@@ -1,12 +1,12 @@
 import {
-  formatToneBRL,
+  formatToneMoney,
   moneyTone,
   type MoneyDirection,
   type MoneyToneKind,
 } from "../../presentation/money";
 
 interface MoneyProps {
-  /** Decimal string in BRL, as the API sends it (e.g. "-1234.50"). */
+  currencyCode?: string;
   value: string;
   /** How the figure reads — see `moneyTone` for the rule behind each kind. */
   tone: MoneyToneKind;
@@ -18,13 +18,13 @@ interface MoneyProps {
 }
 
 /**
- * A BRL amount with the app's one money display rule: tabular figures, and
+ * An amount with the app's one money display rule: tabular figures, and
  * sign and colour decided by `tone` (never red for an ordinary expense).
  */
-export function Money({ value, tone, size, direction, className = "" }: MoneyProps) {
+export function Money({ value, currencyCode = "BRL", tone, size, direction, className = "" }: MoneyProps) {
   const { color } = moneyTone(value, tone, direction);
   const classes = ["money", `money-${color}`, size ? `money-size-${size}` : "", className]
     .filter(Boolean)
     .join(" ");
-  return <span className={classes}>{formatToneBRL(value, tone, direction)}</span>;
+  return <span className={classes}>{formatToneMoney(value, currencyCode, tone, direction)}</span>;
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatToneBRL, moneyTone } from "./money";
+import { formatToneBRL, formatToneMoney, moneyTone } from "./money";
 
 describe("moneyTone", () => {
   it("flow: inflow is tinted and signed, outflow keeps the text colour", () => {
@@ -35,5 +35,15 @@ describe("formatToneBRL", () => {
     ["-0.00", "balance", undefined, "R$ 0,00"],
   ] as const)("%s as %s/%s -> %s", (value, kind, direction, expected) => {
     expect(formatToneBRL(value, kind, direction)).toBe(expected);
+  });
+});
+
+describe("currency-aware tones", () => {
+  it.each(["BRL", "USD", "EUR"])("preserves signs and tones in %s", (currency) => {
+    const prefix = currency === "BRL" ? "R$" : currency;
+    expect(formatToneMoney("1234.50", currency, "flow", "inflow")).toBe(`+${prefix}\u00a01.234,50`);
+    expect(formatToneMoney("1234.50", currency, "flow", "outflow")).toBe(`-${prefix}\u00a01.234,50`);
+    expect(formatToneMoney("-8", currency, "result")).toBe(`-${prefix}\u00a08,00`);
+    expect(formatToneMoney("-0.00", currency, "balance")).toBe(`${prefix}\u00a00,00`);
   });
 });
