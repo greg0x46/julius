@@ -33,15 +33,20 @@ func (s *Service) save(ctx context.Context, rate Rate) error {
 // cached is the row stored for the pair and day, in either orientation;
 // nil when there is none.
 func (s *Service) cached(ctx context.Context, base, quote string, day time.Time) (*Rate, error) {
+	var best *Rate
 	for _, p := range orientations(base, quote) {
 		rate, err := s.queryRate(ctx, p.inverted,
 			rateSelect+` WHERE base_currency = ? AND quote_currency = ? AND as_of = ?`,
 			p.base, p.quote, formatDate(day))
-		if rate != nil || err != nil {
-			return rate, err
+		if err != nil {
+			return nil, err
+		}
+		if rate != nil && (best == nil || rate.EffectiveOn.After(best.EffectiveOn) ||
+			rate.EffectiveOn.Equal(best.EffectiveOn) && rate.FetchedAt.After(best.FetchedAt)) {
+			best = rate
 		}
 	}
-	return nil, nil
+	return best, nil
 }
 
 // latestStored is the most recent rate in effect on or before day, in either
@@ -56,7 +61,8 @@ func (s *Service) latestStored(ctx context.Context, base, quote string, day time
 		if err != nil {
 			return nil, err
 		}
-		if rate != nil && (best == nil || rate.EffectiveOn.After(best.EffectiveOn)) {
+		if rate != nil && (best == nil || rate.EffectiveOn.After(best.EffectiveOn) ||
+			rate.EffectiveOn.Equal(best.EffectiveOn) && rate.FetchedAt.After(best.FetchedAt)) {
 			best = rate
 		}
 	}
