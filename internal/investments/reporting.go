@@ -216,3 +216,84 @@ func ManualOperationReporting(ctx context.Context, q Querier) (ManualReporting, 
 	}
 	return result, nil
 }
+
+// MonthlyMovements sums gross local principal flows, realized income and costs
+// per month, including local entries in integrated accounts. Reconciliation
+// never changes these totals; derived provider pivots are excluded.
+func MonthlyMovements(ctx context.Context, q Querier, accountID *string) ([]MonthlyMovement, error) {
+	query := `
+		SELECT kind, occurred_on, amount, fees, taxes
+		FROM investment_operations
+		WHERE source = 'manual'
+		  AND kind IN ('deposit', 'withdrawal', 'income', 'fee', 'tax', 'buy', 'sell')`
+	args := []any{}
+	if accountID != nil {
+		query += ` AND account_id = ?`
+		args = append(args, *accountID)
+	}
+	rows, err := q.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	byMonth := map[string]*MonthlyMovement{}
+	for rows.Next() {
+		var kindRaw, occurredRaw, amountRaw, feesRaw, taxesRaw string
+		if err := rows.Scan(&kindRaw, &occurredRaw, &amountRaw, &feesRaw, &taxesRaw); err != nil {
+			return nil, err
+		}
+		occurredOn, err := parseDate(occurredRaw)
+		if err != nil {
+			return nil, err
+		}
+		amount, err := decimal.NewFromString(amountRaw)
+		if err != nil {
+			return nil, fmt.Errorf("parse operation amount: %w", err)
+		}
+		fees, err := decimal.NewFromString(feesRaw)
+		if err != nil {
+			return nil, fmt.Errorf("parse operation fees: %w", err)
+		}
+		taxes, err := decimal.NewFromString(taxesRaw)
+		if err != nil {
+			return nil, fmt.Errorf("parse operation taxes: %w", err)
+		}
+		month := occurredOn.Format("2006-01")
+		movement := byMonth[month]
+		if movement == nil {
+			movement = &MonthlyMovement{Month: month}
+			byMonth[month] = movement
+		}
+		switch OperationKind(kindRaw) {
+		case OperationDeposit:
+			movement.Contributions = movement.Contributions.Add(amount)
+		case OperationWithdrawal:
+			movement.Withdrawals = movement.Withdrawals.Add(amount)
+		case OperationIncome:
+			movement.Income = movement.Income.Add(amount)
+		case OperationFee:
+			movement.Fees = movement.Fees.Add(amount)
+		case OperationTax:
+			movement.Taxes = movement.Taxes.Add(amount)
+		case OperationBuy, OperationSell:
+			movement.Fees = movement.Fees.Add(fees)
+			movement.Taxes = movement.Taxes.Add(taxes)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	result := make([]MonthlyMovement, 0, len(byMonth))
+	for _, movement := range byMonth {
+		// A month with only cost-free trades has nothing to report.
+		if movement.Contributions.IsZero() && movement.Withdrawals.IsZero() && movement.Income.IsZero() &&
+			movement.Fees.IsZero() && movement.Taxes.IsZero() {
+			continue
+		}
+		result = append(result, *movement)
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].Month < result[j].Month })
+	return result, nil
+}

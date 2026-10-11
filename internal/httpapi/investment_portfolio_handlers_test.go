@@ -741,6 +741,34 @@ func TestManualHoldingInIntegratedAccountOverHTTP(t *testing.T) {
 	}
 }
 
+func TestInvestmentMonthlyMovementsOverHTTP(t *testing.T) {
+	srv, _ := newTestServer(t)
+	account := investmentID(t, createCustodyAccount(t, srv, "Corretora"))
+	for _, op := range []map[string]any{
+		{"kind": "deposit", "occurred_on": "2026-01-10", "amount": "1000.00"},
+		{"kind": "deposit", "occurred_on": "2026-01-20", "amount": "500.00"},
+		{"kind": "withdrawal", "occurred_on": "2026-02-05", "amount": "200.00"},
+		{"kind": "fee", "occurred_on": "2026-02-06", "amount": "3.50"},
+	} {
+		op["account_id"], op["position_id"] = account, nil
+		investmentCall(t, srv, http.MethodPost, "/api/investment-operations", op, http.StatusCreated)
+	}
+
+	out := investmentCall(t, srv, http.MethodGet, "/api/investment-monthly-movements?account_id="+account, nil, http.StatusOK)
+	items, ok := out["items"].([]any)
+	if !ok || len(items) != 2 {
+		t.Fatalf("items = %+v, want two months", out["items"])
+	}
+	jan, feb := items[0].(map[string]any), items[1].(map[string]any)
+	assertInvestmentKeys(t, "movement", jan, []string{"month", "contributions", "withdrawals", "income", "fees", "taxes"})
+	if jan["month"] != "2026-01" || feb["month"] != "2026-02" {
+		t.Errorf("months = %v, %v", jan["month"], feb["month"])
+	}
+	assertMoney(t, "contributions", jan["contributions"], "1500.00")
+	assertMoney(t, "withdrawals", feb["withdrawals"], "200.00")
+	assertMoney(t, "fees", feb["fees"], "3.50")
+}
+
 func TestInvestmentSummaryOverHTTP(t *testing.T) {
 	srv, conn := newTestServer(t)
 	holding := insertInvestment(t, conn) // provider holding worth 1000.50

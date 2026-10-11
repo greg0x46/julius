@@ -55,7 +55,27 @@ Uma conciliação integral recebe motivo `investment_transfer` apenas se o
 lançamento ainda estava nos totais. Ignorado, categoria de transferência e
 demais motivos já atribuídos têm precedência e são mantidos.
 Gastos por categoria usam o restante; a curva de caixa preserva o movimento
-integral. Os agregados mensais distinguem aportes e resgates.
+integral.
+
+`investments.MonthlyMovements` deriva das operações locais (`source = manual`),
+inclusive em contas integradas, por mês (`YYYY-MM` de `occurred_on`),
+os valores brutos de aportes (`Contributions`), resgates (`Withdrawals`),
+rendimentos realizados (`Income`), taxas (`Fees`) e impostos (`Taxes`),
+opcionalmente filtrados por conta de custódia. Taxas e impostos incluem os
+custos das compras e vendas. Os valores não descontam conciliações: vincular um
+lançamento bancário nunca reduz o aporte ou resgate bruto do mês. Movimentos
+importados e seus pivôs de conciliação (`source = synced`) não entram;
+conciliar ou desfazer esses vínculos não altera os totais locais. Valorização,
+principal de compra/venda e transferências entre custódias não entram. Expostos em
+`GET /api/investment-monthly-movements` (`?account_id=` opcional), que devolve
+`items` com `month`, `contributions`, `withdrawals`, `income`, `fees` e `taxes`;
+`GET /api/investment-operations` segue entregando as operações brutas.
+
+Valorização e ganho não realizado (`Summary.UnrealizedGain`) nunca são
+rendimento realizado: não entram em `ManualReportingEntries`, em
+`MonthlyMovements.Income` nem nos totais de receita da timeline, embora alterem
+o patrimônio. Aporte e resgate conciliados mantêm o patrimônio; taxa reduz o
+patrimônio exatamente pelo seu valor.
 
 Editar ou excluir um lançamento bancário manual conciliado exige desfazer
 os vínculos primeiro. Ignorar um lançamento conciliado desfaz seus vínculos

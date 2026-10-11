@@ -1302,6 +1302,37 @@ func handleGetInvestmentSummary(conn *sql.DB) http.HandlerFunc {
 	}
 }
 
+type investmentMonthlyMovementDTO struct {
+	Month         string `json:"month"`
+	Contributions string `json:"contributions"`
+	Withdrawals   string `json:"withdrawals"`
+	Income        string `json:"income"`
+	Fees          string `json:"fees"`
+	Taxes         string `json:"taxes"`
+}
+
+func handleListInvestmentMonthlyMovements(conn *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		movements, err := investments.MonthlyMovements(r.Context(), conn, investmentQueryFilter(r, "account_id"))
+		if err != nil {
+			writeInvestmentProblem(w, err)
+			return
+		}
+		items := make([]investmentMonthlyMovementDTO, 0, len(movements))
+		for _, m := range movements {
+			items = append(items, investmentMonthlyMovementDTO{
+				Month:         m.Month,
+				Contributions: money.CanonicalDecimal(m.Contributions),
+				Withdrawals:   money.CanonicalDecimal(m.Withdrawals),
+				Income:        money.CanonicalDecimal(m.Income),
+				Fees:          money.CanonicalDecimal(m.Fees),
+				Taxes:         money.CanonicalDecimal(m.Taxes),
+			})
+		}
+		writeInvestmentItems(w, items)
+	}
+}
+
 // A compound action is committed together with its optional bank reconciliation.
 func handleCreateInvestmentOperations(conn *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
