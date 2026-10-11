@@ -87,6 +87,26 @@ describe("QuotesSettings", () => {
     expect(JSON.parse(String(init?.body))).toEqual({ enabled: true, time: "07:30", timezone: "America/Sao_Paulo" });
   });
 
+  it.each([
+    { fetched: 1, failures: 1, deferred: 1 },
+    { fetched: 0, failures: 2, deferred: 1 },
+  ])("reports deferred providers in a partial refresh with $fetched fetched", async (counts) => {
+    mockFetch(json(settings()), json(lastRefresh({ trigger: "manual", status: "partial", ...counts })));
+    render(<QuotesSettings />);
+    await userEvent.click(await screen.findByRole("button", { name: "Atualizar agora" }));
+    expect(
+      await screen.findByText(
+        `${counts.fetched} de 3 ativos cotados; ${counts.failures} falharam; 1 adiados porque o provedor limitou as consultas. Tente novamente mais tarde.`,
+      ),
+    ).toHaveClass("ant-typography-warning");
+  });
+
+  it("reports a partial refresh without deferred providers", async () => {
+    mockFetch(json(settings({ last_refresh: lastRefresh({ status: "partial", fetched: 2, failures: 1 }) })));
+    render(<QuotesSettings />);
+    expect(await screen.findByText("2 de 3 ativos cotados; 1 falharam.")).toHaveClass("ant-typography-warning");
+  });
+
   it("reports a rejected schedule", async () => {
     mockFetch(json(settings()), json({ type: "x", title: "Dados inválidos", status: 422, detail: "invalid" }, 422));
     render(<QuotesSettings />);
