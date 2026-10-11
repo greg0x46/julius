@@ -530,10 +530,7 @@ func Query(ctx context.Context, q Querier, query QueryRequest) (Result, error) {
 		}
 	}
 
-	rates := query.ReportingRates
-	if rates == nil {
-		rates = exchange.New(q, nil)
-	}
+	rates := exchange.New(q, nil)
 	loc, _ := time.LoadLocation(query.Timezone)
 	for i := range filtered {
 		v := &filtered[i]

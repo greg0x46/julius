@@ -49,12 +49,11 @@ type Filters struct {
 
 // QueryRequest mirrors TransactionQuery.
 type QueryRequest struct {
-	ReportingRates reporting.Resolver
-	Timezone       string
-	GroupBy        money.GroupBy
-	Page           int
-	PageSize       int
-	Filters        Filters
+	Timezone string
+	GroupBy  money.GroupBy
+	Page     int
+	PageSize int
+	Filters  Filters
 }
 
 type AccountSummary struct {
