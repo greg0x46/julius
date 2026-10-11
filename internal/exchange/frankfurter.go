@@ -12,16 +12,8 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// Frankfurter serves the European Central Bank's reference rates through
-// https://frankfurter.dev, which needs no key:
-//
-//	GET api.frankfurter.dev/v1/2026-10-10?base=USD&symbols=BRL
-//	{"amount":1.0,"base":"USD","date":"2026-10-09","rates":{"BRL":5.005}}
-//
-// The ECB publishes one rate per business day around 16:00 CET; a weekend or
-// holiday answers with the previous business day's rate, as above. Rates go
-// back to 1999-01-04; an earlier or future day, or an unknown currency, is a
-// 404.
+// Frankfurter uses the ECB-backed v1 API: https://frankfurter.dev/v1/.
+// It needs no API key and returns the previous business day on holidays/weekends.
 type Frankfurter struct {
 	baseURL string
 	client  *http.Client

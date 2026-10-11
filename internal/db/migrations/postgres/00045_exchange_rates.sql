@@ -1,12 +1,4 @@
--- Exchange rates cached by internal/exchange, so reports can convert between
--- currencies without asking a provider on every read. Original amounts and
--- currencies elsewhere are never rewritten from this table.
---
--- One row per pair per requested day (as_of). effective_on is the day the
--- provider's rate actually refers to: for a weekend or holiday it is the last
--- business day before as_of. rate is a decimal string meaning
--- 1 base_currency = rate quote_currency; fetched_at says whether the row may
--- still change (see internal/exchange).
+-- Decimal rates cached per requested day; effective_on records the provider date.
 
 -- +goose Up
 
