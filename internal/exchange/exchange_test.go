@@ -261,7 +261,8 @@ func TestPrecisionSurvivesPersistence(t *testing.T) {
 		if _, err := s.On(ctx, "USD", "BRL", wed); err != nil {
 			t.Fatal(err)
 		}
-		rate, err := New(conn, p).On(ctx, "USD", "BRL", wed)
+		other, _ := newService(conn, p, sun)
+		rate, err := other.On(ctx, "USD", "BRL", wed)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -419,6 +420,41 @@ func TestNonPositiveProviderRatesAreUnavailable(t *testing.T) {
 			if _, err := s.On(context.Background(), "USD", "BRL", wed); !errors.Is(err, ErrUnavailable) {
 				t.Fatalf("rate %s: %v", value, err)
 			}
+		}
+	})
+}
+
+func TestFreshInverseCacheWinsOverExpiredDirectCache(t *testing.T) {
+	dbtest.Each(t, func(t *testing.T, conn *sql.DB) {
+		p := &fakeProvider{err: errors.New("offline")}
+		s, c := newService(conn, p, sun.Add(13*time.Hour))
+		ctx := context.Background()
+		for _, rate := range []Rate{
+			{Base: "USD", Quote: "BRL", Value: dec("5"), AsOf: sun, EffectiveOn: fri, Source: "old", FetchedAt: c.t.Add(-2 * s.TTL)},
+			{Base: "BRL", Quote: "USD", Value: dec("0.25"), AsOf: sun, EffectiveOn: fri, Source: "new", FetchedAt: c.t},
+		} {
+			if err := s.save(ctx, rate); err != nil {
+				t.Fatal(err)
+			}
+		}
+		rate, err := s.Latest(ctx, "USD", "BRL")
+		if err != nil || rate.Stale || !rate.Inverted || rate.Source != "new" || !rate.Convert(dec("10")).Equal(dec("40")) {
+			t.Fatalf("cached rate = %+v, %v", rate, err)
+		}
+		if p.calls != 0 {
+			t.Fatalf("provider calls = %d", p.calls)
+		}
+		fallback, err := s.latestStored(ctx, "USD", "BRL", sun)
+		if err != nil || fallback == nil || fallback.Source != "new" {
+			t.Fatalf("latest stored = %+v, %v", fallback, err)
+		}
+		if err := s.save(ctx, Rate{Base: "BRL", Quote: "USD", Value: dec("0.25"), AsOf: sun,
+			EffectiveOn: wed, Source: "older-effective", FetchedAt: c.t.Add(time.Minute)}); err != nil {
+			t.Fatal(err)
+		}
+		cached, err := s.cached(ctx, "USD", "BRL", sun)
+		if err != nil || cached == nil || cached.Source != "old" {
+			t.Fatalf("newer effective date should win: %+v, %v", cached, err)
 		}
 	})
 }
