@@ -4,16 +4,16 @@ Two independent goose sequences, one per dialect. `internal/db` picks the
 directory from the DSN and each database tracks its own version, so the two
 sequences never meet at runtime.
 
-## Os números não correspondem entre dialetos
+## Numbers differ between dialects
 
-Um mesmo passo lógico tem números diferentes em `sqlite/` e `postgres/`. Não é
-descuido: as sequências divergiram cedo (o SQLite ganhou migrations que o
-Postgres nunca precisou, e vice-versa — `00024_drop_stale_payables_receivable_column`
-só existe no Postgres), e renumerar história quebraria qualquer banco já
-migrado. Desde `00025` o Postgres está exatamente **um número atrás** do
-SQLite para os mesmos passos:
+The same logical step has different numbers in `sqlite/` and `postgres/`. This
+is intentional: the sequences diverged early (SQLite got migrations Postgres
+never needed and vice versa — `00024_drop_stale_payables_receivable_column`
+exists only in Postgres), and renumbering history would break any database
+already migrated. Since `00025`, Postgres is exactly **one number behind**
+SQLite for the same steps:
 
-| passo lógico | sqlite | postgres |
+| logical step | sqlite | postgres |
 |---|---|---|
 | `recurrence_reconciliations` | 00026 | 00025 |
 | `scenario_projection_unification` | 00027 | 00026 |
@@ -21,18 +21,18 @@ SQLite para os mesmos passos:
 | `drop_recurrence_reconciliations` | 00029 | 00028 |
 | `drop_recurring_commitments` | 00030 | 00029 |
 
-**Ao adicionar uma migration:** case pelo *sufixo* (o nome do passo), nunca
-pelo número. Se o passo vale para os dois bancos, crie os dois arquivos com o
-mesmo sufixo e o próximo número **de cada** diretório.
+**When adding a migration:** match by *suffix* (the step name), never by number.
+If the step applies to both databases, create both files with the same suffix
+and the next number **of each** directory.
 
 ## SQLite: `PRAGMA foreign_keys`
 
-Um rebuild de tabela (`CREATE ... _new` / copiar / `DROP` / `RENAME`) só
-precisa desligar as FKs quando **outra** tabela referencia a que está sendo
-reconstruída, ou quando uma linha precisa apontar para outra que ainda não
-existe. Fora esses casos, deixe as FKs ligadas e a migration dentro da
-transação do goose — é o que dá rollback de verdade se algo falhar no meio.
-`PRAGMA foreign_keys` é ignorado dentro de uma transação, então usá-lo obriga
-a `-- +goose NO TRANSACTION`, e aí uma falha no meio deixa o schema pela
-metade *e* a conexão do pool com FK desligada. Prefira reordenar os inserts
-(ver `00030_drop_recurring_commitments.sql`) a pagar esse preço.
+A table rebuild (`CREATE ... _new` / copy / `DROP` / `RENAME`) only needs to
+turn FKs off when **another** table references the one being rebuilt, or when a
+row must point at one that does not exist yet. Otherwise leave FKs on and keep
+the migration inside goose's transaction — that is what gives a real rollback
+if something fails midway. `PRAGMA foreign_keys` is ignored inside a
+transaction, so using it forces `-- +goose NO TRANSACTION`, and then a
+mid-migration failure leaves the schema half-applied *and* a pooled connection
+with FKs off. Prefer reordering the inserts (see
+`00030_drop_recurring_commitments.sql`) over paying that price.
