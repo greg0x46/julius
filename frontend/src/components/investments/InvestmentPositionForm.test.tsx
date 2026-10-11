@@ -151,6 +151,51 @@ describe("new asset inside the position form", () => {
     }));
   });
 
+  it.each([
+    { name: "Titulo", ticker: null, existingName: "Título", existingTicker: null },
+    { name: "Titulo", ticker: "TIT", existingName: "Titulo", existingTicker: "TÍT" },
+  ])("preserves accented catalog identities for $existingName / $existingTicker", async ({ name, ticker, existingName, existingTicker }) => {
+    const existing = {
+      ...bitcoin, name: existingName, ticker: existingTicker, asset_type: "CDB",
+      asset_class: "fixed_income" as const, quote_source: null, quote_symbol: null,
+    };
+    mocked.assets = [existing];
+    const created = { ...existing, id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb9", name, ticker };
+    mocked.createAsset.mockResolvedValue(created);
+    const onCreate = renderForm();
+    await userEvent.click(screen.getByRole("button", { name: "+ Cadastrar novo ativo" }));
+    await choose("Classe", "Renda fixa");
+    await choose("Tipo", "CDB");
+    fireEvent.change(screen.getByRole("textbox", { name: "Nome" }), { target: { value: name } });
+    if (ticker) fireEvent.change(screen.getByRole("textbox", { name: "Código (opcional)" }), { target: { value: ticker } });
+    await save();
+    await waitFor(() => expect(onCreate).toHaveBeenCalledWith(expect.objectContaining({ asset_id: created.id })));
+    expect(mocked.createAsset).toHaveBeenCalledWith(expect.objectContaining({ name, ticker }));
+  });
+
+  it.each([
+    { name: "título-banco", ticker: null, existingName: "Título Banco", existingTicker: null },
+    { name: "Outro nome", ticker: "b.t-c", existingName: "Bitcoin", existingTicker: "BTC" },
+  ])("still reuses case and punctuation variants for $existingName / $existingTicker", async ({ name, ticker, existingName, existingTicker }) => {
+    const existing = {
+      ...bitcoin, name: existingName, ticker: existingTicker, asset_type: "CDB",
+      asset_class: "fixed_income" as const, quote_source: null, quote_symbol: null,
+    };
+    mocked.assets = [existing];
+    const onCreate = renderForm();
+    await userEvent.click(screen.getByRole("button", { name: "+ Cadastrar novo ativo" }));
+    await choose("Classe", "Renda fixa");
+    await choose("Tipo", "CDB");
+    fireEvent.change(screen.getByRole("textbox", { name: "Nome" }), { target: { value: name } });
+    if (ticker) fireEvent.change(screen.getByRole("textbox", { name: "Código (opcional)" }), { target: { value: ticker } });
+    await save();
+    expect(await screen.findByText(/Já existe o ativo/)).toBeInTheDocument();
+    expect(mocked.createAsset).not.toHaveBeenCalled();
+    expect(onCreate).not.toHaveBeenCalled();
+    await save();
+    await waitFor(() => expect(onCreate).toHaveBeenCalledWith(expect.objectContaining({ asset_id: existing.id })));
+  });
+
   it("selects the existing catalog asset instead of creating a duplicate", async () => {
     const onCreate = renderForm();
     await userEvent.click(screen.getByRole("button", { name: "+ Cadastrar novo ativo" }));

@@ -70,7 +70,7 @@ function positive(value: string | null): boolean {
   return value !== null && Number(value) > 0;
 }
 
-/** Case-, accent- and punctuation-insensitive form used for search and duplicates. */
+/** Case-, accent- and punctuation-insensitive search. */
 function searchKey(value: string): string {
   return value.normalize("NFD").replace(/[^\p{L}\p{N}]/gu, "").toUpperCase();
 }
@@ -80,15 +80,19 @@ function assetLabel(asset: InvestmentAsset): string {
 }
 
 /** Mirrors the backend's canonical key: the ticker when there is one, else type and name. */
+function assetCanonicalKey(asset: { name: string; ticker: string | null; asset_type: string }): string {
+  const clean = (value: string) => Array.from(value.replace(/[^\p{L}\p{Nd}]/gu, ""), (letter) => {
+    const upper = letter.toUpperCase();
+    // Go's Unicode uppercase maps one rune at a time.
+    return Array.from(upper).length === 1 ? upper : letter;
+  }).join("");
+  const ticker = clean(asset.ticker ?? "");
+  return ticker ? `ticker:${ticker}` : `name:${clean(asset.asset_type)}:${clean(asset.name)}`;
+}
+
 function findDuplicate(assets: InvestmentAsset[], write: { name: string; ticker: string | null; asset_type: string }) {
-  const ticker = searchKey(write.ticker ?? "");
-  return assets.find((asset) =>
-    ticker !== ""
-      ? searchKey(asset.ticker ?? "") === ticker
-      : searchKey(asset.ticker ?? "") === "" &&
-        searchKey(asset.name) === searchKey(write.name) &&
-        searchKey(asset.asset_type) === searchKey(write.asset_type),
-  );
+  const key = assetCanonicalKey(write);
+  return assets.find((asset) => assetCanonicalKey(asset) === key);
 }
 
 /** A short code-like search (BTC, PETR4) starts the new asset's ticker; anything else its name. */
