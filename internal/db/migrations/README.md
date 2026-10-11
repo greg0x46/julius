@@ -4,6 +4,21 @@ Two independent goose sequences, one per dialect. `internal/db` picks the
 directory from the DSN and each database tracks its own version, so the two
 sequences never meet at runtime.
 
+## Reference-currency valuation
+
+`reference_currency_valuation` leaves existing snapshot amounts untouched,
+with version 0, status `legacy_unknown`, and no currency or valuation date.
+They cannot be assumed to be BRL or historically FX-correct. Version 1 live
+snapshots use BRL and the latest stored rate observed at or before `valued_at`;
+the exact rates, observation timestamps, and sources are copied into the row.
+Rates are BRL per native currency unit, recorded through `fx.StoreRate`;
+there is no automatic FX feed or implicit fallback rate.
+
+Backfills reconstruct native cash before converting at the end of each UTC
+day. They are `reconstructed_partial` because historical investment values
+are unavailable. Days with missing historical FX are `unavailable`, with no
+usable totals. Today's rates are never applied to an earlier day.
+
 ## Os números não correspondem entre dialetos
 
 Um mesmo passo lógico tem números diferentes em `sqlite/` e `postgres/`. Não é
