@@ -123,6 +123,9 @@ func TestScheduleLiveTransitionsAndRestartDedupe(t *testing.T) {
 	if len(fake.asked) != 2 {
 		t.Fatalf("daily did not refresh: %d", len(fake.asked))
 	}
+	if last, err := GetLastRefresh(ctx, conn); err != nil || last == nil || last.Trigger != "scheduled" || last.Status != RefreshSucceeded {
+		t.Fatalf("daily run not recorded: %+v %v", last, err)
+	}
 	config.Enabled = false
 	save()
 	cycle(now.AddDate(0, 0, 1), true)
