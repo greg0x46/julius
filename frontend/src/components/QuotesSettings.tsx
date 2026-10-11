@@ -31,7 +31,7 @@ function refreshSummary(last: QuoteLastRefresh): string {
     case "partial":
       return `${priced}; ${last.failures} falharam.`;
     case "deferred":
-      return `${priced}; ${last.deferred} adiados porque o provedor limitou as consultas. Uma nova tentativa será feita mais tarde.`;
+      return `${priced}; ${last.deferred} adiados porque o provedor limitou as consultas. Tente novamente mais tarde.`;
   }
 }
 

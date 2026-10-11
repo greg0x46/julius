@@ -96,7 +96,7 @@ describe("QuotesSettings", () => {
 
   it("updates now and shows each outcome", async () => {
     const fetch = mockFetch(
-      json(settings({ last_refresh: null })),
+      json(settings({ enabled: false, last_refresh: null })),
       json(lastRefresh({ trigger: "manual", status: "deferred", fetched: 2, deferred: 1 })),
       json(lastRefresh({ trigger: "manual", status: "failed", fetched: 0, failures: 3 })),
       json({ type: "x", title: "Atualização em andamento", status: 409 }, 409),
@@ -104,11 +104,12 @@ describe("QuotesSettings", () => {
     );
     render(<QuotesSettings />);
     const button = await screen.findByRole("button", { name: "Atualizar agora" });
+    expect(screen.getByRole("switch", { name: "Atualizar automaticamente" })).not.toBeChecked();
 
     await userEvent.click(button);
     expect(
       await screen.findByText(
-        "2 de 3 ativos cotados; 1 adiados porque o provedor limitou as consultas. Uma nova tentativa será feita mais tarde.",
+        "2 de 3 ativos cotados; 1 adiados porque o provedor limitou as consultas. Tente novamente mais tarde.",
       ),
     ).toBeInTheDocument();
     expect(screen.getByText(/Manual/)).toBeInTheDocument();
