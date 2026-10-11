@@ -11,9 +11,9 @@ import {
   catalogQuoteMarket,
   customAssetType,
   emptyAssetDraft,
-  InvestmentAssetFields,
   type AssetDraft,
-} from "./investments/InvestmentAssetFields";
+} from "./investments/assetDraft";
+import { InvestmentAssetFields } from "./investments/InvestmentAssetFields";
 import { RecordMenu } from "./shared/RecordMenu";
 import { useConfirm } from "./shared/useConfirm";
 import { DataCard, EmptyState, ResponsiveList } from "./layout";

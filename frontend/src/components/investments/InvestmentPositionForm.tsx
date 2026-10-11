@@ -15,13 +15,8 @@ import { errorMessage } from "../../presentation/errors";
 import { FormDrawer } from "../forms/FormDrawer";
 import { FormField } from "../forms/FormField";
 import { MoneyInput } from "../forms/MoneyInput";
-import {
-  assetWriteFrom,
-  catalogQuoteMarket,
-  emptyAssetDraft,
-  InvestmentAssetFields,
-  type AssetDraft,
-} from "./InvestmentAssetFields";
+import { assetWriteFrom, catalogQuoteMarket, emptyAssetDraft, type AssetDraft } from "./assetDraft";
+import { InvestmentAssetFields } from "./InvestmentAssetFields";
 import { fromMoneyInput, toMoneyInput } from "./moneyDraft";
 
 type Draft = {
@@ -130,6 +125,7 @@ export function InvestmentPositionForm({
   const [assetDraft, setAssetDraft] = useState<AssetDraft>(emptyAssetDraft);
   const [assetSearch, setAssetSearch] = useState("");
   const [savingAsset, setSavingAsset] = useState(false);
+  const [createdAsset, setCreatedAsset] = useState<InvestmentAsset | null>(null);
   const isEditing = position !== null;
   const catalog = useInvestmentAssets({ enabled: open && !isEditing });
 
@@ -140,6 +136,7 @@ export function InvestmentPositionForm({
       setCreatingAsset(false);
       setAssetDraft(emptyAssetDraft);
       setAssetSearch("");
+      setCreatedAsset(null);
     }
   }, [open, position, accounts]);
 
@@ -149,8 +146,12 @@ export function InvestmentPositionForm({
   );
   const accountOptions = editableAccounts.map((account) => ({ value: account.id, label: account.name }));
   const portfolioOptions = portfolios.map((portfolio) => ({ value: portfolio.id, label: portfolio.name }));
-  const assetOptions = catalog.assets.map((asset) => ({ value: asset.id, label: assetLabel(asset) }));
-  const selectedAsset = catalog.assets.find((asset) => asset.id === draft.assetId);
+  // The asset this form just created stays selectable until the catalog refetch brings it in.
+  const assets = createdAsset && !catalog.assets.some((asset) => asset.id === createdAsset.id)
+    ? [...catalog.assets, createdAsset]
+    : catalog.assets;
+  const assetOptions = assets.map((asset) => ({ value: asset.id, label: assetLabel(asset) }));
+  const selectedAsset = assets.find((asset) => asset.id === draft.assetId);
   // With nothing in the catalog there is nothing to pick: the form opens on a new asset.
   const catalogEmpty = !catalog.isLoading && !catalog.error && catalog.assets.length === 0;
   const showNewAsset = creatingAsset || catalogEmpty;
@@ -183,7 +184,7 @@ export function InvestmentPositionForm({
       setError(write);
       return null;
     }
-    const duplicate = findDuplicate(catalog.assets, write);
+    const duplicate = findDuplicate(assets, write);
     if (duplicate) {
       pickAsset(duplicate);
       setError(`Já existe o ativo ${assetLabel(duplicate)} no catálogo. Ele foi selecionado; confira e salve.`);
@@ -192,6 +193,7 @@ export function InvestmentPositionForm({
     setSavingAsset(true);
     try {
       const asset = await catalog.createAsset(write);
+      setCreatedAsset(asset);
       pickAsset(asset);
       setAssetDraft(emptyAssetDraft);
       return asset;
@@ -317,11 +319,12 @@ export function InvestmentPositionForm({
             showSearch
             autoFocus
             filterOption={(input, option) => searchKey(option?.label ?? "").includes(searchKey(input))}
-            onSearch={setAssetSearch}
+            // Leaving the field clears its search; the last text typed still seeds a new asset.
+            onSearch={(value) => value !== "" && setAssetSearch(value)}
             notFoundContent="Nenhum ativo encontrado."
             placeholder={catalog.isLoading ? "Carregando ativos…" : "Busque por código ou nome (ex.: PETR4, Bitcoin)"}
             loading={catalog.isLoading}
-            onChange={(value: string) => pickAsset(catalog.assets.find((asset) => asset.id === value))}
+            onChange={(value: string) => pickAsset(assets.find((asset) => asset.id === value))}
           />
           <Button type="link" htmlType="button" className="investment-new-asset-link" onClick={startNewAsset}>
             + Cadastrar novo ativo
