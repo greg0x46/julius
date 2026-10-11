@@ -112,7 +112,7 @@ func ComputeValued(ctx context.Context, q Querier, valuation *fx.Valuation) (Bre
 }
 
 // Snapshot computes today's net worth and upserts it into
-// net_worth_snapshots keyed by captured_at (the local calendar day), so
+// net_worth_snapshots keyed by captured_at (the UTC calendar day), so
 // calling it repeatedly the same day only ever refreshes that one row
 // instead of accumulating duplicates.
 func Snapshot(ctx context.Context, q Querier) (SnapshotRow, error) {

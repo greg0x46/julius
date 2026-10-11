@@ -29,11 +29,15 @@ func newFixture(t *testing.T) *fixture {
 		t.Fatalf("Open: %v", err)
 	}
 	t.Cleanup(func() { conn.Close() })
+	return newFixtureWithDB(t, conn)
+}
 
+func newFixtureWithDB(t *testing.T, conn *sql.DB) *fixture {
+	t.Helper()
 	f := &fixture{t: t, conn: conn, sourceID: uuid.NewString(), rawImportID: uuid.NewString()}
 	now := db.FormatTime(time.Now())
 	f.exec(`INSERT INTO data_sources (id, provider, external_item_id, created_at, updated_at)
-		VALUES (?, 'pluggy', 'item-1', ?, ?)`, f.sourceID, now, now)
+		VALUES (?, 'pluggy', ?, ?, ?)`, f.sourceID, f.sourceID, now, now)
 	syncRunID := uuid.NewString()
 	f.exec(`INSERT INTO sync_runs (id, source_id, status, started_at, finished_at)
 		VALUES (?, ?, 'completed', ?, ?)`, syncRunID, f.sourceID, now, now)
@@ -41,8 +45,8 @@ func newFixture(t *testing.T) *fixture {
 			id, sync_run_id, source_id, scope, page_sequence, request_attempt,
 			request_method, request_path, http_status, response_headers, payload,
 			payload_sha256, received_at
-		) VALUES (?, ?, ?, 'accounts', 1, 1, 'GET', '/x', 200, '{}', x'00', 'sha', ?)`,
-		f.rawImportID, syncRunID, f.sourceID, now)
+		) VALUES (?, ?, ?, 'accounts', 1, 1, 'GET', '/x', 200, '{}', ?, 'sha', ?)`,
+		f.rawImportID, syncRunID, f.sourceID, []byte{0}, now)
 	return f
 }
 

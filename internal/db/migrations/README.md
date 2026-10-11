@@ -18,6 +18,9 @@ Backfills reconstruct native cash before converting at the end of each UTC
 day. They are `reconstructed_partial` because historical investment values
 are unavailable. Days with missing historical FX are `unavailable`, with no
 usable totals. Today's rates are never applied to an earlier day.
+The same unavailable status applies when a transaction lacks its actual
+account-currency amount and only supplies a different currency: a valuation
+rate cannot recover the bank's historical exchange rate for that movement.
 
 ## Os números não correspondem entre dialetos
 

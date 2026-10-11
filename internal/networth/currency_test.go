@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/greg0x46/julius/internal/db"
+	"github.com/greg0x46/julius/internal/db/dbtest"
 	"github.com/greg0x46/julius/internal/fx"
 	"github.com/greg0x46/julius/internal/networth"
 	"github.com/greg0x46/julius/internal/payables"
@@ -172,4 +173,62 @@ func TestBackfillUsesHistoricalRatesAndMarksMissingHistory(t *testing.T) {
 			assertDecimalEqual(t, "backfill does not rewrite observations", two.Breakdown.CashBalance, "500")
 		})
 	}
+}
+
+func TestBackfillCannotInventAnAccountCurrencyMovement(t *testing.T) {
+	f := newFixture(t)
+	day := func(n int) time.Time { return time.Date(2020, 1, n, 12, 0, 0, 0, time.UTC) }
+	bank := f.addAccount("BANK", "2000")
+	f.addCardTransaction(bank, day(1), "100", "CREDIT")
+	foreign := f.addCardTransaction(bank, day(2), "-10", "DEBIT")
+	f.exec(`UPDATE financial_transactions SET currency_code='USD',amount_in_account_currency=NULL WHERE id=?`, foreign)
+	f.rate("USD", "5", day(1))
+	if err := networth.Backfill(context.Background(), f.conn, day(3)); err != nil {
+		t.Fatal(err)
+	}
+	before, _ := snapshotFor(t, f, day(1))
+	after, _ := snapshotFor(t, f, day(2))
+	if before.ValuationStatus != networth.ValuationUnavailable {
+		t.Fatalf("invented native cash history: %+v", before)
+	}
+	if after.ValuationStatus != networth.ValuationReconstructed {
+		t.Fatalf("known cash anchor unavailable: %+v", after)
+	}
+	assertDecimalEqual(t, "known day-end native cash", after.Breakdown.CashBalance, "2000")
+}
+
+func TestTimelineConvertsForeignMovementsWithItsCashAnchor(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	today := time.Now().UTC()
+	bank := f.addAccount("BANK", "100")
+	f.exec(`UPDATE financial_accounts SET currency_code='USD' WHERE id=?`, bank)
+	transaction := f.addCardTransaction(bank, today.AddDate(0, 0, -1), "-10", "DEBIT")
+	f.exec(`UPDATE financial_transactions SET currency_code='USD' WHERE id=?`, transaction)
+	f.rate("USD", "5", today.Add(-time.Hour))
+	series, err := timeline.BuildSeries(ctx, f.conn, timeline.BuildParams{From: today.AddDate(0, 0, -1), To: today, ReferenceDate: today})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(series.Entries) != 1 {
+		t.Fatalf("entries: %+v", series.Entries)
+	}
+	assertDecimalEqual(t, "foreign movement in BRL", series.Entries[0].Amount, "-50")
+	assertDecimalEqual(t, "converted anchor", series.Points[len(series.Points)-1].Balance, "500")
+}
+
+func TestPostgresSnapshotValuationRoundTrip(t *testing.T) {
+	f := newFixtureWithDB(t, dbtest.OpenPostgres(t))
+	bank := f.addAccount("BANK", "100")
+	f.exec(`UPDATE financial_accounts SET currency_code='USD' WHERE id=?`, bank)
+	f.rate("USD", "5", time.Now().Add(-time.Hour))
+	snapshot, err := networth.Snapshot(context.Background(), f.conn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stored, ok := snapshotFor(t, f, snapshot.CapturedAt)
+	if !ok || stored.ValuationVersion != 1 || stored.ValuationStatus != networth.ValuationComplete || stored.Valuation.ReferenceCurrency != "BRL" || stored.Valuation.Rates["USD"].Value.String() != "5" {
+		t.Fatalf("snapshot context: %+v", stored)
+	}
+	assertDecimalEqual(t, "PostgreSQL cash", stored.Breakdown.CashBalance, "500")
 }

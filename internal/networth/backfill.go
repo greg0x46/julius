@@ -101,15 +101,20 @@ func Backfill(ctx context.Context, q Querier, today time.Time) error {
 	type gap struct {
 		day, dayEnd time.Time
 		cash        map[string]decimal.Decimal
+		unavailable bool
 	}
 	var gaps []gap
 	idx := 0
 	runningDelta := map[string]decimal.Decimal{}
+	unavailable := false
 	for d := yesterday; !d.Before(windowStart); d = d.AddDate(0, 0, -1) {
 		dayEnd := d.AddDate(0, 0, 1)
 		for idx < len(deltas) && !deltas[idx].occurredAt.Before(dayEnd) {
-			currency := deltas[idx].currency
-			runningDelta[currency] = runningDelta[currency].Add(deltas[idx].delta)
+			unavailable = unavailable || deltas[idx].unavailable
+			if !deltas[idx].unavailable {
+				currency := deltas[idx].currency
+				runningDelta[currency] = runningDelta[currency].Add(deltas[idx].delta)
+			}
 			idx++
 		}
 		if existing[formatDate(d)] {
@@ -124,7 +129,7 @@ func Backfill(ctx context.Context, q Querier, today time.Time) error {
 				cash[currency] = delta.Neg()
 			}
 		}
-		gaps = append(gaps, gap{day: d, dayEnd: dayEnd, cash: cash})
+		gaps = append(gaps, gap{day: d, dayEnd: dayEnd, cash: cash, unavailable: unavailable})
 	}
 	if len(gaps) == 0 {
 		return nil
@@ -145,6 +150,9 @@ func Backfill(ctx context.Context, q Querier, today time.Time) error {
 	for i, g := range gaps {
 		valuation := fx.New(g.dayEnd.Add(-time.Nanosecond))
 		status := ValuationReconstructed
+		if g.unavailable {
+			status = ValuationUnavailable
+		}
 		cash := decimal.Zero
 		for currency, native := range g.cash {
 			value, err := valuation.Convert(ctx, q, native, currency)
@@ -225,9 +233,10 @@ func insertBackfillSnapshot(ctx context.Context, q Querier, capturedAt string, b
 // went up" — the opposite convention from consideredCardTransactionTotal's
 // debt indicator, since cash is an asset and card balance is a liability.
 type cashTransactionDelta struct {
-	occurredAt time.Time
-	delta      decimal.Decimal
-	currency   string
+	occurredAt  time.Time
+	delta       decimal.Decimal
+	currency    string
+	unavailable bool
 }
 
 // cashDeltasDescending loads every non-CREDIT-account transaction's real
@@ -316,6 +325,10 @@ func cashDeltasDescending(ctx context.Context, q Querier) ([]cashTransactionDelt
 		// transfer off by its full amount.
 		included, _ := money.Eligibility(classification, providerStatus, effective, money.Considered, "")
 		if !included || effective == nil {
+			continue
+		}
+		if effective.CurrencyCode != fx.Currency(accountCurrency) {
+			result = append(result, cashTransactionDelta{occurredAt: occurredAt, unavailable: true})
 			continue
 		}
 
