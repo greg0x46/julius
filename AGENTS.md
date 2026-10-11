@@ -54,7 +54,10 @@ cd frontend && npm run lint && npm run typecheck && npm test -- --run
 ```
 
 CI (`.github/workflows/ci.yml`) runs exactly these, plus `govulncheck`,
-`npm audit` and an embedded-frontend build. Run them before declaring done.
+`npm audit`, an embedded-frontend build and `scripts/tests/run.sh` (shell tests
+of the release scripts). Run them before declaring done; run
+`scripts/tests/run.sh` whenever you touch `scripts/`, `CHANGELOG.md` or the
+workflow.
 
 - `npm test` watches by default; pass `--run` in scripts/agents. Vitest has a
   `dom` and a `node` project: a new `.ts` test that needs the DOM must be added
@@ -103,6 +106,16 @@ Numbers differ per dialect; match by name suffix, create both files when the
 change applies to both. See that folder's README. SQLite uses a single
 connection; Postgres pool is configurable via `JULIUS_DB_*`.
 
+Because every merge into `stage` is applied to the persistent dev database
+(never restored or refreshed automatically) and only later reaches production:
+- Migrations are forward-only. Never edit or renumber a migration that is
+  already on `stage` or `main`; add a new one.
+- Keep a migration safe to run once on data that already exists (backfill,
+  defaults, no destructive change without a deliberate plan), and test it on
+  both dialects when it applies to both.
+- Don't depend on production data or credentials existing in dev; use
+  synthetic data in tests and in the *How to validate in dev* steps.
+
 **Frontend**: Ant Design + TanStack Query. All HTTP goes through
 `src/api/transport.ts`/`client.ts` (CSRF header, 401 handling); don't call
 `fetch` directly. Money is formatted/computed on decimal strings in
@@ -114,16 +127,64 @@ real statements, balances, or Pluggy payloads.
 
 ## Git, releases, docs
 
-- Conventional Commits (`feat:`, `fix:`, `refactor:`, `docs:`…). A push to
-  `main` that passes CI **publishes a release**: `feat` → minor, `fix`/`perf` →
-  patch, `!`/`BREAKING CHANGE` → major. Preview: `scripts/next-version.sh`.
-- Prefer branch + PR; `git fetch` before pushing to `main`, other sessions may
-  push too.
+**Branches.** `stage` is the rolling integration branch; `main` is production.
+- Open every implementation PR **against `stage`** (agents included), from a
+  branch like `agent/<issue>-<slug>`. Don't open feature PRs against `main`.
+- The PR **title** must be a Conventional Commit (`feat:`, `fix:`, `perf:`,
+  `refactor:`, `docs:`, `!`/`BREAKING CHANGE` for breaking). PRs into `stage`
+  are **squashed**, one commit per PR whose subject ends in `(#PR)`; that
+  subject is what the changelog and the version are built from.
+- Fill in the PR template (`.github/pull_request_template.md`): Summary,
+  *How to validate in dev* (where, prerequisites/data, numbered steps, expected
+  result, limitations), Tests, Related issue. Use `Refs #N`, never `Closes #N`:
+  the issue is closed by the release PR. The owner checks the change in the dev
+  instance, which serves `stage`, using only those steps.
+- `git fetch` before pushing; other sessions may push too. Never push directly
+  to `main` or `stage`.
+
+**Releases.** Only a push to `main` can publish; pushes and PRs on `stage` run
+the same CI but never release or tag.
+- A release candidate is a frozen `release/vX.Y.Z` branch cut from one `stage`
+  SHA. It adds exactly one commit, `docs(changelog): vX.Y.Z`, and is promoted
+  with a PR into `main` that is merged with a **merge commit, never squash or
+  rebase** (squashing would erase the per-PR commits the version is computed
+  from). After the release is published, `main` is merged back into `stage`.
+- `scripts/next-version.sh` is the only place that decides versions: `feat` →
+  minor, `fix`/`perf` → patch, `!`/`BREAKING CHANGE` → major (minor on 0.x);
+  everything else, and merge commits, release nothing. Preview with
+  `scripts/next-version.sh` and `scripts/next-version.sh --notes`. A revert
+  cancels the change it reverts when both are in the release; a revert it
+  cannot interpret is listed under "Needs review" for a human.
+- `CHANGELOG.md` is the single changelog and is written **only when a release
+  is prepared**: `scripts/update-changelog.sh vX.Y.Z [--date YYYY-MM-DD]`
+  prepends one section (idempotent; fails if `vX.Y.Z` is not what
+  `next-version.sh` computes). Don't edit it in feature PRs and don't generate
+  a changelog elsewhere. On `main`, the release job publishes the version
+  `next-version.sh` computes with that version's committed `CHANGELOG.md`
+  section as the release notes, and **fails** if the section is missing or is
+  not the newest. If it fails, fix it with a `docs(changelog)` change to
+  `main` (run `scripts/update-changelog.sh` there); the next run publishes.
+- `scripts/changelog-section.sh vX.Y.Z` prints one section (what CI uses).
+
+**Dependabot.** Version updates target `stage` (`.github/dependabot.yml`):
+Go modules and npm production dependencies as `fix(deps)` (patch release),
+workflow actions as `build(ci)`, npm dev dependencies as `build(deps-dev)`
+(no release). *Security* updates are not redirected by `target-branch` and
+still open against `main`. Controlled procedure: prefer applying the same bump
+on `stage` (retarget the Dependabot PR to `stage`, or make an equivalent
+`fix(deps)` PR) and let it ship with the next promotion. Only for an urgent
+fix merge it into `main` directly, then right away merge `main` into `stage`
+(no rebase, no force-push) and, if a release PR is already open, close it so a
+new candidate is cut from the updated base; the `main` release job needs the
+`docs(changelog)` step above.
+
+**Docs and hygiene.**
 - Finishing a feature or behavior change: update the matching
   `.specs/contextos/<context>/reference.md` in the same PR (and README
   "Features" if user-visible). Delete a design spec once it is implemented.
 - Never commit: `*.db*`, built binaries in the repo root, `.env.local`,
-  `deploy.sh`, keys, real financial data. `.claude/` is local state.
+  `deploy.sh`, keys, real financial data, or host-specific details (domains,
+  ports, local paths). `.claude/` is local state.
 
 ## Gotchas
 
