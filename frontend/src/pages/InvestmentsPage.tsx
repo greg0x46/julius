@@ -502,7 +502,6 @@ export function InvestmentsPage() {
         open={positionFormOpen}
         position={editingPosition}
         accounts={positionAccounts ?? workspace.accounts}
-        positions={workspace.positions}
         portfolios={workspace.portfolios}
         submitting={workspace.isSaving}
         submitError={saveError}
