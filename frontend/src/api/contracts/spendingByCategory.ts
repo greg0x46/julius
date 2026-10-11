@@ -19,6 +19,8 @@ export interface SpendingByCategory {
   currency_code: string;
   total: string;
   items: CategorySpendingItem[];
+  reporting?: ReportingSummary;
+  totals?: CurrencyTotals[];
 }
 
 const monthOnlyPattern = /^\d{4}-\d{2}$/;
@@ -52,9 +54,10 @@ function parseCategorySpendingItem(value: unknown): CategorySpendingItem {
 }
 
 export function parseSpendingByCategory(value: unknown): SpendingByCategory {
-  const item = requiredRecord(
+  const item = requiredRecordWithOptionalKeys(
     value,
     ["month", "currency_code", "total", "items"],
+    ["reporting", "totals"],
     "Gastos por categoria inválidos.",
   );
   if (typeof item.month !== "string" || !monthOnlyPattern.test(item.month)) {
@@ -66,7 +69,12 @@ export function parseSpendingByCategory(value: unknown): SpendingByCategory {
   if (!Array.isArray(item.items)) {
     throw new TypeError("Gastos por categoria inválidos.");
   }
+  const reporting = item.reporting === undefined ? undefined : parseReportingSummary(item.reporting);
+  if (reporting?.totals === null) throw new TypeError("Gastos por categoria inválidos.");
+  if (item.totals !== undefined && !Array.isArray(item.totals)) throw new TypeError("Totais por moeda inválidos.");
   return {
+    ...(reporting ? { reporting } : {}),
+    ...(Array.isArray(item.totals) ? { totals: item.totals.map(parseCurrencyTotals) } : {}),
     month: item.month,
     currency_code: item.currency_code,
     total: decimal(item.total),

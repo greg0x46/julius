@@ -75,6 +75,7 @@ export interface TimelineResponse {
 }
 
 export interface TimelineParams {
+  timezone?: string;
   /** Balance anchor — always today. Never the month being browsed. */
   referenceDate: string;
   from: string;
