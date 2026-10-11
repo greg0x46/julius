@@ -1,35 +1,93 @@
 package httpapi
 
 import (
-	"github.com/greg0x46/julius/internal/datasources"
-	"github.com/greg0x46/julius/internal/settings"
 	"database/sql"
+	"github.com/greg0x46/julius/internal/datasources"
+	"github.com/greg0x46/julius/internal/quotes"
+	"github.com/greg0x46/julius/internal/settings"
 	"net/http"
 )
 
-// handleQuotesSettings mirrors handlePluggySettings: write-only, and never
-// echoes the saved value back. Unlike Pluggy's credentials, the brapi token
-// is optional — the brapi provider in internal/marketdata sends requests
-// unauthenticated when it is empty — so an empty body value is accepted too,
-// as the deliberate way to clear a previously saved token.
+func handleGetQuotesSettings(db *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		config, _, err := settings.GetQuoteRefresh(r.Context(), db)
+		if err != nil {
+			writeProblem(w, 503, "settings-unavailable", "Configuração indisponível", "")
+			return
+		}
+		writeJSON(w, 200, config)
+	}
+}
+
 func handleQuotesSettings(db *sql.DB, keys *settings.Secrets) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		r.Body = http.MaxBytesReader(w, r.Body, 16384)
 		var req struct {
-			BrapiToken string `json:"brapi_token"`
+			BrapiToken *string `json:"brapi_token"`
+			Enabled    *bool   `json:"enabled"`
+			Time       *string `json:"time"`
+			Timezone   *string `json:"timezone"`
 		}
 		if decodeStrict(r, &req) != nil {
-			writeProblem(w, 422, "invalid-settings", "Dados inválidos", "Não foi possível ler o token informado.")
+			writeProblem(w, 422, "invalid-settings", "Dados inválidos", "")
 			return
 		}
-		key, ok := keys.Key()
-		if !ok {
+		tx, err := db.BeginTx(r.Context(), nil)
+		if err != nil {
 			writeProblem(w, 503, "settings-unavailable", "Configuração indisponível", "")
 			return
 		}
-		if err := settings.SetBrapiToken(r.Context(), db, req.BrapiToken, key); err != nil {
-			writeProblem(w, 503, "settings-unavailable", "Não foi possível salvar o token", "")
+		defer tx.Rollback()
+		changed := req.Enabled != nil || req.Time != nil || req.Timezone != nil
+		if changed {
+			_, err := settings.InitializeQuoteRefresh(r.Context(), tx, settings.DefaultQuoteRefreshSettings())
+			if err == nil {
+				_, err = tx.ExecContext(r.Context(), `UPDATE settings SET value = value WHERE key = ?`, settings.KeyQuoteRefresh)
+			}
+			if err != nil {
+				writeProblem(w, 503, "settings-unavailable", "Configuração indisponível", "")
+				return
+			}
+			config, _, err := settings.GetQuoteRefresh(r.Context(), tx)
+			if err != nil {
+				writeProblem(w, 503, "settings-unavailable", "Configuração indisponível", "")
+				return
+			}
+			if req.Enabled != nil {
+				config.Enabled = *req.Enabled
+			}
+			if req.Time != nil {
+				config.Time = *req.Time
+			}
+			if req.Timezone != nil {
+				config.Timezone = *req.Timezone
+			}
+			if err := config.Validate(); err != nil {
+				writeProblem(w, 422, "invalid-settings", "Dados inválidos", err.Error())
+				return
+			}
+			if err := settings.SetQuoteRefresh(r.Context(), tx, config); err != nil {
+				writeProblem(w, 503, "settings-unavailable", "Não foi possível salvar", "")
+				return
+			}
+		}
+		if req.BrapiToken != nil {
+			key, ok := keys.Key()
+			if !ok {
+				writeProblem(w, 503, "settings-unavailable", "Configuração indisponível", "")
+				return
+			}
+			if err := settings.SetBrapiToken(r.Context(), tx, *req.BrapiToken, key); err != nil {
+				writeProblem(w, 503, "settings-unavailable", "Não foi possível salvar", "")
+				return
+			}
+		}
+		if err := tx.Commit(); err != nil {
+			writeProblem(w, 503, "settings-unavailable", "Não foi possível salvar", "")
 			return
+		}
+		if changed {
+			quotes.ConfigurationChanged()
 		}
 		writeJSON(w, 200, map[string]bool{"saved": true})
 	}

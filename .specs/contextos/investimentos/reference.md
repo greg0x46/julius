@@ -139,8 +139,23 @@ orienta usar avaliações manuais ou valores da instituição integrada.
 Um código que não pode ser lido no formato do mercado é recusado ao salvar
 (`400`), com o motivo.
 
-A busca é opt-in: só roda com `JULIUS_QUOTES_SCHEDULE` definido
-(`HH:MM` ou `HH:MM Zona/IANA`), uma vez por dia e na subida do processo.
+A atualização é habilitada por padrão, diariamente às `19:00` em
+`America/Sao_Paulo`. `enabled`, `time` e `timezone` ficam juntos na tabela
+`settings` e são lidos pelo agendador sem reiniciar o processo. Alterar horário
+ou fuso reagenda a próxima execução; desabilitar suspende também o backfill.
+O lote de cotações do dia já em andamento pode terminar; a desabilitação é
+conferida antes do estágio de histórico e dos próximos ciclos de trabalho.
+
+Na subida e ao reabilitar, busca só preços de hoje e histórico que faltam;
+reiniciar não repete consultas já persistidas. A execução diária atualiza os
+preços do dia. A data das cotações continua sendo o dia brasileiro,
+independentemente do fuso do agendamento. Mudanças locais pela API acordam o
+agendador imediatamente; outras gravações são detectadas em até um minuto.
+
+`JULIUS_QUOTES_SCHEDULE` (`HH:MM` ou `HH:MM Zona/IANA`) inicializa somente uma
+configuração ainda não salva. Sem fuso usa `Local`; vazio usa o novo padrão.
+Depois da primeira gravação, a configuração persistida prevalece integralmente,
+inclusive quando desabilitada, e alterações no ambiente são ignoradas.
 
 ### Provedores
 
