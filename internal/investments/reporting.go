@@ -217,14 +217,15 @@ func ManualOperationReporting(ctx context.Context, q Querier) (ManualReporting, 
 	return result, nil
 }
 
-// MonthlyMovements sums gross principal flows, realized income and costs per
-// month. It is not reconciliation-adjusted: linking a bank line never shrinks
-// it. Valuations, trade principal and transfers are not flows here.
+// MonthlyMovements sums gross local principal flows, realized income and costs
+// per month, including local entries in integrated accounts. Reconciliation
+// never changes these totals; derived provider pivots are excluded.
 func MonthlyMovements(ctx context.Context, q Querier, accountID *string) ([]MonthlyMovement, error) {
 	query := `
 		SELECT kind, occurred_on, amount, fees, taxes
 		FROM investment_operations
-		WHERE kind IN ('deposit', 'withdrawal', 'income', 'fee', 'tax', 'buy', 'sell')`
+		WHERE source = 'manual'
+		  AND kind IN ('deposit', 'withdrawal', 'income', 'fee', 'tax', 'buy', 'sell')`
 	args := []any{}
 	if accountID != nil {
 		query += ` AND account_id = ?`

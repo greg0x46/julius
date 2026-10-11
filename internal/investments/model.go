@@ -300,7 +300,7 @@ type ManualReportingEntry struct {
 	Amount     decimal.Decimal
 }
 
-// MonthlyMovement is one calendar month (YYYY-MM) of gross investment flows.
+// MonthlyMovement is one calendar month (YYYY-MM) of gross local investment flows.
 // Contributions and Withdrawals are principal, never income or expense.
 type MonthlyMovement struct {
 	Month         string

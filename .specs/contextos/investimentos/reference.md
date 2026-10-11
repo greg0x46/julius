@@ -48,12 +48,15 @@ demais motivos já atribuídos têm precedência e são mantidos.
 Gastos por categoria usam o restante; a curva de caixa preserva o movimento
 integral.
 
-`investments.MonthlyMovements` deriva, por mês (`YYYY-MM` de `occurred_on`),
+`investments.MonthlyMovements` deriva das operações locais (`source = manual`),
+inclusive em contas integradas, por mês (`YYYY-MM` de `occurred_on`),
 os valores brutos de aportes (`Contributions`), resgates (`Withdrawals`),
 rendimentos realizados (`Income`), taxas (`Fees`) e impostos (`Taxes`),
 opcionalmente filtrados por conta de custódia. Taxas e impostos incluem os
 custos das compras e vendas. Os valores não descontam conciliações: vincular um
-lançamento bancário nunca reduz o aporte ou resgate bruto do mês. Valorização,
+lançamento bancário nunca reduz o aporte ou resgate bruto do mês. Movimentos
+importados e seus pivôs de conciliação (`source = synced`) não entram;
+conciliar ou desfazer esses vínculos não altera os totais locais. Valorização,
 principal de compra/venda e transferências entre custódias não entram. Expostos em
 `GET /api/investment-monthly-movements` (`?account_id=` opcional), que devolve
 `items` com `month`, `contributions`, `withdrawals`, `income`, `fees` e `taxes`;
