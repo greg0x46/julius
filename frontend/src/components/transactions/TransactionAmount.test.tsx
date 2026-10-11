@@ -9,7 +9,7 @@ describe("transaction currency presentation", () => {
     const item = { ...transactionResult.items[0], effective_money: { value: "1234.50", currency_code: currency, source: "transaction_currency" as const } };
     render(<TransactionAmount item={item} />);
     const expected = `-${currency === "BRL" ? "R$" : currency}\u00a01.234,50`;
-    expect(screen.getByText(expected)).toHaveClass("money-neutral");
+    expect(screen.getByText(expected.replaceAll("\u00a0", " "))).toHaveClass("money-neutral");
     expect(detailValue(item)).toBe(expected);
   });
 
