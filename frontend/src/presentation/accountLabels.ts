@@ -126,6 +126,7 @@ export function accountIdentityLine(account: Account): string {
  *  the parts that exist, so an account with nothing to say gets "" and no line,
  *  never a lone dash. Shared by the list rows and the detail header. */
 export function accountMetaLine(account: Account): string {
+  if (account.origin === "manual") return ["Conta manual", account.currency_code, account.archived_at ? "Arquivada" : ""].filter(Boolean).join(" · ");
   const name = accountDisplayName(account);
   const institution = account.institution_name !== null ? shortInstitutionName(account.institution_name) : "";
   return [accountIdentityLine(account), institution !== name ? institution : ""]

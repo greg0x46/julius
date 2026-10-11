@@ -1,4 +1,5 @@
 import type { TransactionItem } from "../../api/contracts";
+import { formatMoney } from "../../presentation/money";
 import { Money } from "../shared/Money";
 
 /**
@@ -17,9 +18,10 @@ export function TransactionAmount({
   size?: "row" | "hero";
 }) {
   const classes = `transaction-amount amount-${item.classification} ${className}`;
-  if (!item.effective_money || item.effective_money.currency_code !== "BRL") {
+  if (!item.effective_money) {
     return <span className={classes}>Valor indisponível</span>;
   }
+  if (item.effective_money.currency_code !== "BRL") return <span className={`${classes} money money-size-${size}`}>{formatMoney(item.effective_money.value, item.effective_money.currency_code)}</span>;
   return (
     <Money
       value={item.effective_money.value}
