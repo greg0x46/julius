@@ -11,7 +11,7 @@ ALTER TABLE financial_accounts ADD CONSTRAINT financial_accounts_origin_identity
         AND current_raw_import_id IS NOT NULL AND normalized_hash IS NOT NULL AND opening_balance IS NULL) OR
     (origin = 'manual' AND source_id IS NULL AND external_id IS NULL
         AND current_raw_import_id IS NULL AND normalized_hash IS NULL
-        AND account_type = 'BANK' AND currency_code IS NOT NULL
+        AND account_type IS NOT NULL AND account_type = 'BANK' AND currency_code IS NOT NULL
         AND opening_balance IS NOT NULL AND balance IS NULL)
 );
 CREATE TABLE account_balance_adjustments (

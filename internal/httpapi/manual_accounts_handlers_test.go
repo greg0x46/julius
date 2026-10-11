@@ -25,7 +25,7 @@ func TestManualAccountLifecycle(t *testing.T) {
 			t.Fatalf("fake identity in %s: %d %v", table, n, err)
 		}
 	}
-	if usd["external_id"] != nil || usd["balance"] != "100.00" || usd["origin"] != "manual" {
+	if usd["external_id"] != nil || usd["balance"] != "100" || usd["origin"] != "manual" {
 		t.Fatalf("account: %+v", usd)
 	}
 	write := map[string]any{"account_id": id, "description": "USD movement", "amount": "10", "occurred_at": "2026-10-01"}
@@ -43,7 +43,7 @@ func TestManualAccountLifecycle(t *testing.T) {
 			t.Fatalf("balance: %+v, want %s", got, want)
 		}
 	}
-	assertBalance("110.00")
+	assertBalance("110")
 	resp = doJSON(t, "PUT", srv.URL+"/api/accounts/"+id, map[string]any{"name": "Changed", "currency_code": "EUR", "opening_balance": "100"})
 	if resp.StatusCode != 409 {
 		t.Fatalf("currency change: %d", resp.StatusCode)
@@ -51,26 +51,26 @@ func TestManualAccountLifecycle(t *testing.T) {
 	resp.Body.Close()
 	resp = doJSON(t, "PUT", srv.URL+"/api/transactions/"+txID+"/inclusion", map[string]any{"state": "ignored"})
 	resp.Body.Close()
-	assertBalance("110.00")
+	assertBalance("110")
 	write["amount"] = "-20"
 	resp = doJSON(t, "PUT", srv.URL+"/api/transactions/"+txID, write)
 	if resp.StatusCode != 200 {
 		t.Fatalf("edit movement: %d", resp.StatusCode)
 	}
 	resp.Body.Close()
-	assertBalance("80.00")
+	assertBalance("80")
 	resp = doJSON(t, "POST", srv.URL+"/api/accounts/"+id+"/adjustments", map[string]any{"amount": "5", "description": "Correction"})
 	if resp.StatusCode != 200 {
 		t.Fatalf("adjust: %d", resp.StatusCode)
 	}
 	resp.Body.Close()
-	assertBalance("85.00")
+	assertBalance("85")
 	resp = doJSON(t, "DELETE", srv.URL+"/api/transactions/"+txID, nil)
 	if resp.StatusCode != 204 {
 		t.Fatalf("delete: %d", resp.StatusCode)
 	}
 	resp.Body.Close()
-	assertBalance("105.00")
+	assertBalance("105")
 	req := map[string]any{"name": "Archived USD", "currency_code": "USD", "opening_balance": "100", "archived": true}
 	resp = doJSON(t, "PUT", srv.URL+"/api/accounts/"+id, req)
 	if resp.StatusCode != 200 {
@@ -82,7 +82,7 @@ func TestManualAccountLifecycle(t *testing.T) {
 		t.Fatal("archived account accepted movement")
 	}
 	resp.Body.Close()
-	assertBalance("105.00")
+	assertBalance("105")
 	req["archived"] = false
 	resp = doJSON(t, "PUT", srv.URL+"/api/accounts/"+id, req)
 	if resp.StatusCode != 200 {

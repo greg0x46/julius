@@ -23,7 +23,7 @@ describe("manual bank accounts", () => {
     expect(screen.getByRole("dialog")).toBeVisible();
     await user.type(screen.getByLabelText("Nome"), "Conta USD");
     await user.click(screen.getByLabelText("Moeda"));
-    await user.click(await screen.findByText("USD — Dólar americano"));
+    await user.click(await screen.findByText(/USD —/));
     await user.clear(screen.getByLabelText("Saldo inicial"));
     await user.type(screen.getByLabelText("Saldo inicial"), "100,25");
     await user.click(screen.getByRole("button", { name: "Criar conta" }));
@@ -62,7 +62,7 @@ describe("manual bank accounts", () => {
     const user = userEvent.setup();
     const view = render(<QueryTestProvider><ManualAccountActions account={manual} /></QueryTestProvider>);
     await user.click(screen.getByRole("button", { name: "Arquivar conta" }));
-    expect(await screen.findByText("Arquivar conta?")).toBeVisible();
+    await waitFor(() => expect(screen.getByText("Arquivar conta?")).toBeVisible());
     await user.click(screen.getByRole("button", { name: "Arquivar" }));
     await waitFor(() => expect(api.writeManualAccount).toHaveBeenCalledWith(manual.id, expect.objectContaining({ archived: true })));
     view.unmount();

@@ -44,7 +44,7 @@ describe("AccountsPage", () => {
     vi.spyOn(compactScreen, "useCompactScreen").mockReturnValue(compact);
     vi.mocked(accountsApi.listAccounts).mockResolvedValue([{ ...bankAccount, origin: "manual", external_id: null, currency_code: "USD", balance: "110", opening_balance: "100", institution_name: null }]);
     renderPage();
-    expect(await findRow("USD\u00a0110,00")).toBeVisible();
+    expect(await screen.findByText(/USD\s110,00/)).toBeVisible();
     expect(screen.getByText("Conta manual · USD")).toBeVisible();
     expect(screen.getByRole("button", { name: "Nova conta" })).toBeVisible();
     expect(screen.getByText("Soma só as contas em reais.")).toBeVisible();

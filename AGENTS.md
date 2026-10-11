@@ -195,8 +195,10 @@ new candidate is cut from the updated base; the `main` release job needs the
   Recurring commitments are stored as `Scenario{Kind: recurring}` plus
   `scenario_recurring_schedules`; `internal/recurrences` owns occurrences and
   reconciliation.
-- Manual transactions never change account balances (`CashOnHand`, net worth
-  backfill filter `origin = 'synced'`); only credit-card bills count them.
+- Manual transactions on synced accounts never change provider balances;
+  credit-card bills count them. Manual bank accounts derive native balance from
+  opening balance + posted undeleted movements + explicit adjustment deltas.
+  BRL cash aggregates exclude foreign currencies without rates.
 - Manual transactions are soft-deleted (`deleted_at`); category/inclusion event
   tables are append-only with `ON DELETE RESTRICT`.
 - Sync runs are claimed atomically with a heartbeat lease, so several instances

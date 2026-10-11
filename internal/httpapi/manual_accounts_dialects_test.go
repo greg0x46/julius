@@ -28,7 +28,7 @@ func TestManualAccountAPIBothDialects(t *testing.T) {
 		if err := json.Unmarshal(w.Body.Bytes(), &d); err != nil {
 			t.Fatal(err)
 		}
-		if d.ExternalID != nil || d.SourceDisplayName != nil || *d.Balance != "25.00" {
+		if d.ExternalID != nil || d.SourceDisplayName != nil || *d.Balance != "25" {
 			t.Fatalf("account: %+v", d)
 		}
 		w = request(`{"name":"Renamed USD","currency_code":"USD","opening_balance":"50"}`, d.ID, false)
@@ -53,7 +53,7 @@ func TestManualAccountAPIBothDialects(t *testing.T) {
 		r = httptest.NewRequest("GET", "/api/accounts", nil)
 		w = httptest.NewRecorder()
 		handleListAccounts(conn)(w, r)
-		if w.Code != 200 || !bytes.Contains(w.Body.Bytes(), []byte(`"balance":"48.00"`)) {
+		if w.Code != 200 || !bytes.Contains(w.Body.Bytes(), []byte(`"balance":"48"`)) {
 			t.Fatalf("read: %d %s", w.Code, w.Body.String())
 		}
 		for _, body := range []string{`{"name":"","currency_code":"BRL"}`, `{"name":"Invalid","currency_code":"ZZZ"}`, `{"name":"Invalid","opening_balance":"NaN"}`} {

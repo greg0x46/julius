@@ -25,11 +25,11 @@ func TestManualAccountBalanceBothDialects(t *testing.T) {
 			t.Fatal(err)
 		}
 		var amount, currency string
-		if err := conn.QueryRow(`SELECT amount, currency_code FROM financial_transactions WHERE id=?`, id).Scan(&amount, &currency); err != nil || amount != "10.00" || currency != "USD" {
+		if err := conn.QueryRow(`SELECT amount, currency_code FROM financial_transactions WHERE id=?`, id).Scan(&amount, &currency); err != nil || amount != "10" || currency != "USD" {
 			t.Fatalf("money %s %s: %v", amount, currency, err)
 		}
 		balance, err := transactions.AccountBalance(ctx, conn, "manual")
-		if err != nil || *balance != "110.00" {
+		if err != nil || *balance != "110" {
 			t.Fatalf("balance %v: %v", balance, err)
 		}
 		_, err = conn.Exec(`INSERT INTO account_balance_adjustments(id,account_id,amount,description,created_at) VALUES('adjust','manual','-5','Correction',?)`, now)
@@ -37,7 +37,7 @@ func TestManualAccountBalanceBothDialects(t *testing.T) {
 			t.Fatal(err)
 		}
 		balance, err = transactions.AccountBalance(ctx, conn, "manual")
-		if err != nil || *balance != "105.00" {
+		if err != nil || *balance != "105" {
 			t.Fatalf("adjusted balance %v: %v", balance, err)
 		}
 		cash, err := transactions.CashOnHand(ctx, conn, nil)

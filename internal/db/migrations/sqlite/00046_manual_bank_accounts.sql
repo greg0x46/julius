@@ -33,7 +33,7 @@ CREATE TABLE financial_accounts_new (
             AND current_raw_import_id IS NOT NULL AND normalized_hash IS NOT NULL AND opening_balance IS NULL) OR
         (origin = 'manual' AND source_id IS NULL AND external_id IS NULL
             AND current_raw_import_id IS NULL AND normalized_hash IS NULL
-            AND account_type = 'BANK' AND currency_code IS NOT NULL
+            AND account_type IS NOT NULL AND account_type = 'BANK' AND currency_code IS NOT NULL
             AND opening_balance IS NOT NULL AND balance IS NULL)
     )
 );

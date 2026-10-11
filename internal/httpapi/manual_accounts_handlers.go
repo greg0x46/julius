@@ -179,6 +179,16 @@ func handleAdjustManualAccount(conn *sql.DB) http.HandlerFunc {
 			return
 		}
 		if n == 0 {
+			var exists bool
+			err := tx.QueryRowContext(r.Context(), `SELECT EXISTS(SELECT 1 FROM financial_accounts WHERE id = ?)`, id).Scan(&exists)
+			if err != nil {
+				accountsUnavailableProblem(w)
+				return
+			}
+			if !exists {
+				accountNotFoundProblem(w)
+				return
+			}
 			writeProblem(w, 409, "account-not-active-manual", "Ajuste indisponível", "Ajustes exigem uma conta manual ativa.")
 			return
 		}

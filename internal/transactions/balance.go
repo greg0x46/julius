@@ -10,7 +10,7 @@ import (
 )
 
 // CashOnHand is how much cash sits in the user's non-credit accounts: the
-// sum of the providers' reported balances. It is the one implementation
+// sum of BRL provider balances and derived manual balances. It is the one implementation
 // every cash-side reader goes through — the timeline's t=today anchor and
 // net worth's asset side — so those two views cannot drift apart.
 //

@@ -88,7 +88,7 @@ func eligibleRealItems(ctx context.Context, q Querier, from, to time.Time, accou
 
 	items := make([]transactions.Item, 0, len(result.Items))
 	for _, item := range result.Items {
-		if !item.TotalsEligibility.MovesCash() || item.EffectiveMoney == nil || item.OccurredAt == nil {
+		if !item.TotalsEligibility.MovesCash() || item.EffectiveMoney == nil || item.EffectiveMoney.CurrencyCode != "BRL" || item.OccurredAt == nil {
 			continue
 		}
 		if len(accountIDs) > 0 && !contains(accountIDs, item.Account.ID) {

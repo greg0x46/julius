@@ -3,7 +3,7 @@ import { formatMoney } from "../../presentation/money";
 import { Money } from "../shared/Money";
 
 /**
- * The signed BRL amount, tinted only when money comes in (tone "flow"); the
+ * The signed native amount, with BRL flow coloring; the
  * anchor of every row scan. `size` picks the row figure or the panel's hero.
  * `amount-<classification>` stays on the element because other screens style
  * and query it.

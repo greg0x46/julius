@@ -18,7 +18,8 @@ describe("manual account API", () => {
     const body = { name: "USD", currency_code: "USD", opening_balance: "100.001", archived: false };
     await expect(writeManualAccount(null, body)).resolves.toEqual(manual);
     await expect(writeManualAccount(manual.id, { ...body, archived: true })).resolves.toEqual(manual);
-    expect(fetchMock).toHaveBeenNthCalledWith(1, "/api/accounts", expect.objectContaining({ method: "POST", body: JSON.stringify(body), headers: expect.objectContaining({ "X-Julius-Request": "1" }) }));
+    expect(fetchMock).toHaveBeenNthCalledWith(1, "/api/accounts", expect.objectContaining({ method: "POST", body: JSON.stringify(body) }));
+    expect(new Headers(fetchMock.mock.calls[0]?.[1]?.headers).get("X-Julius-Request")).toBe("1");
     expect(fetchMock).toHaveBeenNthCalledWith(2, `/api/accounts/${manual.id}`, expect.objectContaining({ method: "PUT" }));
   });
 

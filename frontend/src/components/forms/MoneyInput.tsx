@@ -9,7 +9,7 @@ type MoneyInputProps = Omit<
 >;
 
 /**
- * The one money field: an InputNumber with the "R$" prefix, pt-BR grouping
+ * The money field: an InputNumber with the native currency prefix, pt-BR grouping
  * and decimal comma ("12.850,00"), two decimals and the numeric keypad on
  * phones (`inputMode="decimal"`; rc-input-number forwards unknown props to
  * its `<input>`). Steppers are off — nobody steps a price — which also frees
