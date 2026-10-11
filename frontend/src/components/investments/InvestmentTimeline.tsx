@@ -2,6 +2,7 @@ import { Skeleton } from "antd";
 
 import type { InvestmentTransaction } from "../../api/contracts";
 import { formatCompactDay } from "../../presentation/dates";
+import { formatMoney } from "../../presentation/money";
 import { movementTypeLabel, quotaCount } from "../../presentation/investmentLabels";
 import { UnavailableState } from "../AsyncState";
 import { EmptyState, ListRow, Section } from "../layout";
@@ -15,11 +16,13 @@ import { Money } from "../shared/Money";
  */
 export function InvestmentTimeline({
   transactions,
+  currency = "BRL",
   isLoading,
   error,
   onRetry,
 }: {
   transactions: InvestmentTransaction[];
+  currency?: string;
   isLoading: boolean;
   error: unknown;
   onRetry: () => void;
@@ -51,7 +54,7 @@ export function InvestmentTimeline({
                 ]
                   .filter(Boolean)
                   .join(" · ")}
-                trailing={transaction.amount !== null ? <Money value={transaction.amount} tone="neutral" /> : "—"}
+                trailing={transaction.amount !== null ? (currency === "BRL" ? <Money value={transaction.amount} tone="neutral" /> : <span className="money">{formatMoney(transaction.amount, currency)}</span>) : "—"}
               />
             );
           })}

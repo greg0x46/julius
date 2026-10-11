@@ -3,8 +3,10 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { InvestmentPosition } from "../../api/contracts";
+import type { Investment, InvestmentPosition, InvestmentTransaction } from "../../api/contracts";
 import * as compactScreen from "../shared/useCompactScreen";
+import { InvestmentHeaderCard } from "./InvestmentHeaderCard";
+import { InvestmentTimeline } from "./InvestmentTimeline";
 import { InvestmentFigures } from "./InvestmentFigures";
 import { InvestmentPositionsTable } from "./InvestmentPositionsTable";
 import { fromMoneyInput, toMoneyInput } from "./moneyDraft";
@@ -151,4 +153,36 @@ describe("moneyDraft", () => {
     expect(toMoneyInput(null)).toBeNull();
     expect(fromMoneyInput(null)).toBeNull();
   });
+});
+
+describe("native provider investment amounts", () => {
+  for (const currency of ["USD", "BRL"]) {
+    it(`labels the holding and its movements in ${currency}`, () => {
+      const investment: Investment = {
+        id: "holding", external_id: "holding", source_display_name: null, investment_type: "FIXED_INCOME",
+        subtype: null, name: "Foreign fund", balance: "100", currency_code: currency, quantity: null,
+        value: null, amount: null, amount_profit: null, amount_withdrawal: null, amount_original: "90",
+        taxes: "2", taxes2: null, rate: null, rate_type: null, fixed_annual_rate: null, annual_rate: null,
+        last_twelve_months_rate: null, issuer: null, due_date: null, as_of_date: null, provider_updated_at: null,
+        yield_value: "10", yield_source: "informado", yield_unavailable_reason: null,
+      };
+      const transaction: InvestmentTransaction = {
+        id: "movement", external_id: "movement", movement_type: "BUY", direction: "inflow", quantity: null,
+        value: null, amount: "90", occurred_at: "2020-01-01", trade_date: null,
+      };
+      render(<>
+        <InvestmentHeaderCard investment={investment} transactions={[transaction]} />
+        <InvestmentTimeline transactions={[transaction]} currency={currency} isLoading={false} error={null} onRetry={vi.fn()} />
+      </>);
+      const prefix = currency === "USD" ? "USD" : "R$";
+      expect(screen.getByText(`${prefix} 100,00`)).toBeVisible();
+      expect(screen.getByText(`${prefix} 2,00`)).toBeVisible();
+      const movements = screen.getByRole("list", { name: "Movimentações" });
+      expect(within(movements).getByText(`${prefix} 90,00`)).toBeVisible();
+      if (currency === "USD") {
+        expect(screen.getByText(/Valores deste investimento em USD/)).toBeVisible();
+        expect(screen.queryByText(/R\$/)).toBeNull();
+      }
+    });
+  }
 });
