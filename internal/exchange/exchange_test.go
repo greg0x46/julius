@@ -351,3 +351,74 @@ func TestInvalidCurrency(t *testing.T) {
 		}
 	}
 }
+
+func TestHolidayAndTransactionTimezone(t *testing.T) {
+	dbtest.Each(t, func(t *testing.T, conn *sql.DB) {
+		holiday := day(2026, 4, 6) // Easter Monday.
+		previous := day(2026, 4, 2)
+		p := &fakeProvider{}
+		p.set("EUR", "BRL", holiday, "6.25", previous)
+		s, _ := newService(conn, p, sun)
+		transaction := time.Date(2026, 4, 6, 23, 30, 0, 0, time.FixedZone("BRT", -3*60*60))
+		rate, err := s.On(context.Background(), "EUR", "BRL", transaction)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !rate.AsOf.Equal(holiday) || !rate.EffectiveOn.Equal(previous) || rate.Stale {
+			t.Fatalf("holiday rate = %+v", rate)
+		}
+		if _, err := s.On(context.Background(), "EUR", "BRL", transaction); err != nil {
+			t.Fatal(err)
+		}
+		if p.calls != 1 {
+			t.Fatalf("provider calls = %d", p.calls)
+		}
+	})
+}
+
+func TestExpiredCacheFailureAndRecovery(t *testing.T) {
+	dbtest.Each(t, func(t *testing.T, conn *sql.DB) {
+		p := &fakeProvider{}
+		p.set("USD", "BRL", sun, "5", fri)
+		s, c := newService(conn, p, sun.Add(12*time.Hour))
+		ctx := context.Background()
+		if _, err := s.Latest(ctx, "USD", "BRL"); err != nil {
+			t.Fatal(err)
+		}
+		c.t = c.t.Add(s.TTL)
+		p.err = errors.New("offline")
+		for range 2 {
+			rate, err := s.Latest(ctx, "USD", "BRL")
+			if err != nil || !rate.Stale || !rate.Value.Equal(dec("5")) {
+				t.Fatalf("stale cache = %+v, %v", rate, err)
+			}
+		}
+		if p.calls != 2 {
+			t.Fatalf("provider calls = %d", p.calls)
+		}
+		c.t = c.t.Add(s.Cooldown)
+		p.err = nil
+		p.set("USD", "BRL", sun, "5.1", fri)
+		rate, err := s.Latest(ctx, "USD", "BRL")
+		if err != nil || rate.Stale || !rate.Value.Equal(dec("5.1")) {
+			t.Fatalf("recovered rate = %+v, %v", rate, err)
+		}
+		var count int
+		if err := conn.QueryRow(`SELECT COUNT(*) FROM exchange_rates`).Scan(&count); err != nil || count != 1 {
+			t.Fatalf("upsert count = %d, %v", count, err)
+		}
+	})
+}
+
+func TestNonPositiveProviderRatesAreUnavailable(t *testing.T) {
+	dbtest.Each(t, func(t *testing.T, conn *sql.DB) {
+		for _, value := range []string{"0", "-1"} {
+			p := &fakeProvider{}
+			p.set("USD", "BRL", wed, value, wed)
+			s, _ := newService(conn, p, sun)
+			if _, err := s.On(context.Background(), "USD", "BRL", wed); !errors.Is(err, ErrUnavailable) {
+				t.Fatalf("rate %s: %v", value, err)
+			}
+		}
+	})
+}

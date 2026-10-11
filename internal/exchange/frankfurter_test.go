@@ -39,6 +39,12 @@ func TestFrankfurterErrors(t *testing.T) {
 		"not found": func(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, `{"message":"not found"}`, http.StatusNotFound)
 		},
+		"rate limited": func(w http.ResponseWriter, r *http.Request) {
+			http.Error(w, "try later", http.StatusTooManyRequests)
+		},
+		"invalid date": func(w http.ResponseWriter, r *http.Request) {
+			w.Write([]byte(`{"base":"USD","date":"invalid","rates":{"BRL":5}}`))
+		},
 		"missing quote": func(w http.ResponseWriter, r *http.Request) {
 			w.Write([]byte(`{"amount":1.0,"base":"USD","date":"2026-10-09","rates":{}}`))
 		},
