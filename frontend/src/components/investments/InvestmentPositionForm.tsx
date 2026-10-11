@@ -1,6 +1,6 @@
 import { Button, DatePicker, Input, InputNumber, Select } from "antd";
 import dayjs, { type Dayjs } from "dayjs";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import type {
   InvestmentAccount,
@@ -128,15 +128,21 @@ export function InvestmentPositionForm({
   const [createdAsset, setCreatedAsset] = useState<InvestmentAsset | null>(null);
   const isEditing = position !== null;
   const catalog = useInvestmentAssets({ enabled: open && !isEditing });
+  const session = useRef<{ open: boolean; positionId: string | null }>({ open: false, positionId: null });
 
   useEffect(() => {
-    if (open) {
+    const positionId = position?.id ?? null;
+    const reset = open && (!session.current.open || session.current.positionId !== positionId);
+    session.current = { open, positionId };
+    if (reset) {
       setDraft(draftFrom(position, accounts));
       setError(null);
       setCreatingAsset(false);
       setAssetDraft(emptyAssetDraft);
       setAssetSearch("");
       setCreatedAsset(null);
+    } else if (open && !position) {
+      setDraft((current) => current.accountId ? current : { ...current, accountId: blankDraft(accounts).accountId });
     }
   }, [open, position, accounts]);
 
@@ -153,7 +159,7 @@ export function InvestmentPositionForm({
   const assetOptions = assets.map((asset) => ({ value: asset.id, label: assetLabel(asset) }));
   const selectedAsset = assets.find((asset) => asset.id === draft.assetId);
   // With nothing in the catalog there is nothing to pick: the form opens on a new asset.
-  const catalogEmpty = !catalog.isLoading && !catalog.error && catalog.assets.length === 0;
+  const catalogEmpty = !catalog.isLoading && !catalog.error && assets.length === 0;
   const showNewAsset = creatingAsset || catalogEmpty;
   const assetQuoteMarket = catalogQuoteMarket(assetDraft, catalog.classification);
   const classLabel = (asset: InvestmentAsset) =>

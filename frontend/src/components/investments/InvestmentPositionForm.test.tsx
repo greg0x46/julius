@@ -86,6 +86,25 @@ describe("asset selection from the catalog", () => {
     expect(await screen.findByText("Escolha um ativo ou cadastre um novo.")).toBeInTheDocument();
     expect(onCreate).not.toHaveBeenCalled();
   });
+
+  it("preserves entered position data when accounts refresh", async () => {
+    const onCreate = vi.fn();
+    const secondAccount = { ...manualAccount, id: "second-account", name: "Outra conta" };
+    const props = {
+      open: true, position: null, accounts: [manualAccount, secondAccount], portfolios: [],
+      submitting: false, submitError: null, onCreate, onUpdate: vi.fn(), onCancel: vi.fn(),
+    };
+    const view = render(<InvestmentPositionForm {...props} />);
+    await choose("Conta de investimento", secondAccount.name);
+    await choose("Ativo", "BTC · Bitcoin");
+    fillOpeningValue();
+    view.rerender(<InvestmentPositionForm {...props} accounts={[{ ...manualAccount, cash_balance: "550.00" }, { ...secondAccount }]} />);
+    await save();
+    await waitFor(() => expect(onCreate).toHaveBeenCalledWith(expect.objectContaining({
+      account_id: secondAccount.id, asset_id: bitcoin.id,
+      initial_quantity: "0.5", initial_unit_cost: "300000",
+    })));
+  });
 });
 
 describe("new asset inside the position form", () => {
@@ -163,6 +182,36 @@ describe("new asset inside the position form", () => {
     await waitFor(() => expect(onCreate).toHaveBeenCalledTimes(2));
     expect(mocked.createAsset).toHaveBeenCalledTimes(1);
   });
+
+  it("retries a position from an empty catalog after account invalidation without recreating its asset", async () => {
+    mocked.assets = [];
+    const onCreate = vi.fn();
+    const props = {
+      open: true, position: null, accounts: [manualAccount], portfolios: [],
+      submitting: false, submitError: null, onCreate, onUpdate: vi.fn(), onCancel: vi.fn(),
+    };
+    const view = render(<InvestmentPositionForm {...props} />);
+    mocked.createAsset.mockImplementation(async () => {
+      view.rerender(<InvestmentPositionForm {...props} accounts={[{ ...manualAccount, cash_balance: "550.00" }]} />);
+      return bitcoin;
+    });
+    await choose("Classe", "Criptoativos");
+    await choose("Tipo", "Criptomoeda");
+    fireEvent.change(screen.getByRole("textbox", { name: "Nome" }), { target: { value: "Bitcoin" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "Código" }), { target: { value: "BTC" } });
+    fillOpeningValue();
+    fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
+    await waitFor(() => expect(onCreate).toHaveBeenCalledTimes(1));
+    view.rerender(<InvestmentPositionForm {...props} accounts={[{ ...manualAccount, cash_balance: "550.00" }]} submitError="Falha ao salvar posição" />);
+    expect(screen.queryByRole("group", { name: "Novo ativo" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
+    await waitFor(() => expect(onCreate).toHaveBeenCalledTimes(2));
+    expect(onCreate).toHaveBeenLastCalledWith(expect.objectContaining({
+      account_id: manualAccount.id, asset_id: bitcoin.id,
+      initial_quantity: "0.5", initial_unit_cost: "300000",
+    }));
+    expect(mocked.createAsset).toHaveBeenCalledTimes(1);
+  }, 30_000);
 });
 
 describe("account selection", () => {
