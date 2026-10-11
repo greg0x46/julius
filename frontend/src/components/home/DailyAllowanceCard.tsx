@@ -53,6 +53,7 @@ export function DailyAllowanceCard() {
 
   return (
     <Section title={title}>
+      {base.balance_reporting?.status === "stale" && <p role="status">Saldo convertido com cotações desatualizadas.</p>}
       <p className="daily-allowance-value">
         <Money value={dailyAllowance(base.points)} tone="neutral" size="row" />
         <span className="daily-allowance-unit"> / dia</span>

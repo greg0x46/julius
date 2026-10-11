@@ -97,8 +97,14 @@ func (a Accumulator) Summary() Summary {
 }
 
 type IncompleteError struct {
+	Detail   string
 	Coverage Summary
 	Totals   []Totals
 }
 
-func (e *IncompleteError) Error() string { return "Faltam cotações históricas para o relatório." }
+func (e *IncompleteError) Error() string {
+	if e.Detail != "" {
+		return e.Detail
+	}
+	return "Faltam cotações históricas para o relatório."
+}

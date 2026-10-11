@@ -42,6 +42,7 @@ export interface TimelineDayPoint {
 }
 
 export interface TimelineSeries {
+ balance_reporting?: ReportingSummary;
  reporting?: ReportingSummary;
  totals?: CurrencyTotals[];
   points: TimelineDayPoint[];
@@ -161,7 +162,7 @@ function parseTimelineSeries(value: unknown): TimelineSeries {
   const series = requiredRecordWithOptionalKeys(
     value,
     ["points", "entries", "starting_balance", "lowest_balance", "first_negative"],
- ["reporting", "totals"],
+ ["reporting", "totals", "balance_reporting"],
     "Série da linha do tempo inválida.",
   );
   if (
@@ -175,6 +176,7 @@ function parseTimelineSeries(value: unknown): TimelineSeries {
   return {
     ...(Array.isArray(series.totals) ? { totals: series.totals.map(parseCurrencyTotals) } : {}),
     ...(series.reporting === undefined ? {} : { reporting: parseReportingSummary(series.reporting) }),
+    ...(series.balance_reporting === undefined ? {} : { balance_reporting: parseReportingSummary(series.balance_reporting) }),
     points: series.points.map(parseTimelineDayPoint),
     entries: series.entries.map(parseTimelineEntry),
     starting_balance: decimal(series.starting_balance),

@@ -83,11 +83,12 @@ type DayPoint struct {
 // Series is BuildSeries' one output — every presentation layer reads from
 // this, never recomputing totals independently.
 type Series struct {
-	Totals          []reporting.Totals
-	Reporting       reporting.Summary
-	Points          []DayPoint
-	Entries         []Entry
-	StartingBalance decimal.Decimal
-	LowestBalance   DayPoint   // minimum from reference onward, or the window's minimum for a wholly historical series
-	FirstNegative   *time.Time // first negative point from reference onward; nil for wholly historical windows
+	Totals           []reporting.Totals
+	Reporting        reporting.Summary
+	BalanceReporting reporting.Summary
+	Points           []DayPoint
+	Entries          []Entry
+	StartingBalance  decimal.Decimal
+	LowestBalance    DayPoint   // minimum from reference onward, or the window's minimum for a wholly historical series
+	FirstNegative    *time.Time // first negative point from reference onward; nil for wholly historical windows
 }

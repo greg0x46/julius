@@ -73,13 +73,14 @@ func timelineDayPointToDTO(p timeline.DayPoint) timelineDayPointDTO {
 }
 
 type timelineSeriesDTO struct {
-	Totals          []reporting.Totals    `json:"totals"`
-	Reporting       reporting.Summary     `json:"reporting"`
-	Points          []timelineDayPointDTO `json:"points"`
-	Entries         []timelineEntryDTO    `json:"entries"`
-	StartingBalance string                `json:"starting_balance"`
-	LowestBalance   timelineDayPointDTO   `json:"lowest_balance"`
-	FirstNegative   *string               `json:"first_negative"`
+	Totals           []reporting.Totals    `json:"totals"`
+	Reporting        reporting.Summary     `json:"reporting"`
+	BalanceReporting reporting.Summary     `json:"balance_reporting"`
+	Points           []timelineDayPointDTO `json:"points"`
+	Entries          []timelineEntryDTO    `json:"entries"`
+	StartingBalance  string                `json:"starting_balance"`
+	LowestBalance    timelineDayPointDTO   `json:"lowest_balance"`
+	FirstNegative    *string               `json:"first_negative"`
 }
 
 func timelineSeriesToDTO(s timeline.Series) timelineSeriesDTO {
@@ -97,13 +98,14 @@ func timelineSeriesToDTO(s timeline.Series) timelineSeriesDTO {
 		firstNegative = &formatted
 	}
 	return timelineSeriesDTO{
-		Totals:          s.Totals,
-		Reporting:       s.Reporting,
-		Points:          points,
-		Entries:         entries,
-		StartingBalance: money.CanonicalDecimal(s.StartingBalance),
-		LowestBalance:   timelineDayPointToDTO(s.LowestBalance),
-		FirstNegative:   firstNegative,
+		Totals:           s.Totals,
+		Reporting:        s.Reporting,
+		BalanceReporting: s.BalanceReporting,
+		Points:           points,
+		Entries:          entries,
+		StartingBalance:  money.CanonicalDecimal(s.StartingBalance),
+		LowestBalance:    timelineDayPointToDTO(s.LowestBalance),
+		FirstNegative:    firstNegative,
 	}
 }
 

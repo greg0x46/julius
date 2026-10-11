@@ -67,3 +67,10 @@ describe("timeline contracts", () => {
     expect(() => parseTimelineResponse(payload)).toThrow();
   });
 });
+
+it("preserves balance conversion coverage separately from period reporting", () => {
+  const balanceReporting = { currency_code: "BRL", status: "stale", eligible: 1, converted: 1, missing: 0, stale: 1, totals: { currency_code: "BRL", inflow: "500", outflow: "0", balance: "500" } };
+  const parsed = parseTimelineResponse({ ...validResponse, base: { ...validResponse.base, balance_reporting: balanceReporting } });
+  expect(parsed.base.balance_reporting).toEqual(balanceReporting);
+  expect(parsed.period_totals.reporting).toBeUndefined();
+});

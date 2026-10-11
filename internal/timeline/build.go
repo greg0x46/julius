@@ -254,9 +254,8 @@ type billTiming struct {
 func BuildSeries(ctx context.Context, q Querier, params BuildParams) (Series, error) {
 	from, to, reference := dates.Day(params.From), dates.Day(params.To), dates.Day(params.ReferenceDate)
 
-	// The t=today anchor: cash on hand, from the one implementation net
-	// worth's asset side also reads (see transactions.CashOnHand).
-	balance, err := transactions.CashOnHand(ctx, q, params.AccountIDs)
+	// Convert the cash anchor at the reference date, independently of period income/expense.
+	balance, balanceReporting, err := reportingCashBalance(ctx, q, params.AccountIDs, reference)
 	if err != nil {
 		return Series{}, err
 	}
@@ -392,13 +391,14 @@ func BuildSeries(ctx context.Context, q Querier, params BuildParams) (Series, er
 		return Series{}, &reporting.IncompleteError{Coverage: summary, Totals: rawTotals}
 	}
 	return Series{
-		Totals:          rawTotals,
-		Reporting:       coverage.Summary(),
-		Points:          points,
-		Entries:         entries,
-		StartingBalance: balance,
-		LowestBalance:   lowest,
-		FirstNegative:   firstNegative,
+		Totals:           rawTotals,
+		Reporting:        coverage.Summary(),
+		BalanceReporting: balanceReporting,
+		Points:           points,
+		Entries:          entries,
+		StartingBalance:  balance,
+		LowestBalance:    lowest,
+		FirstNegative:    firstNegative,
 	}, nil
 }
 

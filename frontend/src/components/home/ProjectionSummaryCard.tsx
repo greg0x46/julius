@@ -148,6 +148,7 @@ export function ProjectionSummaryCard({ period }: { period: Period }) {
 
       {!isLoading && !error && base && bounds && !hasNoActivity(base) && (
         <div className="projection-summary">
+          {base.balance_reporting?.status === "stale" && <p role="status">Saldo convertido com cotações desatualizadas.</p>}
           {/* The global control already names the chosen window, so spelling it
               out again would only repeat it — except under "todo o
               período", where the bounds come from the database and are
