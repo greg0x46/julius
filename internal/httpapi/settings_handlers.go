@@ -1,8 +1,11 @@
 package httpapi
 
 import (
+	"context"
 	"database/sql"
+	"errors"
 	"github.com/greg0x46/julius/internal/datasources"
+	"github.com/greg0x46/julius/internal/marketdata"
 	"github.com/greg0x46/julius/internal/quotes"
 	"github.com/greg0x46/julius/internal/settings"
 	"net/http"
@@ -15,7 +18,31 @@ func handleGetQuotesSettings(db *sql.DB) http.HandlerFunc {
 			writeProblem(w, 503, "settings-unavailable", "Configuração indisponível", "")
 			return
 		}
-		writeJSON(w, 200, config)
+		last, err := quotes.GetLastRefresh(r.Context(), db)
+		if err != nil {
+			writeProblem(w, 503, "settings-unavailable", "Configuração indisponível", "")
+			return
+		}
+		writeJSON(w, 200, struct {
+			settings.QuoteRefreshSettings
+			LastRefresh *quotes.LastRefresh `json:"last_refresh"`
+		}{config, last})
+	}
+}
+
+func handleRefreshQuotes(db *sql.DB, market *marketdata.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if market == nil {
+			writeProblem(w, 503, "quotes-unavailable", "Cotações indisponíveis", "")
+			return
+		}
+		// Finish and record the run even if the browser goes away.
+		last, err := quotes.RefreshNow(context.WithoutCancel(r.Context()), db, market)
+		if errors.Is(err, quotes.ErrRefreshRunning) {
+			writeProblem(w, 409, "refresh-running", "Atualização em andamento", "As cotações já estão sendo atualizadas. Tente novamente em instantes.")
+			return
+		}
+		writeJSON(w, 200, last)
 	}
 }
 

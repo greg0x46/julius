@@ -18,6 +18,7 @@ import (
 	"github.com/greg0x46/julius/internal/auth"
 	"github.com/greg0x46/julius/internal/db"
 	"github.com/greg0x46/julius/internal/httpapi"
+	"github.com/greg0x46/julius/internal/marketdata"
 	"github.com/greg0x46/julius/internal/settings"
 	"net/url"
 	"sync"
@@ -33,6 +34,10 @@ const testOrigin = "http://localhost:4200"
 
 func newTestServerWithSession(t *testing.T) (*httptest.Server, *sql.DB, *settings.Secrets) {
 	t.Helper()
+	return newTestServerWithMarket(t, nil)
+}
+func newTestServerWithMarket(t *testing.T, market *marketdata.Service) (*httptest.Server, *sql.DB, *settings.Secrets) {
+	t.Helper()
 	conn, err := db.Open(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
 		t.Fatal(err)
@@ -45,13 +50,17 @@ func newTestServerWithSession(t *testing.T) (*httptest.Server, *sql.DB, *setting
 		t.Fatal(err)
 	}
 	keys := settings.NewSecrets(master)
-	srv := httptest.NewServer(httpapi.NewServer(conn, fs.FS(frontend), keys, auth.Config{PublicURL: testOrigin}))
+	srv := httptest.NewServer(httpapi.NewServer(conn, fs.FS(frontend), keys, auth.Config{PublicURL: testOrigin}, market))
 	t.Cleanup(srv.Close)
 	return srv, conn, keys
 }
 func newTestServer(t *testing.T) (*httptest.Server, *sql.DB) {
 	t.Helper()
-	srv, conn, _ := newTestServerWithSession(t)
+	return loggedIn(t, newTestServerWithSession)
+}
+func loggedIn(t *testing.T, open func(*testing.T) (*httptest.Server, *sql.DB, *settings.Secrets)) (*httptest.Server, *sql.DB) {
+	t.Helper()
+	srv, conn, _ := open(t)
 	token, err := auth.NewStore(conn).Login(context.Background(), "owner@example.com", testPassword)
 	if err != nil {
 		t.Fatal(err)

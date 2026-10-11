@@ -55,7 +55,7 @@ func TestQuoteSettingsPostgresRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	srv := httptest.NewServer(httpapi.NewServer(conn, fstest.MapFS{"index.html": {Data: []byte("spa")}}, settings.NewSecrets(master), auth.Config{PublicURL: testOrigin}))
+	srv := httptest.NewServer(httpapi.NewServer(conn, fstest.MapFS{"index.html": {Data: []byte("spa")}}, settings.NewSecrets(master), auth.Config{PublicURL: testOrigin}, nil))
 	defer srv.Close()
 	endpoint, _ := url.Parse(srv.URL)
 	fixtureTokens.Store(endpoint.Host, token)

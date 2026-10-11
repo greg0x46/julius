@@ -74,11 +74,15 @@ func (s *scheduleState) cycle(ctx context.Context, conn *sql.DB, service *market
 	}
 	today := investments.ProviderDay(now)
 	// A disable committed during spot work takes effect before history starts.
+	spotRefresh.Lock()
 	if daily {
-		_, err = RefreshAll(ctx, conn, service, today)
+		var summary Summary
+		summary, err = RefreshAll(ctx, conn, service, today)
+		recordRefresh(ctx, conn, "scheduled", summary, err)
 	} else {
 		_, err = RefreshMissing(ctx, conn, service, today)
 	}
+	spotRefresh.Unlock()
 	if err != nil {
 		return err
 	}

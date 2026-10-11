@@ -12,6 +12,7 @@ import (
 	"github.com/greg0x46/julius/internal/auth"
 	"github.com/greg0x46/julius/internal/investments"
 	"github.com/greg0x46/julius/internal/ledger"
+	"github.com/greg0x46/julius/internal/marketdata"
 	"github.com/greg0x46/julius/internal/payables"
 	"github.com/greg0x46/julius/internal/recurrences"
 	"github.com/greg0x46/julius/internal/settings"
@@ -41,7 +42,7 @@ func onIgnoredHook(ctx context.Context, q transactions.Querier, transactionID st
 
 // NewServer protects API routes with per-browser authentication. The separate
 // secrets holder is used only to encrypt configuration, never to grant access.
-func NewServer(db *sql.DB, frontend fs.FS, secrets *settings.Secrets, config auth.Config) http.Handler {
+func NewServer(db *sql.DB, frontend fs.FS, secrets *settings.Secrets, config auth.Config, market *marketdata.Service) http.Handler {
 	if err := config.Validate(); err != nil {
 		panic(err)
 	}
@@ -58,6 +59,7 @@ func NewServer(db *sql.DB, frontend fs.FS, secrets *settings.Secrets, config aut
 	mux.HandleFunc("PUT /api/settings/pluggy", handlePluggySettings(db, secrets))
 	mux.HandleFunc("GET /api/settings/quotes", handleGetQuotesSettings(db))
 	mux.HandleFunc("PUT /api/settings/quotes", handleQuotesSettings(db, secrets))
+	mux.HandleFunc("POST /api/settings/quotes/refresh", handleRefreshQuotes(db, market))
 
 	mux.HandleFunc("GET /api/preferences", handleGetPreferences(db))
 	mux.HandleFunc("PUT /api/preferences", handleUpdatePreferences(db))
