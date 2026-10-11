@@ -219,7 +219,10 @@ func cashDeltasDescending(ctx context.Context, q Querier) ([]cashTransactionDelt
 		       ft.occurred_at, ft.provider_status, ft.movement_type
 		FROM financial_transactions ft
 		JOIN financial_accounts fa ON fa.id = ft.account_id
-		WHERE (fa.account_type IS NULL OR fa.account_type != 'CREDIT') AND ft.origin = 'synced'`)
+		WHERE (fa.account_type IS NULL OR fa.account_type != 'CREDIT') AND ft.deleted_at IS NULL AND (ft.origin = 'synced' OR (fa.origin = 'manual' AND ft.provider_status = 'POSTED'))
+ UNION ALL SELECT aba.amount, aba.amount, fa.currency_code, fa.currency_code,
+ aba.created_at, 'POSTED', CASE WHEN CAST(aba.amount AS NUMERIC) < 0 THEN 'DEBIT' ELSE 'CREDIT' END
+ FROM account_balance_adjustments aba JOIN financial_accounts fa ON fa.id = aba.account_id`)
 	if err != nil {
 		return nil, fmt.Errorf("query cash transactions: %w", err)
 	}
@@ -322,7 +325,7 @@ func earliestCashTransactionDay(ctx context.Context, q Querier) (day time.Time, 
 		FROM financial_transactions ft
 		JOIN financial_accounts fa ON fa.id = ft.account_id
 		WHERE (fa.account_type IS NULL OR fa.account_type != 'CREDIT')
-		  AND ft.occurred_at IS NOT NULL AND ft.origin = 'synced'`).Scan(&raw)
+		  AND ft.occurred_at IS NOT NULL AND ft.deleted_at IS NULL AND (ft.origin = 'synced' OR (fa.origin = 'manual' AND ft.provider_status = 'POSTED'))`).Scan(&raw)
 	if err != nil || !raw.Valid {
 		return time.Time{}, false, err
 	}

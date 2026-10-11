@@ -746,6 +746,8 @@ func writeManualTransactionError(w http.ResponseWriter, err error, explicitCateg
 		transactionNotFoundProblem(w)
 	case errors.Is(err, transactions.ErrNotManual):
 		writeProblem(w, 409, "transaction-not-manual", "Transação não é manual", notManualDetail)
+	case errors.Is(err, transactions.ErrAccountArchived):
+		writeProblem(w, 409, "account-archived", "Conta arquivada", "Reative a conta antes de registrar ou editar movimentações.")
 	case errors.Is(err, transactions.ErrAccountNotFound):
 		accountNotFoundProblem(w)
 	case errors.Is(err, ledger.ErrIdempotencyConflict):
