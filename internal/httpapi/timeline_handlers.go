@@ -199,8 +199,16 @@ func handleGetTimeline(conn *sql.DB) http.HandlerFunc {
 			invalidTimelineProblem(w, "to não pode ser anterior a from.")
 			return
 		}
+		timezone := query.Get("timezone")
+		if timezone != "" {
+			if _, err := time.LoadLocation(timezone); err != nil {
+				invalidTimelineProblem(w, "timezone inválida.")
+				return
+			}
+		}
 		baseParams := timeline.BuildParams{
-			From: from, To: to, ReferenceDate: reference,
+			Timezone: timezone,
+			From:     from, To: to, ReferenceDate: reference,
 			AccountIDs:  splitCSV(query.Get("account_ids")),
 			CategoryIDs: splitCSV(query.Get("category_ids")),
 			CardNumbers: splitCSV(query.Get("card_numbers")),

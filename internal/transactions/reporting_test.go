@@ -181,3 +181,32 @@ func TestReportingUsesEffectiveAccountCurrency(t *testing.T) {
 		t.Fatalf("conflicting filter = %+v, %v", categories, err)
 	}
 }
+
+func TestLocalReportingDayAgreesWithTimelineAtMidnight(t *testing.T) {
+	f := newFixture(t)
+	occurred := time.Date(2026, 3, 16, 1, 0, 0, 0, time.UTC)
+	f.rate("USD", "2026-03-15", "5")
+	f.rate("USD", "2026-03-16", "6")
+	accountID := f.addAccount(account{CurrencyCode: strp("USD"), Balance: strp("0")})
+	id := f.addTransaction(txn{AccountID: accountID, Amount: strp("10"), CurrencyCode: strp("USD"), OccurredAt: &occurred, ProviderStatus: strp("POSTED"), MovementType: strp("DEBIT")})
+	f.setCategory(id, categorySupermercado)
+	for _, window := range []struct{ from, to int }{{1, 31}, {15, 15}} {
+		from, to := money.Date{Year: 2026, Month: 3, Day: window.from}, money.Date{Year: 2026, Month: 3, Day: window.to}
+		filters := transactions.Filters{DateFrom: &from, DateTo: &to, CategoryIDs: []string{categorySupermercado}}
+		query, err := transactions.Query(context.Background(), f.conn, transactions.QueryRequest{Timezone: "America/Sao_Paulo", GroupBy: money.GroupNone, Filters: filters})
+		if err != nil {
+			t.Fatal(err)
+		}
+		categories, err := transactions.CategoryReporting(context.Background(), f.conn, filters, "America/Sao_Paulo", money.Outflow)
+		if err != nil {
+			t.Fatal(err)
+		}
+		series, err := timeline.BuildSeries(context.Background(), f.conn, timeline.BuildParams{From: time.Date(2026, 3, window.from, 0, 0, 0, 0, time.UTC), To: time.Date(2026, 3, window.to, 0, 0, 0, 0, time.UTC), ReferenceDate: occurred, Timezone: "America/Sao_Paulo", CategoryIDs: []string{categorySupermercado}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if query.Reporting.Totals.Outflow != "50" || categories.Reporting.Totals.Outflow != "50" || series.Reporting.Totals.Outflow != "50" || len(series.Entries) != 1 || series.Entries[0].Date.Day() != 15 {
+			t.Fatalf("local reporting differs: query=%+v, category=%+v, timeline=%+v", query.Reporting, categories.Reporting, series)
+		}
+	}
+}

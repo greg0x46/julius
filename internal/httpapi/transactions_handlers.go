@@ -468,10 +468,12 @@ type categorySpendingItemDTO struct {
 }
 
 type spendingByCategoryDTO struct {
-	Month        string                    `json:"month"`
-	CurrencyCode string                    `json:"currency_code"`
-	Total        string                    `json:"total"`
-	Items        []categorySpendingItemDTO `json:"items"`
+	Month        string                        `json:"month"`
+	CurrencyCode string                        `json:"currency_code"`
+	Total        string                        `json:"total"`
+	Items        []categorySpendingItemDTO     `json:"items"`
+	Reporting    reporting.Summary             `json:"reporting"`
+	Totals       []transactions.CurrencyTotals `json:"totals"`
 }
 
 func spendingByCategoryUnavailableProblem(w http.ResponseWriter) {
@@ -496,11 +498,12 @@ func dateWithinBounds(t time.Time, from, to money.Date) bool {
 // same convention as the real side) — never merged into a real category's
 // total, always its own row tagged source="projetado", so the response can
 // never conflate a hypothetical amount with a real one.
-func projectedSpendingByCategory(ctx context.Context, db *sql.DB, scenarioID string, from, to money.Date) ([]categorySpendingItemDTO, error) {
+func projectedSpendingByCategory(ctx context.Context, db *sql.DB, scenarioID string, from, to money.Date) ([]categorySpendingItemDTO, int, error) {
 	list, err := scenarios.ListScenarioTransactions(ctx, db, scenarioID)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
+	count := 0
 	type accum struct {
 		name   string
 		amount decimal.Decimal
@@ -511,6 +514,7 @@ func projectedSpendingByCategory(ctx context.Context, db *sql.DB, scenarioID str
 		if !dateWithinBounds(st.ProjectedAt, from, to) {
 			continue
 		}
+		count++
 		key, name := "", "Sem categoria"
 		if st.Category != nil && *st.Category != "" {
 			key, name = *st.Category, *st.Category
@@ -528,7 +532,7 @@ func projectedSpendingByCategory(ctx context.Context, db *sql.DB, scenarioID str
 		a := byCategory[key]
 		items[i] = categorySpendingItemDTO{CategoryName: a.name, Amount: money.CanonicalDecimal(a.amount), Source: "projetado"}
 	}
-	return items, nil
+	return items, count, nil
 }
 
 // handleSpendingByCategory sums the requesting client's current calendar
@@ -553,9 +557,9 @@ func handleSpendingByCategory(db *sql.DB) http.HandlerFunc {
 		lastDay := time.Date(year, month, 1, 0, 0, 0, 0, loc).AddDate(0, 1, -1)
 		to := money.Date{Year: lastDay.Year(), Month: lastDay.Month(), Day: lastDay.Day()}
 
-		items, err := transactions.SpendingByCategory(r.Context(), db, transactions.Filters{
+		report, err := transactions.CategoryReporting(r.Context(), db, transactions.Filters{
 			DateFrom: &from, DateTo: &to,
-		}, timezone)
+		}, timezone, money.Outflow)
 		if err != nil {
 			if writeReportingProblem(w, err) {
 				return
@@ -564,8 +568,13 @@ func handleSpendingByCategory(db *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		dtoItems := make([]categorySpendingItemDTO, len(items))
-		for i, it := range items {
+		if report.Reporting.Totals == nil {
+			writeReportingProblem(w, &reporting.IncompleteError{Coverage: report.Reporting, Totals: report.Totals})
+			return
+		}
+
+		dtoItems := make([]categorySpendingItemDTO, len(report.Items))
+		for i, it := range report.Items {
 			dtoItems[i] = categorySpendingItemDTO{CategoryID: it.CategoryID, CategoryName: it.CategoryName, CategoryIcon: it.CategoryIcon, CategoryColor: it.CategoryColor, Amount: it.Amount, Source: "real"}
 		}
 
@@ -577,12 +586,35 @@ func handleSpendingByCategory(db *sql.DB) http.HandlerFunc {
 				spendingByCategoryUnavailableProblem(w)
 				return
 			}
-			projected, err := projectedSpendingByCategory(r.Context(), db, scenarioID, from, to)
+			projected, count, err := projectedSpendingByCategory(r.Context(), db, scenarioID, from, to)
 			if err != nil {
 				spendingByCategoryUnavailableProblem(w)
 				return
 			}
 			dtoItems = append(dtoItems, projected...)
+			report.Reporting.Eligible += count
+			report.Reporting.Converted += count
+			projectedTotal := decimal.Zero
+			for _, item := range projected {
+				projectedTotal = projectedTotal.Add(decimal.RequireFromString(item.Amount))
+			}
+			if count > 0 {
+				brlIndex := -1
+				for i, totals := range report.Totals {
+					if totals.CurrencyCode == reporting.ReferenceCurrency {
+						brlIndex = i
+						break
+					}
+				}
+				if brlIndex < 0 {
+					report.Totals = append(report.Totals, transactions.CurrencyTotals{CurrencyCode: reporting.ReferenceCurrency, Inflow: "0", Outflow: "0", Balance: "0"})
+					brlIndex = len(report.Totals) - 1
+				}
+				brl := &report.Totals[brlIndex]
+				brl.Outflow = money.CanonicalDecimal(decimal.RequireFromString(brl.Outflow).Add(projectedTotal))
+				brl.Balance = money.CanonicalDecimal(decimal.RequireFromString(brl.Balance).Sub(projectedTotal))
+				sort.Slice(report.Totals, func(i, j int) bool { return report.Totals[i].CurrencyCode < report.Totals[j].CurrencyCode })
+			}
 		}
 
 		total := decimal.Zero
@@ -600,11 +632,16 @@ func handleSpendingByCategory(db *sql.DB) http.HandlerFunc {
 			return ai.GreaterThan(aj)
 		})
 
+		report.Reporting.Totals.Outflow = money.CanonicalDecimal(total)
+		report.Reporting.Totals.Balance = money.CanonicalDecimal(total.Neg())
+
 		writeJSON(w, http.StatusOK, spendingByCategoryDTO{
 			Month:        fmt.Sprintf("%04d-%02d", year, int(month)),
 			CurrencyCode: "BRL",
 			Total:        money.CanonicalDecimal(total),
 			Items:        dtoItems,
+			Reporting:    report.Reporting,
+			Totals:       report.Totals,
 		})
 	}
 }

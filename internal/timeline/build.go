@@ -30,6 +30,7 @@ type Querier = transactions.Querier
 type BuildParams struct {
 	From, To      time.Time
 	ReferenceDate time.Time
+	Timezone      string
 	AccountIDs    []string
 	CategoryIDs   []string
 	CardNumbers   []string
@@ -70,12 +71,12 @@ func contains(list []string, value string) bool {
 // its amount. The anchor is unaffected — today's point is the reported
 // balance whatever the ledger says — so the error is confined to the shape of
 // the past, never to the balance the user is shown for today.
-func eligibleRealItems(ctx context.Context, q Querier, from, to time.Time, accountIDs, categoryIDs, cardNumbers []string) ([]transactions.Item, error) {
+func eligibleRealItems(ctx context.Context, q Querier, from, to time.Time, accountIDs, categoryIDs, cardNumbers []string, timezone string) ([]transactions.Item, error) {
 	fromDate := money.Date{Year: from.Year(), Month: from.Month(), Day: from.Day()}
 	toDate := money.Date{Year: to.Year(), Month: to.Month(), Day: to.Day()}
 
 	result, err := transactions.Query(ctx, q, transactions.QueryRequest{
-		Timezone: "UTC",
+		Timezone: timezone,
 		GroupBy:  money.GroupNone,
 		Page:     1,
 		PageSize: 1_000_000,
@@ -125,7 +126,7 @@ const noCategoryName = "Sem categoria"
 //
 // The second return value classifies the card entries by when their bill
 // falls due relative to reference; see billTiming.
-func realEntries(ctx context.Context, q Querier, items []transactions.Item, reference time.Time) ([]Entry, billTiming, error) {
+func realEntries(ctx context.Context, q Querier, items []transactions.Item, reference time.Time, loc *time.Location) ([]Entry, billTiming, error) {
 	creditAccounts, err := transactions.CreditAccountIDs(ctx, q)
 	if err != nil {
 		return nil, billTiming{}, err
@@ -158,7 +159,12 @@ func realEntries(ctx context.Context, q Querier, items []transactions.Item, refe
 		}
 		cash := item.Reporting
 		if cash.Status != "unavailable" {
-			cash = reporting.Convert(ctx, rates, amount, item.EffectiveMoney.CurrencyCode, item.ReportingDate)
+			reportingDate := item.ReportingDate
+			if reportingDate != nil {
+				local := reportingDate.In(loc)
+				reportingDate = &local
+			}
+			cash = reporting.Convert(ctx, rates, amount, item.EffectiveMoney.CurrencyCode, reportingDate)
 		}
 		amount = decimal.Zero
 		if cash.Amount != nil {
@@ -197,7 +203,7 @@ func realEntries(ctx context.Context, q Querier, items []transactions.Item, refe
 		if item.Description != nil {
 			description = *item.Description
 		}
-		date := dates.Day(*item.OccurredAt)
+		date := dates.Day(item.OccurredAt.In(loc))
 		tier := TierRealizado
 		eventKey := "transaction:" + item.ID
 		if creditAccounts[item.Account.ID] {
@@ -252,6 +258,14 @@ type billTiming struct {
 // stream into one Series. Scenario kinds, schedules, automation, links, and
 // realization precedence all stay behind projections.List.
 func BuildSeries(ctx context.Context, q Querier, params BuildParams) (Series, error) {
+	timezone := params.Timezone
+	if timezone == "" {
+		timezone = "UTC"
+	}
+	loc, err := time.LoadLocation(timezone)
+	if err != nil {
+		return Series{}, fmt.Errorf("invalid timeline timezone: %w", err)
+	}
 	from, to, reference := dates.Day(params.From), dates.Day(params.To), dates.Day(params.ReferenceDate)
 
 	// Convert the cash anchor at the reference date, independently of period income/expense.
@@ -272,11 +286,11 @@ func BuildSeries(ctx context.Context, q Querier, params BuildParams) (Series, er
 	// re-dated purchases are dropped from the walk by cashEntries either way.
 	// The two months stay because they cost one wider query and nothing else,
 	// and because the entries they bring in still belong in Series.Entries.
-	items, err := eligibleRealItems(ctx, q, from.AddDate(0, -2, 0), to, params.AccountIDs, params.CategoryIDs, params.CardNumbers)
+	items, err := eligibleRealItems(ctx, q, from.AddDate(0, -2, 0), to, params.AccountIDs, params.CategoryIDs, params.CardNumbers, timezone)
 	if err != nil {
 		return Series{}, err
 	}
-	entries, bills, err := realEntries(ctx, q, items, reference)
+	entries, bills, err := realEntries(ctx, q, items, reference, loc)
 	if err != nil {
 		return Series{}, err
 	}
