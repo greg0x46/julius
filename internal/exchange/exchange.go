@@ -1,22 +1,8 @@
-// Package exchange resolves currency exchange rates for reporting: the
-// current rate for valuing a holding today, and the rate of a past day for
-// converting a transaction made on it. Rates come from a replaceable Provider
-// and are persisted in exchange_rates, so repeated reads do not reach the
-// provider. Nothing here rewrites an original amount or currency; a
-// conversion is always computed on the side, from a Rate that says where it
-// came from and how current it is.
-//
-// Policy:
-//
-//   - A rate for day D is the provider's rate for the last business day on
-//     or before D (weekends and holidays fall back to the previous one), and
-//     never a rate published after D.
-//   - Rows are cached per requested day. A row fetched after its day ended
-//     (UTC) is final; any other row is refreshed once older than the TTL.
-//   - When the provider fails, the most recent persisted rate on or before D
-//     is returned with Stale set; with nothing persisted the result is
-//     ErrUnavailable. A missing rate is never taken as 1:1.
-//   - A rate whose effective day is more than MaxLag before D is Stale too.
+// Package exchange resolves persisted decimal rates without changing original values.
+// Historical lookups use the last business day on or before the requested day.
+// Rows fetched after that day ended (UTC) are final; others refresh after TTL.
+// Provider failure returns a stored rate marked stale, or ErrUnavailable.
+// Rates more than MaxLag before the requested day are also marked stale.
 package exchange
 
 import (
