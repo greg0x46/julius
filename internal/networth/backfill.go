@@ -3,6 +3,8 @@ package networth
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"time"
@@ -11,6 +13,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/greg0x46/julius/internal/db"
+	"github.com/greg0x46/julius/internal/fx"
 	"github.com/greg0x46/julius/internal/money"
 	"github.com/greg0x46/julius/internal/payables"
 	"github.com/greg0x46/julius/internal/transactions"
@@ -82,7 +85,7 @@ func Backfill(ctx context.Context, q Querier, today time.Time) error {
 		return err
 	}
 
-	currentCash, err := cashBalance(ctx, q)
+	currentCash, err := transactions.CashBalances(ctx, q, nil)
 	if err != nil {
 		return err
 	}
@@ -97,21 +100,31 @@ func Backfill(ctx context.Context, q Querier, today time.Time) error {
 	// every transaction answers every day at once.
 	type gap struct {
 		day, dayEnd time.Time
-		cash        decimal.Decimal
+		cash        map[string]decimal.Decimal
 	}
 	var gaps []gap
 	idx := 0
-	runningDelta := decimal.Zero
+	runningDelta := map[string]decimal.Decimal{}
 	for d := yesterday; !d.Before(windowStart); d = d.AddDate(0, 0, -1) {
 		dayEnd := d.AddDate(0, 0, 1)
 		for idx < len(deltas) && !deltas[idx].occurredAt.Before(dayEnd) {
-			runningDelta = runningDelta.Add(deltas[idx].delta)
+			currency := deltas[idx].currency
+			runningDelta[currency] = runningDelta[currency].Add(deltas[idx].delta)
 			idx++
 		}
 		if existing[formatDate(d)] {
 			continue
 		}
-		gaps = append(gaps, gap{day: d, dayEnd: dayEnd, cash: currentCash.Sub(runningDelta)})
+		cash := map[string]decimal.Decimal{}
+		for currency, balance := range currentCash {
+			cash[currency] = balance.Sub(runningDelta[currency])
+		}
+		for currency, delta := range runningDelta {
+			if _, ok := cash[currency]; !ok {
+				cash[currency] = delta.Neg()
+			}
+		}
+		gaps = append(gaps, gap{day: d, dayEnd: dayEnd, cash: cash})
 	}
 	if len(gaps) == 0 {
 		return nil
@@ -130,15 +143,33 @@ func Backfill(ctx context.Context, q Querier, today time.Time) error {
 	}
 
 	for i, g := range gaps {
-		// The card side still costs a query per day: its cycle math keys off
-		// time.Local calendar days and has no as-of-many-days form, so
-		// there is nothing to hoist out of the loop here yet.
-		creditCard, err := creditCardBalanceAsOf(ctx, q, g.day)
-		if err != nil {
+		valuation := fx.New(g.dayEnd.Add(-time.Nanosecond))
+		status := ValuationReconstructed
+		cash := decimal.Zero
+		for currency, native := range g.cash {
+			value, err := valuation.Convert(ctx, q, native, currency)
+			if errors.Is(err, fx.ErrMissingRate) {
+				status = ValuationUnavailable
+				continue
+			}
+			if err != nil {
+				return err
+			}
+			cash = cash.Add(value)
+		}
+		loc := time.Local
+		reference := time.Date(g.day.Year(), g.day.Month(), g.day.Day(), 12, 0, 0, 0, loc)
+		creditCard, err := transactions.CreditCardBalanceValued(ctx, q, reference, loc, valuation)
+		if errors.Is(err, fx.ErrMissingRate) {
+			status = ValuationUnavailable
+		} else if err != nil {
 			return err
 		}
-		breakdown := Breakdown{CashBalance: g.cash, CreditCardBalance: creditCard, PayablesDebt: debts[i]}.TotalsFor()
-		if err := insertBackfillSnapshot(ctx, q, formatDate(g.day), breakdown); err != nil {
+		breakdown := Breakdown{CashBalance: cash, CreditCardBalance: creditCard, PayablesDebt: debts[i]}.TotalsFor()
+		if status == ValuationUnavailable {
+			breakdown = Breakdown{}.TotalsFor()
+		}
+		if err := insertBackfillSnapshot(ctx, q, formatDate(g.day), breakdown, valuation, status); err != nil {
 			return err
 		}
 	}
@@ -166,20 +197,25 @@ func existingCapturedDays(ctx context.Context, q Querier, from, to time.Time) (m
 	return result, rows.Err()
 }
 
-func insertBackfillSnapshot(ctx context.Context, q Querier, capturedAt string, breakdown Breakdown) error {
+func insertBackfillSnapshot(ctx context.Context, q Querier, capturedAt string, breakdown Breakdown, valuation *fx.Valuation, status string) error {
 	now := db.FormatTime(time.Now())
-	_, err := q.ExecContext(ctx, `
+	rates, err := json.Marshal(valuation.Rates)
+	if err != nil {
+		return err
+	}
+	_, err = q.ExecContext(ctx, `
 		INSERT INTO net_worth_snapshots (
 			id, captured_at, total_assets, total_liabilities, net_worth,
 			cash_balance, investment_balance, credit_card_balance, payables_debt,
-			is_backfilled, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+			is_backfilled, created_at, updated_at,
+			reference_currency, valued_at, rate_policy, fx_rates, valuation_version, valuation_status
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, 1, ?)
 		ON CONFLICT (captured_at) DO NOTHING`,
 		uuid.NewString(), capturedAt,
 		money.CanonicalDecimal(breakdown.TotalAssets), money.CanonicalDecimal(breakdown.TotalLiabilities), money.CanonicalDecimal(breakdown.NetWorth),
 		money.CanonicalDecimal(breakdown.CashBalance), money.CanonicalDecimal(breakdown.InvestmentBalance), money.CanonicalDecimal(breakdown.CreditCardBalance),
 		money.CanonicalDecimal(breakdown.PayablesDebt),
-		now, now,
+		now, now, valuation.ReferenceCurrency, db.FormatTime(valuation.ValuedAt), valuation.RatePolicy, string(rates), status,
 	)
 	return err
 }
@@ -191,6 +227,7 @@ func insertBackfillSnapshot(ctx context.Context, q Querier, capturedAt string, b
 type cashTransactionDelta struct {
 	occurredAt time.Time
 	delta      decimal.Decimal
+	currency   string
 }
 
 // cashDeltasDescending loads every non-CREDIT-account transaction's real
@@ -286,7 +323,7 @@ func cashDeltasDescending(ctx context.Context, q Querier) ([]cashTransactionDelt
 		if classification == money.Outflow {
 			delta = delta.Neg()
 		}
-		result = append(result, cashTransactionDelta{occurredAt: occurredAt, delta: delta})
+		result = append(result, cashTransactionDelta{occurredAt: occurredAt, delta: delta, currency: effective.CurrencyCode})
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

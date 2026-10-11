@@ -3,6 +3,7 @@ package networth
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -133,22 +134,28 @@ func ComputeValued(ctx context.Context, q Querier, valuation *fx.Valuation) (Bre
 // calling it repeatedly the same day only ever refreshes that one row
 // instead of accumulating duplicates.
 func Snapshot(ctx context.Context, q Querier) (SnapshotRow, error) {
-	breakdown, err := Compute(ctx, q)
+	now := time.Now()
+	valuation := fx.New(now)
+	breakdown, err := ComputeValued(ctx, q, valuation)
 	if err != nil {
 		return SnapshotRow{}, err
 	}
 
-	now := time.Now()
 	capturedAt := formatDate(now)
 	nowStored := db.FormatTime(now)
 	id := uuid.NewString()
+	rates, err := json.Marshal(valuation.Rates)
+	if err != nil {
+		return SnapshotRow{}, err
+	}
 
 	_, err = q.ExecContext(ctx, `
 		INSERT INTO net_worth_snapshots (
 			id, captured_at, total_assets, total_liabilities, net_worth,
 			cash_balance, investment_balance, credit_card_balance, payables_debt,
-			is_backfilled, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+			is_backfilled, created_at, updated_at,
+			reference_currency, valued_at, rate_policy, fx_rates, valuation_version, valuation_status
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, 1, ?)
 		ON CONFLICT (captured_at) DO UPDATE SET
 			total_assets = excluded.total_assets,
 			total_liabilities = excluded.total_liabilities,
@@ -158,12 +165,18 @@ func Snapshot(ctx context.Context, q Querier) (SnapshotRow, error) {
 			credit_card_balance = excluded.credit_card_balance,
 			payables_debt = excluded.payables_debt,
 			is_backfilled = 0,
-			updated_at = excluded.updated_at`,
+			updated_at = excluded.updated_at,
+			reference_currency = excluded.reference_currency,
+			valued_at = excluded.valued_at,
+			rate_policy = excluded.rate_policy,
+			fx_rates = excluded.fx_rates,
+			valuation_version = excluded.valuation_version,
+			valuation_status = excluded.valuation_status`,
 		id, capturedAt,
 		money.CanonicalDecimal(breakdown.TotalAssets), money.CanonicalDecimal(breakdown.TotalLiabilities), money.CanonicalDecimal(breakdown.NetWorth),
 		money.CanonicalDecimal(breakdown.CashBalance), money.CanonicalDecimal(breakdown.InvestmentBalance), money.CanonicalDecimal(breakdown.CreditCardBalance),
 		money.CanonicalDecimal(breakdown.PayablesDebt),
-		nowStored, nowStored,
+		nowStored, nowStored, valuation.ReferenceCurrency, db.FormatTime(valuation.ValuedAt), valuation.RatePolicy, string(rates), ValuationComplete,
 	)
 	if err != nil {
 		return SnapshotRow{}, err
@@ -180,12 +193,24 @@ func scanSnapshotRow(scan func(...any) error) (SnapshotRow, error) {
 		cashRaw, investmentRaw, creditCardRaw, payablesDebtRaw string
 		isBackfilledRaw                                        int
 	)
+	var referenceCurrency, valuedAt, ratePolicy sql.NullString
+	var rates string
 	if err := scan(&s.ID, &capturedAtRaw, &totalAssetsRaw, &totalLiabilitiesRaw, &netWorthRaw,
 		&cashRaw, &investmentRaw, &creditCardRaw, &payablesDebtRaw, &isBackfilledRaw,
-		&createdAtRaw, &updatedAtRaw); err != nil {
+		&createdAtRaw, &updatedAtRaw, &referenceCurrency, &valuedAt, &ratePolicy, &rates, &s.ValuationVersion, &s.ValuationStatus); err != nil {
 		return SnapshotRow{}, err
 	}
 	s.IsBackfilled = isBackfilledRaw != 0
+	if s.ValuationVersion != 0 {
+		at, err := db.ParseTime(valuedAt.String)
+		if err != nil {
+			return SnapshotRow{}, err
+		}
+		s.Valuation = &fx.Metadata{ReferenceCurrency: referenceCurrency.String, ValuedAt: at, RatePolicy: ratePolicy.String}
+		if err := json.Unmarshal([]byte(rates), &s.Valuation.Rates); err != nil {
+			return SnapshotRow{}, err
+		}
+	}
 	var err error
 	if s.CapturedAt, err = time.Parse(dateLayout, capturedAtRaw); err != nil {
 		return SnapshotRow{}, err
@@ -219,7 +244,7 @@ func scanSnapshotRow(scan func(...any) error) (SnapshotRow, error) {
 
 const snapshotColumns = `id, captured_at, total_assets, total_liabilities, net_worth,
 	cash_balance, investment_balance, credit_card_balance, payables_debt, is_backfilled,
-	created_at, updated_at`
+	created_at, updated_at, reference_currency, valued_at, rate_policy, fx_rates, valuation_version, valuation_status`
 
 func getByCapturedAt(ctx context.Context, q Querier, capturedAt string) (SnapshotRow, error) {
 	row := q.QueryRowContext(ctx, `SELECT `+snapshotColumns+` FROM net_worth_snapshots WHERE captured_at = ?`, capturedAt)

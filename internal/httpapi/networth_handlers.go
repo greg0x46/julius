@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/greg0x46/julius/internal/fx"
 	"github.com/greg0x46/julius/internal/money"
 	"github.com/greg0x46/julius/internal/networth"
 )
@@ -32,8 +33,11 @@ func toNetWorthBreakdownDTO(b networth.Breakdown) netWorthBreakdownDTO {
 }
 
 type netWorthSnapshotDTO struct {
-	CapturedAt time.Time `json:"captured_at"`
-	netWorthBreakdownDTO
+	CapturedAt       time.Time    `json:"captured_at"`
+	Valuation        *fx.Metadata `json:"valuation"`
+	ValuationVersion int          `json:"valuation_version"`
+	ValuationStatus  string       `json:"valuation_status"`
+	*netWorthBreakdownDTO
 	// IsBackfilled mirrors SnapshotRow.IsBackfilled: true when this row was
 	// reconstructed by networth.Backfill rather than captured live, in
 	// which case InvestmentBalance is always "0" — see Backfill's doc
@@ -80,11 +84,20 @@ func handleGetNetWorth(conn *sql.DB) http.HandlerFunc {
 
 		series := make([]netWorthSnapshotDTO, len(rows))
 		for i, row := range rows {
-			series[i] = netWorthSnapshotDTO{CapturedAt: row.CapturedAt, netWorthBreakdownDTO: toNetWorthBreakdownDTO(row.Breakdown), IsBackfilled: row.IsBackfilled}
+			series[i] = netWorthSnapshotToDTO(row)
 		}
 		writeJSON(w, http.StatusOK, netWorthResponseDTO{
 			Series: series,
-			Latest: netWorthSnapshotDTO{CapturedAt: latest.CapturedAt, netWorthBreakdownDTO: toNetWorthBreakdownDTO(latest.Breakdown), IsBackfilled: latest.IsBackfilled},
+			Latest: netWorthSnapshotToDTO(latest),
 		})
 	}
+}
+
+func netWorthSnapshotToDTO(row networth.SnapshotRow) netWorthSnapshotDTO {
+	breakdown := toNetWorthBreakdownDTO(row.Breakdown)
+	dto := netWorthSnapshotDTO{CapturedAt: row.CapturedAt, netWorthBreakdownDTO: &breakdown, IsBackfilled: row.IsBackfilled, Valuation: row.Valuation, ValuationVersion: row.ValuationVersion, ValuationStatus: row.ValuationStatus}
+	if row.ValuationStatus == networth.ValuationUnavailable {
+		dto.netWorthBreakdownDTO = nil
+	}
+	return dto
 }
