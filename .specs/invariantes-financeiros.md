@@ -1,63 +1,60 @@
-# Invariantes financeiros (matriz de decisão e propriedade)
+# Financial invariants (decision and ownership matrix)
 
-Doc **vivo** e transversal: descreve o comportamento **atual** das regras
-financeiras centrais, qual módulo é dono de cada uma e qual teste a fixa.
-Não é um doc de design — o porquê de cada motor está em
-[`motores-de-dominio.md`](motores-de-dominio.md), e o detalhe por feature nos
-`contextos/<contexto>/reference.md` (em especial
+**Living**, cross-cutting doc: describes the **current** behavior of the core
+financial rules, which module owns each one and which test pins it. It is not a
+design doc — the why of each engine is in
+[`motores-de-dominio.md`](motores-de-dominio.md), and per-feature detail in the
+`contextos/<context>/reference.md` files (in particular
 [`transacoes`](contextos/transacoes/reference.md),
 [`pendencias`](contextos/pendencias/reference.md),
 [`cenarios`](contextos/cenarios/reference.md),
-[`investimentos`](contextos/investimentos/reference.md) e
+[`investimentos`](contextos/investimentos/reference.md) and
 [`patrimonio-liquido`](contextos/patrimonio-liquido/reference.md)).
 
-Os testes transversais (que cruzam mais de um motor) ficam em
-`internal/invariants`, um pacote só de testes. `TestMatrixReferencesExistingTests`
-falha se esta matriz citar um teste que não existe — ao renomear um teste,
-atualize a linha correspondente.
+Cross-engine tests live in `internal/invariants`, a test-only package.
+`TestMatrixReferencesExistingTests` fails if this matrix cites a test that does
+not exist — when renaming a test, update its row.
 
-Quando uma mudança alterar qualquer regra abaixo, atualize a linha no mesmo
-PR. Uma divergência encontrada e **não** corrigida vai para a seção
-"Divergências" no fim, nunca é "consertada" de passagem.
+When a change alters any rule below, update its row in the same PR. A divergence
+found and **not** fixed goes into the "Divergences" section at the end; it is
+never "fixed" in passing.
 
-## Matriz
+## Matrix
 
-| Conceito | Regra (invariante) | Comportamento atual | Módulo dono | Teste que fixa |
+| Concept | Rule (invariant) | Current behavior | Owning module | Pinning test |
 | --- | --- | --- | --- | --- |
-| Saldo de conta | O saldo reportado pelo provedor é a referência de caixa; categorizar, ignorar ou marcar como transferência nunca o altera. Conta `CREDIT` não é caixa. | Soma de `financial_accounts.balance` das contas não-crédito. É a âncora de hoje da Timeline e o caixa do Patrimônio Líquido. | `transactions.CashOnHand` (`internal/transactions/balance.go`) | `TestCategorizationDoesNotAlterProviderBalances`, `TestCashOnHandExcludesCreditAccounts`, `TestCashOnHandScopedToAccountIDsFiltersUntypedAccounts` |
-| Reconstrução histórica de saldo | Dias passados saem da âncora de hoje revertendo o que moveu dinheiro; transferência conta como movimento de caixa. | Timeline caminha só itens com `MovesCash()` (transferência sim, ignorado não). O backfill de patrimônio reverte todo lançamento elegível passando `Considered` e kind `""` — inclusive ignorados (ver Divergências). | `timeline.BuildSeries`/`buildPoints`, `networth.Backfill` (`cashDeltasDescending`), `money.MovedCash` | `TestBuildSeriesKeepsTransferCategorizedCashMovement`, `TestBuildSeriesStillDropsIgnoredTransactions`, `TestBackfillReversesTransferCategorizedTransactions`, `TestIgnoredRowDivergesBetweenTimelineAndBackfill` |
-| Receita e despesa | Só entra no total o lançamento elegível; o primeiro motivo de exclusão é o reportado. Ordem: `ignored` > `unclassified` > `ineligible_status` > `missing_money_pair` > `zero_value` > `transfer_category`. | `POSTED` e `PENDING` são elegíveis. A ordem é load-bearing: `transfer_category` vem por último porque `MovedCash` o lê como "o dinheiro saiu". | `money.Eligibility`, `money.MovedCash`, totais de `transactions.Query` | `TestEligibility`, `TestEligibilityPrecedenceMatrix` |
-| Transferência | Transferência entre contas próprias não é receita nem despesa, mas move caixa nas duas pernas. | Categoria de kind `transfer` gera `ReasonTransferCategory`; fora dos totais, dentro do caixa. A dívida de cartão continua abatendo pagamento de fatura categorizado como transferência. | `money.Eligibility`, `transactions.Query`, `transactions.SpendingByCategory`, `transactions.CreditCardTransactionTotal` | `TestTransfersCreateNoIncomeOrExpense`, `TestQueryExcludesTransferCategoryFromTotals`, `TestQueryExcludesAutomaticSamePersonTransferFromTotals`, `TestSpendingByCategoryExcludesTransfers`, `TestBuildSeriesTransferMovesCashButIsNeitherIncomeNorExpense`, `TestBuildSeriesDropsAnUnsettledTransfer`, `TestBuildSeriesDropsAnUnclassifiedTransfer`, `TestCreditCardTotalIgnoresTransferCategory` |
-| Ignorado | Ignorado vence a transferência na precedência e não é descontado do saldo reportado. Ao ignorar, vínculos que dependiam do lançamento caem. | `SetInclusion(ignored)` dispara o `OnIgnoredHook`: `payables.UnlinkIfPresent` (vínculo + settlement/allocation) e, no caminho de investimentos, `investments.UnlinkTransactionIfPresent`. Uma linha ignorada não pode ser conciliada. | `transactions.SetInclusion`, `payables.UnlinkIfPresent`, `investments.UnlinkTransactionIfPresent` | `TestUnlinkIfPresentTriggeredByIgnoringTransaction`, `TestSetInclusionInvokesOnIgnoredHook`, `TestIgnoredBankLineCannotBeReconciled`, `TestUnlinkTransactionDropsEveryParcelAndTheOrphanPivot`, `TestObligationCannotSettleTwice` |
-| Obrigação (payable) | Um lançamento quita no máximo uma obrigação, uma vez. Quitado/restante são recalculados na leitura, nunca gravados, e o restante fica em `[0, total]`. | `payables.EligibilityForLink` + `CreateLink` (conflito se já vinculado; UNIQUE em `payable_transaction_links.transaction_id`). Só settlements do cenário fonte contábil contam em `Summarize`. | `payables.CreateLink`, `payables.Summarize` | `TestObligationCannotSettleTwice`, `TestCreateLinkConflictsOnAlreadyLinked`, `TestPayableTransactionLinksUniqueAcrossKinds`, `TestRemainingAmountClampedToZero`, `TestRemainingAmountClampedToTotal` |
-| Realização de plano/recorrência | Um lançamento realiza no máximo um evento completo (settlement ou conciliação de recorrência). | `scenarios.RealizeEvent` devolve `ErrTransactionAlreadyRealized` ao bater no índice `uq_scenario_realizations_one_complete_event_transaction`. Alocações (`allocation`) não entram nesse índice. | `scenarios.RealizeEvent` | `TestSameTransactionCannotReconcileTwoOccurrences`, `TestObligationCannotSettleTwice` |
-| Investimento | Principal conciliado (aporte/resgate) não é receita nem despesa, mas o caixa do banco é preservado. Rendimento, imposto e custo contam. | A parte conciliada vira `ReasonInvestmentTransfer` e sai do `ReportableAmount`; só o restante não conciliado conta. Rendimento/imposto/custo manuais entram via `investments.ManualReportingEntries`, sem mover o caixa; a parte já conciliada a uma linha do banco não é contada de novo. | `investments/reconciliations.go`, `investments.ReconciledTransactionAmounts`, `transactions/query.go` (`applyInvestmentTransfer`), `timeline.BuildSeries` | `TestInvestmentPrincipalIsNotIncome`, `TestInvestmentAllocationSeparatesReportingFromCash`, `TestReconciledInvestmentSplitFlowsThroughQueryAndCategories`, `TestBankLineSplitsBetweenOperations` |
-| Hipotético | Movimento de cenário avulso nunca vira lançamento real nem altera saldo. | Cenário `standalone` nasce inativo; entra só por seleção ativa ou `ScenarioIDs` explícito, como `TierHipotetico`/`SourceScenario`. Seleção explícita vazia não emite nada. Evento vinculado a um lançamento real é suprimido (sem dupla contagem). | `projections.List`, `timeline.BuildSeries`, `scenarios.CreateScenario` | `TestHypotheticalMovementsAreNotRealized`, `TestListSelectionAndEventKeys`, `TestListReturnsUnifiedKindsAndRealizationState` |
-| Reprocessamento | Rodar o mesmo processamento de novo não duplica efeito financeiro. | Resync com hash igual é no-op; `SetInclusion` idempotente; automação reaplicada só conta mudanças reais e nunca sobrepõe decisão manual; `ApplyAutomatic` só grava sem decisão prévia; snapshot do dia é upsert de uma linha; backfill nunca sobrescreve; vínculo e realização protegidos por UNIQUE; conciliação repetida é recusada. | `syncsvc`, `transactions.SetInclusion`, `automation`, `categories`, `networth.Snapshot`/`Backfill`, `payables.CreateLink`, `investments.CreateReconciliation` | `TestRepeatedProcessingDoesNotDuplicateFinancialEffects`, `TestExecuteSecondRunDetectsUnchangedRecords`, `TestExecuteSecondRunDetectsUnchangedInvestment`, `TestExecuteResyncNeverOverridesManualInclusionDecision`, `TestSetInclusionIsIdempotent`, `TestApplyRetroactivelyCountsMatchedAndActuallyChanged`, `TestSnapshotIsIdempotentForTheSameDay`, `TestBackfillNeverOverwritesAnExistingSnapshot` |
+| Account balance | The provider-reported balance is the cash reference; categorizing, ignoring or marking as transfer never changes it. A `CREDIT` account is not cash. | Sum of `financial_accounts.balance` of non-credit accounts. It is the Timeline's anchor for today and Net Worth's cash. | `transactions.CashOnHand` (`internal/transactions/balance.go`) | `TestCategorizationDoesNotAlterProviderBalances`, `TestCashOnHandExcludesCreditAccounts`, `TestCashOnHandScopedToAccountIDsFiltersUntypedAccounts` |
+| Historical balance reconstruction | Past days come from today's anchor by reversing what moved money; a transfer counts as a cash movement. | The Timeline walks only items with `MovesCash()` (transfer yes, ignored no). The net-worth backfill reverses every eligible entry passing `Considered` and kind `""` — including ignored ones (see Divergences). | `timeline.BuildSeries`/`buildPoints`, `networth.Backfill` (`cashDeltasDescending`), `money.MovedCash` | `TestBuildSeriesKeepsTransferCategorizedCashMovement`, `TestBuildSeriesStillDropsIgnoredTransactions`, `TestBackfillReversesTransferCategorizedTransactions`, `TestIgnoredRowDivergesBetweenTimelineAndBackfill` |
+| Income and expense | Only an eligible entry enters the total; the first exclusion reason is the one reported. Order: `ignored` > `unclassified` > `ineligible_status` > `missing_money_pair` > `zero_value` > `transfer_category`. | `POSTED` and `PENDING` are eligible. The order is load-bearing: `transfer_category` comes last because `MovedCash` reads it as "the money left". | `money.Eligibility`, `money.MovedCash`, `transactions.Query` totals | `TestEligibility`, `TestEligibilityPrecedenceMatrix` |
+| Transfer | A transfer between own accounts is neither income nor expense, but moves cash on both legs. | A category of kind `transfer` yields `ReasonTransferCategory`; outside totals, inside cash. Card debt still reduces by a bill payment categorized as a transfer. | `money.Eligibility`, `transactions.Query`, `transactions.SpendingByCategory`, `transactions.CreditCardTransactionTotal` | `TestTransfersCreateNoIncomeOrExpense`, `TestQueryExcludesTransferCategoryFromTotals`, `TestQueryExcludesAutomaticSamePersonTransferFromTotals`, `TestSpendingByCategoryExcludesTransfers`, `TestBuildSeriesTransferMovesCashButIsNeitherIncomeNorExpense`, `TestBuildSeriesDropsAnUnsettledTransfer`, `TestBuildSeriesDropsAnUnclassifiedTransfer`, `TestCreditCardTotalIgnoresTransferCategory` |
+| Ignored | Ignored beats transfer on precedence and is not discounted from the reported balance. Ignoring drops the links that depended on the entry. | `SetInclusion(ignored)` fires `OnIgnoredHook`: `payables.UnlinkIfPresent` (link + settlement/allocation) and, on the investments path, `investments.UnlinkTransactionIfPresent`. An ignored row cannot be reconciled. | `transactions.SetInclusion`, `payables.UnlinkIfPresent`, `investments.UnlinkTransactionIfPresent` | `TestUnlinkIfPresentTriggeredByIgnoringTransaction`, `TestSetInclusionInvokesOnIgnoredHook`, `TestIgnoredBankLineCannotBeReconciled`, `TestUnlinkTransactionDropsEveryParcelAndTheOrphanPivot`, `TestObligationCannotSettleTwice` |
+| Obligation (payable) | An entry settles at most one obligation, once. Settled/remaining are recomputed on read, never stored, and remaining stays in `[0, total]`. | `payables.EligibilityForLink` + `CreateLink` (conflict if already linked; UNIQUE on `payable_transaction_links.transaction_id`). Only settlements of the accounting-source scenario count in `Summarize`. | `payables.CreateLink`, `payables.Summarize` | `TestObligationCannotSettleTwice`, `TestCreateLinkConflictsOnAlreadyLinked`, `TestPayableTransactionLinksUniqueAcrossKinds`, `TestRemainingAmountClampedToZero`, `TestRemainingAmountClampedToTotal` |
+| Plan/recurrence realization | An entry realizes at most one complete event (settlement or recurrence reconciliation). | `scenarios.RealizeEvent` returns `ErrTransactionAlreadyRealized` on hitting index `uq_scenario_realizations_one_complete_event_transaction`. Allocations (`allocation`) are not in that index. | `scenarios.RealizeEvent` | `TestSameTransactionCannotReconcileTwoOccurrences`, `TestObligationCannotSettleTwice` |
+| Investment | Reconciled principal (contribution/withdrawal) is neither income nor expense, but the bank's cash is preserved. Income, tax and cost count. | The reconciled part becomes `ReasonInvestmentTransfer` and leaves `ReportableAmount`; only the unreconciled remainder counts. Manual income/tax/cost enter via `investments.ManualReportingEntries`, without moving cash; the part already reconciled to a bank line is not counted again. | `investments/reconciliations.go`, `investments.ReconciledTransactionAmounts`, `transactions/query.go` (`applyInvestmentTransfer`), `timeline.BuildSeries` | `TestInvestmentPrincipalIsNotIncome`, `TestInvestmentAllocationSeparatesReportingFromCash`, `TestReconciledInvestmentSplitFlowsThroughQueryAndCategories`, `TestBankLineSplitsBetweenOperations` |
+| Hypothetical | A standalone scenario movement never becomes a real entry nor changes balance. | A `standalone` scenario is born inactive; it enters only by active selection or explicit `ScenarioIDs`, as `TierHipotetico`/`SourceScenario`. An explicit empty selection emits nothing. An event linked to a real entry is suppressed (no double counting). | `projections.List`, `timeline.BuildSeries`, `scenarios.CreateScenario` | `TestHypotheticalMovementsAreNotRealized`, `TestListSelectionAndEventKeys`, `TestListReturnsUnifiedKindsAndRealizationState` |
+| Reprocessing | Running the same processing again does not duplicate financial effect. | Resync with an equal hash is a no-op; `SetInclusion` is idempotent; re-applied automation counts only real changes and never overrides a manual decision; `ApplyAutomatic` writes only with no prior decision; the day's snapshot is a one-row upsert; backfill never overwrites; link and realization are protected by UNIQUE; a repeated reconciliation is refused. | `syncsvc`, `transactions.SetInclusion`, `automation`, `categories`, `networth.Snapshot`/`Backfill`, `payables.CreateLink`, `investments.CreateReconciliation` | `TestRepeatedProcessingDoesNotDuplicateFinancialEffects`, `TestExecuteSecondRunDetectsUnchangedRecords`, `TestExecuteSecondRunDetectsUnchangedInvestment`, `TestExecuteResyncNeverOverridesManualInclusionDecision`, `TestSetInclusionIsIdempotent`, `TestApplyRetroactivelyCountsMatchedAndActuallyChanged`, `TestSnapshotIsIdempotentForTheSameDay`, `TestBackfillNeverOverwritesAnExistingSnapshot` |
 
-## Divergências e mudanças pretendidas (não implementadas)
+## Divergences and intended changes (not implemented)
 
-Nada aqui foi alterado. Cada item está fixado como comportamento atual e
-fica para uma issue própria.
+Nothing here was changed. Each item is pinned as current behavior and left for
+its own issue.
 
-1. **Sinal da parcela de plano** (nota aberta 5 de
-   `motores-de-dominio.md`): `scenarios.SignedAmount` nega o valor de um
-   `debt_plan` em vez de forçar a direção; uma parcela gravada com valor
-   negativo lê como entrada.
-2. **Ignorado no passado: Timeline × backfill de patrimônio.** A Timeline
-   descarta o lançamento ignorado da caminhada (duplicata/estorno), e o
-   backfill o reverte da âncora (dinheiro que saiu de verdade). O saldo de
-   hoje é o mesmo nos dois; nos dias anteriores ao lançamento os dois gráficos diferem
-   pelo valor dele (`TestIgnoredRowDivergesBetweenTimelineAndBackfill`). O
-   comentário de cabeçalho de `networth.Backfill` ainda diz que ignorado
-   "nunca é revertido", o que contradiz o código e o comentário de
-   `cashDeltasDescending`.
-3. **`PENDING` é elegível.** Um lançamento pendente conta nos totais e, se
-   for transferência, como movimento de caixa — antes de o provedor
-   liquidá-lo (`TestTransfersCreateNoIncomeOrExpense`, caso
-   "pending transfer is still a transfer").
-4. **Alocação não é única por lançamento.** O índice de evento completo
-   cobre só `settlement` e `reconciliation`; um mesmo lançamento pode ser
-   alocado a mais de uma parcela de cenário, e `RealizeEvent` não confere a
-   soma das alocações contra o valor do lançamento. Um pagamento de 800
-   suprime hoje duas parcelas de 800 (`TestHypotheticalMovementsAreNotRealized`).
+1. **Plan installment sign** (open note 4 of `motores-de-dominio.md`):
+   `scenarios.SignedAmount` negates a `debt_plan` amount instead of forcing the
+   direction; an installment stored with a negative amount reads as an inflow.
+2. **Ignored in the past: Timeline × net-worth backfill.** The Timeline drops
+   the ignored entry from the walk (duplicate/chargeback), and the backfill
+   reverses it from the anchor (money that really left). Today's balance is the
+   same in both; on days before the entry the two charts differ by its amount
+   (`TestIgnoredRowDivergesBetweenTimelineAndBackfill`). The header comment of
+   `networth.Backfill` still says an ignored entry is "never reversed", which
+   contradicts the code and the `cashDeltasDescending` comment.
+3. **`PENDING` is eligible.** A pending entry counts in totals and, if it is a
+   transfer, as a cash movement — before the provider settles it
+   (`TestTransfersCreateNoIncomeOrExpense`, case "pending transfer is still a
+   transfer").
+4. **Allocation is not unique per entry.** The complete-event index covers only
+   `settlement` and `reconciliation`; the same entry can be allocated to more
+   than one scenario installment, and `RealizeEvent` does not check the sum of
+   allocations against the entry's amount. A payment of 800 today suppresses
+   two installments of 800 (`TestHypotheticalMovementsAreNotRealized`).
