@@ -92,5 +92,10 @@ inválidos recebem 422 e falhas de banco/chave recebem 503, sem gravação parci
 GET e PUT exigem sessão; PUT mantém a proteção CSRF das demais escritas.
 O padrão é habilitado, 19:00, America/Sao_Paulo. As alterações são aplicadas
 pelo agendador em execução, inclusive a suspensão do backfill; a inicialização
-legada e persistência estão descritas em Investimentos. A interface mantém
-somente o formulário existente do token, sem novos controles de agendamento.
+legada e persistência estão descritas em Investimentos. GET também devolve
+`last_refresh` (data, origem agendada/manual, status success/partial/deferred/
+failed e contagens) ou null. POST /api/settings/quotes/refresh roda
+RefreshAll na hora e devolve esse registro; outra atualização em andamento
+recebe 409. Falhas de provedor não apagam cotações já gravadas. A tela de
+ativos de investimento mostra agendamento, última atualização, "Atualizar
+agora" e o token da brapi como configuração avançada.
