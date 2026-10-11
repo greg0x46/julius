@@ -71,7 +71,8 @@ authentication configuration that does not depend on the host:
   history.
 - **Recurrences** — register cash-flow commitments known in advance (salary,
   rent, subscriptions), reconciled against the real transactions that settle
-  them via an automation rule.
+  them via an automation rule, even when the transaction is uncategorized or
+  has a different category.
 - **Scenarios** — user-authored hypothetical projections ("what if I travel",
   "what if I change jobs"), or the installment plan of a debt/receivable —
   they never affect real totals unless explicitly included in a query.

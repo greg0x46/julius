@@ -24,8 +24,10 @@ package doc comment in `model.go` still describes the older, parallel design.
 In the Timeline, an occurrence becomes an entry only if it was **not**
 reconciled, with tier **Projected**; a reconciled one produces no entry because
 the real transaction already carries it. The candidates an occurrence tries to
-reconcile are scoped to its month — without that, one month's transaction
-reconciled the occurrences of every other month.
+reconcile are scoped to its month and, when specified, the commitment's
+account. Category is not an implicit constraint: uncategorized and differently
+categorized transactions can match the automation rule. Month scoping prevents
+one month's transaction from reconciling another month's occurrence.
 
 `internal/recurrences` — `RecurringCommitment` (`Kind` income/expense, `Amount`,
 `CategoryID`, `AccountID`, `Cadence` monthly/annual, `DayOfMonth`/`MonthOfYear`,
@@ -62,9 +64,9 @@ the rule in April and the same money would suppress two projections.
 Manual-link eligibility lives in `eligibility.go`, mirroring
 `internal/payables`: not ignored, BRL, direction compatible with the `Kind`, and
 not reconciled to another occurrence. It deliberately differs from
-`CandidatesByMonth` by **not** requiring the commitment's category/account —
-reconciling by hand is exactly what you do when the transaction's category is
-wrong.
+`CandidatesByMonth` by **not** requiring the commitment's account or limiting
+the transaction to the occurrence's month (manual links have a 45-day reach).
+Neither path requires the commitment's category.
 
 A transaction marked ignored loses its link (`UnlinkIfPresent`, in
 `onIgnoredHook` together with `payables`); a detached occurrence is unaffected,
