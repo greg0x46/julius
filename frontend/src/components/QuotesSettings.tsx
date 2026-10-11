@@ -22,6 +22,7 @@ const timezones = [
 ];
 
 function refreshSummary(last: QuoteLastRefresh): string {
+  if (last.status === "failed") return "Não foi possível concluir a atualização. Tente novamente mais tarde.";
   if (last.assets === 0) return "Nenhum ativo com cotação automática para atualizar.";
   const priced = `${last.fetched} de ${last.assets} ativos cotados`;
   switch (last.status) {
@@ -31,18 +32,16 @@ function refreshSummary(last: QuoteLastRefresh): string {
       return `${priced}; ${last.failures} falharam.`;
     case "deferred":
       return `${priced}; ${last.deferred} adiados porque o provedor limitou as consultas. Uma nova tentativa será feita mais tarde.`;
-    case "failed":
-      return "Nenhum ativo cotado. Tente novamente mais tarde.";
   }
 }
 
 function LastRefresh({ last }: { last: QuoteLastRefresh | null }) {
   if (last === null) return <span>Nenhuma atualização ainda.</span>;
   const tone =
-    last.assets === 0 || last.status === "success"
-      ? undefined
-      : last.status === "failed"
-        ? "danger"
+    last.status === "failed"
+      ? "danger"
+      : last.assets === 0 || last.status === "success"
+        ? undefined
         : "warning";
   return (
     <>

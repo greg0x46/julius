@@ -59,6 +59,19 @@ describe("QuotesSettings", () => {
     expect(fetch).toHaveBeenCalledTimes(2);
   });
 
+  it.each([
+    { assets: 0, fetched: 0 },
+    { assets: 3, fetched: 2 },
+  ])("shows a failed refresh with $assets assets and $fetched fetched as an error", async (counts) => {
+    mockFetch(json(settings({ last_refresh: lastRefresh({ status: "failed", ...counts }) })));
+    render(<QuotesSettings />);
+    expect(
+      await screen.findByText("Não foi possível concluir a atualização. Tente novamente mais tarde."),
+    ).toHaveClass("ant-typography-danger");
+    expect(screen.queryByText("Nenhum ativo com cotação automática para atualizar.")).not.toBeInTheDocument();
+    expect(screen.queryByText("Nenhum ativo cotado. Tente novamente mais tarde.")).not.toBeInTheDocument();
+  });
+
   it("saves the schedule", async () => {
     const fetch = mockFetch(json(settings({ enabled: false })), json({ saved: true }));
     render(<QuotesSettings />);
@@ -103,11 +116,11 @@ describe("QuotesSettings", () => {
     expect(fetch.mock.calls[1][1]?.method).toBe("POST");
 
     await userEvent.click(button);
-    expect(await screen.findByText("Nenhum ativo cotado. Tente novamente mais tarde.")).toBeInTheDocument();
+    expect(await screen.findByText("Não foi possível concluir a atualização. Tente novamente mais tarde.")).toBeInTheDocument();
 
     await userEvent.click(button);
     expect(await screen.findByText(/Já existe uma atualização em andamento/)).toBeInTheDocument();
-    expect(screen.getByText("Nenhum ativo cotado. Tente novamente mais tarde.")).toBeInTheDocument();
+    expect(screen.getByText("Não foi possível concluir a atualização. Tente novamente mais tarde.")).toBeInTheDocument();
 
     await userEvent.click(button);
     expect(await screen.findByText("Não foi possível atualizar as cotações agora.")).toBeInTheDocument();
