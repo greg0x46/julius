@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
-import type { NetWorthSnapshot } from "../../api/contracts";
+import { hasNetWorthValue, type NetWorthSnapshot } from "../../api/contracts";
 import { formatAxisMoney } from "../../presentation/chartAxis";
 import { yAxisWidth } from "../../presentation/chartAxisWidth";
 import { balanceChartColor } from "../../presentation/chartColors";
@@ -9,7 +9,7 @@ import { formatBRL } from "../../presentation/money";
 import { Section } from "../layout";
 import { useCompactScreen } from "../shared/useCompactScreen";
 
-type ChartPoint = { date: string; netWorth: number };
+type ChartPoint = { date: string; netWorth: number | null };
 
 function dateLabel(value: string): string {
   const date = new Date(value);
@@ -18,7 +18,7 @@ function dateLabel(value: string): string {
 }
 
 function toChartData(snapshots: NetWorthSnapshot[]): ChartPoint[] {
-  return snapshots.map((s) => ({ date: dateLabel(s.captured_at), netWorth: Number(s.net_worth) }));
+  return snapshots.map((s) => ({ date: dateLabel(s.captured_at), netWorth: hasNetWorthValue(s) ? Number(s.net_worth) : null }));
 }
 
 function TooltipContent({ active, payload, label }: { active?: boolean; payload?: { value: number }[]; label?: string }) {
@@ -40,12 +40,12 @@ function TooltipContent({ active, payload, label }: { active?: boolean; payload?
 export function NetWorthChart({ snapshots, footnote }: { snapshots: NetWorthSnapshot[]; footnote?: ReactNode }) {
   const compact = useCompactScreen();
   const data = toChartData(snapshots);
-  const axisWidth = yAxisWidth(data.map((point) => point.netWorth));
+  const axisWidth = yAxisWidth(data.flatMap((point) => point.netWorth === null ? [] : [point.netWorth]));
   const first = data[0]?.date ?? "";
   const last = data[data.length - 1]?.date ?? "";
   return (
     <Section title="Evolução do patrimônio líquido">
-      <div className="timeline-chart" role="img" aria-label={`Evolução do patrimônio líquido, de ${first} a ${last}`}>
+      <div className="timeline-chart" role="img" aria-label={`Evolução do patrimônio líquido em reais, de ${first} a ${last}, com lacunas nos dias sem avaliação disponível`}>
         <ResponsiveContainer width="100%" height={compact ? 240 : 320}>
           <LineChart data={data} margin={{ top: 12, right: 16, left: 0, bottom: 4 }}>
             <CartesianGrid stroke={balanceChartColor.grid} vertical={false} />
@@ -67,6 +67,7 @@ export function NetWorthChart({ snapshots, footnote }: { snapshots: NetWorthSnap
             />
             <Tooltip content={<TooltipContent />} />
             <Line
+              connectNulls={false}
               type="monotone"
               dataKey="netWorth"
               name="Patrimônio líquido"

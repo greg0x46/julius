@@ -17,3 +17,5 @@ export * from "./spendingByCategory";
 export * from "./syncRuns";
 export * from "./timeline";
 export * from "./transactions";
+
+export * from "./valuation";

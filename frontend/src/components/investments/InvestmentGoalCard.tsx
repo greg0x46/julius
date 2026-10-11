@@ -56,6 +56,7 @@ export function InvestmentGoalCard({
   busy: boolean;
 }) {
   const confirm = useConfirm();
+  const hasForeign = positions.some((position) => position.currency_code !== "BRL");
   const movements = goalMovements(operations);
   const currentValue =
     summary?.current_value ?? portfolio?.current_value ?? sumBRL(positions.filter((position) => position.currency_code === "BRL").map((position) => position.current_value));
@@ -103,12 +104,12 @@ export function InvestmentGoalCard({
           { label: "Valor atual", value: <Money value={currentValue} tone="balance" /> },
           {
             label: "Rendimento líquido",
-            value: <InvestmentYieldValue gain={yieldAggregate.gain} percent={yieldAggregate.percent} />,
+            value: hasForeign ? "Indisponível em reais" : <InvestmentYieldValue gain={yieldAggregate.gain} percent={yieldAggregate.percent} />,
             hint: "Já descontados IR, IOF e taxas das posições que têm rendimento conhecido.",
           },
           {
             label: "IR/Taxas",
-            value: <Money value={cost} tone="neutral" />,
+            value: hasForeign ? "Indisponível em reais" : <Money value={cost} tone="neutral" />,
             hint: "Taxas e impostos das movimentações, mais IR e IOF informados pela instituição.",
           },
           {

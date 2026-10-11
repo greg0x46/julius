@@ -1,4 +1,4 @@
-import type { NetWorthSnapshot } from "../../api/contracts";
+import type { NetWorthSnapshot, NetWorthBreakdown } from "../../api/contracts";
 import { SummaryStrip } from "../layout";
 import { Money } from "../shared/Money";
 
@@ -29,12 +29,12 @@ function Liability({ value }: { value: string }) {
   );
 }
 
-export function NetWorthBreakdownCard({ snapshot }: { snapshot: NetWorthSnapshot }) {
+export function NetWorthBreakdownCard({ snapshot }: { snapshot: NetWorthSnapshot & NetWorthBreakdown }) {
   return (
     <SummaryStrip
       label="Hoje"
       value={<Money value={snapshot.net_worth} tone="balance" size="hero" />}
-      note="Caixa + Investimentos − Cartão de crédito − Dívidas. Valores a receber não entram."
+      note={`Caixa + Investimentos − Cartão de crédito − Dívidas. Valores a receber não entram. Valores em reais. Câmbio observado até ${new Date(snapshot.valuation!.valued_at).toLocaleString("pt-BR")}.${snapshot.is_backfilled ? " Estimativa reconstruída a partir das transações. Não inclui investimentos históricos." : ""}`}
       items={[
         { label: "Caixa", value: <Money value={snapshot.cash_balance} tone="balance" /> },
         { label: "Investimentos", value: <Money value={snapshot.investment_balance} tone="balance" /> },

@@ -24,6 +24,7 @@ export function InvestmentWorkspaceSummary({
   /** Provider holdings by id: a synced position reads its rendimento and IR/IOF from here. */
   linked: LinkedInvestments;
 }) {
+  const hasForeign = positions.some((position) => position.currency_code !== "BRL");
   const movements = accountMovements(operations);
   const yieldAggregate = aggregateYield(positions, linked, costsByPosition(operations, positions, linked));
   const cost = groupCost(operations, positions, linked);
@@ -35,15 +36,15 @@ export function InvestmentWorkspaceSummary({
       items={[
         {
           label: "Rendimento líquido",
-          value: <InvestmentYieldValue gain={yieldAggregate.gain} percent={yieldAggregate.percent} />,
+          value: hasForeign ? "Indisponível em reais" : <InvestmentYieldValue gain={yieldAggregate.gain} percent={yieldAggregate.percent} />,
         },
         { label: "Aportes desde o início", value: <Money value={movements.deposits} tone="neutral" /> },
         { label: "Resgates desde o início", value: <Money value={movements.withdrawals} tone="neutral" /> },
-        { label: "IR/Taxas", value: <Money value={cost} tone="neutral" /> },
+        { label: "IR/Taxas", value: hasForeign ? "Indisponível em reais" : <Money value={cost} tone="neutral" /> },
         { label: "Saldo para investir", value: <Money value={summary?.cash_balance ?? "0"} tone="neutral" /> },
         { label: "Informado pela instituição", value: <Money value={summary?.synced_value ?? "0"} tone="neutral" /> },
       ]}
-      note="Rendimento líquido: soma das posições com rendimento conhecido, já descontados IR, IOF e taxas. IR/Taxas: taxas e impostos das movimentações, mais o IR e o IOF informados pela instituição. Saldo para investir: já saiu da conta corrente e ainda não virou posição. Informado pela instituição: parte do total que vem da integração."
+      note={`${summary?.valuation ? `Valores em reais. Câmbio observado até ${new Date(summary.valuation.valued_at).toLocaleString("pt-BR")}. ` : ""}Rendimento líquido: soma das posições com rendimento conhecido, já descontados IR, IOF e taxas. IR/Taxas: taxas e impostos das movimentações, mais o IR e o IOF informados pela instituição. Saldo para investir: já saiu da conta corrente e ainda não virou posição. Informado pela instituição: parte do total que vem da integração.${hasForeign ? " Rendimento e impostos em outras moedas disponíveis nas posições." : ""}`}
     />
   );
 }

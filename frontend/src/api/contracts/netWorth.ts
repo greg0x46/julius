@@ -1,4 +1,5 @@
-import { decimal, isValidDate, requiredRecord } from "./shared";
+import { decimal, isValidDate, requiredRecord, requiredRecordWithOptionalKeys } from "./shared";
+import { parseValuation, type Valuation } from "./valuation";
 
 // NetWorthBreakdown mirrors internal/httpapi's netWorthBreakdownDTO: the
 // four underlying balances plus the three totals derived from them
@@ -16,7 +17,10 @@ export interface NetWorthBreakdown {
   net_worth: string;
 }
 
-export interface NetWorthSnapshot extends NetWorthBreakdown {
+export interface NetWorthSnapshot extends Partial<NetWorthBreakdown> {
+  valuation?: Valuation | null;
+  valuation_version?: number;
+  valuation_status?: "complete" | "reconstructed_partial" | "unavailable" | "legacy_unknown";
   captured_at: string;
   // Mirrors internal/httpapi's netWorthSnapshotDTO.IsBackfilled: true when
   // this row was reconstructed from past transactions rather than captured
@@ -54,11 +58,26 @@ const netWorthBreakdownKeys = [
 ] as const;
 
 export function parseNetWorthSnapshot(value: unknown): NetWorthSnapshot {
-  const snapshot = requiredRecord(
+  const snapshot = requiredRecordWithOptionalKeys(
     value,
-    ["captured_at", "is_backfilled", ...netWorthBreakdownKeys],
+    ["captured_at", "is_backfilled"],
+    [...netWorthBreakdownKeys, "valuation", "valuation_version", "valuation_status"],
     "Patrimônio líquido inválido.",
   );
+  const status = snapshot.valuation_status ?? "legacy_unknown";
+  if (!["complete", "reconstructed_partial", "unavailable", "legacy_unknown"].includes(status as string)) {
+    throw new TypeError("Patrimônio líquido inválido.");
+  }
+  const version = snapshot.valuation_version ?? 0;
+  if (version !== 0 && version !== 1) throw new TypeError("Versão de avaliação inválida.");
+  const valuation = snapshot.valuation == null ? null : parseValuation(snapshot.valuation);
+  if ((status === "legacy_unknown" && (version !== 0 || valuation !== null)) ||
+      (status !== "legacy_unknown" && (version !== 1 || valuation === null))) {
+    throw new TypeError("Contexto de avaliação inválido.");
+  }
+  if (status === "unavailable" && netWorthBreakdownKeys.some((key) => key in snapshot)) {
+    throw new TypeError("Avaliação indisponível contém valores.");
+  }
   if (!isValidDate(snapshot.captured_at)) {
     throw new TypeError("Patrimônio líquido inválido.");
   }
@@ -68,7 +87,10 @@ export function parseNetWorthSnapshot(value: unknown): NetWorthSnapshot {
   return {
     captured_at: snapshot.captured_at,
     is_backfilled: snapshot.is_backfilled,
-    ...parseNetWorthBreakdown(snapshot),
+    valuation,
+    valuation_version: version,
+    valuation_status: status as NetWorthSnapshot["valuation_status"],
+    ...(status === "unavailable" ? {} : parseNetWorthBreakdown(snapshot)),
   };
 }
 
@@ -81,4 +103,9 @@ export function parseNetWorthSeries(value: unknown): NetWorthSeries {
     series: response.series.map(parseNetWorthSnapshot),
     latest: parseNetWorthSnapshot(response.latest),
   };
+}
+
+export function hasNetWorthValue(snapshot: NetWorthSnapshot): snapshot is NetWorthSnapshot & NetWorthBreakdown {
+  return (snapshot.valuation_status === "complete" || snapshot.valuation_status === "reconstructed_partial") &&
+    snapshot.valuation?.reference_currency === "BRL" && netWorthBreakdownKeys.every((key) => typeof snapshot[key] === "string");
 }

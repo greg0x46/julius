@@ -74,6 +74,7 @@ export function InvestmentAccountCard({
 }) {
   const confirm = useConfirm();
   const editable = account.kind === "manual";
+  const hasForeign = positions.some((position) => position.currency_code !== "BRL");
   const movements = accountMovements(operations);
   // The server already nets the account's value; positions alone would miss
   // the cash sitting in the investment account.
@@ -140,12 +141,12 @@ export function InvestmentAccountCard({
           { label: "Valor atual", value: <Money value={currentValue} tone="balance" /> },
           {
             label: "Rendimento líquido",
-            value: <InvestmentYieldValue gain={yieldAggregate.gain} percent={yieldAggregate.percent} />,
+            value: hasForeign ? "Indisponível em reais" : <InvestmentYieldValue gain={yieldAggregate.gain} percent={yieldAggregate.percent} />,
             hint: "Já descontados IR, IOF e taxas das posições que têm rendimento conhecido.",
           },
           {
             label: "IR/Taxas",
-            value: <Money value={cost} tone="neutral" />,
+            value: hasForeign ? "Indisponível em reais" : <Money value={cost} tone="neutral" />,
             hint: "Taxas e impostos das movimentações, mais IR e IOF informados pela instituição.",
           },
           {

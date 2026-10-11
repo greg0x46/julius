@@ -318,16 +318,16 @@ export function InvestmentsPage() {
         // A failed load shows only the retry above: zeroed totals and "Nenhuma
         // conta ainda" beside it would claim there is nothing there.
         <>
-          {workspace.positions.some((position) => position.currency_code !== "BRL") && (
+          {workspace.summary?.valuation && workspace.positions.some((position) => position.currency_code !== "BRL") && (
             <Alert type="info" showIcon style={{ marginBottom: 16 }} message="Totais em reais"
-              description="Posições em outras moedas são exibidas na moeda original e ficam fora dos totais e metas em reais. Esta versão não faz conversão de câmbio." />
+              description={`Posições em outras moedas entram nos totais com o câmbio disponível até ${new Date(workspace.summary.valuation.valued_at).toLocaleString("pt-BR")}. Os valores das posições continuam na moeda original.`} />
           )}
           {/* Each view's hero is its own scope: the workspace total for the
               account and goal views, the imported investments' total for the
               synced one. Two heroes on one screen would compete. */}
           {view === "synced" ? (
             !syncedInvestments.isLoading &&
-            syncedInvestments.investments.length > 0 && <InvestmentsSummary investments={syncedInvestments.investments} />
+            syncedInvestments.investments.length > 0 && <InvestmentsSummary investments={syncedInvestments.investments} summary={workspace.error ? null : workspace.summary} />
           ) : (
             <InvestmentWorkspaceSummary
               summary={workspace.summary}

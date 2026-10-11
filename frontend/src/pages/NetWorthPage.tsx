@@ -1,3 +1,4 @@
+import { hasNetWorthValue } from "../api/contracts";
 import { Skeleton } from "antd";
 
 import { UnavailableState } from "../components/AsyncState";
@@ -11,13 +12,13 @@ export function NetWorthPage() {
   // A single point has no evolution to plot — a line chart with one dot
   // reads as broken, not "just started". Wait for at least two days of
   // history before showing the chart.
-  const hasSeries = netWorth.series.length > 1;
+  const hasSeries = netWorth.series.filter(hasNetWorthValue).length > 1;
   const hasBackfilledPoints = netWorth.series.some((s) => s.is_backfilled);
 
   // One footnote, under the chart it qualifies, for what used to be a
   // paragraph above the figures plus an info Alert below the chart.
-  const footnote = `Dias sem registro são reconstruídos a partir das transações, então a série pode não cobrir todo o passado.${
-    hasBackfilledPoints ? " Esses dias não incluem investimentos: não há como saber quanto deles já existia." : ""
+  const footnote = `Valores em reais, usando o câmbio disponível até a data de cada avaliação. Dias sem taxas de câmbio ou sem contexto de avaliação não são exibidos.${
+    hasBackfilledPoints ? " Dias reconstruídos não incluem investimentos históricos." : ""
   }`;
 
   return (
@@ -46,15 +47,21 @@ export function NetWorthPage() {
 
       {!netWorth.isLoading && !netWorth.error && netWorth.latest && (
         <div className="net-worth-page">
-          <NetWorthBreakdownCard snapshot={netWorth.latest} />
+          {hasNetWorthValue(netWorth.latest) ? <NetWorthBreakdownCard snapshot={netWorth.latest} /> : (
+            <EmptyState
+              title={netWorth.latest.valuation_status === "unavailable" ? "Patrimônio indisponível" : "Registro anterior sem contexto de avaliação"}
+              hint={netWorth.latest.valuation_status === "unavailable" ? "Faltam taxas de câmbio para avaliar todos os saldos em reais." : "Este registro não informa a moeda nem as taxas usadas."}
+            />
+          )}
           {hasSeries ? (
             <NetWorthChart snapshots={netWorth.series} footnote={footnote} />
           ) : (
             <Section title="Evolução do patrimônio líquido">
               <EmptyState
-                title="Ainda não há histórico para mostrar"
-                hint="O gráfico aparece a partir do segundo dia com dados registrados."
+                title="Ainda não há histórico avaliado para mostrar"
+                hint="O gráfico aparece a partir do segundo dia com avaliação disponível."
               />
+              <p className="net-worth-footnote">{footnote}</p>
             </Section>
           )}
         </div>
