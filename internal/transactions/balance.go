@@ -2,7 +2,10 @@ package transactions
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
+	"github.com/greg0x46/julius/internal/fx"
+	"time"
 
 	"github.com/shopspring/decimal"
 
@@ -39,10 +42,31 @@ import (
 // on hand. accountIDs optionally scopes the result; empty means every
 // account.
 func CashOnHand(ctx context.Context, q Querier, accountIDs []string) (decimal.Decimal, error) {
+	return CashOnHandValued(ctx, q, accountIDs, fx.New(time.Now()))
+}
+
+func CashOnHandValued(ctx context.Context, q Querier, accountIDs []string, valuation *fx.Valuation) (decimal.Decimal, error) {
+	balances, err := CashBalances(ctx, q, accountIDs)
+	if err != nil {
+		return decimal.Zero, err
+	}
+	total := decimal.Zero
+	for currency, balance := range balances {
+		value, err := valuation.Convert(ctx, q, balance, currency)
+		if err != nil {
+			return decimal.Zero, err
+		}
+		total = total.Add(value)
+	}
+	return total, nil
+}
+
+// CashBalances returns provider balances grouped by native currency.
+func CashBalances(ctx context.Context, q Querier, accountIDs []string) (map[string]decimal.Decimal, error) {
 	// The OR must stay parenthesized: without it, `... IS NULL OR ... AND id
 	// IN (...)` binds as `... IS NULL OR (... AND id IN (...))`, letting
 	// every untyped account escape the accountIDs filter.
-	query := `SELECT balance FROM financial_accounts
+	query := `SELECT balance, currency_code FROM financial_accounts
 	          WHERE balance IS NOT NULL AND (account_type IS NULL OR account_type != 'CREDIT')`
 	in, args := db.InClause(accountIDs)
 	if in != "" {
@@ -50,24 +74,26 @@ func CashOnHand(ctx context.Context, q Querier, accountIDs []string) (decimal.De
 	}
 	rows, err := q.QueryContext(ctx, query, args...)
 	if err != nil {
-		return decimal.Decimal{}, err
+		return nil, err
 	}
 	defer rows.Close()
 
-	total := decimal.Zero
+	total := map[string]decimal.Decimal{}
 	for rows.Next() {
 		// A plain string, not sql.NullString: the query already filters
 		// `balance IS NOT NULL`, so a NULL here would be a schema surprise
 		// worth surfacing as a scan error rather than silently summing "".
 		var balanceRaw string
-		if err := rows.Scan(&balanceRaw); err != nil {
-			return decimal.Decimal{}, err
+		var currency sql.NullString
+		if err := rows.Scan(&balanceRaw, &currency); err != nil {
+			return nil, err
 		}
 		amount, err := decimal.NewFromString(balanceRaw)
 		if err != nil {
-			return decimal.Decimal{}, fmt.Errorf("parse account balance %q: %w", balanceRaw, err)
+			return nil, fmt.Errorf("parse account balance %q: %w", balanceRaw, err)
 		}
-		total = total.Add(amount)
+		code := fx.Currency(&currency.String)
+		total[code] = total[code].Add(amount)
 	}
 	return total, rows.Err()
 }

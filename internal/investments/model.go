@@ -7,6 +7,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"github.com/greg0x46/julius/internal/fx"
 	"time"
 
 	"github.com/shopspring/decimal"
@@ -278,6 +279,7 @@ type SummaryPortfolio struct {
 }
 
 type Summary struct {
+	Valuation      fx.Metadata
 	CurrencyCode   string
 	TotalValue     decimal.Decimal
 	ManualValue    decimal.Decimal

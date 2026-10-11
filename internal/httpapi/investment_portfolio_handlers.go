@@ -12,6 +12,7 @@ import (
 
 	"github.com/shopspring/decimal"
 
+	"github.com/greg0x46/julius/internal/fx"
 	"github.com/greg0x46/julius/internal/investments"
 	"github.com/greg0x46/julius/internal/marketdata"
 	"github.com/greg0x46/julius/internal/money"
@@ -352,6 +353,7 @@ type investmentSummaryAccountDTO struct {
 }
 
 type investmentSummaryDTO struct {
+	Valuation      fx.Metadata                     `json:"valuation"`
 	CurrencyCode   string                          `json:"currency_code"`
 	TotalValue     string                          `json:"total_value"`
 	ManualValue    string                          `json:"manual_value"`
@@ -364,6 +366,7 @@ type investmentSummaryDTO struct {
 
 func investmentSummaryToDTO(s investments.Summary) investmentSummaryDTO {
 	dto := investmentSummaryDTO{
+		Valuation:      s.Valuation,
 		CurrencyCode:   investmentCurrency(&s.CurrencyCode),
 		TotalValue:     money.CanonicalDecimal(s.TotalValue),
 		ManualValue:    money.CanonicalDecimal(s.ManualValue),

@@ -11,6 +11,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/greg0x46/julius/internal/db"
+	"github.com/greg0x46/julius/internal/fx"
 )
 
 const portfolioColumns = `id, name, target_amount, target_date, notes, created_at, updated_at`
@@ -114,7 +115,10 @@ func ListPortfolios(ctx context.Context, q Querier) ([]Portfolio, error) {
 	if err != nil {
 		return nil, err
 	}
-	values := portfolioValues(positions)
+	values, err := valuedPortfolioValues(ctx, q, positions)
+	if err != nil {
+		return nil, err
+	}
 	for i := range portfolios {
 		applyPortfolioValue(&portfolios[i], values[portfolios[i].ID])
 	}
@@ -130,7 +134,11 @@ func GetPortfolio(ctx context.Context, q Querier, id string) (Portfolio, error) 
 	if err != nil {
 		return Portfolio{}, err
 	}
-	applyPortfolioValue(&portfolio, portfolioValues(positions)[id])
+	values, err := valuedPortfolioValues(ctx, q, positions)
+	if err != nil {
+		return Portfolio{}, err
+	}
+	applyPortfolioValue(&portfolio, values[id])
 	return portfolio, nil
 }
 
@@ -185,4 +193,20 @@ func DeletePortfolio(ctx context.Context, q Querier, id string) error {
 	}
 	_, err := q.ExecContext(ctx, `DELETE FROM investment_portfolios WHERE id = ?`, id)
 	return err
+}
+
+func valuedPortfolioValues(ctx context.Context, q Querier, positions []Position) (map[string]decimal.Decimal, error) {
+	valuation := fx.New(time.Now())
+	values := map[string]decimal.Decimal{}
+	for _, p := range positions {
+		if p.PortfolioID == nil {
+			continue
+		}
+		value, err := valuation.Convert(ctx, q, p.CurrentValue, fx.Currency(p.CurrencyCode))
+		if err != nil {
+			return nil, err
+		}
+		values[*p.PortfolioID] = values[*p.PortfolioID].Add(value)
+	}
+	return values, nil
 }

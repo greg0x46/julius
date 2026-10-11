@@ -9,6 +9,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/greg0x46/julius/internal/dates"
+	"github.com/greg0x46/julius/internal/fx"
 	"github.com/greg0x46/julius/internal/investments"
 	"github.com/greg0x46/julius/internal/money"
 	"github.com/greg0x46/julius/internal/projections"
@@ -124,6 +125,10 @@ const noCategoryName = "Sem categoria"
 // The second return value classifies the card entries by when their bill
 // falls due relative to reference; see billTiming.
 func realEntries(ctx context.Context, q Querier, items []transactions.Item, reference time.Time) ([]Entry, billTiming, error) {
+	return realEntriesValued(ctx, q, items, reference, fx.New(time.Now()))
+}
+
+func realEntriesValued(ctx context.Context, q Querier, items []transactions.Item, reference time.Time, valuation *fx.Valuation) ([]Entry, billTiming, error) {
 	creditAccounts, err := transactions.CreditAccountIDs(ctx, q)
 	if err != nil {
 		return nil, billTiming{}, err
@@ -153,6 +158,10 @@ func realEntries(ctx context.Context, q Querier, items []transactions.Item, refe
 		if err != nil {
 			return nil, billTiming{}, fmt.Errorf("parse transaction amount %q: %w", item.EffectiveMoney.Value, err)
 		}
+		amount, err = valuation.Convert(ctx, q, amount, item.EffectiveMoney.CurrencyCode)
+		if err != nil {
+			return nil, billTiming{}, err
+		}
 		// Classification, not the raw value's sign, decides direction —
 		// mirrors currencyTotalsFor's Value.Abs() in transactions/query.go.
 		amount = amount.Abs()
@@ -162,6 +171,10 @@ func realEntries(ctx context.Context, q Querier, items []transactions.Item, refe
 		var reportable *decimal.Decimal
 		if item.ReportableAmount != nil {
 			value, err := decimal.NewFromString(*item.ReportableAmount)
+			if err != nil {
+				return nil, billTiming{}, err
+			}
+			value, err = valuation.Convert(ctx, q, value, item.EffectiveMoney.CurrencyCode)
 			if err != nil {
 				return nil, billTiming{}, err
 			}
@@ -229,7 +242,8 @@ func BuildSeries(ctx context.Context, q Querier, params BuildParams) (Series, er
 
 	// The t=today anchor: cash on hand, from the one implementation net
 	// worth's asset side also reads (see transactions.CashOnHand).
-	balance, err := transactions.CashOnHand(ctx, q, params.AccountIDs)
+	valuation := fx.New(time.Now())
+	balance, err := transactions.CashOnHandValued(ctx, q, params.AccountIDs, valuation)
 	if err != nil {
 		return Series{}, err
 	}
@@ -250,7 +264,7 @@ func BuildSeries(ctx context.Context, q Querier, params BuildParams) (Series, er
 	if err != nil {
 		return Series{}, err
 	}
-	entries, bills, err := realEntries(ctx, q, items, reference)
+	entries, bills, err := realEntriesValued(ctx, q, items, reference, valuation)
 	if err != nil {
 		return Series{}, err
 	}

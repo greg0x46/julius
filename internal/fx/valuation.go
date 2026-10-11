@@ -24,16 +24,16 @@ type Querier interface {
 }
 
 type Rate struct {
-	Value decimal.Decimal `json:"value"`
-	ObservedAt time.Time `json:"observed_at"`
-	Source string `json:"source"`
+	Value      decimal.Decimal `json:"value"`
+	ObservedAt time.Time       `json:"observed_at"`
+	Source     string          `json:"source"`
 }
 
 type Metadata struct {
-	ReferenceCurrency string `json:"reference_currency"`
-	ValuedAt time.Time `json:"valued_at"`
-	RatePolicy string `json:"rate_policy"`
-	Rates map[string]Rate `json:"rates"`
+	ReferenceCurrency string          `json:"reference_currency"`
+	ValuedAt          time.Time       `json:"valued_at"`
+	RatePolicy        string          `json:"rate_policy"`
+	Rates             map[string]Rate `json:"rates"`
 }
 
 type Valuation struct {
@@ -78,12 +78,20 @@ func (v *Valuation) Convert(ctx context.Context, q Querier, amount decimal.Decim
 		if errors.Is(err, sql.ErrNoRows) {
 			return decimal.Zero, fmt.Errorf("%w: %s/%s at %s", ErrMissingRate, currency, v.ReferenceCurrency, v.ValuedAt.Format(time.RFC3339))
 		}
-		if err != nil { return decimal.Zero, err }
+		if err != nil {
+			return decimal.Zero, err
+		}
 		rate.Value, err = decimal.NewFromString(raw)
-		if err != nil { return decimal.Zero, err }
-		if !rate.Value.IsPositive() { return decimal.Zero, fmt.Errorf("invalid FX rate for %s", currency) }
+		if err != nil {
+			return decimal.Zero, err
+		}
+		if !rate.Value.IsPositive() {
+			return decimal.Zero, fmt.Errorf("invalid FX rate for %s", currency)
+		}
 		rate.ObservedAt, err = db.ParseTime(observed)
-		if err != nil { return decimal.Zero, err }
+		if err != nil {
+			return decimal.Zero, err
+		}
 		v.Rates[currency] = rate
 	}
 	return amount.Mul(rate.Value), nil

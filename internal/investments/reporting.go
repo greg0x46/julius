@@ -4,7 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"github.com/greg0x46/julius/internal/fx"
 	"sort"
+	"time"
 
 	"github.com/shopspring/decimal"
 )
@@ -75,6 +77,10 @@ func ReconciledTransactionAmount(ctx context.Context, q Querier, financialTransa
 // book cash only when that cash is not already represented by a linked
 // provider account. It intentionally does not include provider holdings.
 func ManualNetWorth(ctx context.Context, q Querier) (decimal.Decimal, error) {
+	return ManualNetWorthValued(ctx, q, fx.New(time.Now()))
+}
+
+func ManualNetWorthValued(ctx context.Context, q Querier, valuation *fx.Valuation) (decimal.Decimal, error) {
 	accounts, err := ListAccounts(ctx, q)
 	if err != nil {
 		return decimal.Zero, err
@@ -86,12 +92,20 @@ func ManualNetWorth(ctx context.Context, q Querier) (decimal.Decimal, error) {
 	total := decimal.Zero
 	for _, position := range positions {
 		if position.Source == PositionSourceManual {
-			total = total.Add(position.CurrentValue)
+			value, err := valuation.Convert(ctx, q, position.CurrentValue, fx.Currency(position.CurrencyCode))
+			if err != nil {
+				return decimal.Zero, err
+			}
+			total = total.Add(value)
 		}
 	}
 	for _, account := range accounts {
 		if account.Kind == AccountKindManual && account.FinancialAccountID == nil {
-			total = total.Add(account.CashBalance)
+			value, err := valuation.Convert(ctx, q, account.CashBalance, fx.Currency(account.CurrencyCode))
+			if err != nil {
+				return decimal.Zero, err
+			}
+			total = total.Add(value)
 		}
 	}
 	return total, nil

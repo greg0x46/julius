@@ -11,6 +11,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/greg0x46/julius/internal/db"
+	"github.com/greg0x46/julius/internal/fx"
 	"github.com/greg0x46/julius/internal/investments"
 	"github.com/greg0x46/julius/internal/money"
 	"github.com/greg0x46/julius/internal/payables"
@@ -50,29 +51,46 @@ func creditCardBalance(ctx context.Context, q Querier) (decimal.Decimal, error) 
 // investmentBalance sums every synced investment's current balance. Balances
 // are stored as TEXT to stay exact, so the summing happens here in Go with
 // decimal.Decimal rather than through a float-lossy SQL SUM.
-func investmentBalance(ctx context.Context, q Querier) (decimal.Decimal, error) {
-	manual, err := investments.ManualNetWorth(ctx, q)
+func investmentBalance(ctx context.Context, q Querier, valuation *fx.Valuation) (decimal.Decimal, error) {
+	manual, err := investments.ManualNetWorthValued(ctx, q, valuation)
 	if err != nil {
 		return decimal.Zero, err
 	}
-	rows, err := q.QueryContext(ctx, `SELECT balance FROM financial_investments WHERE balance IS NOT NULL AND (currency_code IS NULL OR currency_code = 'BRL')`)
+	rows, err := q.QueryContext(ctx, `SELECT balance, currency_code FROM financial_investments WHERE balance IS NOT NULL`)
 	if err != nil {
 		return decimal.Decimal{}, err
 	}
 	defer rows.Close()
+	type holding struct {
+		amount   decimal.Decimal
+		currency string
+	}
+	var holdings []holding
 	total := manual
 	for rows.Next() {
 		var raw string
-		if err := rows.Scan(&raw); err != nil {
+		var currency sql.NullString
+		if err := rows.Scan(&raw, &currency); err != nil {
 			return decimal.Decimal{}, err
 		}
 		amount, err := decimal.NewFromString(raw)
 		if err != nil {
 			return decimal.Decimal{}, fmt.Errorf("parse investment balance %q: %w", raw, err)
 		}
-		total = total.Add(amount)
+		holdings = append(holdings, holding{amount, fx.Currency(&currency.String)})
 	}
-	return total, rows.Err()
+	if err := rows.Err(); err != nil {
+		return decimal.Zero, err
+	}
+	rows.Close()
+	for _, h := range holdings {
+		value, err := valuation.Convert(ctx, q, h.amount, h.currency)
+		if err != nil {
+			return decimal.Zero, err
+		}
+		total = total.Add(value)
+	}
+	return total, nil
 }
 
 // Compute aggregates the current net worth from live data — never from a
@@ -81,15 +99,19 @@ func investmentBalance(ctx context.Context, q Querier) (decimal.Decimal, error) 
 // remaining debts. Receivables never enter this computation at all — see
 // Breakdown's doc comment for why.
 func Compute(ctx context.Context, q Querier) (Breakdown, error) {
-	cash, err := cashBalance(ctx, q)
+	return ComputeValued(ctx, q, fx.New(time.Now()))
+}
+
+func ComputeValued(ctx context.Context, q Querier, valuation *fx.Valuation) (Breakdown, error) {
+	cash, err := transactions.CashOnHandValued(ctx, q, nil, valuation)
 	if err != nil {
 		return Breakdown{}, err
 	}
-	investments, err := investmentBalance(ctx, q)
+	investments, err := investmentBalance(ctx, q, valuation)
 	if err != nil {
 		return Breakdown{}, err
 	}
-	creditCard, err := creditCardBalance(ctx, q)
+	creditCard, err := transactions.CreditCardBalanceValued(ctx, q, valuation.ValuedAt, time.Local, valuation)
 	if err != nil {
 		return Breakdown{}, err
 	}

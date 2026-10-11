@@ -2,6 +2,8 @@ package investments
 
 import (
 	"context"
+	"github.com/greg0x46/julius/internal/fx"
+	"time"
 
 	"github.com/shopspring/decimal"
 )
@@ -13,6 +15,10 @@ const unassignedPortfolioName = "Sem objetivo"
 // uses ManualNetWorth instead because linked cash is already bank cash there.
 // Goals only regroup value that positions already carry.
 func BuildSummary(ctx context.Context, q Querier) (Summary, error) {
+	return BuildSummaryValued(ctx, q, fx.New(time.Now()))
+}
+
+func BuildSummaryValued(ctx context.Context, q Querier, valuation *fx.Valuation) (Summary, error) {
 	accounts, err := ListAccounts(ctx, q)
 	if err != nil {
 		return Summary{}, err
@@ -26,14 +32,26 @@ func BuildSummary(ctx context.Context, q Querier) (Summary, error) {
 		return Summary{}, err
 	}
 
-	summary := Summary{CurrencyCode: "BRL", Portfolios: []SummaryPortfolio{}, Accounts: []SummaryAccount{}}
+	summary := Summary{Valuation: valuation.Metadata, CurrencyCode: "BRL", Portfolios: []SummaryPortfolio{}, Accounts: []SummaryAccount{}}
 	valueByAccount := map[string]decimal.Decimal{}
 	unassigned := decimal.Zero
 	hasUnassigned := false
+	valuedPositions := make([]Position, 0, len(positions))
 	for _, position := range positions {
-		if position.CurrencyCode != nil && *position.CurrencyCode != "BRL" {
-			continue
+		value, err := valuation.Convert(ctx, q, position.CurrentValue, fx.Currency(position.CurrencyCode))
+		if err != nil {
+			return Summary{}, err
 		}
+		position.CurrentValue = value
+		if position.TotalCost != nil {
+			cost, err := valuation.Convert(ctx, q, *position.TotalCost, fx.Currency(position.CurrencyCode))
+			if err != nil {
+				return Summary{}, err
+			}
+			position.TotalCost = &cost
+		}
+		position.CurrencyCode = nil
+		valuedPositions = append(valuedPositions, position)
 		valueByAccount[position.AccountID] = valueByAccount[position.AccountID].Add(position.CurrentValue)
 		if position.Source == PositionSourceManual {
 			summary.ManualValue = summary.ManualValue.Add(position.CurrentValue)
@@ -53,7 +71,10 @@ func BuildSummary(ctx context.Context, q Querier) (Summary, error) {
 
 	summary.TotalValue = summary.ManualValue.Add(summary.SyncedValue)
 	for _, account := range accounts {
-		cash := accountEffectiveCash(account)
+		cash, err := valuation.Convert(ctx, q, accountEffectiveCash(account), fx.Currency(account.CurrencyCode))
+		if err != nil {
+			return Summary{}, err
+		}
 		summary.CashBalance = summary.CashBalance.Add(cash)
 		summary.TotalValue = summary.TotalValue.Add(cash)
 		summary.Accounts = append(summary.Accounts, SummaryAccount{
@@ -65,7 +86,7 @@ func BuildSummary(ctx context.Context, q Querier) (Summary, error) {
 		})
 	}
 
-	values := portfolioValues(positions)
+	values := portfolioValues(valuedPositions)
 	for _, portfolio := range portfolios {
 		id := portfolio.ID
 		summary.Portfolios = append(summary.Portfolios, SummaryPortfolio{
