@@ -72,9 +72,15 @@ type Provider interface {
 	Rate(ctx context.Context, base, quote string, day time.Time) (ProviderRate, error)
 }
 
+// Querier is the part of *sql.DB or *sql.Tx the service uses.
+type Querier interface {
+	ExecContext(context.Context, string, ...any) (sql.Result, error)
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}
+
 // Service resolves rates through the cache in exchange_rates and the provider.
 type Service struct {
-	conn     *sql.DB
+	conn     Querier
 	provider Provider
 	now      func() time.Time
 
@@ -93,7 +99,7 @@ type Service struct {
 }
 
 // New builds a Service. A nil provider uses Frankfurter.
-func New(conn *sql.DB, provider Provider) *Service {
+func New(conn Querier, provider Provider) *Service {
 	if provider == nil {
 		provider = NewFrankfurter()
 	}

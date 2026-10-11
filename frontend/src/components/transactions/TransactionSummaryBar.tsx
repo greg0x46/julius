@@ -1,7 +1,9 @@
 import { DownOutlined } from "@ant-design/icons";
 import { useId, useState } from "react";
 
-import type { CurrencyTotals } from "../../api/contracts";
+import { ReportingDetails } from "../shared/ReportingDetails";
+import { reportingLabel, reportingTotals } from "../../presentation/reporting";
+import type { CurrencyTotals, ReportingSummary } from "../../api/contracts";
 import { formatBRL } from "../../presentation/money";
 import { DataCardSummary } from "../layout/DataCard";
 import { Money } from "../shared/Money";
@@ -20,21 +22,18 @@ import { useCompactScreen } from "../shared/useCompactScreen";
  */
 export function TransactionSummaryBar({
   totals,
+  reporting,
   totalItems,
   busy,
 }: {
   totals: CurrencyTotals[];
+  reporting?: ReportingSummary;
   totalItems: number;
   busy?: boolean;
 }) {
   const compact = useCompactScreen();
   const [expanded, setExpanded] = useState(false);
-  const brl = totals.find((total) => total.currency_code === "BRL") ?? {
-    currency_code: "BRL",
-    inflow: "0",
-    outflow: "0",
-    balance: "0",
-  };
+  const brl = reportingTotals(reporting, totals);
   const showDetails = !compact || expanded;
   const detailsId = useId();
 
@@ -51,9 +50,9 @@ export function TransactionSummaryBar({
           </span>
           <span className="transaction-summary-figure transaction-summary-result">
             <span className="transaction-summary-label">Resultado</span>
-            <Money value={brl.balance} tone="result" className="transaction-summary-value" />
+            {brl ? <Money value={brl.balance} currencyCode={brl.currency_code} tone="result" className="transaction-summary-value" /> : <span role="status">{reporting ? reportingLabel(reporting) : "Total indisponível"}</span>}
           </span>
-          {!compact && (
+          {!compact && brl && (
             <>
               <span className="transaction-summary-figure">
                 <span className="transaction-summary-label">Entradas</span>
@@ -80,7 +79,7 @@ export function TransactionSummaryBar({
           </button>
         )}
 
-        {compact && expanded && (
+        {compact && expanded && brl && (
           <dl id={detailsId} className="transaction-summary-details">
             <div>
               <dt>Entradas</dt>
@@ -93,6 +92,7 @@ export function TransactionSummaryBar({
           </dl>
         )}
       </div>
+      <ReportingDetails report={reporting} totals={totals} />
     </DataCardSummary>
   );
 }
