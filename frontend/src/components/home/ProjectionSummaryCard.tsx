@@ -3,6 +3,7 @@ import { Popover, Skeleton } from "antd";
 import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 
+import { reportingError } from "../../presentation/reporting";
 import type { TimelineDayPoint } from "../../api/contracts";
 import { UnavailableState } from "../AsyncState";
 import type { Period } from "../../hooks/usePeriod";
@@ -135,7 +136,7 @@ export function ProjectionSummaryCard({ period }: { period: Period }) {
     <Section title="Evolução do saldo" trailing={<ChartHelp />}>
       {isLoading && <ProjectionSkeleton />}
       {error && !isLoading && (
-        <UnavailableState onRetry={retry}>Não foi possível carregar o saldo.</UnavailableState>
+        <UnavailableState onRetry={retry}>{reportingError(error)?.message ?? "Não foi possível carregar o saldo."}</UnavailableState>
       )}
 
       {!isLoading && !error && base && bounds && hasNoActivity(base) && (

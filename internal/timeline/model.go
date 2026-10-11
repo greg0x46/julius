@@ -25,6 +25,7 @@ import (
 
 	"github.com/shopspring/decimal"
 
+	"github.com/greg0x46/julius/internal/reporting"
 	timelinetypes "github.com/greg0x46/julius/internal/timeline/types"
 )
 
@@ -54,17 +55,20 @@ const (
 // Entry is one atomic cash-flow item — the one shape every consumer reads,
 // never a second parallel representation.
 type Entry struct {
-	Date             time.Time
-	Description      string
-	Amount           decimal.Decimal  // signed: positive = inflow, negative = outflow
-	ReportableAmount *decimal.Decimal // signed income/expense amount; nil uses Amount
-	CategoryID       *string          // nil means "Sem categoria" — never dropped from totals
-	CategoryName     string
-	Tier             CertaintyTier
-	Source           SourceKind
-	SourceRefID      string
-	EventKey         string  // stable identity for projected events; real events use transaction:<id>
-	ScenarioID       *string // set for every projected Scenario event
+	OriginalCurrency         string
+	OriginalReportableAmount *decimal.Decimal
+	ReportingStatus          string
+	Date                     time.Time
+	Description              string
+	Amount                   decimal.Decimal  // signed: positive = inflow, negative = outflow
+	ReportableAmount         *decimal.Decimal // signed income/expense amount; nil uses Amount
+	CategoryID               *string          // nil means "Sem categoria" — never dropped from totals
+	CategoryName             string
+	Tier                     CertaintyTier
+	Source                   SourceKind
+	SourceRefID              string
+	EventKey                 string  // stable identity for projected events; real events use transaction:<id>
+	ScenarioID               *string // set for every projected Scenario event
 }
 
 // DayPoint is the running balance at the end of one calendar day.
@@ -79,6 +83,8 @@ type DayPoint struct {
 // Series is BuildSeries' one output — every presentation layer reads from
 // this, never recomputing totals independently.
 type Series struct {
+	Totals          []reporting.Totals
+	Reporting       reporting.Summary
 	Points          []DayPoint
 	Entries         []Entry
 	StartingBalance decimal.Decimal

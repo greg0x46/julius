@@ -9,9 +9,11 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/greg0x46/julius/internal/dates"
+	"github.com/greg0x46/julius/internal/exchange"
 	"github.com/greg0x46/julius/internal/investments"
 	"github.com/greg0x46/julius/internal/money"
 	"github.com/greg0x46/julius/internal/projections"
+	"github.com/greg0x46/julius/internal/reporting"
 	"github.com/greg0x46/julius/internal/transactions"
 )
 
@@ -147,11 +149,20 @@ func realEntries(ctx context.Context, q Querier, items []transactions.Item, refe
 	}
 
 	entries := make([]Entry, 0, len(items))
+	rates := exchange.New(q, nil)
 	bills := billTiming{settled: map[string]bool{}, dueOnReference: map[string]bool{}}
 	for _, item := range items {
 		amount, err := decimal.NewFromString(item.EffectiveMoney.Value)
 		if err != nil {
 			return nil, billTiming{}, fmt.Errorf("parse transaction amount %q: %w", item.EffectiveMoney.Value, err)
+		}
+		cash := item.Reporting
+		if cash.Status != "unavailable" {
+			cash = reporting.Convert(ctx, rates, amount, item.EffectiveMoney.CurrencyCode, item.ReportingDate)
+		}
+		amount = decimal.Zero
+		if cash.Amount != nil {
+			amount = *cash.Amount
 		}
 		// Classification, not the raw value's sign, decides direction —
 		// mirrors currencyTotalsFor's Value.Abs() in transactions/query.go.
@@ -164,6 +175,12 @@ func realEntries(ctx context.Context, q Querier, items []transactions.Item, refe
 			value, err := decimal.NewFromString(*item.ReportableAmount)
 			if err != nil {
 				return nil, billTiming{}, err
+			}
+			if item.TotalsEligibility.Included {
+				value = decimal.Zero
+				if item.Reporting.Amount != nil {
+					value = *item.Reporting.Amount
+				}
 			}
 			if item.Classification == money.Outflow {
 				value = value.Neg()
@@ -193,17 +210,27 @@ func realEntries(ctx context.Context, q Querier, items []transactions.Item, refe
 				bills.dueOnReference[eventKey] = true
 			}
 		}
+		originalReportable := decimal.Zero
+		if item.ReportableAmount != nil {
+			originalReportable, _ = decimal.NewFromString(*item.ReportableAmount)
+		}
+		if item.Classification == money.Outflow {
+			originalReportable = originalReportable.Neg()
+		}
 		entries = append(entries, Entry{
-			Date:             date,
-			Description:      description,
-			Amount:           amount,
-			ReportableAmount: reportable,
-			CategoryID:       categoryID,
-			CategoryName:     categoryName,
-			Tier:             tier,
-			Source:           SourceReal,
-			SourceRefID:      item.ID,
-			EventKey:         eventKey,
+			OriginalCurrency:         item.EffectiveMoney.CurrencyCode,
+			OriginalReportableAmount: &originalReportable,
+			ReportingStatus:          cash.Status,
+			Date:                     date,
+			Description:              description,
+			Amount:                   amount,
+			ReportableAmount:         reportable,
+			CategoryID:               categoryID,
+			CategoryName:             categoryName,
+			Tier:                     tier,
+			Source:                   SourceReal,
+			SourceRefID:              item.ID,
+			EventKey:                 eventKey,
 		})
 	}
 	return entries, bills, nil
@@ -304,6 +331,7 @@ func BuildSeries(ctx context.Context, q Querier, params BuildParams) (Series, er
 		}
 		scenarioID := event.ScenarioID
 		entries = append(entries, Entry{
+
 			Date: event.Date, Description: event.Description, Amount: event.Amount,
 			CategoryID: event.CategoryID, CategoryName: event.CategoryName,
 			Tier: CertaintyTier(event.Tier), Source: SourceKind(event.Source),
@@ -320,7 +348,52 @@ func BuildSeries(ctx context.Context, q Querier, params BuildParams) (Series, er
 	})
 	lowest, firstNegative := lowestAndFirstNegative(points, reference)
 
+	var coverage reporting.Accumulator
+	raw := map[string]*reporting.Accumulator{}
+	for _, e := range entries {
+		original := reportingAmount(e)
+		currency := reporting.ReferenceCurrency
+		if e.OriginalReportableAmount != nil {
+			original = *e.OriginalReportableAmount
+			currency = e.OriginalCurrency
+		}
+		if !original.IsZero() {
+			if raw[currency] == nil {
+				raw[currency] = &reporting.Accumulator{}
+			}
+			direction := money.Inflow
+			if original.IsNegative() {
+				direction = money.Outflow
+			}
+			raw[currency].Add(reporting.Conversion{Amount: &original, Status: "complete"}, direction)
+		}
+		if e.ReportingStatus == "unavailable" {
+			coverage.Add(reporting.Conversion{Status: "unavailable"}, money.Unclassified)
+			continue
+		}
+		amount := reportingAmount(e)
+		if amount.IsZero() {
+			continue
+		}
+		direction := money.Inflow
+		if amount.IsNegative() {
+			direction = money.Outflow
+		}
+		coverage.Add(reporting.Conversion{Amount: &amount, Status: e.ReportingStatus}, direction)
+	}
+	rawTotals := make([]reporting.Totals, 0, len(raw))
+	for currency, a := range raw {
+		totals := *a.Summary().Totals
+		totals.CurrencyCode = currency
+		rawTotals = append(rawTotals, totals)
+	}
+	sort.Slice(rawTotals, func(i, j int) bool { return rawTotals[i].CurrencyCode < rawTotals[j].CurrencyCode })
+	if summary := coverage.Summary(); summary.Missing > 0 {
+		return Series{}, &reporting.IncompleteError{Coverage: summary, Totals: rawTotals}
+	}
 	return Series{
+		Totals:          rawTotals,
+		Reporting:       coverage.Summary(),
 		Points:          points,
 		Entries:         entries,
 		StartingBalance: balance,

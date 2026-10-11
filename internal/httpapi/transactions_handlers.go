@@ -15,6 +15,7 @@ import (
 	"github.com/greg0x46/julius/internal/categories"
 	"github.com/greg0x46/julius/internal/ledger"
 	"github.com/greg0x46/julius/internal/money"
+	"github.com/greg0x46/julius/internal/reporting"
 	"github.com/greg0x46/julius/internal/scenarios"
 	"github.com/greg0x46/julius/internal/transactions"
 )
@@ -307,6 +308,7 @@ func toCurrencyTotalsDTO(t transactions.CurrencyTotals) currencyTotalsDTO {
 }
 
 type groupDTO struct {
+	Reporting      reporting.Summary   `json:"reporting"`
 	Key            string              `json:"key"`
 	Kind           string              `json:"kind"`
 	StartDate      *string             `json:"start_date"`
@@ -332,6 +334,7 @@ func toGroupDTO(g transactions.Group) groupDTO {
 		totals[i] = toCurrencyTotalsDTO(t)
 	}
 	return groupDTO{
+		Reporting:      g.Reporting,
 		Key:            g.Key,
 		Kind:           string(g.Kind),
 		StartDate:      dateStringPtr(g.StartDate),
@@ -373,6 +376,7 @@ type availableFiltersDTO struct {
 }
 
 type transactionQueryResultDTO struct {
+	Reporting        reporting.Summary    `json:"reporting"`
 	ConfirmedAt      time.Time            `json:"confirmed_at"`
 	StoredTotal      int                  `json:"stored_total"`
 	Page             pageDTO              `json:"page"`
@@ -404,6 +408,7 @@ func toResultDTO(result transactions.Result) transactionQueryResultDTO {
 		categoryOptions[i] = categoryOptionDTO{ID: c.ID, Name: c.Name, Kind: string(c.Kind), IsActive: c.IsActive, Icon: c.Icon, Color: c.Color}
 	}
 	return transactionQueryResultDTO{
+		Reporting:   result.Reporting,
 		ConfirmedAt: result.ConfirmedAt,
 		StoredTotal: result.StoredTotal,
 		Page: pageDTO{
@@ -552,6 +557,9 @@ func handleSpendingByCategory(db *sql.DB) http.HandlerFunc {
 			DateFrom: &from, DateTo: &to,
 		}, timezone)
 		if err != nil {
+			if writeReportingProblem(w, err) {
+				return
+			}
 			spendingByCategoryUnavailableProblem(w)
 			return
 		}
@@ -898,14 +906,14 @@ func handleCategoryBreakdown(db *sql.DB) http.HandlerFunc {
 			writeProblem(w, 400, "invalid-classification", "Classificação inválida", "Informe inflow ou outflow.")
 			return
 		}
-		items, err := transactions.CategoryBreakdown(r.Context(), db, filters, timezone, classification)
+		report, err := transactions.CategoryReporting(r.Context(), db, filters, timezone, classification)
 		if err != nil {
 			writeProblem(w, 503, "category-breakdown-unavailable", "Categorias temporariamente indisponíveis", "Tente novamente em instantes.")
 			return
 		}
 		total := decimal.Zero
-		result := make([]categorySpendingItemDTO, 0, len(items))
-		for _, item := range items {
+		result := make([]categorySpendingItemDTO, 0, len(report.Items))
+		for _, item := range report.Items {
 			amount, err := decimal.NewFromString(item.Amount)
 			if err != nil {
 				writeProblem(w, 503, "category-breakdown-unavailable", "Categorias temporariamente indisponíveis", "Tente novamente em instantes.")
@@ -914,20 +922,17 @@ func handleCategoryBreakdown(db *sql.DB) http.HandlerFunc {
 			total = total.Add(amount)
 			result = append(result, categorySpendingItemDTO{CategoryID: item.CategoryID, CategoryName: item.CategoryName, CategoryIcon: item.CategoryIcon, CategoryColor: item.CategoryColor, Amount: item.Amount, Source: "real"})
 		}
-		if monthLabel != "" {
-			writeJSON(w, http.StatusOK, struct {
-				spendingByCategoryDTO
-				Classification money.Classification `json:"classification"`
-			}{spendingByCategoryDTO{Month: monthLabel, CurrencyCode: "BRL", Total: money.CanonicalDecimal(total), Items: result}, classification})
-			return
+		var totalValue *string
+		if report.Reporting.Totals != nil {
+			value := money.CanonicalDecimal(total)
+			totalValue = &value
 		}
-		writeJSON(w, http.StatusOK, struct {
-			DateFrom       *string                   `json:"date_from"`
-			DateTo         *string                   `json:"date_to"`
-			CurrencyCode   string                    `json:"currency_code"`
-			Total          string                    `json:"total"`
-			Items          []categorySpendingItemDTO `json:"items"`
-			Classification money.Classification      `json:"classification"`
-		}{dateFrom, dateTo, "BRL", money.CanonicalDecimal(total), result, classification})
+		payload := map[string]any{"currency_code": "BRL", "total": totalValue, "items": result, "classification": classification, "reporting": report.Reporting, "totals": report.Totals}
+		if monthLabel != "" {
+			payload["month"] = monthLabel
+		} else {
+			payload["date_from"], payload["date_to"] = dateFrom, dateTo
+		}
+		writeJSON(w, http.StatusOK, payload)
 	}
 }
