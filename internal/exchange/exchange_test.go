@@ -206,6 +206,50 @@ func TestCacheReuse(t *testing.T) {
 	})
 }
 
+func TestStaleHistoricalRateRefreshesAfterTTL(t *testing.T) {
+	dbtest.Each(t, func(t *testing.T, conn *sql.DB) {
+		p := &fakeProvider{}
+		old := wed.AddDate(0, 0, -8)
+		p.set("USD", "BRL", wed, "5", old)
+		s, c := newService(conn, p, sun.Add(13*time.Hour))
+		ctx := context.Background()
+
+		rate, err := s.On(ctx, "USD", "BRL", wed)
+		if err != nil || !rate.Stale || !rate.EffectiveOn.Equal(old) {
+			t.Fatalf("stale historical rate = %+v, %v", rate, err)
+		}
+		p.set("USD", "BRL", wed, "5.4", wed)
+		c.t = c.t.Add(s.TTL - time.Nanosecond)
+		other, otherClock := newService(conn, p, c.t)
+		rate, err = other.On(ctx, "USD", "BRL", wed)
+		if err != nil || !rate.Stale || !rate.Value.Equal(dec("5")) || p.calls != 1 {
+			t.Fatalf("cached stale rate = %+v, %v; calls = %d", rate, err, p.calls)
+		}
+
+		otherClock.t = otherClock.t.Add(time.Nanosecond)
+		rate, err = other.On(ctx, "USD", "BRL", wed)
+		if err != nil || rate.Stale || !rate.Value.Equal(dec("5.4")) || !rate.EffectiveOn.Equal(wed) || p.calls != 2 {
+			t.Fatalf("refreshed historical rate = %+v, %v; calls = %d", rate, err, p.calls)
+		}
+		var value, effective string
+		if err := conn.QueryRow(`SELECT rate, effective_on FROM exchange_rates
+			WHERE base_currency = 'USD' AND quote_currency = 'BRL' AND as_of = '2026-10-07'`).
+			Scan(&value, &effective); err != nil {
+			t.Fatal(err)
+		}
+		if value != "5.4" || effective != "2026-10-07" {
+			t.Fatalf("persisted refreshed rate = %s on %s", value, effective)
+		}
+
+		p.err = errors.New("offline")
+		restarted, _ := newService(conn, p, otherClock.t.Add(2*other.TTL))
+		rate, err = restarted.On(ctx, "USD", "BRL", wed)
+		if err != nil || rate.Stale || !rate.Value.Equal(dec("5.4")) || p.calls != 2 {
+			t.Fatalf("final historical rate = %+v, %v; calls = %d", rate, err, p.calls)
+		}
+	})
+}
+
 func TestSameCurrencyIsIdentityWithoutProvider(t *testing.T) {
 	dbtest.Each(t, func(t *testing.T, conn *sql.DB) {
 		p := &fakeProvider{}

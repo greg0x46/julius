@@ -1,6 +1,6 @@
 // Package exchange resolves persisted decimal rates without changing original values.
 // Historical lookups use the last business day on or before the requested day.
-// Rows fetched after that day ended (UTC) are final; others refresh after TTL.
+// Valid rows fetched after that day ended (UTC) are final; others refresh after TTL.
 // Provider failure returns a stored rate marked stale, or ErrUnavailable.
 // Rates more than MaxLag before the requested day are also marked stale.
 package exchange
@@ -213,7 +213,7 @@ func (s *Service) finish(rate *Rate, err error) (Rate, error) {
 
 // fresh reports whether a cached row can be used without asking the provider.
 func (s *Service) fresh(rate Rate) bool {
-	if !rate.FetchedAt.Before(rate.AsOf.AddDate(0, 0, 1)) {
+	if rate.AsOf.Sub(rate.EffectiveOn) <= s.MaxLag && !rate.FetchedAt.Before(rate.AsOf.AddDate(0, 0, 1)) {
 		return true
 	}
 	return s.now().Sub(rate.FetchedAt) < s.TTL
