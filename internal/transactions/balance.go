@@ -4,16 +4,16 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/greg0x46/julius/internal/fx"
 	"time"
 
 	"github.com/shopspring/decimal"
 
 	"github.com/greg0x46/julius/internal/db"
+	"github.com/greg0x46/julius/internal/fx"
 )
 
 // CashOnHand is how much cash sits in the user's non-credit accounts: the
-// sum of the providers' reported balances. It is the one implementation
+// sum of the providers' reported balances valued in BRL. It is the one implementation
 // every cash-side reader goes through — the timeline's t=today anchor and
 // net worth's asset side — so those two views cannot drift apart.
 //

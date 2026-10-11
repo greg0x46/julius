@@ -7,10 +7,11 @@
 package networth
 
 import (
-	"github.com/greg0x46/julius/internal/fx"
 	"time"
 
 	"github.com/shopspring/decimal"
+
+	"github.com/greg0x46/julius/internal/fx"
 )
 
 // Breakdown is a point-in-time decomposition of net worth into the

@@ -7,10 +7,11 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"github.com/greg0x46/julius/internal/fx"
 	"time"
 
 	"github.com/shopspring/decimal"
+
+	"github.com/greg0x46/julius/internal/fx"
 )
 
 // Querier is implemented by *sql.DB and *sql.Tx. Keeping this package on the

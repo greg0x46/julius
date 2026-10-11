@@ -4,11 +4,12 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/greg0x46/julius/internal/fx"
 	"sort"
 	"time"
 
 	"github.com/shopspring/decimal"
+
+	"github.com/greg0x46/julius/internal/fx"
 )
 
 // ReconciledTransactionAmounts returns only the portions of bank

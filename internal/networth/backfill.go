@@ -374,15 +374,3 @@ func earliestCashTransactionDay(ctx context.Context, q Querier) (day time.Time, 
 	}
 	return dayBoundary, true, nil
 }
-
-// creditCardBalanceAsOf mirrors creditCardBalance but for a past day,
-// reusing transactions.CreditCardTransactionTotalAt's
-// arbitrary-reference-date support. The reference time is local noon on
-// day — as opposed to a UTC midnight boundary — because the cycle math
-// keys off time.Local calendar days (see CreditCardTransactionTotalAt);
-// noon keeps the same calendar date in virtually every timezone.
-func creditCardBalanceAsOf(ctx context.Context, q Querier, day time.Time) (decimal.Decimal, error) {
-	loc := time.Local
-	reference := time.Date(day.Year(), day.Month(), day.Day(), 12, 0, 0, 0, loc)
-	return transactions.CreditCardTransactionTotalAt(ctx, q, "BRL", reference, loc)
-}

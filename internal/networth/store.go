@@ -30,25 +30,6 @@ const dateLayout = "2006-01-02"
 
 func formatDate(t time.Time) string { return t.UTC().Format(dateLayout) }
 
-// cashBalance is the asset side's cash figure: the same
-// transactions.CashOnHand the timeline anchors on, so the two views can
-// never disagree. Credit card accounts are excluded there — their balance
-// is owed debt, handled by creditCardBalance below.
-func cashBalance(ctx context.Context, q Querier) (decimal.Decimal, error) {
-	return transactions.CashOnHand(ctx, q, nil)
-}
-
-// creditCardBalance is what's currently owed across every credit card,
-// computed the same way handlePayableTotalOwed's "Dívida total" homepage
-// widget does — the current bill cycle's eligible transaction total, never
-// financial_accounts.balance directly (see the doc comment on
-// transactions.CreditCardTransactionTotal for why: the provider balance can
-// include locally-ignored transactions). Reusing that exact function is
-// what keeps this figure and the homepage's in agreement.
-func creditCardBalance(ctx context.Context, q Querier) (decimal.Decimal, error) {
-	return transactions.CreditCardTransactionTotal(ctx, q, "BRL")
-}
-
 // investmentBalance sums every synced investment's current balance. Balances
 // are stored as TEXT to stay exact, so the summing happens here in Go with
 // decimal.Decimal rather than through a float-lossy SQL SUM.
@@ -103,6 +84,7 @@ func Compute(ctx context.Context, q Querier) (Breakdown, error) {
 	return ComputeValued(ctx, q, fx.New(time.Now()))
 }
 
+// ComputeValued uses live balances; the valuation timestamp controls FX only.
 func ComputeValued(ctx context.Context, q Querier, valuation *fx.Valuation) (Breakdown, error) {
 	cash, err := transactions.CashOnHandValued(ctx, q, nil, valuation)
 	if err != nil {

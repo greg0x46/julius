@@ -2,6 +2,8 @@ package investments_test
 
 import (
 	"context"
+	"errors"
+	"github.com/greg0x46/julius/internal/fx"
 	"testing"
 	"time"
 
@@ -130,8 +132,37 @@ func TestImportedForeignCurrencyIsPreservedWithoutInventingExchangeRate(t *testi
 	if position.CurrencyCode == nil || *position.CurrencyCode != "USD" || position.CurrentValue.String() != "2000" {
 		t.Fatal(position)
 	}
+	if _, err := investments.BuildSummary(context.Background(), f.conn); !errors.Is(err, fx.ErrMissingRate) {
+		t.Fatalf("missing FX rate = %v", err)
+	}
+	at := time.Now().Add(-time.Hour)
+	if err := fx.StoreRate(context.Background(), f.conn, "USD", fx.Rate{Value: bookDec("5"), ObservedAt: at, Source: "test"}); err != nil {
+		t.Fatal(err)
+	}
 	summary := f.summary()
-	if !summary.TotalValue.IsZero() {
-		t.Fatal("foreign currency was added to BRL total", summary)
+	if summary.TotalValue.String() != "10000" || summary.SyncedValue.String() != "10000" || summary.Accounts[0].CurrentValue.String() != "10000" {
+		t.Fatalf("converted summary = %+v", summary)
+	}
+	if summary.Valuation.Rates["USD"].Value.String() != "5" {
+		t.Fatal(summary.Valuation)
+	}
+	position, err = investments.GetPosition(context.Background(), f.conn, id)
+	if err != nil || position.CurrentValue.String() != "2000" || *position.CurrencyCode != "USD" {
+		t.Fatalf("native holding changed: %+v, %v", position, err)
+	}
+	goal, err := investments.CreatePortfolio(context.Background(), f.conn, investments.PortfolioInput{Name: "Foreign", TargetAmount: bookDecPtr("20000")})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := investments.UpdatePosition(context.Background(), f.conn, id, investments.PositionUpdate{Name: position.Name, AssetType: position.AssetType, PortfolioID: &goal.ID}); err != nil {
+		t.Fatal(err)
+	}
+	summary = f.summary()
+	if summary.Portfolios[0].CurrentValue.String() != "10000" || summary.Portfolios[0].Progress.String() != "0.5" {
+		t.Fatal(summary.Portfolios)
+	}
+	portfolio, err := investments.GetPortfolio(context.Background(), f.conn, goal.ID)
+	if err != nil || portfolio.CurrentValue.String() != "10000" {
+		t.Fatalf("portfolio: %+v, %v", portfolio, err)
 	}
 }

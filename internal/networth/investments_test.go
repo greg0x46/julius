@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/greg0x46/julius/internal/db"
+	"github.com/greg0x46/julius/internal/fx"
 	"github.com/greg0x46/julius/internal/investments"
 	"github.com/greg0x46/julius/internal/networth"
 	"github.com/greg0x46/julius/internal/timeline"
@@ -37,6 +38,18 @@ func TestManualInvestmentsAndLinkedBrokerageCashCountOnce(t *testing.T) {
 	}
 	assertDecimalEqual(t, "linked investments", b.InvestmentBalance, "2600")
 	assertDecimalEqual(t, "linked net worth", b.NetWorth, "3100")
+	foreignCash := f.addAccount("BANK", "100")
+	f.exec(`UPDATE financial_accounts SET currency_code='USD' WHERE id=?`, foreignCash)
+	foreignHolding := f.addInvestment("20")
+	f.exec(`UPDATE financial_investments SET currency_code='USD' WHERE id=?`, foreignHolding)
+	f.rate("USD", "5", time.Now().Add(-time.Hour))
+	b, err = networth.ComputeValued(context.Background(), f.conn, fx.New(time.Now()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertDecimalEqual(t, "mixed linked cash", b.CashBalance, "1000")
+	assertDecimalEqual(t, "mixed linked investments", b.InvestmentBalance, "2700")
+	assertDecimalEqual(t, "mixed linked wealth", b.NetWorth, "3700")
 }
 
 func TestInvestmentLifecycleConservesWealthAndSeparatesSpending(t *testing.T) {

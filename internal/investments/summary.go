@@ -2,10 +2,11 @@ package investments
 
 import (
 	"context"
-	"github.com/greg0x46/julius/internal/fx"
 	"time"
 
 	"github.com/shopspring/decimal"
+
+	"github.com/greg0x46/julius/internal/fx"
 )
 
 const unassignedPortfolioName = "Sem objetivo"
