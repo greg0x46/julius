@@ -1,60 +1,58 @@
-# Categorias
+# Categories
 
-> Referência viva deste contexto — o que existe e funciona hoje. Mantenha
-> atualizado ao mudar a feature.
+> Living reference — what exists and works today. Keep it updated when the
+> feature changes.
 
-## O que é
+## What it is
 
-Catálogo de categorias definido pelo usuário, com histórico de
-categorização. Não é um motor de domínio — catálogo passivo, sem lógica de
-match/cálculo/fusão própria (ver critério 2 e seção "Não são motores" em
-`.specs/motores-de-dominio.md`).
+A user-defined category catalog with categorization history. Not a domain
+engine — a passive catalog with no matching/computation/merging logic of its own
+(see criterion 2 and "Not engines" in `.specs/motores-de-dominio.md`).
 
-Uma exceção ao "passivo": o `kind` `transfer` carrega regra junto. Uma
-transação com categoria desse kind fica **fora dos totais de
-receita/despesa** (motivo `transfer_category`), porque contar as duas
-pontas de uma transferência somaria o mesmo dinheiro duas vezes. Não
-afeta saldo, patrimônio histórico nem dívida de cartão. `expense`/`income`
-seguem sendo só rótulo. A semente traz uma categoria desse kind
-(`Transferência entre Contas Próprias`, `00004_categories.sql`); o usuário
-pode criar outras.
+One exception to "passive": the `transfer` kind carries a rule. A transaction
+with a category of this kind is **left out of income/expense totals** (reason
+`transfer_category`), because counting both legs of a transfer would count the
+same money twice. It does not affect balance, historical net worth or card
+debt. `expense`/`income` remain plain labels. The seed ships one category of
+this kind (`Transferência entre Contas Próprias`, `00004_categories.sql`); users
+can create more.
 
 ## Backend
 
-`internal/categories` — CRUD simples (`Create/Update/Get/List`) sobre
-`money.CategoryKind`, mais as decisões de categoria por transação
-(`transaction_category_decisions`, histórico append-only em
+`internal/categories` — simple CRUD (`Create/Update/Get/List`) over
+`money.CategoryKind`, plus per-transaction category decisions
+(`transaction_category_decisions`, append-only history in
 `transaction_category_events`).
 
-### Origem da decisão e precedência
+### Decision origin and precedence
 
-Cada decisão carrega um `origin`; a precedência é
+Each decision carries an `origin`; precedence is
 `manual > rule > learned > automatic`:
 
-- `manual` — o usuário escolheu (`AssignManual`). Nunca é sobrescrita.
-- `rule` — ação `set_category` de uma regra de automação (`ApplyRule`).
-  Sobrescreve `learned` e `automatic`.
-- `learned` — copiada da decisão **manual mais recente** feita numa
-  transação semelhante (`ApplyLearned`, `learned.go`). Semelhante =
-  mesma descrição normalizada (minúsculas, espaços colapsados, sufixo de
-  parcela ` N/M` removido) e mesmo `movement_type`. Sobrescreve
-  `automatic`; propaga para todas as parcelas de uma compra parcelada.
-  Só vale para transações que chegam **depois** da decisão manual — uma
-  decisão manual nunca reclassifica o passado.
-- `automatic` — mapeamento do `source_category` do Pluggy
-  (`ApplyAutomatic`) ou heurística de pagamento de fatura
-  (`ApplyAutomaticCardPayment`). Só escreve quando não há decisão.
+- `manual` — the user chose (`AssignManual`). Never overwritten.
+- `rule` — `set_category` action of an automation rule (`ApplyRule`). Overwrites
+  `learned` and `automatic`.
+- `learned` — copied from the **most recent manual** decision made on a similar
+  transaction (`ApplyLearned`, `learned.go`). Similar = same normalized
+  description (lowercase, collapsed whitespace, ` N/M` installment suffix
+  removed) and same `movement_type`. Overwrites `automatic`; propagates to all
+  installments of an installment purchase. Applies only to transactions that
+  arrive **after** the manual decision — a manual decision never reclassifies
+  the past.
+- `automatic` — Pluggy `source_category` mapping (`ApplyAutomatic`) or the
+  card-bill-payment heuristic (`ApplyAutomaticCardPayment`). Writes only when
+  there is no decision.
 
-Ordem no sync (`syncsvc.upsertTransaction`): fatura de cartão → mapeamento
-Pluggy → aprendida (esses três só em inserção) → regras (hook, também em
-atualização). Todas compartilham a transação do upsert; uma falha reverte
-dados, decisões e eventos juntos, permitindo repetir na próxima sync.
-Lançamento manual sem `category_id` segue a mesma ordem (aprendida → regras).
+Order during sync (`syncsvc.upsertTransaction`): card bill → Pluggy mapping →
+learned (these three on insert only) → rules (hook, also on update). All share
+the upsert's transaction; a failure rolls back data, decisions and events
+together, so the next sync can retry. A manual entry without `category_id`
+follows the same order (learned → rules).
 
-## Rotas HTTP
+## HTTP routes
 
 `GET/POST /api/categories`, `PATCH /api/categories/{id}`.
 
 ## Frontend
 
-`/categorias` — CRUD do catálogo.
+`/categorias` — catalog CRUD.

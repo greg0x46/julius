@@ -1,147 +1,142 @@
-# Importação de extratos de contas — plano (primeira entrega implementada)
+# Account statement import — plan (first delivery implemented)
 
-O estado atual da primeira entrega está em
+The current state of the first delivery is in
 [`contextos/importacao-extratos/reference.md`](contextos/importacao-extratos/reference.md).
-Este plano permanece para acompanhar extensões: novos formatos, revisão de
-correções de saldo em movimentos repetidos, conciliação entre contas de
-arquivo e Pluggy, e validação de migração com Postgres em ambiente integrado.
+This plan remains to track extensions: new formats, review of balance
+corrections on repeated movements, reconciliation between file accounts and
+Pluggy, and validating the Postgres migration in an integrated environment.
 
-## Objetivo e recorte
+## Goal and scope
 
-Permitir importar transações de arquivos de instituições diferentes para o
-mesmo motor de Lançamentos. O primeiro adaptador será o CSV do Flash. A
-primeira entrega cobre contas de movimentação em BRL, upload manual, prévia,
-confirmação, histórico e reimportação segura. Outros formatos devem exigir um
-novo adaptador, sem alterar as regras de persistência ou a interface de
-revisão. Não incluir faturas de cartão de crédito, OFX nem conciliação
-automática com transações da Pluggy nesta entrega.
+Allow importing transactions from files of different institutions into the same
+Ledger engine. The first adapter is the Flash CSV. The first delivery covers
+BRL checking-type accounts, manual upload, preview, confirmation, history and
+safe re-import. Other formats must require a new adapter, without changing the
+persistence rules or the review interface. Not included in this delivery:
+credit card bills, OFX, and automatic reconciliation with Pluggy transactions.
 
-O arquivo real recebido foi usado apenas para analisar o formato. Não
-versioná-lo nem usá-lo como fixture; ele contém dados financeiros pessoais.
+The real file received was used only to analyze the format. Do not version it
+or use it as a fixture; it contains personal financial data.
 
-## Evidências do CSV Flash recebido
+## Evidence from the Flash CSV received
 
-- Codificação UTF-8 com BOM, separador vírgula e cabeçalho `Data, Hora,
+- UTF-8 encoding with BOM, comma separator and header `Data, Hora,
   Movimentação, Valor, Meio de Pagamento, Saldo`.
-- 19 linhas; datas entre 08/09/2026 e 25/09/2026; todas as seis colunas
-  preenchidas. Valor assinado em reais com vírgula decimal e espaço não
-  separável (`-R$ 49,90`); horário no formato `HH:mm`.
-- Há saídas por `Cartão` e `Pagamento PIX`, e entradas por `Depósito`. Neste
-  exemplo, a diferença entre saldos de linhas adjacentes corresponde ao
-  valor da linha mais recente. O arquivo aparece em ordem decrescente, mas
-  o parser não deve depender dessa ordem.
-- O nome contém `06-2026`, embora as linhas sejam de setembro de 2026.
-  Data, período e saldo devem vir do conteúdo, nunca do nome do arquivo.
-- Nenhuma coluna fornece um identificador de transação ou de conta. Um
-  extrato com saldos não prova, sozinho, que a conta é cartão de crédito;
-  tratá-la como conta de movimentação até existir evidência em contrário.
+- 19 rows; dates between 08/09/2026 and 25/09/2026; all six columns filled.
+  Signed amount in reais with a decimal comma and a non-breaking space
+  (`-R$ 49,90`); time in `HH:mm`.
+- There are outflows by `Cartão` and `Pagamento PIX`, and inflows by
+  `Depósito`. In this sample, the difference between the balances of adjacent
+  rows matches the most recent row's amount. The file is in descending order,
+  but the parser must not depend on that order.
+- The file name contains `06-2026` although the rows are from September 2026.
+  Date, period and balance must come from the content, never the file name.
+- No column provides a transaction or account identifier. A statement with
+  balances does not prove by itself that the account is a credit card; treat it
+  as a checking-type account until there is evidence otherwise.
 
-## Contrato do importador
+## Importer contract
 
-1. `Detector` reconhece formato por conteúdo, cabeçalho e codificação;
-   formato explícito opcional pode resolver ambiguidades. Versão do
-   adaptador faz parte do resultado.
-2. `Parser` recebe bytes e produz linhas normalizadas com número da linha,
-   instante no fuso `America/Sao_Paulo`, descrição original, valor decimal
-   exato assinado, moeda, meio de pagamento, saldo após a movimentação e
-   eventuais erros/avisos. Nenhum adaptador escreve no banco.
-3. O serviço comum recebe conta de destino, linhas normalizadas e hash do
-   arquivo. Ele calcula identidades, classifica linhas como novas,
-   já importadas ou inválidas, e gera a mesma prévia que será revalidada na
-   confirmação. O parser Flash converte `dd/mm/aaaa`, `HH:mm`, `R$` e vírgula
-   decimal sem `float`.
-4. O arquivo inteiro deve falhar se cabeçalho, codificação, estrutura ou
-   associação à conta forem ambíguos. Linhas inválidas devem aparecer com
-   número e motivo na prévia; confirmação só com escolha explícita de
-   importar as válidas, ou após corrigir o arquivo. Não criar transações
-   silenciosamente incompletas.
+1. `Detector` recognizes the format by content, header and encoding; an optional
+   explicit format can resolve ambiguities. The adapter version is part of the
+   result.
+2. `Parser` takes bytes and produces normalized rows with line number, instant in
+   the `America/Sao_Paulo` zone, original description, exact signed decimal
+   amount, currency, payment method, balance after the movement and any
+   errors/warnings. No adapter writes to the database.
+3. The common service takes the target account, normalized rows and file hash.
+   It computes identities, classifies rows as new, already imported or invalid,
+   and produces the same preview that is revalidated at confirmation. The Flash
+   parser converts `dd/mm/yyyy`, `HH:mm`, `R$` and the decimal comma without
+   `float`.
+4. The whole file must fail if header, encoding, structure or account
+   association are ambiguous. Invalid rows must appear with number and reason in
+   the preview; confirmation only with an explicit choice to import the valid
+   ones, or after fixing the file. Never create silently incomplete
+   transactions.
 
-## Identidade, duplicidade e saldo
+## Identity, duplicates and balance
 
-- A conta importada tem identidade local persistente, escolhida na primeira
-  importação e reutilizada nas seguintes. Não derivar conta do nome do
-  arquivo. Na primeira entrega, criar uma conta de arquivo ou escolher uma
-  conta previamente criada para arquivos; não gravar diretamente numa
-  conta Pluggy, pois isso permitiria duplicar transações e disputar saldo.
-- Usar `data_sources.provider = 'file'` e um identificador local estável,
-  distinto de `format = 'flash_csv'`. A agenda e o botão de sincronização
-  Pluggy devem selecionar apenas fontes Pluggy; o worker não deve reivindicar
-  execuções de arquivo.
-- Sem ID nativo, a identidade provisória de cada lançamento é um hash
-  versionado de conta + data/hora + descrição normalizada + valor + meio de
-  pagamento, com ordinal para ocorrências idênticas. Ignorar nome, hash do
-  arquivo e posição da linha para permitir arquivos sobrepostos/reordenados.
-  O ordinal preserva multiplicidade, mas não identifica uma correção de
-  descrição/valor: a prévia deve sinalizar colisões ou possíveis correções
-  para revisão, sem substituição automática de transações já categorizadas.
-  `Saldo` entra no hash de conteúdo, não na identidade, para permitir corrigir
-  esse dado sem criar outra transação. A mesma conta + arquivo pode ser
-  reenviada sem inserir duplicatas.
-- Saldos adjacentes devem ser verificados quando o extrato permitir. Uma
-  quebra de continuidade vira aviso, pois pode haver recorte ou movimentos
-  ausentes; jamais inventar lançamentos para fechar a diferença. O saldo da
-  conta só avança com o saldo da transação mais recente conhecida, guardando
-  seu instante de referência; importar um arquivo antigo não o regride.
-- Mostrar possíveis correspondências com lançamentos manuais/Pluggy como
-  aviso para revisão; não fundir por semelhança. Preservar decisões de
-  categoria, inclusão e vínculos de lançamentos já existentes.
+- The imported account has a persistent local identity, chosen on first import
+  and reused afterwards. Do not derive the account from the file name. In the
+  first delivery, create a file account or pick one previously created for
+  files; do not write directly into a Pluggy account, as that would allow
+  duplicate transactions and a balance dispute.
+- Use `data_sources.provider = 'file'` and a stable local identifier, distinct
+  from `format = 'flash_csv'`. The Pluggy schedule and sync button must select
+  only Pluggy sources; the worker must not claim file runs.
+- Without a native ID, an entry's provisional identity is a versioned hash of
+  account + date/time + normalized description + amount + payment method, with
+  an ordinal for identical occurrences. Ignore the file name, file hash and row
+  position to allow overlapping/reordered files. The ordinal preserves
+  multiplicity but does not identify a description/amount correction: the
+  preview must flag collisions or possible corrections for review, without
+  automatically replacing already categorized transactions. `Saldo` goes into
+  the content hash, not the identity, so that data can be corrected without
+  creating another transaction. The same account + file can be re-sent without
+  inserting duplicates.
+- Adjacent balances must be checked when the statement allows. A continuity gap
+  becomes a warning, since there may be a cut or missing movements; never invent
+  entries to close the difference. The account balance only advances with the
+  balance of the most recent known transaction, storing its reference instant;
+  importing an old file does not regress it.
+- Show possible matches with manual/Pluggy entries as a warning for review; do
+  not merge by similarity. Preserve the category, inclusion and link decisions of
+  existing entries.
 
-## Persistência e API
+## Persistence and API
 
-- Reaproveitar `financial_accounts`, `financial_transactions`,
-  `data_sources`, `sync_runs`, `raw_imports` e `normalization_events` para
-  integrar consulta, automação, balanço e trilha de auditoria. Criar
-  migrações equivalentes em SQLite e Postgres para representar a origem
-  arquivo, metadados de importação e `balance_as_of` da conta, e ajustar os
-  campos/checks de `raw_imports` para upload. O CSV bruto só é guardado na
-  confirmação, associado à execução, com hash SHA-256; não registrá-lo em
-  logs ou respostas da API.
-- Extrair da sincronização Pluggy a persistência comum de conta/transação,
-  hash normalizado, eventos, contadores e hooks de categorização/automação.
-  O adaptador de arquivo não deve simular respostas da API Pluggy. Uma
-  confirmação deve ser atômica: arquivo, execução, conta, transações e
-  eventos entram juntos, ou nada entra. Hooks pós-gravação precisam ter
-  estratégia de repetição que não duplique lançamentos.
-- `POST /api/statement-imports/preview`: multipart com arquivo, formato
-  opcional e conta de destino opcional; devolve formato detectado, período,
-  moeda, contagens, linhas com erros/avisos e amostra limitada. Não persiste.
-- `POST /api/statement-imports`: reenvia o arquivo e confirma a conta,
-  versão/formato e hash vistos na prévia; revalida tudo sob transação e
-  devolve execução + contagens efetivas. Divergência entre prévia e
-  confirmação deve retornar conflito legível, não importar às cegas.
-  Listagem/detalhe do histórico podem reutilizar a API de execuções, com
-  filtro de tipo, desde que não confundam importação com sincronização.
-- Limitar tamanho e número de linhas do upload; exigir autenticação já
-  usada nas rotas financeiras; mensagens de erro sem conteúdo financeiro.
+- Reuse `financial_accounts`, `financial_transactions`, `data_sources`,
+  `sync_runs`, `raw_imports` and `normalization_events` to integrate querying,
+  automation, balance and audit trail. Create equivalent SQLite and Postgres
+  migrations to represent the file origin, import metadata and the account's
+  `balance_as_of`, and adjust `raw_imports` fields/checks for upload. The raw CSV
+  is stored only at confirmation, associated with the run, with its SHA-256
+  hash; do not record it in logs or API responses.
+- Extract from the Pluggy sync the common account/transaction persistence,
+  normalized hash, events, counters and categorization/automation hooks. The file
+  adapter must not simulate Pluggy API responses. A confirmation must be atomic:
+  file, run, account, transactions and events go in together, or nothing does.
+  Post-write hooks need a retry strategy that does not duplicate entries.
+- `POST /api/statement-imports/preview`: multipart with file, optional format and
+  optional target account; returns detected format, period, currency, counts, rows
+  with errors/warnings and a limited sample. Persists nothing.
+- `POST /api/statement-imports`: re-sends the file and confirms the account,
+  version/format and hash seen in the preview; revalidates everything under a
+  transaction and returns run + effective counts. A mismatch between preview and
+  confirmation must return a readable conflict, not import blindly.
+  History list/detail may reuse the runs API with a type filter, as long as they
+  do not confuse import with sync.
+- Limit upload size and row count; require the authentication already used by
+  financial routes; error messages without financial content.
 
-## Experiência no frontend
+## Frontend experience
 
-Fluxo: selecionar CSV → detectar formato → escolher/criar conta e conferir
-período, saldo, novas/repetidas/inválidas → confirmar → ver resultado e
-histórico. Mostrar aviso explícito quando houver linhas inválidas, possíveis
-duplicatas com outras origens ou diferença nos saldos. Identificar a origem
-do lançamento como arquivo no detalhe e nos filtros existentes, mantendo as
-ações de categorização e inclusão.
+Flow: select CSV → detect format → pick/create account and check period, balance,
+new/repeated/invalid → confirm → see result and history. Show an explicit warning
+when there are invalid rows, possible duplicates with other origins, or a
+balance difference. Identify the entry's origin as file in the detail and in the
+existing filters, keeping the categorization and inclusion actions.
 
-## Etapas de implementação e aceite
+## Implementation steps and acceptance
 
-1. **Base de domínio e migrações:** registrar fontes/contas de arquivo e
-   distinguir execuções manuais das agendadas. Aceite: Pluggy continua
-   sincronizando; uma fonte de arquivo nunca é enviada ao worker.
-2. **Parser Flash e prévia:** parser isolado, valores exatos, datas e fusos,
-   erros por linha, validação de saldo e detecção de duplicidade. Aceite:
-   fixture sintética com cabeçalho/BOM e variações de saída/entrada; teste
-   para nome de arquivo com período enganoso e linhas reordenadas.
-3. **Confirmação e auditoria:** transação atômica, identidade estável,
-   reimportação, sobreposição de arquivos, saldo com data de referência,
-   eventos e hooks. Aceite: upload repetido insere zero transações; arquivo
-   antigo não regride saldo; falha no meio não deixa importação parcial;
-   SQLite e Postgres obedecem ao mesmo contrato.
-4. **Interface:** prévia e confirmação com erros e histórico, incluindo
-   estados de conflito. Aceite: fluxo completo em conta nova e existente
-   de arquivo, com contagens iguais às gravadas após revalidação.
+1. **Domain base and migrations:** register file sources/accounts and
+   distinguish manual runs from scheduled ones. Acceptance: Pluggy keeps
+   syncing; a file source is never sent to the worker.
+2. **Flash parser and preview:** isolated parser, exact amounts, dates and time
+   zones, per-row errors, balance validation and duplicate detection. Acceptance:
+   synthetic fixture with header/BOM and inflow/outflow variations; a test for a
+   file name with a misleading period and reordered rows.
+3. **Confirmation and audit:** atomic transaction, stable identity, re-import,
+   overlapping files, balance with reference date, events and hooks. Acceptance:
+   repeated upload inserts zero transactions; an old file does not regress the
+   balance; a failure midway leaves no partial import; SQLite and Postgres obey
+   the same contract.
+4. **Interface:** preview and confirmation with errors and history, including
+   conflict states. Acceptance: full flow on a new and an existing file account,
+   with counts equal to those written after revalidation.
 
-Antes de implementar, confirmar em amostras adicionais se o Flash sempre
-exporta o mesmo cabeçalho/colunas e se o saldo de cada linha representa
-saldo após a movimentação. O primeiro CSV sustenta essas hipóteses, mas não
-garante todos os formatos de exportação da instituição.
+Before implementing, confirm with additional samples whether Flash always exports
+the same header/columns and whether each row's balance represents the balance
+after the movement. The first CSV supports these hypotheses but does not
+guarantee all of the institution's export formats.

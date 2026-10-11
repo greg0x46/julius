@@ -1,111 +1,105 @@
-# Recorrências
+# Recurrences
 
-> Referência viva deste contexto — o que existe e funciona hoje. Mantenha
-> atualizado ao mudar a feature. Não é um motor de domínio — feature
-> construída sobre Motor de regras + Automação (ver "Não são motores" em
-> `.specs/motores-de-dominio.md`, que também nota a divergência de design
-> descrita abaixo).
+> Living reference — what exists and works today. Keep it updated when the
+> feature changes. Not a domain engine — a feature built on the rules engine +
+> Automation (see "Not engines" in `.specs/motores-de-dominio.md`).
 
-## O que é
+## What it is
 
-Compromisso de fluxo de caixa conhecido de antemão (salário, aluguel),
-cadastrado manualmente, independente de qualquer transação real
-específica, reconciliado contra transações reais via regra de automação.
+A cash-flow commitment known in advance (salary, rent), registered manually,
+independent of any specific real transaction, and reconciled against real
+transactions through an automation rule.
 
-## Estado vs. ideal
+## State vs. ideal
 
-A concepção original (`.specs/motores-de-dominio.md`, notas abertas) era
-Recorrências serem construídas a partir de Cenários. O código foi
-implementado de forma diferente: campos de agendamento próprios
-(`Cadence`, `DayOfMonth`/`MonthOfYear`), sem relação com `internal/scenarios`.
-Se isso mudar num refactor futuro, a Timeline colapsaria de 3 para 2
-fontes — ver contexto de Relatório Financeiro.
+Matches the design: a recurring commitment **is** a `Scenario{Kind: recurring}`
+plus its row in `scenario_recurring_schedules`, and the scenario id is the
+identity shared by projection, automation `reconcile` target and occurrence
+decisions. `internal/recurrences` still exists as the occurrence and
+reconciliation engine (calendar, `Reconciler`), reading those tables. Its
+package doc comment in `model.go` still describes the older, parallel design.
 
 ## Backend
 
-Na Timeline, uma ocorrência só vira entry se **não** foi reconciliada, e
-com tier **Projetado**; a reconciliada não gera entry porque a transação
-real já a carrega. Os candidatos que uma ocorrência tenta reconciliar são
-escopados ao mês dela — sem isso, a transação de um mês reconciliava as
-ocorrências de todos os outros.
+In the Timeline, an occurrence becomes an entry only if it was **not**
+reconciled, with tier **Projected**; a reconciled one produces no entry because
+the real transaction already carries it. The candidates an occurrence tries to
+reconcile are scoped to its month — without that, one month's transaction
+reconciled the occurrences of every other month.
 
-`internal/recurrences` — `RecurringCommitment` (`Kind` income/expense,
-`Amount`, `CategoryID`, `AccountID`, `Cadence` monthly/annual,
-`DayOfMonth`/`MonthOfYear`, `StartDate`/`EndDate`, `IsActive`). Sem
-critério de matching próprio: ocorrências vêm só do agendamento
-(`OccurrencesInRange`); reconciliação contra transações reais acontece na
-leitura via `internal/rules` (`Matches`/`MatchCandidate`), dirigida por
-regras de `internal/automation` cuja única ação é `reconcile`
-(`ListActiveReconcileTargets` — sem essa regra e sem decisão manual, o
-compromisso nunca reconcilia).
+`internal/recurrences` — `RecurringCommitment` (`Kind` income/expense, `Amount`,
+`CategoryID`, `AccountID`, `Cadence` monthly/annual, `DayOfMonth`/`MonthOfYear`,
+`StartDate`/`EndDate`, `IsActive`). No matching criteria of its own: occurrences
+come only from the schedule (`OccurrencesInRange`); reconciliation against real
+transactions happens at read time via `internal/rules` (`Matches`/
+`MatchCandidate`), driven by `internal/automation` rules whose only action is
+`reconcile` (`ListActiveReconcileTargets` — without that rule and without a
+manual decision, the commitment never reconciles).
 
-### Conciliação manual
+### Manual reconciliation
 
-Sobre essa resolução automática existe uma camada de **decisão do
-usuário**, e só ela é persistida (`scenario_realizations` com
-`relation_type = 'reconciliation'`, uma linha por ocorrência, única por
-`(scenario_id, occurrence_date)` e por `transaction_id` entre os eventos
-completos). O estado resolvido continua recomputado a cada
-leitura — princípio 1 de `.specs/motores-de-dominio.md` —, e a tabela é a
-tabela de ligação explícita que o princípio 2 pede.
+On top of that automatic resolution sits a layer of **user decision**, and only
+it is persisted (`scenario_realizations` with `relation_type = 'reconciliation'`,
+one row per occurrence, unique by `(scenario_id, occurrence_date)` and by
+`transaction_id` among full events). The resolved state is still recomputed on
+every read — principle 1 of `.specs/motores-de-dominio.md` — and the table is
+the explicit link table principle 2 asks for.
 
-`Reconciler` (`reconciliation.go`) é o único lugar que resolve uma
-ocorrência, usado tanto pela Timeline quanto pela camada HTTP. Ordem:
+`Reconciler` (`reconciliation.go`) is the only place that resolves an
+occurrence, used by both the Timeline and the HTTP layer. Order:
 
-1. override `detached` → não conciliada, e a regra **não** pode reclamá-la
-   de volta. Isso é o que faz "desconciliar" funcionar: a regra é
-   reavaliada do zero a cada leitura, então apagar um registro não bastaria;
-2. override `linked` → a transação escolhida à mão (`OriginManual`);
-3. senão, a regra de automação, escopada ao mês da ocorrência
-   (`CandidatesByMonth`, movida de `internal/timeline`) — `OriginRule`.
+1. `detached` override → not reconciled, and the rule can **not** claim it back.
+   This is what makes "detach" work: the rule is re-evaluated from scratch on
+   every read, so deleting a record would not be enough;
+2. `linked` override → the transaction picked by hand (`OriginManual`);
+3. otherwise the automation rule, scoped to the occurrence's month
+   (`CandidatesByMonth`, moved from `internal/timeline`) — `OriginRule`.
 
-No passo 3 as transações já vinculadas à mão saem do pool de candidatas: sem
-isso, uma transação conciliada em março seria também casada pela regra em
-abril e o mesmo dinheiro suprimiria duas projeções.
+In step 3, transactions already linked by hand are removed from the candidate
+pool: without that, a transaction reconciled in March would also be matched by
+the rule in April and the same money would suppress two projections.
 
-Elegibilidade de vínculo manual em `eligibility.go`, espelhando
-`internal/payables`: não ignorada, BRL, direção compatível com o `Kind`, e
-não conciliada em outra ocorrência. Diverge de `CandidatesByMonth` de
-propósito ao **não** exigir a categoria/conta do compromisso — conciliar à
-mão é justamente o que se faz quando a categoria da transação está errada.
+Manual-link eligibility lives in `eligibility.go`, mirroring
+`internal/payables`: not ignored, BRL, direction compatible with the `Kind`, and
+not reconciled to another occurrence. It deliberately differs from
+`CandidatesByMonth` by **not** requiring the commitment's category/account —
+reconciling by hand is exactly what you do when the transaction's category is
+wrong.
 
-Uma transação marcada como ignorada perde o vínculo (`UnlinkIfPresent`, no
-`onIgnoredHook` junto com `payables`); uma ocorrência desconciliada não é
-afetada por isso, porque a decisão é sobre a ocorrência.
+A transaction marked ignored loses its link (`UnlinkIfPresent`, in
+`onIgnoredHook` together with `payables`); a detached occurrence is unaffected,
+because the decision is about the occurrence.
 
-## Rotas HTTP
+## HTTP routes
 
-Um compromisso recorrente é um `Scenario{Kind: recurring}` mais sua linha
-em `scenario_recurring_schedules`; o `{id}` de toda rota abaixo é o id do
-cenário — o mesmo que a projeção, o alvo `reconcile` da automação e as
-decisões de ocorrência usam.
+The `{id}` of every route below is the scenario id — the same one projection,
+the automation `reconcile` target and occurrence decisions use.
 
 `GET/POST /api/recurring-scenarios`,
 `PUT/PATCH/DELETE /api/recurring-scenarios/{id}`.
 
-A coleção de escrita é irmã de `/api/scenarios`, não uma sub-coleção
-`/api/scenarios/recurring`: um segmento literal onde `/api/scenarios/{id}`
-espera um wildcard faz o `ServeMux` recusar o par
-`/api/scenarios/recurring/{id}` × `/api/scenarios/{id}/…` no mesmo método
-— panic no registro, não erro em runtime. Ocorrência continua sendo
-sub-recurso do cenário, porque pertence ao cenário e não à forma de
-escrita.
+The write collection is a sibling of `/api/scenarios`, not a sub-collection
+`/api/scenarios/recurring`: a literal segment where `/api/scenarios/{id}`
+expects a wildcard makes `ServeMux` reject the pair
+`/api/scenarios/recurring/{id}` × `/api/scenarios/{id}/…` on the same method —
+a panic at registration, not a runtime error. An occurrence remains a
+sub-resource of the scenario, because it belongs to the scenario and not to the
+write form.
 
-Conciliação — o endereço de uma ocorrência é o cenário mais o dia, já
-que ocorrência não tem id armazenado:
+Reconciliation — an occurrence's address is the scenario plus the day, since an
+occurrence has no stored id:
 `GET /api/scenarios/{id}/occurrences`,
 `GET .../occurrences/{date}/candidates`,
 `PUT .../occurrences/{date}/reconciliation` (`{"state":"linked",
-"transaction_id":…}` ou `{"state":"detached"}`),
-`DELETE .../occurrences/{date}/reconciliation` (volta ao automático).
-Do lado da transação, só leitura:
-`GET /api/transactions/{id}/reconciliation` — as escritas passam pelos
-endpoints acima, para existir um único lugar que decide o que é uma
-conciliação válida.
+"transaction_id":…}` or `{"state":"detached"}`),
+`DELETE .../occurrences/{date}/reconciliation` (back to automatic).
+On the transaction side, read-only:
+`GET /api/transactions/{id}/reconciliation` — writes go through the endpoints
+above, so there is a single place that decides what a valid reconciliation is.
 
 ## Frontend
 
-`/recorrencias` — cada compromisso expande mostrando suas ocorrências do
-período, com a transação que as conciliou e as ações Conciliar com… /
+`/recorrencias` — each commitment expands to show its occurrences in the period,
+with the transaction that reconciled them and the actions Conciliar com… /
 Desconciliar / Voltar ao automático.
-`/transacoes` — seção "Conciliação" no drawer de detalhe.
+`/transacoes` — "Conciliação" section in the detail drawer.

@@ -1,130 +1,126 @@
-# Transações
+# Transactions
 
-> Referência viva deste contexto — o que existe e funciona hoje. Mantenha
-> atualizado ao mudar a feature. Motor de domínio por trás: motor de
-> Lançamentos (seção 1 de `.specs/motores-de-dominio.md`).
+> Living reference — what exists and works today. Keep it updated when the
+> feature changes. Engine behind it: the Ledger engine (section 1 of
+> `.specs/motores-de-dominio.md`).
 
-## O que é
+## What it is
 
-Lista pesquisável/filtrável de transações reais, com inclusão/exclusão
-manual (ex.: ignorar um estorno ou duplicata) e categorização. Também
-expõe contas, cartões e investimentos — dados adjacentes servidos pelos
-mesmos handlers de apresentação.
+A searchable/filterable list of real transactions, with manual inclusion/exclusion
+(e.g. ignoring a chargeback or duplicate) and categorization. It also exposes
+accounts, cards and investments — adjacent data served by the same presentation
+handlers.
 
-Além das transações sincronizadas do Pluggy, um lançamento pode ser criado à
-mão (`origin='manual'`) numa conta que já existe — mesma entidade, mesmas
-regras de categorização/inclusão/automação, só outra via de entrada. Editar
-e excluir só valem para um lançamento manual; um sincronizado nunca muda por
-aqui. O saldo da conta continua vindo só do provedor — um lançamento manual
-nunca o altera (ver Notas).
+Besides Pluggy-synced transactions, an entry can be created by hand
+(`origin='manual'`) in an account that already exists — same entity, same
+categorization/inclusion/automation rules, just another way in. Editing and
+deleting apply only to manual entries; a synced one never changes here. The
+account balance still comes only from the provider — a manual entry never
+changes it (see Notes).
 
-Categorizar como transferência entre contas próprias (`kind='transfer'`)
-também tira o lançamento dos totais, com motivo próprio
-(`transfer_category`) e sem marcá-lo como ignorado — ver a nota sobre as
-duas vias em `.specs/motores-de-dominio.md` seção 1.
+Categorizing as a transfer between own accounts (`kind='transfer'`) also takes
+the entry out of totals, with its own reason (`transfer_category`) and without
+marking it ignored — see the note on the two paths in
+`.specs/motores-de-dominio.md` section 1.
 
 ## Backend
 
 - `internal/transactions` — `QueryRequest`/`Filters`/`Item`/`Page`/`Group`,
-  mutação de inclusão/categoria, e `manual.go` (`CreateManual`/
-  `UpdateManual`/`DeleteManual`) para a via de entrada manual.
-- `internal/money` — as regras que decidem o que conta pra total:
-  `Classify`, `SelectEffectiveMoney`, `Considered`/`Ignored`, e o
-  `CategoryKind` `transfer`. Agnóstico de origem — Pluggy e lançamento
-  manual populam a mesma tabela, e o motor em si não presume qual das duas.
-  `Eligibility` recebe o kind da categoria atribuída; quem calcula *saldo*
-  em vez de fluxo passa `""` para a regra de transferência não vazar
-  (`networth/backfill.go`, `transactions/cardtotal.go`).
-- `financial_transactions.origin` (`synced`/`manual`) distingue as duas
-  vias; as colunas específicas de sync (`source_id`, `external_id`,
-  `current_raw_import_id`, `normalized_hash`) ficam `NULL` numa linha
-  manual — não existe `data_sources`/`raw_import` fake por trás. `deleted_at`
-  é o soft-delete de um lançamento manual: `transaction_category_events`/
-  `transaction_inclusion_events` são append-only e têm `ON DELETE RESTRICT`
-  para `financial_transactions`, então uma linha manual já categorizada ou
-  ignorada não pode ser apagada de verdade — `DeleteManual` marca
-  `deleted_at` em vez disso, e `viewSelect` (a base de todo SELECT deste
-  pacote, incluindo `GetItem`) filtra por `deleted_at IS NULL`. Um
-  lançamento manual nunca entra em `networth.cashDeltasDescending`/
-  `earliestCashTransactionDay` (filtro `origin = 'synced'`) — ver Notas.
-- Cartão de crédito (`cardflow.go`/`cardtotal.go`, vindos de
-  `internal/payables`): `CardDueDates`/`ProjectedEntryDate` (a data em que
-  uma compra no cartão vira saída de caixa — o vencimento da fatura, não o
-  `occurred_at`), `CreditAccountIDs`, `CardMetadataByTransaction` e
-  `CreditCardTransactionTotal(At)` (o quanto se deve no ciclo aberto,
-  calculado dos lançamentos elegíveis, nunca de `financial_accounts.balance`).
-- `balance.go` — `CashOnHand`: dinheiro em conta (soma dos saldos
-  reportados das contas não-crédito), a única implementação, usada pela
-  Timeline e pelo Patrimônio Líquido. Ver a nota sobre saldo em
-  `.specs/motores-de-dominio.md` seção 1 para por que uma transação
-  ignorada continua dentro do saldo.
+  inclusion/category mutation, and `manual.go`
+  (`CreateManual`/`UpdateManual`/`DeleteManual`) for the manual entry path.
+- `internal/money` — the rules that decide what counts toward totals:
+  `Classify`, `SelectEffectiveMoney`, `Considered`/`Ignored`, and the `transfer`
+  `CategoryKind`. Origin-agnostic — Pluggy and manual entries populate the same
+  table, and the engine does not presume which. `Eligibility` takes the kind of
+  the assigned category; callers computing *balance* instead of flow pass `""`
+  so the transfer rule does not leak (`networth/backfill.go`,
+  `transactions/cardtotal.go`).
+- `financial_transactions.origin` (`synced`/`manual`) distinguishes the two
+  paths; sync-specific columns (`source_id`, `external_id`,
+  `current_raw_import_id`, `normalized_hash`) are `NULL` on a manual row — there
+  is no fake `data_sources`/`raw_import` behind it. `deleted_at` is the
+  soft-delete of a manual entry: `transaction_category_events`/
+  `transaction_inclusion_events` are append-only with `ON DELETE RESTRICT` to
+  `financial_transactions`, so an already categorized or ignored manual row
+  cannot be truly deleted — `DeleteManual` sets `deleted_at` instead, and
+  `viewSelect` (the base of every SELECT in this package, including `GetItem`)
+  filters on `deleted_at IS NULL`. A manual entry never enters
+  `networth.cashDeltasDescending`/`earliestCashTransactionDay` (filter
+  `origin = 'synced'`) — see Notes.
+- Credit card (`cardflow.go`/`cardtotal.go`, moved from `internal/payables`):
+  `CardDueDates`/`ProjectedEntryDate` (the date a card purchase becomes a cash
+  outflow — the bill's due date, not `occurred_at`), `CreditAccountIDs`,
+  `CardMetadataByTransaction` and `CreditCardTransactionTotal(At)` (how much is
+  owed in the open cycle, computed from eligible entries, never from
+  `financial_accounts.balance`).
+- `balance.go` — `CashOnHand`: money in accounts (sum of reported balances of
+  non-credit accounts), the single implementation, used by the Timeline and Net
+  Worth. See the balance note in `.specs/motores-de-dominio.md` section 1 for
+  why an ignored transaction stays inside the balance.
 
-## Rotas HTTP
+## HTTP routes
 
 - `POST /api/transactions/query`, `GET /api/transactions/spending-by-category`,
+  `GET /api/transactions/category-breakdown`,
   `PUT /api/transactions/{id}/inclusion`, `PUT /api/transactions/{id}/category`.
-- Em `POST /api/transactions/query`, `filters.classification` aceita
-  `inflow` (entrada, valor positivo), `outflow` (saída, valor negativo) e
-  `unclassified`; a interface oferece só entradas e saídas. Qualquer outro
-  valor é 400 (`invalid-classification`).
-- Lançamento manual: `POST /api/transactions` (cria), `PUT
-  /api/transactions/{id}` (edita), `DELETE /api/transactions/{id}` (exclui)
-  — as três só aceitam uma transação com `origin='manual'` (409 caso
-  contrário). O fluxo vive em `ledger.Service` (`internal/ledger`); os
-  handlers só interpretam a requisição e mapeiam erros de domínio para
-  Problem. A criação aplica a categoria aprendida e roda a automação
-  (`automation.ApplyToNewTransactionWithQuerier`) como uma sync rodaria, e
-  depois aplica `category_id` explícito por cima, se vier — a escolha do
-  usuário sempre vence o que a automação tiver decidido. Tudo na mesma
-  transação de banco. `ledger.ApplyNewTransactionDecisions` é a mesma
-  sequência, reutilizada pela confirmação de importação de extrato.
-- Clientes que precisam repetir `POST /api/transactions` com segurança enviam
-  `Idempotency-Key` (8 a 128 caracteres ASCII sem espaços). A mesma chave e
-  o mesmo lançamento retornam o ID original; a mesma chave com dados
-  diferentes retorna 409. A chave é reservada junto com o lançamento na
-  transação de banco e pertence ao proprietário da instalação. Sem o header,
-  o comportamento legado permanece: cada POST cria um lançamento novo.
-- Contas/cartões: `GET /api/accounts[/{id}][/cards|/bills]`,
+- In `POST /api/transactions/query`, `filters.classification` accepts `inflow`
+  (positive amount), `outflow` (negative amount) and `unclassified`; the UI
+  offers only inflows and outflows. Any other value is 400
+  (`invalid-classification`). `filters.origin` accepts `manual`, `synced`.
+- Manual entry: `POST /api/transactions` (create), `PUT /api/transactions/{id}`
+  (edit), `DELETE /api/transactions/{id}` (delete) — all three accept only a
+  transaction with `origin='manual'` (409 otherwise). The flow lives in
+  `ledger.Service` (`internal/ledger`); handlers only parse the request and map
+  domain errors to Problem. Creation applies the learned category and runs
+  automation (`automation.ApplyToNewTransactionWithQuerier`) as a sync would,
+  then applies an explicit `category_id` on top if present — the user's choice
+  always beats what automation decided. All in the same database transaction.
+  `ledger.ApplyNewTransactionDecisions` is the same sequence, reused by
+  statement-import confirmation.
+- Clients that need to retry `POST /api/transactions` safely send an
+  `Idempotency-Key` header (8 to 128 ASCII characters, no spaces). The same key
+  and the same entry return the original ID; the same key with different data
+  returns 409. The key is reserved together with the entry in the database
+  transaction and belongs to the installation's owner. Without the header the
+  legacy behavior remains: each POST creates a new entry.
+- Accounts/cards: `GET /api/accounts[/{id}][/cards|/bills]`,
   `PUT /api/accounts/{id}/closing-day`.
-- Investimentos: `GET /api/investments[/{id}][/transactions]`.
+- Investments: `GET /api/investments[/{id}][/transactions]`.
 
 ## Frontend
 
-- `/transacoes` — ledger principal: filtros, agrupamento, totais, drawer de
-  edição de categoria/inclusão, botão "Novo lançamento manual" e — para um
-  lançamento manual — tag "Manual" na lista e no drawer, com ações Editar/
-  Excluir. `ManualTransactionForm` serve criação e edição.
+- `/transacoes` — main ledger: filters, grouping, totals, category/inclusion
+  edit drawer, "Novo lançamento manual" button and — for a manual entry — a
+  "Manual" tag in the list and drawer, with Editar/Excluir actions.
+  `ManualTransactionForm` serves create and edit.
 - `/contas-e-cartoes` + `/contas-e-cartoes/:id`.
 - `/investimentos` + `/investimentos/:id`.
 
-## Notas
+## Notes
 
-Investimentos conciliados acrescentam `investment_transfer_amount` e
-`reportable_amount` ao lançamento. A parcela de aporte/resgate não entra nos
-totais de receita/despesa, mas o valor integral continua sendo movimento de
-caixa. O motivo de exclusão integral é `investment_transfer`. Ver
+Reconciled investments add `investment_transfer_amount` and `reportable_amount`
+to the entry. The contribution/withdrawal portion does not count in
+income/expense totals, but the full amount remains a cash movement. The reason
+for full exclusion is `investment_transfer`. See
 [`investimentos/reference.md`](../investimentos/reference.md).
 
-Ingestão: Pluggy e lançamento manual (`.specs/lancamentos-manuais.md`) são
-as duas vias de entrada hoje, ambas provedor de dado, não parte deste motor
-— ver contexto de Sincronização Open Banking e `.specs/motores-de-
-dominio.md` seção 1. Criar uma conta 100% manual (sem nenhum vínculo com
-Pluggy) fica fora de escopo por ora — todo lançamento manual aponta para
-uma conta que já existe.
+Ingestion: Pluggy, manual entry and statement import are the entry paths today,
+all data providers, not part of this engine — see Open Banking sync and
+`.specs/motores-de-dominio.md` section 1. Creating a 100% manual account (with
+no Pluggy link) is out of scope for now — every manual entry points to an
+account that already exists (statement import creates its own file accounts).
 
-Decisões do usuário ficam em tabelas próprias que a ingestão nunca reescreve:
-categoria e inclusão manuais (`transaction_category_*`,
-`transaction_inclusion_*`), `payable_transaction_links` e
-`scenario_realizations`. Uma atualização do provedor (PENDING → POSTED,
-correções) mantém o `id` do lançamento. Política completa em
+User decisions live in their own tables, which ingestion never rewrites: manual
+category and inclusion (`transaction_category_*`, `transaction_inclusion_*`),
+`payable_transaction_links` and `scenario_realizations`. A provider update
+(PENDING → POSTED, corrections) keeps the entry's `id`. Full policy in
 [`sincronizacao-open-banking/reference.md`](../sincronizacao-open-banking/reference.md).
 
-O saldo de conta (`CashOnHand`, Patrimônio Líquido) nunca reflete um
-lançamento manual — só o que o provedor reporta em
-`financial_accounts.balance`. Um lançamento manual afeta o extrato e os
-totais de receita/despesa, mas nunca o saldo exibido da conta nem a
-reconstrução histórica de patrimônio (`networth.Backfill` filtra
-`origin = 'synced'` explicitamente por isso). Cartão de crédito é a
-exceção deliberada: `CreditCardTransactionTotal` já soma dos lançamentos
-elegíveis (nunca do saldo reportado), então um lançamento manual numa
-conta de crédito conta normalmente para a fatura em aberto.
+The account balance (`CashOnHand`, Net Worth) never reflects a manual entry —
+only what the provider reports in `financial_accounts.balance`. A manual entry
+affects the statement and income/expense totals, but never the displayed
+account balance or the historical net-worth reconstruction (`networth.Backfill`
+filters `origin = 'synced'` explicitly for that). Credit card is the deliberate
+exception: `CreditCardTransactionTotal` already sums eligible entries (never the
+reported balance), so a manual entry on a credit account counts normally toward
+the open bill.

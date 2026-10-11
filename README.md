@@ -15,7 +15,8 @@ as an option. For online access, the host must provide HTTPS.
 
 ## Domain documentation and contributing
 
-Contributions, new features and refactors are welcome. Before touching an area
+Contributions, new features and refactors are welcome. Coding agents: start at
+[`AGENTS.md`](AGENTS.md). Before touching an area
 of the domain, see [`.specs/README.md`](.specs/README.md) — the navigation hub
 of the `.specs/` folder, with the domain architecture
 (`motores-de-dominio.md`), the current state of each feature
@@ -342,7 +343,7 @@ export JULIUS_QUOTES_PROVIDERS="yahoo,brapi,coingecko" # default
 By default Yahoo Finance is the primary source for both markets; brapi is the
 B3 fallback and CoinGecko the crypto one. The optional brapi token is
 configured in the UI. Details in the
-[investments reference](.specs/contextos/investimentos/reference.md#cotação-automática).
+[investments reference](.specs/contextos/investimentos/reference.md#automatic-quotes).
 
 Assets are registered with a financial class (fixed income, variable income,
 multi-market, currency, crypto assets or other) and an instrument type. The
@@ -438,30 +439,6 @@ during setup.
 
 ## Project structure
 
-```
-cmd/julius/     entry point: wires the DB, HTTP server and background worker
-internal/
-  db/                SQLite/Postgres connection and migrations
-  pluggy/             Pluggy API client and data mapping
-  syncsvc/             sync run orchestration
-  worker/              background sync polling loop
-  money/                shared domain primitives (classification, effective amount)
-  transactions/           transaction queries and inclusion state
-  categories/              category catalog and categorization
-  rules/                     composable matching core (conditions/operators)
-  automation/                 automation rule engine, built on internal/rules
-  recurrences/                   recurring commitments, reconciled via automation
-  payables/                        debts/receivables and links to the transactions that settle them
-  scenarios/                         hypothetical projections and payment plans
-  timeline/                            merges entries + recurrences + scenarios into a single series
-  networth/                              net worth snapshots
-  auth/                                    owner account, passwords and browser sessions
-  settings/                                encrypted settings and migration of legacy secrets
-  httpapi/                                   HTTP handlers and routing
-  webui/                                       embeds the built frontend
-frontend/            React/TypeScript SPA (Vite)
-```
-
-For what each one does today (routes, pages, implementation status), see
-[`.specs/README.md`](.specs/README.md) and each context's `reference.md` under
-`.specs/contextos/`.
+Package map, commands and conventions: [`AGENTS.md`](AGENTS.md). What each area
+does today (routes, pages, implementation status): [`.specs/README.md`](.specs/README.md)
+and each context's `reference.md` under `.specs/contextos/`.
