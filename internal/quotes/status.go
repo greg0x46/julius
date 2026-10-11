@@ -55,7 +55,7 @@ func RefreshNow(ctx context.Context, conn *sql.DB, service *marketdata.Service) 
 		log.Printf("quote_refresh_failed: %v", err)
 	}
 	last := recordRefresh(ctx, conn, "manual", summary, err)
-	RequestBackfill()
+	requestManualBackfill()
 	return last, nil
 }
 
