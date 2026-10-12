@@ -1,38 +1,51 @@
 # Migrations
 
-Two independent goose sequences, one per dialect. `internal/db` picks the
-directory from the DSN and each database tracks its own version, so the two
-sequences never meet at runtime.
+SQLite and Postgres share one numbered Goose sequence. Each dialect starts at
+`0001_initial.sql`, representing the final application schema; add the same
+number and suffix in both directories for every subsequent change. Migrations
+remain forward-only: never modify an applied migration.
 
-## Numbers differ between dialects
+## Storage contract
 
-The same logical step has different numbers in `sqlite/` and `postgres/`. This
-is intentional: the sequences diverged early (SQLite got migrations Postgres
-never needed and vice versa — `00024_drop_stale_payables_receivable_column`
-exists only in Postgres), and renumbering history would break any database
-already migrated. Since `00025`, Postgres is exactly **one number behind**
-SQLite for the same steps:
+Postgres uses unconstrained `NUMERIC` for exact money, quantities and rates,
+`TIMESTAMPTZ` for UTC instants, `DATE` for calendar days, `BOOLEAN` for flags and
+`UUID` for UUID identities and their links. Opaque provider identifiers, hashes,
+keys and integrated investment-account IDs (`integrated:<source id>`) remain
+text. SQLite uses exact decimal and UTC timestamp text, date text and integer
+0/1 flags. Both enforce the same enums, currency codes, relationships and
+partial uniqueness; all foreign keys declare their delete behavior.
 
-| logical step | sqlite | postgres |
-|---|---|---|
-| `recurrence_reconciliations` | 00026 | 00025 |
-| `scenario_projection_unification` | 00027 | 00026 |
-| `drop_scenario_transaction_realizations` | 00028 | 00027 |
-| `drop_recurrence_reconciliations` | 00029 | 00028 |
-| `drop_recurring_commitments` | 00030 | 00029 |
+No decimal check casts to floating point. SQLite's positive/nonnegative checks
+validate decimal text and inspect its sign/nonzero digits; Postgres compares
+native numeric values and rejects non-finite numbers. Reads use `internal/db/types`
+to normalize native values without introducing floating point. Authentication
+instants now use the same timestamp representation as other stores.
 
-**When adding a migration:** match by *suffix* (the step name), never by number.
-If the step applies to both databases, create both files with the same suffix
-and the next number **of each** directory.
+## Existing databases
 
-## SQLite: `PRAGMA foreign_keys`
+`julius_schema_version` distinguishes this schema generation from legacy Goose
+version 1. `db.Open` and `db.Migrate` reject application databases without that
+marker before applying migrations. This binary initializes empty databases and
+reopens generation 1 databases; it does **not** convert existing installations.
+Keep the old binary and a backup until a separate legacy conversion tool is
+available. Never delete the old database or rewrite its Goose version to bypass
+the guard. The SQLite-to-Postgres copier also cannot convert legacy generations.
 
-A table rebuild (`CREATE ... _new` / copy / `DROP` / `RENAME`) only needs to
-turn FKs off when **another** table references the one being rebuilt, or when a
-row must point at one that does not exist yet. Otherwise leave FKs on and keep
-the migration inside goose's transaction — that is what gives a real rollback
-if something fails midway. `PRAGMA foreign_keys` is ignored inside a
-transaction, so using it forces `-- +goose NO TRANSACTION`, and then a
-mid-migration failure leaves the schema half-applied *and* a pooled connection
-with FKs off. Prefer reordering the inserts (see
-`00030_drop_recurring_commitments.sql`) over paying that price.
+`archive/sqlite` and `archive/postgres` retain the original migrations unchanged.
+They are embedded only in tests that pin historical data migrations and rollbacks,
+not in the application binary. Their independent numbering is historical and
+must never be reused by the active runner.
+
+## Validation
+
+`TestBaselineSchemaParity` applies both baselines and compares tables, columns,
+nullability, index definitions, checks and foreign keys. It normalizes equivalent
+dialect syntax and native type-domain checks; `TestBaselineNativeTypes` separately
+pins every money/decimal/date/instant/boolean column against the inventory.
+Postgres tests require a disposable `JULIUS_TEST_POSTGRES_DSN`. Guard tests cover
+both the first and final legacy versions, unchanged migration history, and an
+unsupported generation.
+
+SQLite table rebuilds should remain transactional where possible. Turning off
+foreign keys requires `-- +goose NO TRANSACTION`; prefer ordering inserts and
+using a transaction over leaving a half-applied schema after a failure.

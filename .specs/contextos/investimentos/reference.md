@@ -354,3 +354,14 @@ Imported positions in other currencies keep their original currency and value.
 With no FX conversion in this version, they stay out of the investment totals,
 goals and the investments portion of net worth in reais. The UI flags when
 positions exist outside those totals.
+
+## Database representation
+
+Exact amounts, prices and quantities use Postgres `NUMERIC` and SQLite decimal
+text. Issue/purchase/due dates are calendar dates (`DATE` in Postgres, date text
+in SQLite), normalized on the provider's BRT wall clock; quote identity retains
+its existing provider-day semantics. Trade dates retain the existing movement-day
+rule (midnight UTC is already a day, other instants use BRT). Observation/as-of
+values remain instants. Integrated custody IDs remain opaque
+`integrated:<source id>` text; records with UUID identities use native Postgres
+UUIDs. `db.Open` rejects the old schema generation; conversion is separate work.

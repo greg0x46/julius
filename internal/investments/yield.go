@@ -297,7 +297,7 @@ func loadSyncedSeries(ctx context.Context, q Querier, cache *YieldCache, id stri
 			s.complete = false
 			continue
 		}
-		event := flowEvent{day: movementDay(*when), cash: amount, inflow: inflow}
+		event := flowEvent{day: MovementDay(*when), cash: amount, inflow: inflow}
 		if !inflow {
 			event.cash = amount.Neg()
 		}
@@ -364,10 +364,10 @@ func loadSyncedSeries(ctx context.Context, q Querier, cache *YieldCache, id stri
 	return s, nil
 }
 
-// movementDay is the calendar day of a provider movement. Pluggy sends
+// MovementDay is the calendar day of a provider movement. Pluggy sends
 // movement dates as date-only values stored at UTC midnight; any other
 // instant is read on the provider's wall clock like as-of dates are.
-func movementDay(t time.Time) time.Time {
+func MovementDay(t time.Time) time.Time {
 	utc := t.UTC()
 	if utc.Hour() == 0 && utc.Minute() == 0 && utc.Second() == 0 && utc.Nanosecond() == 0 {
 		return Day(utc)

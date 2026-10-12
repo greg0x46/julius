@@ -41,6 +41,11 @@ password-derivation functions in settings exist only for migration and tests.
   sessions; does not need or change the key. Passwords are read without echo
   from a terminal.
 
+Owner/session timestamps use UTC text in SQLite and native `TIMESTAMPTZ` in
+Postgres, retaining second-level lifetime and idle-timeout semantics. Database
+opening refuses the old schema generation before any automatic migration; a
+separate legacy conversion tool is not implemented.
+
 The server refuses pending configuration or an invalid key. A lost key cannot
 be recovered with the password; key rotation is not implemented. Instructions
 are in the README.

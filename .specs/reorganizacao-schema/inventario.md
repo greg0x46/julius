@@ -69,6 +69,16 @@ resurrect old names from migration history.
 
 ## Target column contract
 
+The implemented baseline follows issue #31's native Postgres types, superseding
+the original text-only proposal below: exact numbers use `NUMERIC`, instants
+`TIMESTAMPTZ`, calendar dates `DATE`, flags `BOOLEAN` and UUID identities `UUID`.
+Opaque IDs (including integrated custody IDs), keys and provider fields remain
+text. SQLite keeps exact decimal/UTC text and integer flags. See
+[`migrations/README.md`](../../internal/db/migrations/README.md). The snapshots
+below remain the unchanged legacy source for a future conversion tool.
+
+### Original conversion proposal
+
 Keep table/column names and the existing constraints, defaults, relationships,
 indexes and append-only behavior unless target DDL work explicitly changes them.
 Every inventory row maps to the same `table.column`. Columns absent from the
@@ -122,8 +132,8 @@ string or a guessed date. Conversion failures abort the destination import.
 
 The UTC converter matches the bill calendar convention in
 `transactions/cardflow.go` and `transactions/cardtotal.go`. Investment dates use
-the provider convention in `investments/quotes.go`, including the proposed trade
-calendar date. Removing the timestamp portion of a calendar field is intentional;
+the provider convention in `investments/quotes.go`, while trade dates follow `investments.MovementDay`: a midnight UTC timestamp
+already names a calendar day; other instants use the provider's BRT day. Removing the timestamp portion of a calendar field is intentional;
 raw payloads retain provider evidence. The future readers/writers must switch
 these fields together with the migration; copying date-only values into today's
 schema would break its timestamp parsers. Auth readers/writers likewise need to
@@ -230,7 +240,7 @@ implementing the target schema and migration tool.
 
 ## Full column inventory
 
-42 application tables, 426 application columns; 136 ID + 8 boolean + 1 bytes + 20 calendar date + 8 decimal (non-money) + 59 enum + 53 free text + 73 instant + 25 integer + 43 money.
+42 application tables, 426 application columns; 136 ID + 8 boolean + 1 bytes + 20 calendar date + 8 decimal (non-money) + 59 enum + 55 free text + 73 instant + 25 integer + 41 money.
 Plus one Goose table with four bookkeeping columns. The physical types below
 are from the migrated databases, not inferred from filenames. `NN` means a
 NOT NULL declaration (primary-key constraints are also in the snapshots).
@@ -297,7 +307,7 @@ not be assumed to enforce NOT NULL just because Postgres does.
 | `rule_id` | TEXT / NN | text / NN | ID |
 | `field` | TEXT / NN | text / NN | enum |
 | `operator` | TEXT / NN | text / NN | enum |
-| `value` | TEXT / NN | text / NN | money |
+| `value` | TEXT / NN | text / NN | free text |
 | `position` | INTEGER / NN | integer / NN | integer |
 
 ### `automation_rules`
@@ -772,7 +782,7 @@ not be assumed to enforce NOT NULL just because Postgres does.
 | Column | SQLite type / nullability | Postgres type / nullability | Classification |
 |---|---|---|---|
 | `key` | TEXT / NULL | text / NN | ID |
-| `value` | TEXT / NULL | text / NULL | money |
+| `value` | TEXT / NULL | text / NULL | free text |
 | `is_encrypted` | INTEGER / NN | integer / NN | boolean |
 | `updated_at` | TEXT / NN | text / NN | instant |
 

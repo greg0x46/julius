@@ -161,3 +161,11 @@ they sum eligible entries, so manual entries count toward the open bill.
 accounts. Net-worth history reverses posted manual-account movements and
 adjustment deltas, using opening balance as its historical baseline; existing
 snapshots are never rewritten.
+
+## Database representation
+
+Money uses exact Postgres `NUMERIC` or SQLite decimal text; transaction times
+remain instants. Account cycle dates and bill due/closing dates are UTC calendar
+days, stored as Postgres `DATE` or SQLite date text. UUID identities use native
+Postgres UUIDs. Both dialects start at the same `0001_initial.sql` baseline;
+legacy databases are rejected before migrations and require a separate converter.
