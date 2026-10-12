@@ -160,8 +160,13 @@ history stage and subsequent work cycles.
 At startup and when re-enabled, the scheduler fetches only missing prices for
 today and missing history; a restart does not repeat requests already covered.
 The daily run updates prices for today. Quote dates remain Brazilian calendar
-days regardless of the scheduling timezone. API changes wake the local
-scheduler immediately; writes by another process are detected within a minute.
+days regardless of the scheduling timezone. Full scheduled runs and explicit
+manual refreshes record finish time, trigger, status (`success`, `partial`,
+`deferred` or `failed`) and counts in `quotes.last_refresh`; small spot refreshes
+triggered by position saves are not recorded. A shared lock refuses overlapping
+manual refreshes and serializes scheduled spot work. History backfill follows a
+manual spot refresh in the background and is not part of its displayed outcome.
+API changes wake the local scheduler immediately; writes by another process are detected within a minute.
 
 `JULIUS_QUOTES_SCHEDULE` (`HH:MM` or `HH:MM Zone/IANA`) initializes only a
 configuration that has not yet been saved. With no zone it uses `Local`; an
