@@ -14,7 +14,7 @@ func TestManualAccountMigrationPreservesSyncedData(t *testing.T) {
 		open     func(*testing.T, int64) (*sql.DB, *goose.Provider)
 		previous int64
 	}{
-		{"sqlite", migrationProviderAt, 45}, {"postgres", postgresMigrationProviderAt, 44},
+		{"sqlite", migrationProviderAt, 46}, {"postgres", postgresMigrationProviderAt, 45},
 	} {
 		t.Run(backend.name, func(t *testing.T) {
 			conn, provider := backend.open(t, backend.previous)
