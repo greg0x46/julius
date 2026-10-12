@@ -77,7 +77,7 @@ text. SQLite keeps exact decimal/UTC text and integer flags. See
 [`migrations/README.md`](../../internal/db/migrations/README.md). The snapshots
 below remain the unchanged legacy source for a future conversion tool.
 
-### Original conversion proposal
+### Original conversion proposal (superseded by the implemented baseline)
 
 Keep table/column names and the existing constraints, defaults, relationships,
 indexes and append-only behavior unless target DDL work explicitly changes them.
@@ -129,11 +129,14 @@ string or a guessed date. Conversion failures abort the destination import.
 | `unix_seconds_to_instant` | Integer Unix seconds → UTC fixed-width `db.TimeLayout`; preserve the exact second, no milliseconds guess | `0` → `1970-01-01T00:00:00.000000000Z` |
 | `utc_calendar_day` | Canonical legacy timestamp parsed with `db.ParseTime` → its UTC year/month/day via `dates.Day`, formatted `YYYY-MM-DD` | `2026-10-10T00:00:00.000000000Z` → `2026-10-10` |
 | `provider_calendar_day` | Canonical legacy timestamp → existing `investments.ProviderDay` (fixed BRT, UTC−03:00), formatted `YYYY-MM-DD`; never use the machine's timezone | `2026-10-10T02:00:00.000000000Z` → `2026-10-09` |
+| `provider_movement_day` | Canonical legacy timestamp → existing `investments.movementDay`: exact UTC midnight preserves its UTC calendar day; every other instant uses `investments.ProviderDay`, formatted `YYYY-MM-DD` | `2026-09-13T00:00:00.000000000Z` → `2026-09-13`; `2026-09-13T02:00:00.000000000Z` → `2026-09-12` |
 
 The UTC converter matches the bill calendar convention in
 `transactions/cardflow.go` and `transactions/cardtotal.go`. Investment dates use
-the provider convention in `investments/quotes.go`, while trade dates follow `investments.MovementDay`: a midnight UTC timestamp
-already names a calendar day; other instants use the provider's BRT day. Removing the timestamp portion of a calendar field is intentional;
+the provider convention in `investments/quotes.go` for due, issue and purchase
+dates. Trade dates use [`movementDay` in `investments/yield.go`](../../internal/investments/yield.go)
+to preserve provider date-only movements stored at UTC midnight. Removing the
+timestamp portion of a calendar field is intentional;
 raw payloads retain provider evidence. The future readers/writers must switch
 these fields together with the migration; copying date-only values into today's
 schema would break its timestamp parsers. Auth readers/writers likewise need to
@@ -152,7 +155,7 @@ switch from Unix seconds while preserving lifetime/revision checks.
 | `financial_investments.due_date` | TEXT | TEXT calendar date | `provider_calendar_day` |
 | `financial_investments.issue_date` | TEXT | TEXT calendar date | `provider_calendar_day` |
 | `financial_investments.purchase_date` | TEXT | TEXT calendar date | `provider_calendar_day` |
-| `financial_investment_transactions.trade_date` | TEXT | TEXT calendar date | `provider_calendar_day` |
+| `financial_investment_transactions.trade_date` | TEXT | TEXT calendar date | `provider_movement_day` |
 
 The target runner creates its own `goose_db_version`; it is excluded from the
 converter allowlist. Rebuild engine-managed sequences from imported rows where
@@ -228,7 +231,8 @@ Reviewed against the baseline above on 2026-10-12 using only synthetic databases
   unchanged calendar dates have no converters.
 - Reviewed date semantics against `db/time.go`, `auth/store.go`,
   `transactions/cardflow.go`, `transactions/cardtotal.go`,
-  `investments/quotes.go`, `networth/store.go`, `scenarios/store.go` and
+  `investments/quotes.go`, `investments/yield.go`, `networth/store.go`,
+  `scenarios/store.go` and
   `httpapi/statement_imports_handlers.go`, rather than classifying by suffix alone.
 - Go build, vet and tests (including disposable Postgres), frontend lint,
   typecheck, tests and build, embedded frontend build, release-script tests,

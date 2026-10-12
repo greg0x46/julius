@@ -34,9 +34,12 @@ one month's transaction from reconciling another month's occurrence.
 `StartDate`/`EndDate`, `IsActive`). No matching criteria of its own: occurrences
 come only from the schedule (`OccurrencesInRange`); reconciliation against real
 transactions happens at read time via `internal/rules` (`Matches`/
-`MatchCandidate`), driven by `internal/automation` rules whose only action is
-`reconcile` (`ListActiveReconcileTargets` — without that rule and without a
+`MatchCandidate`), driven by `internal/automation` rules with a
+`reconcile` action (`ListActiveReconcileTargets` — without that rule and without a
 manual decision, the commitment never reconciles).
+Candidates expose description, card number, account name/institution, absolute
+effective amount and day of month, matching the fields used during transaction
+automation application.
 
 The commitment store supports both SQLite and native Postgres UUID/boolean
 columns. Nullable schedule categories read as an empty `CategoryID`; writes
@@ -110,3 +113,7 @@ above, so there is a single place that decides what a valid reconciliation is.
 with the transaction that reconciled them and the actions Conciliar com… /
 Desconciliar / Voltar ao automático.
 `/transacoes` — "Conciliação" section in the detail drawer.
+
+`/automacoes` — a reconcile automation can also apply a category using the same
+conditions. New rules default that optional action to the commitment's
+category; it is editable and clearable. Reconciliation eligibility is unchanged.

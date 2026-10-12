@@ -21,11 +21,7 @@ var backfillRequests = make(chan struct{}, 1)
 // settle before the scan looks at them.
 const backfillDebounce = 2 * time.Second
 
-// RequestBackfill asks the running scheduler to look for price history that is
-// missing — after a position or an operation was saved with an earlier date,
-// an asset got a quote source, and so on. It never blocks and never fails: when
-// quoting is not scheduled (no JULIUS_QUOTES_SCHEDULE) nothing is listening
-// and the request is dropped, so a fresh install does not start market requests.
+// RequestBackfill coalesces saves into one scan of missing prices.
 func RequestBackfill() {
 	select {
 	case backfillRequests <- struct{}{}:
@@ -33,68 +29,117 @@ func RequestBackfill() {
 	}
 }
 
-// RunSchedule prices every quoted asset once a day and fills in the history
-// that is missing, until ctx is cancelled — same shape as worker.RunSchedule
-// (do the work, sleep until the next slot, check ctx.Err(), repeat), so a
-// slot missed while the process was down still gets a run as soon as it comes
-// back up, the same catch-up behavior EnqueueDue gives the sync schedule. The
-// daily run's own same-day dedupe is what makes running it an extra time (at
-// startup, or from a second process restart the same day) harmless, and the
-// history scan asks nothing of a provider for a range it has already asked
-// about.
-//
-// Between daily runs the loop also wakes for RequestBackfill and prices what
-// has no price today yet and fills in the missing history: that is how a
-// position registered with a past date gets its prices within seconds instead
-// of at the next scheduled slot.
-//
-// The service is shared across runs. Its brapi token callback reads settings
-// per request, so changing the token takes effect without a restart.
-func RunSchedule(ctx context.Context, conn *sql.DB, service *marketdata.Service, schedule Schedule) {
-	nextDaily := time.Now()
-	for {
+var configurationChanges = make(chan struct{}, 1)
+
+func ConfigurationChanged() {
+	select {
+	case configurationChanges <- struct{}{}:
+	default:
+	}
+}
+
+const configurationPoll = time.Minute
+
+type scheduleState struct {
+	config      settings.QuoteRefreshSettings
+	initialized bool
+	nextDaily   time.Time
+	pending     bool
+}
+
+// cycle is shared by the timer loop and deterministic scheduler tests.
+func (s *scheduleState) cycle(ctx context.Context, conn *sql.DB, service *marketdata.Service, now time.Time, backfill bool) error {
+	s.pending = s.pending || backfill
+	config, _, err := settings.GetQuoteRefresh(ctx, conn)
+	if err != nil {
+		return err
+	}
+	schedule, err := configuredSchedule(config)
+	if err != nil {
+		return err
+	}
+	if !s.initialized || config != s.config {
+		if !s.initialized || (!s.config.Enabled && config.Enabled) {
+			s.pending = true
+		}
+		s.nextDaily = schedule.Next(now)
+		s.config, s.initialized = config, true
+	}
+	if !config.Enabled || ctx.Err() != nil {
+		return ctx.Err()
+	}
+	daily := !now.Before(s.nextDaily)
+	if !daily && !s.pending {
+		return nil
+	}
+	today := investments.ProviderDay(now)
+	// A disable committed during spot work takes effect before history starts.
+	if daily {
+		_, err = RefreshAll(ctx, conn, service, today)
+	} else {
+		_, err = RefreshMissing(ctx, conn, service, today)
+	}
+	if err != nil {
+		return err
+	}
+	current, _, err := settings.GetQuoteRefresh(ctx, conn)
+	if err != nil {
+		return err
+	}
+	if !current.Enabled || ctx.Err() != nil {
+		return ctx.Err()
+	}
+	if _, err = RefreshHistory(ctx, conn, service, today); err != nil {
+		return err
+	}
+	s.pending = false
+	if daily {
+		s.nextDaily = schedule.Next(now)
+	}
+	return nil
+}
+
+// RunSchedule rereads persisted settings on notifications and at least every minute.
+func RunSchedule(ctx context.Context, conn *sql.DB, service *marketdata.Service) {
+	state := scheduleState{}
+	backfill := false
+	for ctx.Err() == nil {
 		now := time.Now()
-		// "Today" is the Brazilian calendar day, like everywhere rendimento
-		// reads the price series, whatever zone the host runs in: a quote
-		// stamped with the host's day could land after the day it is read on.
-		today := investments.ProviderDay(now)
-		if !now.Before(nextDaily) {
-			if _, err := RefreshAll(ctx, conn, service, today); err != nil {
-				log.Printf("quote_refresh_failed: %v", err)
-			}
-			nextDaily = schedule.Next(now)
-		} else if _, err := RefreshMissing(ctx, conn, service, today); err != nil && ctx.Err() == nil {
-			// Woken by a save: price what has no price today yet.
+		err := state.cycle(ctx, conn, service, now, backfill)
+		if err != nil && ctx.Err() == nil {
 			log.Printf("quote_refresh_failed: %v", err)
 		}
-		if _, err := RefreshHistory(ctx, conn, service, today); err != nil && ctx.Err() == nil {
-			log.Printf("quote_history_failed: %v", err)
+		delay := configurationPoll
+		if err == nil && state.config.Enabled && state.nextDaily.After(now) {
+			if until := time.Until(state.nextDaily); until < delay {
+				delay = until
+			}
 		}
-
-		if !waitForWork(ctx, time.Until(nextDaily)) {
+		var running bool
+		backfill, running = waitForWork(ctx, delay)
+		if !running {
 			return
 		}
 	}
 }
 
-// waitForWork sleeps until the next daily slot or a backfill request,
-// whichever comes first, and reports false once ctx is cancelled.
-func waitForWork(ctx context.Context, untilDaily time.Duration) bool {
-	timer := time.NewTimer(untilDaily)
+func waitForWork(ctx context.Context, delay time.Duration) (backfill, running bool) {
+	timer := time.NewTimer(delay)
 	defer timer.Stop()
 	select {
 	case <-ctx.Done():
-		return false
+		return false, false
 	case <-timer.C:
-		return true
+		return false, true
+	case <-configurationChanges:
+		return false, true
 	case <-backfillRequests:
-		// Let the rest of a burst of saves land, then take them all at once.
 		sleep(ctx, backfillDebounce)
 		select {
 		case <-backfillRequests:
 		default:
 		}
-		return ctx.Err() == nil
+		return true, ctx.Err() == nil
 	}
 }
 

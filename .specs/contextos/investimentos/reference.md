@@ -150,8 +150,24 @@ manual valuations or the integrated institution's values.
 A code that cannot be read in the market's format is rejected on save (`400`),
 with the reason.
 
-Fetching is opt-in: it only runs with `JULIUS_QUOTES_SCHEDULE` set (`HH:MM`
-or `HH:MM Zone/IANA`), once a day and at process start.
+Automatic refresh is enabled by default, daily at `19:00` in
+`America/Sao_Paulo`. `enabled`, `time` and `timezone` are stored together in
+`settings` and read by the scheduler without restarting the process. Changing
+the time or zone reschedules the next run; disabling also suspends history
+backfill. An active spot batch can finish; disabling is checked before the
+history stage and subsequent work cycles.
+
+At startup and when re-enabled, the scheduler fetches only missing prices for
+today and missing history; a restart does not repeat requests already covered.
+The daily run updates prices for today. Quote dates remain Brazilian calendar
+days regardless of the scheduling timezone. API changes wake the local
+scheduler immediately; writes by another process are detected within a minute.
+
+`JULIUS_QUOTES_SCHEDULE` (`HH:MM` or `HH:MM Zone/IANA`) initializes only a
+configuration that has not yet been saved. With no zone it uses `Local`; an
+empty value uses the default schedule. Once saved, persisted settings take
+precedence in full, including when disabled, and later environment changes are
+ignored.
 
 ### Providers
 
