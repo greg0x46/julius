@@ -43,3 +43,10 @@ since they did not change the provider balance. See Transactions, Notes.
 
 `/patrimonio-liquido` — composition card + `NetWorthChart` (Recharts) with the
 evolution over time.
+
+## API contract verification
+
+Wire semantics and calculation ownership are inventoried in
+[`contratos-api.md`](../../contratos-api.md). Shared synthetic responses are
+checked against Go DTOs and the production TypeScript parsers by the existing
+backend/frontend CI tests.

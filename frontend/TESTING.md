@@ -71,3 +71,28 @@ With the 5 s timeout, the 2-worker config passed again locally (108.59 s).
 Only local numbers were measured; GitHub Actions timings (`frontend` job on
 `ubuntu-24.04`, 4 vCPU) are not recorded here and no benchmark workflow was
 added.
+
+## Financial API contracts
+
+`src/api/financialContracts.test.ts` consumes the synthetic Go DTO fixture at
+`internal/httpapi/testdata/financial-contracts.json`. The backend's
+`TestFinancialContracts` pins its JSON to the actual response DTOs/converters;
+frontend parsers must preserve every field, null and decimal string. Both run
+in CI through the ordinary Go/Vitest suites. Tests include pending/posted and
+nullable payloads, tiny/large decimals and money JSON round-trips. No DOM or
+running server is needed. See [the contract inventory](../.specs/contratos-api.md).
+
+After deliberately changing a DTO, review compatibility and update the fixture
+from the repository root:
+
+```sh
+go test ./internal/httpapi -run '^TestFinancialContracts$' -count=1 -args -update-financial-contracts
+cd frontend && npm run typecheck && npm test -- --run src/api/financialContracts.test.ts
+```
+
+Review the JSON diff; do not regenerate just to silence a failure. A change to
+money type, nullability, date shape, required fields or enums needs matching
+consumer changes and documentation. Cached-response optional fields have
+explicit parser behavior; they must not invent business values from missing
+data. For a quick failure check, temporarily change a DTO JSON tag and run the
+Go contract test without the update flag: it must fail; restore it afterwards.

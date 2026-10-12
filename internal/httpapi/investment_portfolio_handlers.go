@@ -237,6 +237,7 @@ type investmentPositionDTO struct {
 	AssetType          string  `json:"asset_type"`
 	Quantity           string  `json:"quantity"`
 	AverageCost        *string `json:"average_cost"`
+	TotalCost          *string `json:"total_cost"`
 	CurrentValue       string  `json:"current_value"`
 	CurrentUnitPrice   *string `json:"current_unit_price"`
 	ValuedOn           *string `json:"valued_on"`
@@ -262,6 +263,7 @@ func investmentPositionToDTO(p investments.Position) investmentPositionDTO {
 		AssetType:          p.AssetType,
 		Quantity:           money.CanonicalDecimal(p.Quantity),
 		AverageCost:        optionalMoney(p.AverageCost),
+		TotalCost:          optionalMoney(p.TotalCost),
 		CurrentValue:       money.CanonicalDecimal(p.CurrentValue),
 		CurrentUnitPrice:   optionalMoney(p.CurrentUnitPrice),
 		ValuedOn:           optionalDay(p.ValuedOn),

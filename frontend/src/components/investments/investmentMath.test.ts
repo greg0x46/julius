@@ -14,6 +14,7 @@ const position: InvestmentPosition = {
   asset_type: "Criptomoeda",
   quantity: "3.2",
   average_cost: "10000.00",
+  total_cost: "32000.00",
   current_value: "44180.21",
   current_unit_price: "13806.32",
   valued_on: "2026-09-30",
@@ -36,6 +37,18 @@ describe("positionYield", () => {
     expect(quoted.basis).toBe("32000.00");
     expect(quoted.value).toBe("12180.21");
     expect(quoted.percent).toBeCloseTo(38.0631, 3);
+  });
+
+  it("uses exact backend cost even when the displayed average would reconstruct another value", () => {
+    const estimate = positionYield({
+      ...position, quantity: "3", average_cost: "33.33", total_cost: "100.00", current_value: "110.00",
+    }, new Map());
+    expect(estimate).toMatchObject({ known: true, basis: "100.00", gross: "10.00", value: "10.00" });
+  });
+
+  it.each([undefined, null])("does not reconstruct an unavailable backend cost (%s)", (total_cost) => {
+    const estimate = positionYield({ ...position, total_cost }, new Map());
+    expect(estimate).toMatchObject({ known: false, short: "Sem custo de aquisição" });
   });
 
   it("deducts the position's costs from a market-quoted gain", () => {

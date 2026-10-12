@@ -1,4 +1,4 @@
-import { dateOnlyPattern, decimal, isNullableString, isNullableUuid, isUuid, isValidDate, nullableDecimal, requiredRecord } from "./shared";
+import { dateOnlyPattern, decimal, isNullableString, isNullableUuid, isUuid, isValidDate, nullableDecimal, requiredRecord, requiredRecordWithOptionalKeys } from "./shared";
 
 // Investment workspace ----------------------------------------------------
 //
@@ -302,6 +302,8 @@ export interface InvestmentPosition {
   asset_type: string;
   quantity: string;
   average_cost: string | null;
+  /** Exact backend acquisition cost; absent only in older responses. */
+  total_cost?: string | null;
   current_value: string;
   current_unit_price: string | null;
   valued_on: string | null;
@@ -356,7 +358,7 @@ const investmentPositionKeys = [
 ] as const;
 
 export function parseInvestmentPosition(value: unknown): InvestmentPosition {
-  const item = requiredRecord(value, investmentPositionKeys, "Posição de investimento inválida.");
+  const item = requiredRecordWithOptionalKeys(value, investmentPositionKeys, ["total_cost"], "Posição de investimento inválida.");
   if (
     typeof item.id !== "string" ||
     !isUuid(item.id) ||
@@ -389,6 +391,7 @@ export function parseInvestmentPosition(value: unknown): InvestmentPosition {
     asset_type: item.asset_type,
     quantity: decimal(item.quantity),
     average_cost: nullableDecimal(item.average_cost),
+    ...(item.total_cost === undefined ? {} : { total_cost: nullableDecimal(item.total_cost) }),
     current_value: decimal(item.current_value),
     current_unit_price: nullableDecimal(item.current_unit_price),
     valued_on: item.valued_on as string | null,

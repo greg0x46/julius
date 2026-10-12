@@ -386,3 +386,16 @@ rule (midnight UTC is already a day, other instants use BRT). Observation/as-of
 values remain instants. Integrated custody IDs remain opaque
 `integrated:<source id>` text; records with UUID identities use native Postgres
 UUIDs. `db.Open` rejects the old schema generation; conversion is separate work.
+
+Position responses expose nullable `total_cost`, the exact acquisition cost
+from the backend ledger. The frontend uses it for manual yield instead of
+reconstructing quantity × average_cost; older responses without it show the
+existing unknown-cost state. Workspace net yield/cost/movement aggregates still
+run locally and are inventoried as a migration gap in the API contract doc.
+
+## API contract verification
+
+Wire semantics and calculation ownership are inventoried in
+[`contratos-api.md`](../../contratos-api.md). Shared synthetic responses are
+checked against Go DTOs and the production TypeScript parsers by the existing
+backend/frontend CI tests.
