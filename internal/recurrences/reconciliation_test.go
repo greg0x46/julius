@@ -10,9 +10,7 @@ import (
 	"github.com/greg0x46/julius/internal/transactions"
 )
 
-// categorizedItem is itemAt plus the category/account a commitment's
-// automatic candidate filter requires — CandidatesByMonth drops anything
-// without a matching category, so the rule-driven cases need it.
+// categorizedItem adds category, account and inclusion metadata to itemAt.
 func categorizedItem(t *testing.T, dateStr, amount, categoryID, accountID string) transactions.Item {
 	t.Helper()
 	item := itemAt(t, dateStr, amount)
@@ -169,21 +167,27 @@ func TestResolveRangeCoversEveryScheduledOccurrence(t *testing.T) {
 	}
 }
 
-func TestCandidatesByMonthScopesToCategoryAccountAndMonth(t *testing.T) {
+func TestCandidatesByMonthScopesToAccountAndMonth(t *testing.T) {
 	commitment := monthlyCommitment(t, "cat-1")
 	accountID := "acct-1"
 	commitment.AccountID = &accountID
 
+	uncategorized := categorizedItem(t, "2026-01-08", "1500.00", "cat-1", "acct-1")
+	uncategorized.InternalCategory = nil
+	undated := uncategorized
+	undated.OccurredAt = nil
 	byMonth := recurrences.CandidatesByMonth(commitment, []transactions.Item{
 		categorizedItem(t, "2026-01-05", "1500.00", "cat-1", "acct-1"),
 		categorizedItem(t, "2026-01-06", "1500.00", "cat-2", "acct-1"), // other category
 		categorizedItem(t, "2026-01-07", "1500.00", "cat-1", "acct-9"), // other account
 		categorizedItem(t, "2026-02-05", "1500.00", "cat-1", "acct-1"),
+		uncategorized,
+		undated,
 	})
 
 	january := byMonth[recurrences.MonthKey(date(t, "2026-01-01"))]
-	if len(january) != 1 || january[0].ID != "tx-2026-01-05" {
-		t.Errorf("january candidates = %+v, want only tx-2026-01-05", january)
+	if len(january) != 3 || january[0].ID != "tx-2026-01-05" || january[1].ID != "tx-2026-01-06" || january[2].ID != uncategorized.ID {
+		t.Errorf("january candidates = %+v, want same-account transactions regardless of category", january)
 	}
 	if len(byMonth[recurrences.MonthKey(date(t, "2026-02-01"))]) != 1 {
 		t.Error("expected February's own bucket")
@@ -198,5 +202,28 @@ func TestMonthKeyCarriesTheYear(t *testing.T) {
 	want := time.Date(2026, time.September, 1, 0, 0, 0, 0, time.UTC)
 	if got := recurrences.MonthKey(date(t, "2026-09-15")); !got.Equal(want) {
 		t.Errorf("MonthKey = %v, want %v", got, want)
+	}
+}
+
+func TestReconcilerMatchesRegardlessOfCategory(t *testing.T) {
+	for _, categoryID := range []string{"", "cat-2"} {
+		t.Run("category="+categoryID, func(t *testing.T) {
+			commitment := monthlyCommitment(t, "cat-1")
+			item := itemAt(t, "2026-01-30", "1500.00")
+			if categoryID != "" {
+				item.InternalCategory = &transactions.InternalCategory{ID: categoryID}
+			}
+			reconciler := recurrences.NewReconciler(commitment, baseConditions(), rules.LogicAnd, true, nil, []transactions.Item{item})
+			resolved := reconciler.ResolveRange(date(t, "2026-01-01"), date(t, "2026-02-28"))
+			if len(resolved) != 2 {
+				t.Fatalf("got %d occurrences, want 2", len(resolved))
+			}
+			if !resolved[0].Reconciled() || resolved[0].Origin != recurrences.OriginRule || *resolved[0].TransactionID != item.ID {
+				t.Fatalf("January = %+v, want automatic reconciliation with %s", resolved[0], item.ID)
+			}
+			if resolved[1].Reconciled() {
+				t.Fatalf("February must not reuse January's transaction: %+v", resolved[1])
+			}
+		})
 	}
 }
