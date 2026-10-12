@@ -328,7 +328,20 @@ stores money as exact `NUMERIC`, instants as `TIMESTAMPTZ`, calendar days as
 `DATE`, flags as `BOOLEAN`, and UUID identities as `UUID`; SQLite retains exact
 text money and UTC timestamps. Both dialects use the same migration numbers.
 
-**Existing installations:** databases from the old migration sequence are
+**Existing Postgres installations:** startup automatically converts the final
+legacy schema (version 46) into generation 1 in the same database. Stop old
+application instances before upgrading and retain an external database backup.
+The database role needs permission to create schemas. A transaction locks the
+legacy tables, builds the native baseline, copies and verifies every converted
+row, then activates it without changing the DSN. The original tables, migration
+history and append-only trigger function remain in a `julius_legacy_<id>` schema;
+the startup log identifies it. Concurrent startups serialize, and subsequent
+starts skip conversion. Any invalid value, schema mismatch or constraint failure
+rolls back the entire operation and prevents startup with the original intact.
+Older Postgres schemas must first reach version 46 using the legacy binary.
+The backup schema is retained indefinitely; do not delete it before acceptance.
+
+**Existing SQLite installations:** databases from the old migration sequence are
 rejected at startup, without applying migrations. Use the one-shot
 `cmd/migrate-legacy` tool with a separate target; it replaces
 `cmd/migrate-to-postgres`. Keep the old binary, database and external master key.

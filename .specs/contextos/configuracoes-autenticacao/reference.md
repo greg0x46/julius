@@ -43,7 +43,10 @@ password-derivation functions in settings exist only for migration and tests.
 
 Owner/session timestamps use UTC text in SQLite and native `TIMESTAMPTZ` in
 Postgres, retaining second-level lifetime and idle-timeout semantics. Database
-opening refuses the old schema generation before any automatic migration; a
+opening automatically converts final legacy Postgres in one transaction while
+retaining the original tables in a backup schema, including hashes, revisions,
+encrypted settings and session deadlines. Concurrent startups serialize and
+invalid data rolls back the conversion. Legacy SQLite requires a
 `cmd/migrate-legacy` converts a final legacy SQLite backup into a separate fresh
 SQLite/Postgres target. Unix-second owner/session timestamps become UTC instants
 without extending sessions; encrypted settings, hashes and revisions copy
