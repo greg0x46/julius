@@ -18,7 +18,14 @@ rule and the reconciliation of a recurring commitment (see Recurrences).
 actions `ignore`, `set_category`, `reconcile`. The `reconcile` action ties the
 rule to a recurring commitment without touching the transaction directly;
 reconcile-only rules are skipped by the normal apply flow
-(`isReconcileOnlyRule`).
+(`isReconcileOnlyRule`). Combined `set_category` + `reconcile` rules still
+apply categorization on new entries, changed sync entries and retroactive
+passes, without overriding manual category decisions. Apply candidates include
+absolute effective money (account currency first) and occurrence day, so
+amount/day conditions work in both apply paths as well as reconciliation.
+Reconciliation candidates also carry the same description, account name and
+institution, and card number, so both actions evaluate the complete shared
+conditions.
 
 During sync, `NewTransactionHook` uses the entry's transaction `Querier` to
 apply rules and the payable-unlink hook. It opens no inner transaction: a
@@ -44,4 +51,14 @@ without a manual decision.
 
 ## Frontend
 
-`/automacoes`.
+`/automacoes` — the reconcile form includes an optional, searchable and clearable
+"Categoria a aplicar" selector. For new rules it defaults to the selected or
+new commitment's category until explicitly edited or cleared. Existing rules
+load exactly their saved actions, including reconcile-only rules. Selecting a
+category adds `set_category` to the same rule; clearing removes it, preserving
+`reconcile` and its conditions. Categorization can be applied retroactively
+from the same form. The list displays both action descriptions.
+
+Automatic reconciliation retains its existing eligibility checks, including
+the commitment's category; selecting a different action category does not
+relax those checks.
