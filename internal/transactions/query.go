@@ -199,9 +199,7 @@ func scanRow(rows *sql.Rows) (row, error) {
 		r                          row
 		externalID                 sql.NullString
 		sourceProvider             sql.NullString
-		amount, amountAcct         sql.NullString
 		currencyCode               sql.NullString
-		occurredAt                 sql.NullString
 		providerStatus             sql.NullString
 		movementType               sql.NullString
 		sourceCategory             sql.NullString
@@ -212,11 +210,9 @@ func scanRow(rows *sql.Rows) (row, error) {
 		accountCurrencyCode        sql.NullString
 		accountType                sql.NullString
 		inclusionState             sql.NullString
-		inclusionChangedAt         sql.NullString
 		inclusionOrigin            sql.NullString
 		inclusionRuleName          sql.NullString
 		categoryDecisionCategoryID sql.NullString
-		categoryDecisionChangedAt  sql.NullString
 		categoryDecisionOrigin     sql.NullString
 		categoryID                 sql.NullString
 		categoryName               sql.NullString
@@ -226,12 +222,12 @@ func scanRow(rows *sql.Rows) (row, error) {
 		categoryColor              sql.NullString
 	)
 	err := rows.Scan(
-		dbtypes.ID(&r.id), dbtypes.ID(&r.accountID), dbtypes.ID(&externalID), &r.origin, &sourceProvider, &description, dbtypes.Decimal(&amount),
-		dbtypes.Decimal(&amountAcct), &currencyCode, dbtypes.Time(&occurredAt),
+		dbtypes.ID(&r.id), dbtypes.ID(&r.accountID), dbtypes.ID(&externalID), &r.origin, &sourceProvider, &description, dbtypes.Decimal(&r.amount),
+		dbtypes.Decimal(&r.amountInAccountCurrency), &currencyCode, dbtypes.Time(&r.occurredAt),
 		&providerStatus, &movementType, &sourceCategory, &creditCardMetadata,
 		&accountName, &accountInstitution, &accountCurrencyCode, &accountType,
-		&inclusionState, dbtypes.Time(&inclusionChangedAt), &inclusionOrigin, &inclusionRuleName,
-		dbtypes.ID(&categoryDecisionCategoryID), dbtypes.Time(&categoryDecisionChangedAt), &categoryDecisionOrigin,
+		&inclusionState, dbtypes.Time(&r.inclusionChangedAt), &inclusionOrigin, &inclusionRuleName,
+		dbtypes.ID(&categoryDecisionCategoryID), dbtypes.Time(&r.categoryDecisionChangedAt), &categoryDecisionOrigin,
 		dbtypes.ID(&categoryID), &categoryName, &categoryKind, dbtypes.Bool(&categoryIsActive), &categoryIcon, &categoryColor,
 	)
 	if err != nil {
@@ -264,21 +260,6 @@ func scanRow(rows *sql.Rows) (row, error) {
 	r.categoryIcon = nullString(categoryIcon)
 	r.categoryColor = nullString(categoryColor)
 
-	if r.amount, err = nullDecimal(amount); err != nil {
-		return row{}, err
-	}
-	if r.amountInAccountCurrency, err = nullDecimal(amountAcct); err != nil {
-		return row{}, err
-	}
-	if r.occurredAt, err = dbtypes.ParseNullTime(occurredAt); err != nil {
-		return row{}, err
-	}
-	if r.inclusionChangedAt, err = dbtypes.ParseNullTime(inclusionChangedAt); err != nil {
-		return row{}, err
-	}
-	if r.categoryDecisionChangedAt, err = dbtypes.ParseNullTime(categoryDecisionChangedAt); err != nil {
-		return row{}, err
-	}
 	return r, nil
 }
 
@@ -287,17 +268,6 @@ func nullString(ns sql.NullString) *string {
 		return nil
 	}
 	return &ns.String
-}
-
-func nullDecimal(ns sql.NullString) (*decimal.Decimal, error) {
-	if !ns.Valid {
-		return nil, nil
-	}
-	d, err := decimal.NewFromString(ns.String)
-	if err != nil {
-		return nil, fmt.Errorf("parse decimal %q: %w", ns.String, err)
-	}
-	return &d, nil
 }
 
 func buildView(r row, query QueryRequest, periodBasis string, billDueDates map[string]time.Time) (view, error) {
