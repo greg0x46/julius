@@ -77,6 +77,9 @@ function isDerivedAmount(operation: InvestmentOperation): boolean {
 
 const kindsNeedingPosition: InvestmentOperationKind[] = ["buy", "sell", "valuation"];
 const tradeKinds: InvestmentOperationKind[] = ["buy", "sell"];
+// An integrated account's cash is the provider's: no cash-only opening
+// balance, and trades only move its manual holdings.
+const integratedKinds: InvestmentOperationKind[] = ["deposit", "withdrawal", "income", "fee", "tax", "buy", "sell", "valuation"];
 const kindOptions = (Object.keys(investmentOperationKindLabel) as InvestmentOperationKind[])
   .filter((value) => value !== "transfer_out" && value !== "transfer_in")
   .map((value) => ({
@@ -265,7 +268,7 @@ export function InvestmentOperationFields({
         <Select
           id="investment-operation-kind"
           value={draft.kind}
-          options={kindOptions.filter(({ value }) => (!allowedKinds || allowedKinds.includes(value)) && (!integrated || ["deposit", "withdrawal", "income", "fee", "tax"].includes(value)))}
+          options={kindOptions.filter(({ value }) => (!allowedKinds || allowedKinds.includes(value)) && (!integrated || integratedKinds.includes(value)))}
           disabled={isEditing}
           onChange={(value: InvestmentOperationKind) =>
             setDraft((current) => ({ ...current, kind: value }))
@@ -385,8 +388,9 @@ export function InvestmentOperationFields({
       )}
       {integrated && (
         <p className="form-field-hint">
-          Os saldos continuam sendo informados pela instituição. Esta movimentação registra o evento para os
-          relatórios e a conciliação.
+          O caixa e as posições da instituição continuam sendo informados por ela. Compras, vendas e cotações valem
+          só para as suas posições manuais; aportes, resgates e rendimentos registram o evento para os relatórios e
+          a conciliação.
         </p>
       )}
       <FormField label="Observações (opcional)" htmlFor="investment-operation-notes">

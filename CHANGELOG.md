@@ -4,6 +4,12 @@ Notable changes per release. A section is added by `scripts/update-changelog.sh`
 only when a release is prepared, and the release job publishes that same text as
 the GitHub release notes. Newest release first.
 
+## v0.6.0 — 2026-10-12
+
+### Features
+
+- **investments:** Allow manual holdings in synchronized accounts ([#51](https://github.com/greg0x46/julius/pull/51))
+
 ## v0.5.0 — 2026-10-12
 
 ### Features
