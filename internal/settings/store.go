@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/greg0x46/julius/internal/db"
+	dbtypes "github.com/greg0x46/julius/internal/db/types"
 )
 
 // ErrLocked means that an encryption key was not supplied by the caller.
@@ -47,7 +48,7 @@ func Get(ctx context.Context, q Querier, key string, unlockKey []byte) (value st
 	var stored string
 	var isEncrypted int
 	err = q.QueryRowContext(ctx, `SELECT value, is_encrypted FROM settings WHERE key = ?`, key).
-		Scan(&stored, &isEncrypted)
+		Scan(&stored, dbtypes.Bool(&isEncrypted))
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", false, nil
 	}

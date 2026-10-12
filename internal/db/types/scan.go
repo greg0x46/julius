@@ -95,7 +95,11 @@ func Decimal(dest any) sql.Scanner {
 		case **decimal.Decimal:
 			*target = &d
 		default:
-			return assignText(dest, d.String())
+			s := d.String()
+			if raw, err := text(value); err == nil {
+				s = raw
+			}
+			return assignText(dest, s)
 		}
 		return nil
 	})

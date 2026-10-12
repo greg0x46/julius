@@ -11,6 +11,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/greg0x46/julius/internal/db"
+	dbtypes "github.com/greg0x46/julius/internal/db/types"
 	"github.com/greg0x46/julius/internal/investments"
 	"github.com/greg0x46/julius/internal/money"
 	"github.com/greg0x46/julius/internal/payables"
@@ -63,7 +64,7 @@ func investmentBalance(ctx context.Context, q Querier) (decimal.Decimal, error) 
 	total := manual
 	for rows.Next() {
 		var raw string
-		if err := rows.Scan(&raw); err != nil {
+		if err := rows.Scan(dbtypes.Decimal(&raw)); err != nil {
 			return decimal.Decimal{}, err
 		}
 		amount, err := decimal.NewFromString(raw)
@@ -158,20 +159,20 @@ func scanSnapshotRow(scan func(...any) error) (SnapshotRow, error) {
 		cashRaw, investmentRaw, creditCardRaw, payablesDebtRaw string
 		isBackfilledRaw                                        int
 	)
-	if err := scan(&s.ID, &capturedAtRaw, &totalAssetsRaw, &totalLiabilitiesRaw, &netWorthRaw,
-		&cashRaw, &investmentRaw, &creditCardRaw, &payablesDebtRaw, &isBackfilledRaw,
-		&createdAtRaw, &updatedAtRaw); err != nil {
+	if err := scan(dbtypes.ID(&s.ID), dbtypes.Date(&capturedAtRaw), dbtypes.Decimal(&totalAssetsRaw), dbtypes.Decimal(&totalLiabilitiesRaw), dbtypes.Decimal(&netWorthRaw),
+		dbtypes.Decimal(&cashRaw), dbtypes.Decimal(&investmentRaw), dbtypes.Decimal(&creditCardRaw), dbtypes.Decimal(&payablesDebtRaw), dbtypes.Bool(&isBackfilledRaw),
+		dbtypes.Time(&createdAtRaw), dbtypes.Time(&updatedAtRaw)); err != nil {
 		return SnapshotRow{}, err
 	}
 	s.IsBackfilled = isBackfilledRaw != 0
 	var err error
-	if s.CapturedAt, err = time.Parse(dateLayout, capturedAtRaw); err != nil {
+	if s.CapturedAt, err = dbtypes.ParseDate(capturedAtRaw); err != nil {
 		return SnapshotRow{}, err
 	}
-	if s.CreatedAt, err = db.ParseTime(createdAtRaw); err != nil {
+	if s.CreatedAt, err = dbtypes.ParseTime(createdAtRaw); err != nil {
 		return SnapshotRow{}, err
 	}
-	if s.UpdatedAt, err = db.ParseTime(updatedAtRaw); err != nil {
+	if s.UpdatedAt, err = dbtypes.ParseTime(updatedAtRaw); err != nil {
 		return SnapshotRow{}, err
 	}
 	for _, field := range []struct {

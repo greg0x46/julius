@@ -53,7 +53,7 @@ func TestScanners(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if d.String() != "12.3" || pd == nil || pd.String() != d.String() || s != d.String() {
+	if d.String() != "12.3" || pd == nil || pd.String() != d.String() || s != "12.30" {
 		t.Fatal("decimal destinations")
 	}
 	for _, dest := range []any{&s, &ns, &ps} {

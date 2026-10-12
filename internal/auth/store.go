@@ -28,7 +28,7 @@ type Store struct {
 func NewStore(db *sql.DB) *Store { return &Store{DB: db, Now: time.Now} }
 func (s *Store) Ready(ctx context.Context, master []byte) error {
 	var id int
-	if err := s.DB.QueryRowContext(ctx, `SELECT id FROM auth_owner WHERE id = 1`).Scan(&id); err != nil {
+	if err := s.DB.QueryRowContext(ctx, `SELECT 1 FROM auth_owner WHERE id = 1`).Scan(&id); err != nil {
 		return fmt.Errorf("autenticação pendente: execute auth init ou auth migrate: %w", err)
 	}
 	return settings.VerifyMaster(ctx, s.DB, master)

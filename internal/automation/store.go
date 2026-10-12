@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/greg0x46/julius/internal/db"
+	dbtypes "github.com/greg0x46/julius/internal/db/types"
 )
 
 // ErrNotFound is returned by Get/Update/SetActive/Delete when id has no
@@ -95,7 +96,7 @@ func loadConditionsFor(ctx context.Context, q Querier, ruleIDs []string) (map[st
 			ruleID string
 			c      Condition
 		)
-		if err := rows.Scan(&ruleID, &c.Field, &c.Operator, &c.Value); err != nil {
+		if err := rows.Scan(dbtypes.ID(&ruleID), &c.Field, &c.Operator, &c.Value); err != nil {
 			return nil, err
 		}
 		result[ruleID] = append(result[ruleID], c)
@@ -154,7 +155,7 @@ func loadActionsFor(ctx context.Context, q Querier, ruleIDs []string) (map[strin
 			a          Action
 			actionType string
 		)
-		if err := rows.Scan(&ruleID, &a.ID, &actionType, &a.ScenarioID, &a.CategoryID); err != nil {
+		if err := rows.Scan(dbtypes.ID(&ruleID), dbtypes.ID(&a.ID), &actionType, dbtypes.ID(&a.ScenarioID), dbtypes.ID(&a.CategoryID)); err != nil {
 			return nil, err
 		}
 		a.Type = ActionType(actionType)
@@ -292,15 +293,15 @@ func scanRule(row *sql.Row) (Rule, error) {
 		createdAtRaw string
 		updatedAtRaw string
 	)
-	if err := row.Scan(&r.ID, &r.Name, &isActive, &r.LogicOperator, &createdAtRaw, &updatedAtRaw); err != nil {
+	if err := row.Scan(dbtypes.ID(&r.ID), &r.Name, dbtypes.Bool(&isActive), &r.LogicOperator, dbtypes.Time(&createdAtRaw), dbtypes.Time(&updatedAtRaw)); err != nil {
 		return Rule{}, err
 	}
 	r.IsActive = isActive != 0
 	var err error
-	if r.CreatedAt, err = db.ParseTime(createdAtRaw); err != nil {
+	if r.CreatedAt, err = dbtypes.ParseTime(createdAtRaw); err != nil {
 		return Rule{}, err
 	}
-	if r.UpdatedAt, err = db.ParseTime(updatedAtRaw); err != nil {
+	if r.UpdatedAt, err = dbtypes.ParseTime(updatedAtRaw); err != nil {
 		return Rule{}, err
 	}
 	return r, nil
@@ -345,14 +346,14 @@ func listWhere(ctx context.Context, q Querier, where string) ([]Rule, error) {
 			createdAtRaw string
 			updatedAtRaw string
 		)
-		if err := rows.Scan(&r.ID, &r.Name, &isActive, &r.LogicOperator, &createdAtRaw, &updatedAtRaw); err != nil {
+		if err := rows.Scan(dbtypes.ID(&r.ID), &r.Name, dbtypes.Bool(&isActive), &r.LogicOperator, dbtypes.Time(&createdAtRaw), dbtypes.Time(&updatedAtRaw)); err != nil {
 			return nil, err
 		}
 		r.IsActive = isActive != 0
-		if r.CreatedAt, err = db.ParseTime(createdAtRaw); err != nil {
+		if r.CreatedAt, err = dbtypes.ParseTime(createdAtRaw); err != nil {
 			return nil, err
 		}
-		if r.UpdatedAt, err = db.ParseTime(updatedAtRaw); err != nil {
+		if r.UpdatedAt, err = dbtypes.ParseTime(updatedAtRaw); err != nil {
 			return nil, err
 		}
 		rules = append(rules, r)
@@ -415,14 +416,14 @@ func ListActiveReconcileTargets(ctx context.Context, q Querier) (map[string]Rule
 			updatedAtRaw string
 			scenarioID   sql.NullString
 		)
-		if err := rows.Scan(&r.ID, &r.Name, &isActive, &r.LogicOperator, &createdAtRaw, &updatedAtRaw, &scenarioID); err != nil {
+		if err := rows.Scan(dbtypes.ID(&r.ID), &r.Name, dbtypes.Bool(&isActive), &r.LogicOperator, dbtypes.Time(&createdAtRaw), dbtypes.Time(&updatedAtRaw), dbtypes.ID(&scenarioID)); err != nil {
 			return nil, err
 		}
 		r.IsActive = isActive != 0
-		if r.CreatedAt, err = db.ParseTime(createdAtRaw); err != nil {
+		if r.CreatedAt, err = dbtypes.ParseTime(createdAtRaw); err != nil {
 			return nil, err
 		}
-		if r.UpdatedAt, err = db.ParseTime(updatedAtRaw); err != nil {
+		if r.UpdatedAt, err = dbtypes.ParseTime(updatedAtRaw); err != nil {
 			return nil, err
 		}
 		if scenarioID.Valid {

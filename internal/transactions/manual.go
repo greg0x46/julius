@@ -10,6 +10,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/greg0x46/julius/internal/db"
+	dbtypes "github.com/greg0x46/julius/internal/db/types"
 	"github.com/greg0x46/julius/internal/money"
 )
 
@@ -27,7 +28,7 @@ var ErrInvestmentLinked = errors.New("transaction has investment reconciliations
 
 func requireNoInvestmentLinks(ctx context.Context, q Querier, id string) error {
 	var linked bool
-	if err := q.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM investment_reconciliations WHERE financial_transaction_id = ?)`, id).Scan(&linked); err != nil {
+	if err := q.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM investment_reconciliations WHERE financial_transaction_id = ?)`, id).Scan(dbtypes.Bool(&linked)); err != nil {
 		return err
 	}
 	if linked {

@@ -11,6 +11,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/greg0x46/julius/internal/db"
+	dbtypes "github.com/greg0x46/julius/internal/db/types"
 	"github.com/greg0x46/julius/internal/money"
 	"github.com/greg0x46/julius/internal/payables"
 	"github.com/greg0x46/julius/internal/transactions"
@@ -53,7 +54,7 @@ import (
 // showing a lower total on past days.
 func Backfill(ctx context.Context, q Querier, today time.Time) error {
 	todayDay := formatDate(today)
-	todayBoundary, err := time.Parse(dateLayout, todayDay)
+	todayBoundary, err := dbtypes.ParseDate(todayDay)
 	if err != nil {
 		return err
 	}
@@ -156,7 +157,7 @@ func existingCapturedDays(ctx context.Context, q Querier, from, to time.Time) (m
 	result := make(map[string]bool)
 	for rows.Next() {
 		var capturedAt string
-		if err := rows.Scan(&capturedAt); err != nil {
+		if err := rows.Scan(dbtypes.Date(&capturedAt)); err != nil {
 			return nil, err
 		}
 		result[capturedAt] = true
@@ -227,8 +228,8 @@ func cashDeltasDescending(ctx context.Context, q Querier) ([]cashTransactionDelt
 		var amountRaw, amountInAccountCurrencyRaw, currencyCodeRaw, accountCurrencyRaw sql.NullString
 		var occurredAtRaw, providerStatusRaw, movementTypeRaw sql.NullString
 		if err := rows.Scan(
-			&amountRaw, &amountInAccountCurrencyRaw, &currencyCodeRaw, &accountCurrencyRaw,
-			&occurredAtRaw, &providerStatusRaw, &movementTypeRaw,
+			dbtypes.Decimal(&amountRaw), dbtypes.Decimal(&amountInAccountCurrencyRaw), &currencyCodeRaw, &accountCurrencyRaw,
+			dbtypes.Time(&occurredAtRaw), &providerStatusRaw, &movementTypeRaw,
 		); err != nil {
 			return nil, err
 		}
@@ -239,7 +240,7 @@ func cashDeltasDescending(ctx context.Context, q Querier) ([]cashTransactionDelt
 			// (equivalent to treating it as having always already happened).
 			continue
 		}
-		occurredAt, err := db.ParseTime(occurredAtRaw.String)
+		occurredAt, err := dbtypes.ParseTime(occurredAtRaw.String)
 		if err != nil {
 			return nil, err
 		}
@@ -321,16 +322,16 @@ func earliestCashTransactionDay(ctx context.Context, q Querier) (day time.Time, 
 		WHERE (fa.account_type IS NULL OR fa.account_type != 'CREDIT')
 		  AND ft.occurred_at IS NOT NULL AND (fa.currency_code IS NULL OR fa.currency_code = 'BRL') AND ft.deleted_at IS NULL AND (ft.origin = 'synced' OR (fa.origin = 'manual' AND ft.provider_status = 'POSTED'))
  UNION ALL SELECT aba.created_at FROM account_balance_adjustments aba
- JOIN financial_accounts fa ON fa.id = aba.account_id WHERE fa.currency_code = 'BRL') history`).Scan(&raw)
+ JOIN financial_accounts fa ON fa.id = aba.account_id WHERE fa.currency_code = 'BRL') history`).Scan(dbtypes.Time(&raw))
 	if err != nil || !raw.Valid {
 		return time.Time{}, false, err
 	}
-	earliest, err := db.ParseTime(raw.String)
+	earliest, err := dbtypes.ParseTime(raw.String)
 	if err != nil {
 		return time.Time{}, false, err
 	}
 	dayString := formatDate(earliest)
-	dayBoundary, err := time.Parse(dateLayout, dayString)
+	dayBoundary, err := dbtypes.ParseDate(dayString)
 	if err != nil {
 		return time.Time{}, false, err
 	}

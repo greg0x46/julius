@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 
 	"github.com/greg0x46/julius/internal/categories"
+	dbtypes "github.com/greg0x46/julius/internal/db/types"
 	"github.com/greg0x46/julius/internal/money"
 	"github.com/greg0x46/julius/internal/transactions"
 )
@@ -189,7 +190,7 @@ func ApplyRetroactively(ctx context.Context, conn *sql.DB, ruleID string, onIgno
 	for rows.Next() {
 		var id string
 		var description, creditCardMetadata, accountName, accountInstitution sql.NullString
-		if err := rows.Scan(&id, &description, &creditCardMetadata, &accountName, &accountInstitution); err != nil {
+		if err := rows.Scan(dbtypes.ID(&id), &description, &creditCardMetadata, &accountName, &accountInstitution); err != nil {
 			rows.Close()
 			return RetroactiveResult{}, err
 		}

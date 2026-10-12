@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/greg0x46/julius/internal/db"
+	dbtypes "github.com/greg0x46/julius/internal/db/types"
 	"github.com/greg0x46/julius/internal/money"
 )
 
@@ -48,15 +49,15 @@ func scanCategory(row *sql.Row) (Category, error) {
 		createdAtRaw string
 		updatedAtRaw string
 	)
-	if err := row.Scan(&c.ID, &c.Name, &c.Kind, &isActive, &c.Icon, &c.Color, &createdAtRaw, &updatedAtRaw); err != nil {
+	if err := row.Scan(dbtypes.ID(&c.ID), &c.Name, &c.Kind, dbtypes.Bool(&isActive), &c.Icon, &c.Color, dbtypes.Time(&createdAtRaw), dbtypes.Time(&updatedAtRaw)); err != nil {
 		return Category{}, err
 	}
 	c.IsActive = isActive != 0
-	createdAt, err := db.ParseTime(createdAtRaw)
+	createdAt, err := dbtypes.ParseTime(createdAtRaw)
 	if err != nil {
 		return Category{}, err
 	}
-	updatedAt, err := db.ParseTime(updatedAtRaw)
+	updatedAt, err := dbtypes.ParseTime(updatedAtRaw)
 	if err != nil {
 		return Category{}, err
 	}
@@ -149,14 +150,14 @@ func List(ctx context.Context, q Querier) ([]Category, error) {
 			createdAtRaw string
 			updatedAtRaw string
 		)
-		if err := rows.Scan(&c.ID, &c.Name, &c.Kind, &isActive, &c.Icon, &c.Color, &createdAtRaw, &updatedAtRaw); err != nil {
+		if err := rows.Scan(dbtypes.ID(&c.ID), &c.Name, &c.Kind, dbtypes.Bool(&isActive), &c.Icon, &c.Color, dbtypes.Time(&createdAtRaw), dbtypes.Time(&updatedAtRaw)); err != nil {
 			return nil, err
 		}
 		c.IsActive = isActive != 0
-		if c.CreatedAt, err = db.ParseTime(createdAtRaw); err != nil {
+		if c.CreatedAt, err = dbtypes.ParseTime(createdAtRaw); err != nil {
 			return nil, err
 		}
-		if c.UpdatedAt, err = db.ParseTime(updatedAtRaw); err != nil {
+		if c.UpdatedAt, err = dbtypes.ParseTime(updatedAtRaw); err != nil {
 			return nil, err
 		}
 		result = append(result, c)
