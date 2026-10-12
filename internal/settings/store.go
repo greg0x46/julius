@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/greg0x46/julius/internal/db"
+	dbtypes "github.com/greg0x46/julius/internal/db/types"
 )
 
 // ErrLocked means that an encryption key was not supplied by the caller.
@@ -20,7 +21,7 @@ var ErrLocked = errors.New("settings: locked")
 // encrypted=false and a nil key.
 func Set(ctx context.Context, q Querier, key, value string, encrypted bool, unlockKey []byte) error {
 	stored := value
-	isEncrypted := 0
+	isEncrypted := false
 	if encrypted {
 		if unlockKey == nil {
 			return ErrLocked
@@ -30,7 +31,7 @@ func Set(ctx context.Context, q Querier, key, value string, encrypted bool, unlo
 			return err
 		}
 		stored = base64.StdEncoding.EncodeToString(ciphertext)
-		isEncrypted = 1
+		isEncrypted = true
 	}
 	_, err := q.ExecContext(ctx,
 		`INSERT INTO settings (key, value, is_encrypted, updated_at) VALUES (?, ?, ?, ?)
@@ -47,7 +48,7 @@ func Get(ctx context.Context, q Querier, key string, unlockKey []byte) (value st
 	var stored string
 	var isEncrypted int
 	err = q.QueryRowContext(ctx, `SELECT value, is_encrypted FROM settings WHERE key = ?`, key).
-		Scan(&stored, &isEncrypted)
+		Scan(&stored, dbtypes.Bool(&isEncrypted))
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", false, nil
 	}

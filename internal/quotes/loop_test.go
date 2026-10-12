@@ -2,15 +2,35 @@ package quotes
 
 import (
 	"context"
+	"database/sql"
 	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/greg0x46/julius/internal/db"
+	"github.com/greg0x46/julius/internal/db/dbtest"
 	"github.com/greg0x46/julius/internal/marketdata"
 	"github.com/greg0x46/julius/internal/settings"
 	"github.com/shopspring/decimal"
 )
+
+func TestInitializeScheduleBothDialects(t *testing.T) {
+	dbtest.Each(t, func(t *testing.T, conn *sql.DB) {
+		ctx := context.Background()
+		config, err := InitializeSchedule(ctx, conn, "")
+		if err != nil || config != settings.DefaultQuoteRefreshSettings() {
+			t.Fatalf("default: %+v %v", config, err)
+		}
+		saved := settings.QuoteRefreshSettings{Enabled: false, Time: "09:30", Timezone: "Asia/Tokyo"}
+		if err := settings.SetQuoteRefresh(ctx, conn, saved); err != nil {
+			t.Fatal(err)
+		}
+		config, err = InitializeSchedule(ctx, conn, "malformed ignored environment")
+		if err != nil || config != saved {
+			t.Fatalf("saved: %+v %v", config, err)
+		}
+	})
+}
 
 func TestInitializeSchedulePersistenceAndLegacy(t *testing.T) {
 	ctx := context.Background()

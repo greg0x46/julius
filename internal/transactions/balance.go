@@ -7,10 +7,11 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/greg0x46/julius/internal/db"
+	dbtypes "github.com/greg0x46/julius/internal/db/types"
 )
 
 // CashOnHand is how much cash sits in the user's non-credit accounts: the
-// sum of the providers' reported balances. It is the one implementation
+// sum of BRL provider balances and derived manual balances. It is the one implementation
 // every cash-side reader goes through — the timeline's t=today anchor and
 // net worth's asset side — so those two views cannot drift apart.
 //
@@ -42,8 +43,8 @@ func CashOnHand(ctx context.Context, q Querier, accountIDs []string) (decimal.De
 	// The OR must stay parenthesized: without it, `... IS NULL OR ... AND id
 	// IN (...)` binds as `... IS NULL OR (... AND id IN (...))`, letting
 	// every untyped account escape the accountIDs filter.
-	query := `SELECT balance FROM financial_accounts
-	          WHERE balance IS NOT NULL AND (account_type IS NULL OR account_type != 'CREDIT')`
+	query := `SELECT id FROM financial_accounts
+	          WHERE (balance IS NOT NULL OR origin = 'manual') AND (currency_code IS NULL OR currency_code = 'BRL') AND (account_type IS NULL OR account_type != 'CREDIT')`
 	in, args := db.InClause(accountIDs)
 	if in != "" {
 		query += ` AND id IN (` + in + `)`
@@ -54,20 +55,32 @@ func CashOnHand(ctx context.Context, q Querier, accountIDs []string) (decimal.De
 	}
 	defer rows.Close()
 
-	total := decimal.Zero
+	ids := []string{}
 	for rows.Next() {
-		// A plain string, not sql.NullString: the query already filters
-		// `balance IS NOT NULL`, so a NULL here would be a schema surprise
-		// worth surfacing as a scan error rather than silently summing "".
-		var balanceRaw string
-		if err := rows.Scan(&balanceRaw); err != nil {
-			return decimal.Decimal{}, err
+		var id string
+		if err := rows.Scan(dbtypes.ID(&id)); err != nil {
+			return decimal.Zero, err
 		}
-		amount, err := decimal.NewFromString(balanceRaw)
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return decimal.Zero, err
+	}
+	rows.Close()
+	total := decimal.Zero
+	for _, id := range ids {
+		raw, err := AccountBalance(ctx, q, id)
 		if err != nil {
-			return decimal.Decimal{}, fmt.Errorf("parse account balance %q: %w", balanceRaw, err)
+			return decimal.Zero, err
+		}
+		if raw == nil {
+			continue
+		}
+		amount, err := decimal.NewFromString(*raw)
+		if err != nil {
+			return decimal.Zero, fmt.Errorf("parse account balance: %w", err)
 		}
 		total = total.Add(amount)
 	}
-	return total, rows.Err()
+	return total, nil
 }

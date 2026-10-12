@@ -10,6 +10,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/greg0x46/julius/internal/db"
+	dbtypes "github.com/greg0x46/julius/internal/db/types"
 	"github.com/greg0x46/julius/internal/money"
 )
 
@@ -40,7 +41,7 @@ func scanAllocation(scan func(dest ...any) error) (ScenarioTransactionRealizatio
 		payableLinkID                    sql.NullString
 		allocatedAmountRaw, createdAtRaw string
 	)
-	if err := scan(&r.ID, &r.ScenarioTransactionID, &payableLinkID, &allocatedAmountRaw, &createdAtRaw); err != nil {
+	if err := scan(dbtypes.ID(&r.ID), dbtypes.ID(&r.ScenarioTransactionID), dbtypes.ID(&payableLinkID), dbtypes.Decimal(&allocatedAmountRaw), dbtypes.Time(&createdAtRaw)); err != nil {
 		return ScenarioTransactionRealization{}, err
 	}
 	if payableLinkID.Valid {
@@ -50,7 +51,7 @@ func scanAllocation(scan func(dest ...any) error) (ScenarioTransactionRealizatio
 	if r.AllocatedAmount, err = decimal.NewFromString(allocatedAmountRaw); err != nil {
 		return ScenarioTransactionRealization{}, err
 	}
-	if r.CreatedAt, err = db.ParseTime(createdAtRaw); err != nil {
+	if r.CreatedAt, err = dbtypes.ParseTime(createdAtRaw); err != nil {
 		return ScenarioTransactionRealization{}, err
 	}
 	return r, nil
@@ -74,7 +75,7 @@ func CreateRealization(ctx context.Context, q Querier, scenarioTransactionID str
 		SELECT st.scenario_id, l.transaction_id
 		FROM scenario_transactions st
 		JOIN payable_transaction_links l ON l.id = ?
-		WHERE st.id = ?`, r.PayableLinkID, r.ScenarioTransactionID).Scan(&scenarioID, &transactionID); err != nil {
+		WHERE st.id = ?`, r.PayableLinkID, r.ScenarioTransactionID).Scan(dbtypes.ID(&scenarioID), dbtypes.ID(&transactionID)); err != nil {
 		return ScenarioTransactionRealization{}, err
 	}
 	if _, err := q.ExecContext(ctx, `

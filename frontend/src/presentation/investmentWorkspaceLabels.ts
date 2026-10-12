@@ -1,6 +1,7 @@
 import type {
   InvestmentAccountKind,
   InvestmentOperationKind,
+  InvestmentPositionSource,
   InvestmentValuationBasis,
 } from "../api/contracts";
 
@@ -23,6 +24,11 @@ export const investmentOperationKindLabel: Record<InvestmentOperationKind, strin
   valuation: "Cotação manual",
   transfer_out: "Transferência enviada",
   transfer_in: "Transferência recebida",
+};
+
+export const investmentPositionSourceLabel: Record<InvestmentPositionSource, string> = {
+  manual: "Manual",
+  synced: "Integrada",
 };
 
 export const investmentValuationBasisLabel: Record<InvestmentValuationBasis, string> = {

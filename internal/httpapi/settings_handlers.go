@@ -4,11 +4,12 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"net/http"
+
 	"github.com/greg0x46/julius/internal/datasources"
 	"github.com/greg0x46/julius/internal/marketdata"
 	"github.com/greg0x46/julius/internal/quotes"
 	"github.com/greg0x46/julius/internal/settings"
-	"net/http"
 )
 
 func handleGetQuotesSettings(db *sql.DB) http.HandlerFunc {
