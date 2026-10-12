@@ -90,7 +90,7 @@ authentication configuration that does not depend on the host:
   time.
 - **Investments** — integrated and manual investment accounts, goal-based
   portfolios, per-asset operations, manual valuations and optional automatic
-  quotes (B3 and crypto). Contributions and withdrawals reconciled with the
+  quotes (B3 and crypto), enabled by default with a persistent daily schedule. Contributions and withdrawals reconciled with the
   statement show up apart from spending, keeping their cash effect and avoiding
   double counting in net worth.
 - **Browser authentication** — email and password login for the owner account,
@@ -395,16 +395,35 @@ Investment assets with automatic quotes enabled have the price of their manual
 positions fetched automatically and stored in the asset's price series. The
 position value is computed on every read (quantity × latest price); a manual
 valuation dated on or after the latest price takes precedence over it. Fetching
-is opt-in: set `JULIUS_QUOTES_SCHEDULE` (same format as the sync schedule)
-to run once a day and when the process starts. Providers are tried in order,
+is enabled by default at 19:00 America/Sao_Paulo. The backend persists
+`enabled`, `time` and `timezone` and applies changes without a restart.
+Startup and re-enabling fetch missing prices and history; disabling also stops
+backfill. The active spot batch may finish; disabling prevents the following
+history stage and later work cycles. Providers are tried in order,
 with automatic fallback; `JULIUS_QUOTES_PROVIDERS` sets the order
 (comma-separated; an omitted provider is disabled; an unknown name prevents
 startup):
 
 ```sh
-export JULIUS_QUOTES_SCHEDULE="19:00 America/Sao_Paulo"
+export JULIUS_QUOTES_SCHEDULE="19:00 America/Sao_Paulo" # first initialization only
 export JULIUS_QUOTES_PROVIDERS="yahoo,brapi,coingecko" # default
 ```
+
+An authenticated owner can read `GET /api/settings/quotes` and partially update
+`PUT /api/settings/quotes`, with the session cookie, configured `Origin` and
+`X-Julius-Request: 1`. Example JSON to change the schedule:
+
+```json
+{"enabled": true, "time": "20:30", "timezone": "America/Sao_Paulo"}
+```
+
+Send `{"enabled": false}` to disable it. Omitted fields are preserved;
+`brapi_token` stays write-only, and an explicit empty string clears it.
+`time` must be strict HH:MM and `timezone` must be loadable. Saved settings
+survive restarts and take precedence over `JULIUS_QUOTES_SCHEDULE`, which
+initializes only an absent configuration (HH:MM alone keeps process-local time).
+An unset or empty environment uses the enabled default. API changes wake the
+scheduler immediately; other persisted changes are checked every minute.
 
 By default Yahoo Finance is the primary source for both markets; brapi is the
 B3 fallback and CoinGecko the crypto one. The optional brapi token is
