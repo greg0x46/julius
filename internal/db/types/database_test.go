@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
 
 	"github.com/greg0x46/julius/internal/db/dbtest"
@@ -32,11 +31,26 @@ func TestDriverValues(t *testing.T) {
 		if date.Format(dbtypes.DateLayout) != "2026-10-11" || date.Hour() != 0 {
 			t.Fatal(date)
 		}
-		if _, err := uuid.Parse(id); err != nil {
-			t.Fatal(err)
+		if id != "b438a2c8-6c7d-4e94-8e2f-5c230900671a" {
+			t.Fatal(id)
+		}
+		wantPrecision := 123456789
+		if dbtest.IsPostgres(conn) {
+			wantPrecision = 123456000
+		}
+		if stamp.Nanosecond() != wantPrecision {
+			t.Fatal(stamp)
 		}
 		if !active || amount.String() != "12345678901234567890.123456789" || optional != nil {
 			t.Fatal(active, amount, optional)
+		}
+		var encodedTime, encodedDate, encodedID, encodedAmount, absent sql.NullString
+		var activeInt int
+		if err := conn.QueryRow(query).Scan(dbtypes.Time(&encodedTime), dbtypes.Date(&encodedDate), dbtypes.ID(&encodedID), dbtypes.Bool(&activeInt), dbtypes.Decimal(&encodedAmount), dbtypes.Time(&absent)); err != nil {
+			t.Fatal(err)
+		}
+		if !encodedTime.Valid || encodedTime.String != stamp.Format(dbtypes.TimeLayout) || encodedDate.String != "2026-10-11" || encodedID.String != id || activeInt != 1 || encodedAmount.String != amount.String() || absent.Valid {
+			t.Fatal(encodedTime, encodedDate, encodedID, activeInt, encodedAmount, absent)
 		}
 		if err := conn.QueryRow(`SELECT 'invalid'`).Scan(dbtypes.Date(&date)); err == nil {
 			t.Fatal("accepted malformed date")
