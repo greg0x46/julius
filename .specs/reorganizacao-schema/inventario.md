@@ -204,6 +204,30 @@ migrations or tests.
 `goose_db_version` is used by Goose, not a domain module. Its four columns are
 classified below for completeness but its rows do not carry over.
 
+## Engineering review record
+
+Reviewed against the baseline above on 2026-10-12 using only synthetic databases:
+
+- SQLite and Postgres expose the same 430 `(table, column)` pairs. Every pair
+  appears exactly once below with its observed type, declared nullability and
+  classification; 426 belong to the application and four to Goose.
+- Both committed schema dumps restore successfully into empty databases and
+  reproduce those column sets. The three requested obsolete tables are absent.
+- All 42 retained application tables have runtime evidence in the linked files.
+  All 12 changed-column entries refer to existing columns; money, IDs, bytes and
+  unchanged calendar dates have no converters.
+- Reviewed date semantics against `db/time.go`, `auth/store.go`,
+  `transactions/cardflow.go`, `transactions/cardtotal.go`,
+  `investments/quotes.go`, `networth/store.go`, `scenarios/store.go` and
+  `httpapi/statement_imports_handlers.go`, rather than classifying by suffix alone.
+- Go build, vet and tests (including disposable Postgres), frontend lint,
+  typecheck, tests and build, embedded frontend build, release-script tests,
+  govulncheck and the production npm audit passed.
+
+This is an engineering consistency review. Owner acceptance of the proposed
+scope and date conversion choices remains part of reviewing this design before
+implementing the target schema and migration tool.
+
 ## Full column inventory
 
 42 application tables, 426 application columns; 136 ID + 8 boolean + 1 bytes + 20 calendar date + 8 decimal (non-money) + 59 enum + 53 free text + 73 instant + 25 integer + 43 money.
