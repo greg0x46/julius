@@ -51,6 +51,10 @@ authentication configuration that does not depend on the host:
 
 ## Features
 
+- **Typed database baseline** — both dialects share one migration sequence,
+  with native exact Postgres types and a startup guard that rejects the old
+  schema generation. Existing installations need a separate conversion before
+  using this binary; see [Database schema generations](#database-schema-generations).
 - **Open Banking sync** — a background worker polls Pluggy periodically for
   new transactions and account data, recorded as auditable sync runs (history,
   metrics, failures) instead of a black-box import.
@@ -316,6 +320,19 @@ immediately. Origin checks for writes stay active in both modes. The preference
 is stored in the database; if it does not exist, protected mode is used, and if
 it cannot be read the API becomes unavailable — it never opens because of a
 configuration failure.
+
+### Database schema generations
+
+This binary initializes a new schema generation on empty databases. Postgres
+stores money as exact `NUMERIC`, instants as `TIMESTAMPTZ`, calendar days as
+`DATE`, flags as `BOOLEAN`, and UUID identities as `UUID`; SQLite retains exact
+text money and UTC timestamps. Both dialects use the same migration numbers.
+
+**Existing installations:** databases from the old migration sequence are
+rejected at startup, without applying migrations. Keep a backup and continue
+using the previous binary until a separate legacy conversion tool is available.
+Do not delete your database or change its migration version to bypass the guard.
+The SQLite-to-Postgres copier does not convert an old schema generation.
 
 ### Running with Postgres
 

@@ -69,6 +69,16 @@ resurrect old names from migration history.
 
 ## Target column contract
 
+The implemented baseline follows issue #31's native Postgres types, superseding
+the original text-only proposal below: exact numbers use `NUMERIC`, instants
+`TIMESTAMPTZ`, calendar dates `DATE`, flags `BOOLEAN` and UUID identities `UUID`.
+Opaque IDs (including integrated custody IDs), keys and provider fields remain
+text. SQLite keeps exact decimal/UTC text and integer flags. See
+[`migrations/README.md`](../../internal/db/migrations/README.md). The snapshots
+below remain the unchanged legacy source for a future conversion tool.
+
+### Original conversion proposal (superseded by the implemented baseline)
+
 Keep table/column names and the existing constraints, defaults, relationships,
 indexes and append-only behavior unless target DDL work explicitly changes them.
 Every inventory row maps to the same `table.column`. Columns absent from the

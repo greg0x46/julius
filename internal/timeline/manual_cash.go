@@ -6,7 +6,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/greg0x46/julius/internal/dates"
-	"github.com/greg0x46/julius/internal/db"
+	dbtypes "github.com/greg0x46/julius/internal/db/types"
 )
 
 // Manual adjustments and future posted movements are already in the cash anchor.
@@ -28,13 +28,13 @@ func anchoredManualCash(ctx context.Context, q Querier, params BuildParams) ([]E
 	from, reference := dates.Day(params.From), dates.Day(params.ReferenceDate)
 	for rows.Next() {
 		var id, accountID, rawAmount, rawDate, kind string
-		if err := rows.Scan(&id, &accountID, &rawAmount, &rawDate, &kind); err != nil {
+		if err := rows.Scan(dbtypes.ID(&id), dbtypes.ID(&accountID), dbtypes.Decimal(&rawAmount), dbtypes.Time(&rawDate), &kind); err != nil {
 			return nil, err
 		}
 		if len(params.AccountIDs) > 0 && !contains(params.AccountIDs, accountID) {
 			continue
 		}
-		occurredAt, err := db.ParseTime(rawDate)
+		occurredAt, err := dbtypes.ParseTime(rawDate)
 		if err != nil {
 			return nil, err
 		}

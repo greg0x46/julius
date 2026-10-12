@@ -12,6 +12,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/greg0x46/julius/internal/db"
+	dbtypes "github.com/greg0x46/julius/internal/db/types"
 	"github.com/greg0x46/julius/internal/money"
 )
 
@@ -40,8 +41,8 @@ func scanReconciliation(row interface{ Scan(...any) error }) (Reconciliation, er
 		transactionID, investmentTransactionID sql.NullString
 		amountRaw, createdAtRaw                string
 	)
-	if err := row.Scan(&r.ID, &r.OperationID, &transactionID, &investmentTransactionID,
-		&amountRaw, &createdAtRaw); err != nil {
+	if err := row.Scan(dbtypes.ID(&r.ID), dbtypes.ID(&r.OperationID), dbtypes.ID(&transactionID), dbtypes.ID(&investmentTransactionID),
+		dbtypes.Decimal(&amountRaw), dbtypes.Time(&createdAtRaw)); err != nil {
 		return Reconciliation{}, err
 	}
 	if transactionID.Valid {
@@ -143,7 +144,7 @@ func financialTransactionValue(ctx context.Context, q Querier, id string) (decim
    COALESCE(tid.state, 'considered')
   FROM financial_transactions t JOIN financial_accounts a ON a.id = t.account_id
   LEFT JOIN transaction_inclusion_decisions tid ON tid.transaction_id = t.id
-  WHERE t.id = ? AND t.deleted_at IS NULL`, id).Scan(&raw, &currency, &inclusion)
+  WHERE t.id = ? AND t.deleted_at IS NULL`, id).Scan(dbtypes.Decimal(&raw), &currency, &inclusion)
 	if errors.Is(err, sql.ErrNoRows) {
 		return decimal.Zero, ErrInvalidReconciliationLink
 	}
@@ -178,7 +179,7 @@ func sumReconciliations(ctx context.Context, q Querier, column, id string) (deci
 	total := decimal.Zero
 	for rows.Next() {
 		var raw string
-		if err := rows.Scan(&raw); err != nil {
+		if err := rows.Scan(dbtypes.Decimal(&raw)); err != nil {
 			return decimal.Zero, err
 		}
 		amount, err := decimal.NewFromString(raw)
@@ -243,7 +244,7 @@ func requireUnlinkedPair(ctx context.Context, q Querier, operationID string, tra
 			SELECT EXISTS (
 				SELECT 1 FROM investment_reconciliations
 				WHERE operation_id = ? AND `+link.column+` = ?
-			)`, operationID, *link.value).Scan(&exists); err != nil {
+			)`, operationID, *link.value).Scan(dbtypes.Bool(&exists)); err != nil {
 			return err
 		}
 		if exists {
@@ -477,7 +478,7 @@ func ensureSyncedPivot(ctx context.Context, q Querier, movementID string) (id st
 		SELECT o.id FROM investment_operations o
 		JOIN investment_reconciliations r ON r.operation_id = o.id
 		WHERE o.source = 'synced' AND r.financial_investment_transaction_id = ?
-		ORDER BY o.created_at, o.id LIMIT 1`, movementID).Scan(&id)
+		ORDER BY o.created_at, o.id LIMIT 1`, movementID).Scan(dbtypes.ID(&id))
 	if err == nil {
 		return id, true, nil
 	}
@@ -490,7 +491,7 @@ func ensureSyncedPivot(ctx context.Context, q Querier, movementID string) (id st
 	err = q.QueryRowContext(ctx, `
 		SELECT t.amount, i.currency_code, t.direction, t.movement_type, t.trade_date, t.occurred_at, i.name, t.source_id
 		FROM financial_investment_transactions t JOIN financial_investments i ON i.id = t.investment_id
-		WHERE t.id = ?`, movementID).Scan(&amountRaw, &currency, &direction, &movementType, &tradeDate, &occurredAt, &name, &sourceID)
+		WHERE t.id = ?`, movementID).Scan(dbtypes.Decimal(&amountRaw), &currency, &direction, &movementType, dbtypes.Time(&tradeDate), dbtypes.Time(&occurredAt), &name, dbtypes.ID(&sourceID))
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", false, ErrInvalidReconciliationLink
 	}
@@ -558,7 +559,7 @@ func investmentTransactionValue(ctx context.Context, q Querier, op Operation, id
 	var sourceID string
 	err := q.QueryRowContext(ctx, `SELECT t.amount, i.currency_code, t.direction, t.source_id
   FROM financial_investment_transactions t JOIN financial_investments i ON i.id = t.investment_id
-  WHERE t.id = ?`, id).Scan(&amount, &currency, &direction, &sourceID)
+  WHERE t.id = ?`, id).Scan(dbtypes.Decimal(&amount), &currency, &direction, dbtypes.ID(&sourceID))
 	if errors.Is(err, sql.ErrNoRows) {
 		return decimal.Zero, ErrInvalidReconciliationLink
 	}

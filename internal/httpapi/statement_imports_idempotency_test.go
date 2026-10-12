@@ -224,7 +224,7 @@ func TestStatementLookalikeRowsOnlyWarn(t *testing.T) {
 		insertPluggyStatementRow(t, conn, "Café", "-10", cafeOccurredAt)
 		insertManualStatementRow(t, conn, accountID, "Café", "-10.00", cafeOccurredAt)
 		existing := func() [][]string {
-			result, err := conn.Query(`SELECT id, account_id, description, amount, origin, updated_at, COALESCE(deleted_at, '') FROM financial_transactions WHERE occurred_at = ? ORDER BY id`, cafeOccurredAt)
+			result, err := conn.Query(`SELECT id, account_id, description, amount, origin, updated_at, COALESCE(CAST(deleted_at AS TEXT), '') FROM financial_transactions WHERE occurred_at = ? ORDER BY id`, cafeOccurredAt)
 			if err != nil {
 				t.Fatal(err)
 			}

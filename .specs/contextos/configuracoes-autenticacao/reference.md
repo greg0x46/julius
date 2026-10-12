@@ -41,6 +41,11 @@ password-derivation functions in settings exist only for migration and tests.
   sessions; does not need or change the key. Passwords are read without echo
   from a terminal.
 
+Owner/session timestamps use UTC text in SQLite and native `TIMESTAMPTZ` in
+Postgres, retaining second-level lifetime and idle-timeout semantics. Database
+opening refuses the old schema generation before any automatic migration; a
+separate legacy conversion tool is not implemented.
+
 The server refuses pending configuration or an invalid key. A lost key cannot
 be recovered with the password; key rotation is not implemented. Instructions
 are in the README.
@@ -101,3 +106,8 @@ default is enabled at 19:00 America/Sao_Paulo. The running scheduler applies
 changes without restart, including suspending history backfill. Legacy
 environment initialization and precedence are described under Investments.
 The UI keeps the existing token form without schedule controls.
+
+Schedule initialization stores the unencrypted flag using SQL `FALSE`, which
+works with SQLite integer flags and Postgres native booleans.
+`TestInitializeScheduleBothDialects` covers startup initialization;
+`TestQuoteSettingsPostgresRoundTrip` covers HTTP schedule writes.

@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/greg0x46/julius/internal/db"
+	dbtypes "github.com/greg0x46/julius/internal/db/types"
 )
 
 // Origin distinguishes a category decision the user made explicitly from one
@@ -56,14 +57,14 @@ func getDecision(ctx context.Context, q Querier, transactionID string) (*Decisio
 		`SELECT transaction_id, category_id, revision, changed_at, origin
 		 FROM transaction_category_decisions WHERE transaction_id = ?`,
 		transactionID,
-	).Scan(&d.TransactionID, &d.CategoryID, &d.Revision, &changedAtRaw, &d.Origin)
+	).Scan(dbtypes.ID(&d.TransactionID), dbtypes.ID(&d.CategoryID), &d.Revision, dbtypes.Time(&changedAtRaw), &d.Origin)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
-	if d.ChangedAt, err = db.ParseTime(changedAtRaw); err != nil {
+	if d.ChangedAt, err = dbtypes.ParseTime(changedAtRaw); err != nil {
 		return nil, err
 	}
 	return &d, nil

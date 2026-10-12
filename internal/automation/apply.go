@@ -5,12 +5,13 @@ import (
 	"database/sql"
 	"encoding/json"
 
-	"github.com/greg0x46/julius/internal/db"
-	"github.com/shopspring/decimal"
-
 	"github.com/greg0x46/julius/internal/categories"
+	"github.com/greg0x46/julius/internal/db"
+	dbtypes "github.com/greg0x46/julius/internal/db/types"
 	"github.com/greg0x46/julius/internal/money"
 	"github.com/greg0x46/julius/internal/transactions"
+
+	"github.com/shopspring/decimal"
 )
 
 // extractCardNumber pulls the card number out of a financial_transactions
@@ -35,7 +36,7 @@ func candidateFor(ctx context.Context, q transactions.Querier, transactionID str
 		       ft.amount, ft.amount_in_account_currency, ft.currency_code, fa.currency_code, ft.occurred_at
 		FROM financial_transactions ft JOIN financial_accounts fa ON fa.id = ft.account_id
 		WHERE ft.id = ?`, transactionID,
-	).Scan(&description, &creditCardMetadata, &accountName, &accountInstitution, &amount, &accountAmount, &currency, &accountCurrency, &occurredAt)
+	).Scan(&description, &creditCardMetadata, &accountName, &accountInstitution, dbtypes.Decimal(&amount), dbtypes.Decimal(&accountAmount), &currency, &accountCurrency, dbtypes.Time(&occurredAt))
 	if err != nil {
 		return MatchCandidate{}, err
 	}
@@ -238,7 +239,7 @@ func ApplyRetroactively(ctx context.Context, conn *sql.DB, ruleID string, onIgno
 		var id string
 		var description, creditCardMetadata, accountName, accountInstitution sql.NullString
 		var amount, accountAmount, currency, accountCurrency, occurredAt sql.NullString
-		if err := rows.Scan(&id, &description, &creditCardMetadata, &accountName, &accountInstitution, &amount, &accountAmount, &currency, &accountCurrency, &occurredAt); err != nil {
+		if err := rows.Scan(dbtypes.ID(&id), &description, &creditCardMetadata, &accountName, &accountInstitution, dbtypes.Decimal(&amount), dbtypes.Decimal(&accountAmount), &currency, &accountCurrency, dbtypes.Time(&occurredAt)); err != nil {
 			rows.Close()
 			return RetroactiveResult{}, err
 		}

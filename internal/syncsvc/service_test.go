@@ -238,7 +238,7 @@ func TestExecutePersistsCreditAccountLimitsAndDates(t *testing.T) {
 	if available != "3765.44" {
 		t.Errorf("available_credit_limit = %s", available)
 	}
-	if closeRaw != db.FormatTime(closeDate) || dueRaw != db.FormatTime(dueDate) {
+	if closeRaw != closeDate.UTC().Format("2006-01-02") || dueRaw != dueDate.UTC().Format("2006-01-02") {
 		t.Errorf("close=%s due=%s", closeRaw, dueRaw)
 	}
 }

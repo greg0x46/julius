@@ -58,12 +58,29 @@ renamed. Frontend routes and UI labels are also Portuguese.
 | `investimentos` | Investments, quotes, reconciliation | `investments`, `quotes`, `marketdata` |
 | `configuracoes-autenticacao` | Settings, authentication | `auth`, `settings` |
 
+## Shared database read boundary
+
+`internal/db/types` decodes timestamps, calendar dates, booleans, identifiers
+and exact decimals returned by SQLite and Postgres. Stores and SQL-backed HTTP
+handlers use its scan adapters, including nullable columns; native driver values
+are normalized there before domain logic runs. Opaque provider and legacy IDs
+remain intact; `ParseUUID` is available for UUID values. Decimal reads accept
+text and integers and reject floating-point values. Postgres uses native exact
+numeric, temporal, UUID and boolean types; SQLite keeps text decimals, UTC
+instants, calendar dates and integer flags. Both start at `0001_initial.sql`.
+`db.Open` rejects the old schema before running migrations; the archived history
+is embedded only in historical tests. See
+[`migrations/README.md`](../internal/db/migrations/README.md) for the contract.
+The SQLite-to-Postgres copier supports this baseline and converts integer flags
+according to the destination's boolean column types; it does not convert legacy
+schemas.
+
 ## Cross-cutting design work
 
 - [`reorganizacao-schema/inventario.md`](reorganizacao-schema/inventario.md) —
   final legacy schema snapshots, complete column inventory, data/auth scope
-  decisions and the proposed changed-column conversion map. Target DDL and the
-  legacy migration tool are not implemented yet.
+  decisions and the proposed changed-column conversion map. The native baseline
+  is implemented; the legacy conversion tool remains unimplemented.
 
 ## Shared frontend building blocks
 

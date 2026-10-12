@@ -7,6 +7,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/greg0x46/julius/internal/db"
+	dbtypes "github.com/greg0x46/julius/internal/db/types"
 )
 
 // CashOnHand is how much cash sits in the user's non-credit accounts: the
@@ -57,7 +58,7 @@ func CashOnHand(ctx context.Context, q Querier, accountIDs []string) (decimal.De
 	ids := []string{}
 	for rows.Next() {
 		var id string
-		if err := rows.Scan(&id); err != nil {
+		if err := rows.Scan(dbtypes.ID(&id)); err != nil {
 			return decimal.Zero, err
 		}
 		ids = append(ids, id)

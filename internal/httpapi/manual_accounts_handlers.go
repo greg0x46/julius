@@ -12,6 +12,7 @@ import (
 	"golang.org/x/text/currency"
 
 	"github.com/greg0x46/julius/internal/db"
+	dbtypes "github.com/greg0x46/julius/internal/db/types"
 	"github.com/greg0x46/julius/internal/money"
 	"github.com/greg0x46/julius/internal/transactions"
 )
@@ -97,10 +98,10 @@ func handleWriteManualAccount(conn *sql.DB, create bool) http.HandlerFunc {
 			}
 			var origin, oldCurrency, oldOpening string
 			var hasMovements bool
-			err = tx.QueryRowContext(r.Context(), `SELECT origin, COALESCE(currency_code, ''), COALESCE(opening_balance, ''),
+			err = tx.QueryRowContext(r.Context(), `SELECT origin, COALESCE(currency_code, ''), COALESCE(opening_balance, '0'),
     EXISTS(SELECT 1 FROM financial_transactions WHERE account_id = ?) OR
     EXISTS(SELECT 1 FROM account_balance_adjustments WHERE account_id = ?)
-    FROM financial_accounts WHERE id = ?`, id, id, id).Scan(&origin, &oldCurrency, &oldOpening, &hasMovements)
+    FROM financial_accounts WHERE id = ?`, id, id, id).Scan(&origin, &oldCurrency, dbtypes.Decimal(&oldOpening), dbtypes.Bool(&hasMovements))
 			if err != nil {
 				accountsUnavailableProblem(w)
 				return
@@ -180,7 +181,7 @@ func handleAdjustManualAccount(conn *sql.DB) http.HandlerFunc {
 		}
 		if n == 0 {
 			var exists bool
-			err := tx.QueryRowContext(r.Context(), `SELECT EXISTS(SELECT 1 FROM financial_accounts WHERE id = ?)`, id).Scan(&exists)
+			err := tx.QueryRowContext(r.Context(), `SELECT EXISTS(SELECT 1 FROM financial_accounts WHERE id = ?)`, id).Scan(dbtypes.Bool(&exists))
 			if err != nil {
 				accountsUnavailableProblem(w)
 				return

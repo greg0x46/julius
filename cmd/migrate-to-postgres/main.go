@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/greg0x46/julius/internal/db"
+	"github.com/greg0x46/julius/internal/db/types"
 )
 
 func main() {
@@ -152,6 +153,15 @@ func copyTable(src, dst *sql.DB, table string) (int, error) {
 		quotedCols[i] = c
 	}
 	insertSQL := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s)", table, strings.Join(quotedCols, ", "), strings.Join(placeholders, ", "))
+	targetRows, err := dst.Query(fmt.Sprintf("SELECT %s FROM %s LIMIT 0", strings.Join(quotedCols, ", "), table))
+	if err != nil {
+		return 0, fmt.Errorf("target columns: %w", err)
+	}
+	targetTypes, err := targetRows.ColumnTypes()
+	targetRows.Close()
+	if err != nil {
+		return 0, fmt.Errorf("target column types: %w", err)
+	}
 
 	tx, err := dst.Begin()
 	if err != nil {
@@ -174,6 +184,17 @@ func copyTable(src, dst *sql.DB, table string) (int, error) {
 			stmt.Close()
 			tx.Rollback()
 			return 0, fmt.Errorf("scan row %d: %w", n, err)
+		}
+		for i, column := range targetTypes {
+			if values[i] == nil || (column.DatabaseTypeName() != "BOOL" && column.DatabaseTypeName() != "BOOLEAN") {
+				continue
+			}
+			values[i], err = types.ParseBool(values[i])
+			if err != nil {
+				stmt.Close()
+				tx.Rollback()
+				return 0, fmt.Errorf("convert row %d column %s: %w", n, cols[i], err)
+			}
 		}
 		if _, err := stmt.Exec(values...); err != nil {
 			stmt.Close()

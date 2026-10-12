@@ -9,6 +9,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/greg0x46/julius/internal/db"
+	dbtypes "github.com/greg0x46/julius/internal/db/types"
 	"github.com/greg0x46/julius/internal/money"
 )
 
@@ -84,23 +85,23 @@ func (s *Service) queryRate(ctx context.Context, inverted bool, query string, ar
 		asOf, effectiveOn, value, fetched string
 	)
 	err := s.conn.QueryRowContext(ctx, query, args...).
-		Scan(&rate.Base, &rate.Quote, &asOf, &effectiveOn, &value, &rate.Source, &fetched)
+		Scan(&rate.Base, &rate.Quote, dbtypes.Date(&asOf), dbtypes.Date(&effectiveOn), dbtypes.Decimal(&value), &rate.Source, dbtypes.Time(&fetched))
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
-	if rate.AsOf, err = time.Parse(dateLayout, asOf); err != nil {
+	if rate.AsOf, err = dbtypes.ParseDate(asOf); err != nil {
 		return nil, err
 	}
-	if rate.EffectiveOn, err = time.Parse(dateLayout, effectiveOn); err != nil {
+	if rate.EffectiveOn, err = dbtypes.ParseDate(effectiveOn); err != nil {
 		return nil, err
 	}
 	if rate.Value, err = decimal.NewFromString(value); err != nil {
 		return nil, err
 	}
-	if rate.FetchedAt, err = db.ParseTime(fetched); err != nil {
+	if rate.FetchedAt, err = dbtypes.ParseTime(fetched); err != nil {
 		return nil, err
 	}
 	if inverted {
