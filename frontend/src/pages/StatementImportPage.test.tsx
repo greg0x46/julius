@@ -79,7 +79,7 @@ describe("StatementImportPage", () => {
     expect(confirm).toBeDisabled();
     await user.click(screen.getByRole("checkbox", { name: /Importar somente as linhas válidas/ }));
     await user.click(confirm);
-    await waitFor(() => expect(statementApi.confirmStatement).toHaveBeenCalledWith(expect.any(File), expect.any(Object), { newAccountName: "Flash" }, true));
+    await waitFor(() => expect(statementApi.confirmStatement).toHaveBeenCalledWith(expect.any(File), expect.any(Object), { newAccountName: "Flash" }, true, {}));
     expect(await screen.findByText("Extrato importado")).toBeVisible();
     expect(screen.getByRole("link", { name: "Ver conta" })).toHaveAttribute("href", "/contas-e-cartoes/acc");
     // Nothing is left to confirm once the import is done.
@@ -105,6 +105,30 @@ describe("StatementImportPage", () => {
     await user.upload(screen.getByLabelText("Arquivo CSV"), csv());
     expect(await screen.findByText("Este extrato já foi importado nesta conta. Nenhuma transação nova será criada.")).toBeVisible();
     expect(screen.getByRole("button", { name: "Registrar reenvio sem novas transações" })).toBeDisabled();
+  });
+
+  it("requires an explicit choice for each same-looking row from another file", async () => {
+    const user = userEvent.setup();
+    const ambiguous = row({ status: "ambiguous", warnings: ["movimentação idêntica em outro arquivo"] });
+    vi.mocked(statementApi.listImportAccounts).mockResolvedValue([{ id: "acc", name: "Flash", currency_code: "BRL" }]);
+    vi.mocked(statementApi.previewStatement).mockResolvedValue(preview([ambiguous]));
+    vi.mocked(statementApi.confirmStatement).mockResolvedValue({ ...saved, counts: { total: 1, new: 1, duplicate: 0, invalid: 0 } });
+    renderPage();
+    await user.click(screen.getByRole("radio", { name: "Usar conta existente" }));
+    const account = screen.getByRole("combobox", { name: "Conta de arquivo" });
+    await user.click(account);
+    await user.click(await screen.findByText("Flash (BRL)"));
+    await user.upload(screen.getByLabelText("Arquivo CSV"), csv());
+    expect(await screen.findByText("Precisa de decisão")).toBeVisible();
+    const confirm = screen.getByRole("button", { name: "Registrar reenvio sem novas transações" });
+    expect(confirm).toBeDisabled();
+    await user.click(screen.getByRole("radio", { name: "Importar como outra compra" }));
+    const importButton = screen.getByRole("button", { name: "Importar 1 transação" });
+    expect(importButton).toBeEnabled();
+    await user.click(importButton);
+    await waitFor(() => expect(statementApi.confirmStatement).toHaveBeenCalledWith(
+      expect.any(File), expect.any(Object), { accountId: "acc" }, false, { 2: "import" },
+    ));
   });
 
   describe("layout", () => {

@@ -1,64 +1,61 @@
-# Pendências (dívidas e recebíveis)
+# Payables (debts and receivables)
 
-> Referência viva deste contexto — o que existe e funciona hoje. Mantenha
-> atualizado ao mudar a feature. Motor de domínio por trás: Payables
-> (seção 4 de `.specs/motores-de-dominio.md`).
+> Living reference — what exists and works today. Keep it updated when the
+> feature changes. Engine behind it: Payables (section 4 of
+> `.specs/motores-de-dominio.md`). Folder and route name: `pendencias`.
 
-## O que é
+## What it is
 
-Rastreia um alvo real: um total (dívida ou recebível) que vai sendo
-abatido por transações reais vinculadas, com settled/remaining/status
-sempre recomputados na leitura, nunca persistidos.
+Tracks a real target: a total (debt or receivable) paid down by linked real
+transactions, with settled/remaining/status always recomputed on read, never
+persisted.
 
-## Estado vs. ideal
+## State vs. ideal
 
-O pacote `internal/payables` substituiu por completo o antigo
-`internal/debts` (que não existe mais no código). `Kind` hoje ainda só
-cobre `debt`/`receivable` — a generalização para incluir metas ("juntar
-R$10.000 até dezembro"), descrita como direção em
-`.specs/motores-de-dominio.md` seção 4, **não foi implementada**. Nome
-"Payables" já é considerado provisório mesmo antes dessa generalização
-(ver nota de nome no mesmo doc).
+`internal/payables` fully replaced the old `internal/debts` (gone from the
+code). `Kind` still covers only `debt`/`receivable` — the generalization to
+goals ("save R$10,000 by December"), described as a direction in
+`.specs/motores-de-dominio.md` section 4, is **not implemented**. The name
+"Payables" is already considered provisional (see the name note in that doc).
 
 ## Backend
 
-`internal/payables` — total/quitado/restante sempre recomputados na
-leitura a partir de `payable_transaction_links`, nunca persistidos.
-`summary.go` é o único lugar onde essa recomputação vive: `Summarize`/
-`SummarizeAsOf` (um payable), `SummarizeAll` (um conjunto, em duas queries
-— é o que a listagem HTTP usa) e `RemainingTotal`/`RemainingTotalAsOf`/
-`RemainingTotalsAsOf` (agregados). Antes a mesma sequência estava
-reimplementada em quatro lugares, dois deles na camada HTTP. A matemática
-pura (settled/remaining/status) é interna ao pacote: `Summarize` é a única
-porta de entrada, para ninguém remontar as peças por fora.
+`internal/payables` — total/settled/remaining always recomputed on read from
+`payable_transaction_links`, never persisted. `summary.go` is the only place
+that recomputation lives: `Summarize`/`SummarizeAsOf` (one payable),
+`SummarizeAll` (a set, in two queries — what the HTTP list uses) and
+`RemainingTotal`/`RemainingTotalAsOf`/`RemainingTotalsAsOf` (aggregates). The
+same sequence used to be reimplemented in four places, two of them in the HTTP
+layer. The pure math (settled/remaining/status) is internal to the package:
+`Summarize` is the only entry point, so nobody reassembles the pieces
+externally.
 
-`Summary` carrega os próprios vínculos (`Links []LinkSummary`, com valor
-efetivo e os campos de exibição da transação) em vez de só uma contagem —
-a tela de detalhe formata o que essa passagem já carregou, sem recarregar
-cada vínculo e cada transação atrás dele. Sob `SummarizeAsOf` a lista traz
-exatamente os vínculos que contavam naquele dia, então todo campo do
-`Summary` descreve o mesmo momento.
+`Summary` carries its own links (`Links []LinkSummary`, with effective amount
+and the transaction's display fields) instead of just a count — the detail
+screen formats what that pass already loaded, without reloading every link and
+the transaction behind it. Under `SummarizeAsOf` the list holds exactly the
+links that counted on that day, so every `Summary` field describes the same
+moment.
 
-Inclui também elegibilidade de vínculo (`eligibility.go`, hoje deriva a
-direção de fluxo aceita a partir do `Kind` debt/receivable).
+Also includes link eligibility (`eligibility.go`, which today derives the
+accepted flow direction from the debt/receivable `Kind`).
 
-Os helpers de dívida/vencimento de cartão **saíram daqui** para
-`internal/transactions` (motor de Lançamentos) — ver contexto de
-Transações. A soma "dívida de payables + fatura do cartão" do widget
-"Dívida total" não voltou para cá: ela junta dois motores e é composta no
-handler (`handlePayableTotalOwed`), porque nenhum dos dois é dono do
-número — e é ali também que a moeda BRL fica fixada.
+The card debt / bill due-date helpers **moved out of here** to
+`internal/transactions` (Ledger engine) — see Transactions. The "payables debt
++ card bill" sum of the "Dívida total" widget did not come back here: it joins
+two engines and is composed in the handler (`handlePayableTotalOwed`), because
+neither owns the number — and that is also where the BRL currency is pinned.
 
-## Rotas HTTP
+## HTTP routes
 
 `GET/POST /api/payables`, `GET/PUT/DELETE /api/payables/{id}`,
-`GET /api/payables/total-owed`, `/total-to-receive`,
-`/eligible-transactions`, `POST /api/payables/{id}/links`,
-`DELETE .../links/{linkId}`, mais rotas de cenário escopadas por payable —
-`GET/POST /api/payables/{id}/scenarios` (ver contexto de Cenários).
+`GET /api/payables/total-owed`, `/total-to-receive`, `/eligible-transactions`,
+`POST /api/payables/{id}/links`, `DELETE .../links/{linkId}`, plus
+payable-scoped scenario routes — `GET/POST /api/payables/{id}/scenarios` (see
+Scenarios).
 
 ## Frontend
 
-`/pendencias` — lista combinada dívidas/recebíveis.
-`/pendencias/:id` — detalhe, incluindo timeline e o plano de pagamento
-(cenário) associado.
+`/pendencias` — combined list of debts/receivables.
+`/pendencias/:id` — detail, including the timeline and the associated payment
+plan (scenario).

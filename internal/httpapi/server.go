@@ -56,6 +56,7 @@ func NewServer(db *sql.DB, frontend fs.FS, secrets *settings.Secrets, config aut
 	mux.HandleFunc("PUT /api/auth/password", authentication.password)
 	mux.HandleFunc("PUT /api/auth/config", authentication.updateConfig)
 	mux.HandleFunc("PUT /api/settings/pluggy", handlePluggySettings(db, secrets))
+	mux.HandleFunc("GET /api/settings/quotes", handleGetQuotesSettings(db))
 	mux.HandleFunc("PUT /api/settings/quotes", handleQuotesSettings(db, secrets))
 
 	mux.HandleFunc("GET /api/preferences", handleGetPreferences(db))
@@ -91,6 +92,10 @@ func NewServer(db *sql.DB, frontend fs.FS, secrets *settings.Secrets, config aut
 	mux.HandleFunc("GET /api/statement-imports/accounts", handleStatementAccounts(db))
 	mux.HandleFunc("GET /api/statement-imports/template", handleStatementTemplate())
 
+	mux.HandleFunc("GET /api/accounts/currencies", handleAccountCurrencies)
+	mux.HandleFunc("POST /api/accounts", handleWriteManualAccount(db, true))
+	mux.HandleFunc("PUT /api/accounts/{id}", handleWriteManualAccount(db, false))
+	mux.HandleFunc("POST /api/accounts/{id}/adjustments", handleAdjustManualAccount(db))
 	mux.HandleFunc("GET /api/accounts", handleListAccounts(db))
 	mux.HandleFunc("GET /api/accounts/{id}", handleGetAccount(db))
 	mux.HandleFunc("GET /api/accounts/{id}/cards", handleListAccountCards(db))

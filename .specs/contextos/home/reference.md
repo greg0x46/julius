@@ -1,97 +1,136 @@
 # Home
 
-> Referência viva deste contexto — o que existe e funciona hoje. Mantenha
-> atualizado ao mudar a feature. Motor de domínio por trás: Timeline, a
-> fusão (seção 6 de `.specs/motores-de-dominio.md`).
+> Living reference — what exists and works today. Keep it updated when the
+> feature changes. Engine behind it: Timeline, the merge engine (section 6 of
+> `.specs/motores-de-dominio.md`).
 
-## O que é
+## What it is
 
-O painel inicial: saldo/entradas/saídas do período selecionado, a projeção
-de saldo (hoje, fim do horizonte, menor saldo) e o gasto por categoria. Os
-dois primeiros leem da mesma `Series` do backend, nunca recalculando
-localmente; o que muda entre eles é o campo que cada um consome.
+The landing dashboard: balance/inflows/outflows of the selected period, the
+balance projection (today, end of horizon, lowest balance), the daily spending
+allowance until the end of the month, and spending by category. The first three
+read the backend `Series`; they differ only in which field each consumes. The
+daily allowance is the only computation done on the client (floor, truncation
+and division over the daily balances the server returns): a deliberate
+exception to "Home never recomputes", kept client-side to avoid a new API field
+for one division; moving it to the server is the natural step if another screen
+needs the same number.
 
-Já existiu uma tela de retrospectiva mensal (`/relatorio-financeiro`, com
-quebra mês a mês, drill-down por categoria e comparativos); foi removida
-junto com as agregações do `/api/timeline` que só ela consumia
+A monthly retrospective screen once existed (`/relatorio-financeiro`, with
+month-by-month breakdown, category drill-down and comparisons); it was removed
+together with the `/api/timeline` aggregations only it consumed
 (`monthly_breakdown`, `category_breakdown`, `month_over_month`,
-`year_over_year`, `category_evolution`). Recuperá-las do histórico é o
-caminho se a retrospectiva voltar.
+`year_over_year`, `category_evolution`). Recover them from git history if the
+retrospective comes back.
 
 ## Backend
 
-`internal/timeline` — `Series{Points, Entries, StartingBalance,
-LowestBalance, FirstNegative}`, `Entry` com `CertaintyTier`
-(`realizado`/`confirmado`/`projetado`/`hipotetico`). `BuildSeries` funde **2
-fontes**: Lançamentos e o fluxo unificado de projeção de Cenários
-(`projections.List`) — recorrência deixou de ser fonte paralela e virou
-`Scenario{Kind: recurring}`. Os 4 tiers continuam todos produzidos:
+`internal/timeline` — `Series{Points, Entries, StartingBalance, LowestBalance,
+FirstNegative}`, `Entry` with `CertaintyTier`
+(`realizado`/`confirmado`/`projetado`/`hipotetico`). `BuildSeries` merges **2
+sources**: Ledger entries and the unified scenario projection flow
+(`projections.List`) — recurrence is no longer a parallel source but
+`Scenario{Kind: recurring}`. All 4 tiers are still produced:
 
-- **Realizado** — transação real; um lançamento de cartão vira
-  **Confirmado**, redatado para o vencimento da fatura.
-- **Confirmado** — parcela de plano de payable (dívida real com data
-  planejada).
-- **Projetado** — ocorrência de recorrência **não reconciliada**. Uma
-  ocorrência reconciliada contra uma transação real não gera entry: a
-  transação real já carrega o dinheiro (antes gerava, e o valor era contado
-  duas vezes). Os candidatos que uma ocorrência tenta reconciliar são
-  escopados ao mês dela. Quem decide se a ocorrência está reconciliada é
-  `recurrences.Reconciler`, o mesmo resolvedor que a tela de Recorrências
-  lê — então desconciliar à mão faz a ocorrência voltar a projetar aqui, e
-  conciliar à mão a suprime. Um vínculo manual pode apontar para uma
-  transação do mês vizinho; a ocorrência é suprimida do mesmo jeito (a
-  conciliação é um fato sobre a ocorrência), e a janela estreita de
-  candidatas mantém o efeito limitado a uma virada de mês.
-- **Hipotético** — transação de cenário standalone explicitamente
-  selecionado.
+- **Realized** — a real transaction; a credit-card entry becomes **Confirmed**,
+  re-dated to the bill's due date.
+- **Confirmed** — installment of a payable plan (real debt with a planned date).
+- **Projected** — a **non-reconciled** recurrence occurrence. An occurrence
+  reconciled against a real transaction produces no entry: the real
+  transaction already carries the money (it used to, and the amount was counted
+  twice). The candidates an occurrence tries to reconcile are scoped to its
+  month. `recurrences.Reconciler` decides whether an occurrence is reconciled,
+  the same resolver the Recurrences screen reads — so detaching by hand makes
+  the occurrence project here again, and reconciling by hand suppresses it. A
+  manual link may point to a transaction in the neighboring month; the
+  occurrence is suppressed all the same (reconciliation is a fact about the
+  occurrence), and the narrow candidate window keeps the effect limited to a
+  month boundary.
+- **Hypothetical** — a transaction of an explicitly selected standalone
+  scenario.
 
-O pacote **não conhece Payables**: o vínculo de um plano com um `Payable`
-fica encapsulado em `internal/scenarios` (`Scenario.PayableID`/`Kind`, via
-`ListPlanInstallments`/`SignedAmount`). O saldo âncora vem de
-`transactions.CashOnHand`.
+The package **does not know Payables**: a plan's link to a `Payable` is
+encapsulated in `internal/scenarios` (`Scenario.PayableID`/`Kind`, via
+`ListPlanInstallments`/`SignedAmount`). The anchor balance comes from
+`transactions.CashOnHand`, including derived BRL manual-account balances.
+Foreign account amounts are excluded from both the anchor and real entries;
+there is no implicit FX conversion. Balance adjustments enter the current
+anchor and the dated balance walk, never transaction income/expense totals or
+reporting entries. The walk also reverses adjustments after a historical
+window before reconstructing its days. Posted manual movements are already in
+the anchor even when future-dated; the walk reverses them before applying them
+on their dates, so they affect the curve once. These cash-only inputs respect
+account selection and exclude foreign currencies.
 
-Cada `Entry` carrega duas leituras do mesmo dinheiro. A curva de saldo
-(`Points`) usa `Amount` e inclui todo movimento que moveu caixa — o filtro
-de `BuildSeries` é `MovesCash`, não `Included`. Entradas e saídas do
-período (`TotalsForPeriod`) usam `ReportableAmount`, o valor reportável que
-`transactions.toItem` zera para o que a elegibilidade de totais exclui.
-Assim uma transferência entre contas próprias (categoria de transferência,
-ou a parcela conciliada como aporte/resgate de investimento) desconta o
-saldo mas fica fora de entradas e saídas.
+The reference-day point is the balance at the **end** of that day, not the
+anchor balance: a real transaction from today is already in cash and enters the
+anchor; what is only planned for today (unreconciled recurrence, plan
+installment, scenario) and a card bill due today have not moved money yet, and
+are walked as future entries (`awaitingCash` in `build.go`). A bill due today
+that was already paid cancels out (real bank leg in cash + card leg with the
+same due date cancelling the purchases); bills due before the reference date
+are still treated as paid (`cashEntries`). `StartingBalance` remains the cash
+as of now.
 
-## Rotas HTTP
+Each `Entry` carries two readings of the same money. The balance curve
+(`Points`) uses `Amount` and includes every movement that moved cash — the
+`BuildSeries` filter is `MovesCash`, not `Included`. Period inflows and outflows
+(`TotalsForPeriod`) use `ReportableAmount`, the reportable value that
+`transactions.toItem` zeroes for what totals eligibility excludes. So a
+transfer between own accounts (transfer category, or the installment reconciled
+as an investment contribution/withdrawal) reduces the balance but stays out of
+inflows and outflows.
 
-`GET /api/timeline` — `reference_date`, `from`, `to`, filtros
-(`account_ids`, `category_ids`, `card_numbers`) e `scenario_ids`. Devolve
-`base`, `period_totals`, `simulation` e `scenario_impacts`.
+## HTTP routes
 
-`GET /api/timeline/range` — a janela mais larga que a curva cobre (da
-transação mais antiga à última parcela planejada), usada pela opção "todo o
-período".
+`GET /api/timeline` — `reference_date`, `from`, `to`, filters (`account_ids`,
+`category_ids`, `card_numbers`) and `scenario_ids`. Returns `base`,
+`period_totals`, `simulation` and `scenario_impacts`.
+
+`GET /api/timeline/range` — the widest window the curve covers (from the oldest
+transaction to the last planned installment), used by the "whole period" option.
 
 ## Frontend
 
 Home (`/`):
-- `PeriodBalanceCard` — saldo, entradas e saídas do período
+- `PeriodBalanceCard` — balance, inflows and outflows of the period
   (`period_totals`).
-- `ProjectionSummaryCard` — saldo hoje, saldo no fim do horizonte, menor
-  saldo, mais `ProjectionTimeline`. Horizonte selecionável (fim do mês, 3,
-  6, 12 meses; 3 por padrão).
-- `SpendingByCategoryCard` — gasto por categoria, lido de
-  `GET /api/transactions/category-breakdown` (contexto Transações).
+- `ProjectionSummaryCard` — balance today, balance at end of horizon, lowest
+  balance, plus `ProjectionTimeline`. Selectable horizon (end of month, 3, 6,
+  12 months; 3 by default).
+- `DailyAllowanceCard` — daily spending allowance ("R$ X / dia"), below the
+  period result, as a compact figure (`Money` size `row`; the page hero is only
+  the period result). It runs its own query with `reference_date = from = today`
+  and `to = last day of the month`, independent of the selected period:
+  `base.points` has one point per day, today's first, already net of real
+  entries, plan installments, unreconciled recurrences and bills due today.
+  Value = the minimum, over days k = 1..N (today = 1), of `max(0, balance_k) / k`,
+  truncated to the cent (`presentation/dailyAllowance.ts`): spending d per day
+  leaves `balance_k - k·d` on day k, so that minimum is the largest d that never
+  zeroes the balance — an early dip weighs more than the same dip at month end.
+  Assumes spending at the end of each day. The cent math (`clampBRLAtZero`,
+  `minBRL`, `divideBRLFloor`, which rejects negative values) lives in
+  `presentation/money.ts`. "Today" rolls over at midnight (`useToday`, shared
+  with `ProjectionSummaryCard`, each card with its own timer). The React Query
+  key is by value: the query is shared with another card only if the window is
+  identical, which the default period (start of month) is not. If a background
+  refetch fails it keeps the last value; the error state shows only with no data
+  at all. Nothing is persisted: the value follows any `timeline` invalidation.
+  It is not a reserve nor a budget.
+- `SpendingByCategoryCard` — spending by category, read from
+  `GET /api/transactions/category-breakdown` (Transactions context).
 
-## Notas
+## Notes
 
-**Simulação de cenários não tem entrada na UI hoje.** `GET /api/timeline`
-continua aceitando `scenario_ids` e devolvendo `simulation` e
-`scenario_impacts` — o backend está inteiro —, mas nenhuma tela os
-consome: a Home é deliberadamente só a base ("sem cenários hipotéticos").
-Os componentes que faziam essa leitura (`ScenarioMultiSelect`,
-`BaseVsSimulationCompare`, `ProjectionComposition`) foram removidos por
-estarem mortos; recuperá-los do histórico é o caminho se a simulação
-voltar para a tela.
+**Scenario simulation has no UI entry point today.** `GET /api/timeline` still
+accepts `scenario_ids` and returns `simulation` and `scenario_impacts` — the
+backend is complete — but no screen consumes them: Home is deliberately the base
+only ("no hypothetical scenarios"). The components that did this
+(`ScenarioMultiSelect`, `BaseVsSimulationCompare`, `ProjectionComposition`) were
+removed as dead; recover them from git history if simulation returns to the
+screen.
 
-Pelo mesmo motivo o `CertaintyTier` não aparece mais em lugar nenhum da
-interface — o vocabulário de certeza (princípio 4 de
-`.specs/motores-de-dominio.md`) vive só no backend hoje. O badge que o
-exibia (`EntryOriginBadge`) e o mapa de rótulos que ele usava saíram junto.
+For the same reason `CertaintyTier` appears nowhere in the UI — the certainty
+vocabulary (principle 4 of `.specs/motores-de-dominio.md`) lives only in the
+backend today. The badge that showed it (`EntryOriginBadge`) and its label map
+were removed with it.

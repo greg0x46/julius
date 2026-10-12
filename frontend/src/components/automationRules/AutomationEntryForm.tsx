@@ -193,6 +193,7 @@ export function AutomationEntryForm({
 
   const [actionTypes, setActionTypes] = useState<AutomationActionType[]>(initialActionTypes);
   const [categoryId, setCategoryId] = useState<string | null>(initialCategoryId);
+  const [categoryEdited, setCategoryEdited] = useState(false);
   const [commitmentMode, setCommitmentMode] = useState<"new" | "existing">(
     entry?.linkedCommitment ? "existing" : "new",
   );
@@ -210,6 +211,7 @@ export function AutomationEntryForm({
     if (open) {
       setActionTypes(initialActionTypes);
       setCategoryId(initialCategoryId);
+      setCategoryEdited(false);
       setCommitmentMode(entry?.linkedCommitment ? "existing" : "new");
       setSelectedCommitmentId(entry?.linkedCommitment?.id ?? null);
       setRuleDraft(ruleDraftFrom(entry?.rule ?? null, initialActionTypes));
@@ -219,6 +221,12 @@ export function AutomationEntryForm({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, entry]);
+
+  useEffect(() => {
+    if (!isEditing && actionTypes.includes("reconcile") && !categoryEdited) {
+      setCategoryId(commitmentDraft.categoryId);
+    }
+  }, [isEditing, actionTypes, categoryEdited, commitmentDraft.categoryId]);
 
   const selectExistingCommitment = (commitmentId: string | null) => {
     const selected = commitmentId ? commitments.find((item) => item.id === commitmentId) ?? null : null;
@@ -244,7 +252,8 @@ export function AutomationEntryForm({
       setSelectedCommitmentId(null);
       setCommitmentDraft(blankCommitmentDraft);
     }
-    if (!nextActionTypes.includes("set_category")) {
+    if (!nextActionTypes.includes("set_category") && !nextActionTypes.includes("reconcile")) {
+      setCategoryEdited(false);
       setCategoryId(null);
     }
   };
@@ -346,7 +355,7 @@ export function AutomationEntryForm({
       setError("Selecione ao menos uma ação.");
       return;
     }
-    if (actionTypes.includes("set_category") && categoryId === null) {
+    if (actionTypes.includes("set_category") && !actionTypes.includes("reconcile") && categoryId === null) {
       setError("Selecione uma categoria para aplicar.");
       return;
     }
@@ -402,9 +411,11 @@ export function AutomationEntryForm({
       isActive: ruleDraft.isActive,
       logicOperator: ruleDraft.logicOperator,
       conditions: ruleDraft.conditions.map((condition) => ({ ...condition, value: condition.value.trim() })),
-      actionTypes,
+      actionTypes: actionTypes.includes("reconcile")
+        ? [...actionTypes.filter((type) => type !== "set_category"), ...(categoryId ? ["set_category" as const] : [])]
+        : actionTypes,
       applyRetroactively,
-      categoryId: actionTypes.includes("set_category") ? categoryId : null,
+      categoryId: actionTypes.includes("reconcile") || actionTypes.includes("set_category") ? categoryId : null,
       reconcile,
     });
   };
@@ -465,27 +476,36 @@ export function AutomationEntryForm({
         <Checkbox.Group
           aria-labelledby="automation-actions-label"
           value={actionTypes}
-          options={actionOptions}
+          options={actionOptions.filter((option) => !actionTypes.includes("reconcile") || option.value !== "set_category")}
           disabled={isEditing}
           onChange={(value) => setActionTypesAndReset(value as AutomationActionType[])}
         />
       </FormField>
 
-      {actionTypes.includes("set_category") && (
-        <FormField label="Categoria a aplicar" htmlFor="automation-entry-category">
+      {(actionTypes.includes("set_category") || actionTypes.includes("reconcile")) && (
+        <FormField
+          label={actionTypes.includes("reconcile") ? "Categoria a aplicar (opcional)" : "Categoria a aplicar"}
+          htmlFor="automation-entry-category"
+          hint={actionTypes.includes("reconcile") ? "Aplica a categoria às transações que casarem com as condições. Categorias definidas manualmente são preservadas." : undefined}
+        >
           <Select
             id="automation-entry-category"
+            allowClear={actionTypes.includes("reconcile")}
+            aria-describedby={actionTypes.includes("reconcile") ? "automation-entry-category-hint" : undefined}
             value={categoryId ?? undefined}
             options={ruleCategoryOptions}
             showSearch
             optionFilterProp="label"
-            placeholder="Selecione uma categoria"
-            onChange={(value: string) => setCategoryId(value)}
+            placeholder={actionTypes.includes("reconcile") ? "Sem categoria a aplicar" : "Selecione uma categoria"}
+            onChange={(value: string | undefined) => {
+              setCategoryEdited(true);
+              setCategoryId(value ?? null);
+            }}
           />
         </FormField>
       )}
 
-      {(actionTypes.includes("ignore") || actionTypes.includes("set_category")) && (
+      {(actionTypes.includes("ignore") || (actionTypes.includes("reconcile") ? categoryId !== null : actionTypes.includes("set_category"))) && (
         <Checkbox checked={applyRetroactively} onChange={(event) => setApplyRetroactively(event.target.checked)}>
           Aplicar agora às transações existentes que casarem com as condições
         </Checkbox>

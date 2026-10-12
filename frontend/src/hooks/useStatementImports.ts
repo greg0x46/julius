@@ -25,6 +25,7 @@ interface ConfirmRequest {
   preview: ImportPreview;
   target: { accountId?: string; newAccountName?: string };
   allowPartial: boolean;
+  ambiguousDecisions?: Record<number, "import" | "ignore">;
 }
 
 
@@ -63,8 +64,8 @@ export function useStatementImports() {
   // onSettled, cannot stick even when the screen has moved on mid-request.
   const confirmLock = useRef(false);
   const confirmMutation = useMutation({
-    mutationFn: ({ file, preview, target, allowPartial }: ConfirmRequest) =>
-      confirmStatement(file, preview, target, allowPartial),
+    mutationFn: ({ file, preview, target, allowPartial, ambiguousDecisions }: ConfirmRequest) =>
+      confirmStatement(file, preview, target, allowPartial, ambiguousDecisions),
     onSuccess: () => invalidateAfterStatementImport(queryClient),
     onSettled: () => {
       confirmLock.current = false;

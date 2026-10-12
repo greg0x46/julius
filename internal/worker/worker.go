@@ -1,13 +1,10 @@
-// Package worker ports worker.py's background sync loop: it recovers any
-// sync run an earlier process left in_progress, then repeatedly claims and
-// executes the oldest unclaimed run.
+// Package worker ports worker.py's background sync loop: it repeatedly
+// claims the oldest unclaimed run, keeps a heartbeat on it while executing,
+// and periodically recovers runs whose owner stopped heartbeating.
 //
-// Unlike the reference (designed for several worker processes sharing one
-// Postgres database, hence claim_next_run's SKIP LOCKED and the
-// heartbeat/worker_id staleness split in recovery), this is one worker
-// goroutine inside the single binary that also serves HTTP — there is only
-// ever one claimant, so the claim step is really just "pick the oldest
-// unclaimed run" with no contention to resolve.
+// Several instances may share one Postgres database: a claim is a single
+// conditional UPDATE, so exactly one claimant wins each run, and only the
+// owner can finish it (see syncsvc.ErrClaimLost).
 package worker
 
 import (
@@ -18,6 +15,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -29,55 +27,109 @@ import (
 	"github.com/greg0x46/julius/internal/syncsvc"
 )
 
-// Config mirrors the reference's worker-relevant Settings fields.
+// Config mirrors the reference's worker-relevant Settings fields. Zero
+// durations use the defaults (syncsvc.DefaultHeartbeatInterval,
+// syncsvc.DefaultLeaseTimeout).
 type Config struct {
 	PollInterval          time.Duration
+	HeartbeatInterval     time.Duration
+	LeaseTimeout          time.Duration
 	Pluggy                pluggy.Config
 	OnTransactionUpserted syncsvc.TransactionUpsertedHook
 }
 
-// WorkerID identifies this process for sync_runs.worker_id, kept even
-// though nothing else contends for a claim, so a run's row still records
-// which process executed it.
+func (c Config) withDefaults() Config {
+	if c.PollInterval <= 0 {
+		c.PollInterval = time.Second
+	}
+	if c.HeartbeatInterval <= 0 {
+		c.HeartbeatInterval = syncsvc.DefaultHeartbeatInterval
+	}
+	if c.LeaseTimeout <= 0 {
+		c.LeaseTimeout = syncsvc.DefaultLeaseTimeout
+	}
+	return c
+}
+
+// WorkerID identifies this process for sync_runs.worker_id, the claim owner
+// checked by heartbeats and terminal updates.
 func WorkerID() string {
 	host, _ := os.Hostname()
 	return fmt.Sprintf("%s:%d:%s", host, os.Getpid(), uuid.NewString()[:8])
 }
 
-// ClaimNextRun mirrors claim_next_run.
+const claimAttempts = 3
+
+// ClaimNextRun claims the oldest unclaimed Pluggy run with one conditional
+// UPDATE. A claimant that loses the row to a concurrent one gets zero rows
+// (Postgres re-checks worker_id IS NULL once the winner commits), so it
+// retries a few times to take the next pending run instead of idling.
 func ClaimNextRun(ctx context.Context, conn *sql.DB, workerID string) (syncRunID, sourceID string, ok bool, err error) {
-	tx, err := conn.BeginTx(ctx, nil)
-	if err != nil {
-		return "", "", false, err
+	for attempt := 0; attempt < claimAttempts; attempt++ {
+		err = conn.QueryRowContext(ctx, `
+			UPDATE sync_runs SET worker_id = ?, heartbeat_at = ?
+			WHERE id = (
+				SELECT sr.id FROM sync_runs sr
+				JOIN data_sources ds ON ds.id = sr.source_id
+				WHERE sr.status = 'in_progress' AND sr.worker_id IS NULL
+				  AND sr.run_type = 'sync' AND ds.provider = 'pluggy'
+				ORDER BY sr.started_at, sr.id LIMIT 1
+			) AND worker_id IS NULL AND status = 'in_progress'
+			RETURNING id, source_id`,
+			workerID, db.FormatTime(time.Now()),
+		).Scan(&syncRunID, &sourceID)
+		if err == nil {
+			log.Printf("sync_run_claimed run_id=%s worker_id=%s", syncRunID, workerID)
+			return syncRunID, sourceID, true, nil
+		}
+		if !errors.Is(err, sql.ErrNoRows) {
+			return "", "", false, err
+		}
+		var pending bool
+		if err := conn.QueryRowContext(ctx, `
+			SELECT EXISTS (SELECT 1 FROM sync_runs sr
+				JOIN data_sources ds ON ds.id = sr.source_id
+				WHERE sr.status = 'in_progress' AND sr.worker_id IS NULL
+				  AND sr.run_type = 'sync' AND ds.provider = 'pluggy')`,
+		).Scan(&pending); err != nil {
+			return "", "", false, err
+		}
+		if !pending {
+			break
+		}
 	}
-	defer tx.Rollback()
+	return "", "", false, nil
+}
 
-	err = tx.QueryRowContext(ctx, `
-		SELECT sr.id, sr.source_id FROM sync_runs sr
-		JOIN data_sources ds ON ds.id = sr.source_id
-		WHERE sr.status = 'in_progress' AND sr.worker_id IS NULL
-		  AND sr.run_type = 'sync' AND ds.provider = 'pluggy'
-		ORDER BY sr.started_at, sr.id LIMIT 1`,
-	).Scan(&syncRunID, &sourceID)
-	if errors.Is(err, sql.ErrNoRows) {
-		return "", "", false, nil
+// heartbeat refreshes heartbeat_at on the owned run every interval until ctx
+// ends. When the update matches no row the claim was lost (recovered or
+// taken over): onLost is called once and heartbeat returns.
+func heartbeat(ctx context.Context, conn *sql.DB, runID, workerID string, interval time.Duration, onLost func()) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+		result, err := conn.ExecContext(ctx,
+			`UPDATE sync_runs SET heartbeat_at = ? WHERE id = ? AND worker_id = ? AND status = 'in_progress'`,
+			db.FormatTime(time.Now()), runID, workerID)
+		if err != nil {
+			if ctx.Err() == nil {
+				log.Printf("sync_run_heartbeat_failed run_id=%s: %v", runID, err)
+			}
+			continue
+		}
+		if affected, err := result.RowsAffected(); err == nil && affected == 0 {
+			if ctx.Err() == nil {
+				log.Printf("sync_run_claim_lost run_id=%s worker_id=%s", runID, workerID)
+				onLost()
+			}
+			return
+		}
 	}
-	if err != nil {
-		return "", "", false, err
-	}
-
-	now := db.FormatTime(time.Now())
-	if _, err := tx.ExecContext(ctx,
-		`UPDATE sync_runs SET worker_id = ?, heartbeat_at = ? WHERE id = ?`,
-		workerID, now, syncRunID,
-	); err != nil {
-		return "", "", false, err
-	}
-	if err := tx.Commit(); err != nil {
-		return "", "", false, err
-	}
-	log.Printf("sync_run_claimed run_id=%s worker_id=%s", syncRunID, workerID)
-	return syncRunID, sourceID, true, nil
 }
 
 // pluggyCredentials reads the decrypted Pluggy API credentials from settings;
@@ -103,19 +155,28 @@ func pluggyCredentials(ctx context.Context, conn *sql.DB, secrets *settings.Secr
 	return clientID, clientSecret, true
 }
 
-// ProcessClaim mirrors process_claim (minus the heartbeat-maintaining
-// goroutine, which only matters for detecting a worker that's still alive
-// but stuck — not needed here since a hung sync in this process would hang
-// the whole binary, which is its own, more visible, failure mode).
-func ProcessClaim(ctx context.Context, conn *sql.DB, secrets *settings.Secrets, cfg Config, syncRunID, sourceID string) error {
-	clientID, clientSecret, ok := pluggyCredentials(ctx, conn, secrets)
+// ProcessClaim mirrors process_claim: it executes a run workerID claimed,
+// heartbeating it meanwhile, and cancels the execution if the claim is lost.
+func ProcessClaim(ctx context.Context, conn *sql.DB, secrets *settings.Secrets, cfg Config, workerID, syncRunID, sourceID string) error {
+	cfg = cfg.withDefaults()
+	runCtx, cancel := context.WithCancel(ctx)
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		heartbeat(runCtx, conn, syncRunID, workerID, cfg.HeartbeatInterval, cancel)
+	}()
+	defer wg.Wait()
+	defer cancel()
+
+	clientID, clientSecret, ok := pluggyCredentials(runCtx, conn, secrets)
 	if !ok {
 		return fmt.Errorf("pluggy credentials unavailable")
 	}
 	// The item comes from the connection this run was created for, not from
 	// global config: with several connections registered, reading a single
 	// configured item id here would sync one bank's data into another's run.
-	source, err := datasources.Get(ctx, conn, sourceID)
+	source, err := datasources.Get(runCtx, conn, sourceID)
 	if err != nil {
 		return fmt.Errorf("resolve data source %s: %w", sourceID, err)
 	}
@@ -127,37 +188,55 @@ func ProcessClaim(ctx context.Context, conn *sql.DB, secrets *settings.Secrets, 
 	// it has no way to see that. Check here, before syncing an item the user
 	// no longer wants synced.
 	if !source.IsActive {
-		return syncsvc.FailRun(ctx, conn, syncRunID, "connection_inactive")
+		return syncsvc.FailRun(runCtx, conn, syncRunID, workerID, "connection_inactive")
 	}
 	pluggyConfig := cfg.Pluggy
 	pluggyConfig.ClientID = clientID
 	pluggyConfig.ClientSecret = clientSecret
 	pluggyConfig.ItemID = source.ExternalItemID
 
-	writer := &syncsvc.RawImportWriter{DB: conn, SyncRunID: syncRunID, SourceID: sourceID}
+	writer := &syncsvc.RawImportWriter{DB: conn, SyncRunID: syncRunID, SourceID: sourceID, WorkerID: workerID}
 	adapter := pluggy.NewAdapter(pluggyConfig, writer, &http.Client{Timeout: pluggyConfig.ConnectTimeout + pluggyConfig.ReadTimeout})
 	service := &syncsvc.Service{
 		DB: conn, Provider: adapter, SyncRunID: syncRunID, SourceID: sourceID,
-		OnTransactionUpserted: cfg.OnTransactionUpserted,
+		OnTransactionUpserted: cfg.OnTransactionUpserted, WorkerID: workerID,
 	}
-	return service.Execute(ctx)
+	return service.Execute(runCtx)
 }
 
-// Run mirrors run_worker: recovers stale runs once at startup, then loops
-// claiming and executing runs until ctx is cancelled.
-func Run(ctx context.Context, conn *sql.DB, secrets *settings.Secrets, cfg Config) {
-	if cfg.PollInterval <= 0 {
-		cfg.PollInterval = time.Second
-	}
-	if recovered, err := syncsvc.RecoverStaleRuns(ctx, conn, time.Now()); err != nil {
+func recoverStale(ctx context.Context, conn *sql.DB, lease time.Duration) {
+	recovered, err := syncsvc.RecoverStaleRuns(ctx, conn, time.Now(), lease)
+	if err != nil {
 		log.Printf("recover_stale_runs failed: %v", err)
-	} else {
-		for _, id := range recovered {
-			log.Printf("sync_run_recovered run_id=%s", id)
-		}
 	}
+	for _, id := range recovered {
+		log.Printf("sync_run_recovered run_id=%s", id)
+	}
+}
 
+// Run mirrors run_worker: loops claiming and executing runs until ctx is
+// cancelled. Lease recovery runs independently so a long sync cannot delay it.
+func Run(ctx context.Context, conn *sql.DB, secrets *settings.Secrets, cfg Config) {
+	cfg = cfg.withDefaults()
 	workerID := WorkerID()
+	recoveryEvery := cfg.LeaseTimeout / 2
+	recoverStale(ctx, conn, cfg.LeaseTimeout)
+	recoveryDone := make(chan struct{})
+	go func() {
+		defer close(recoveryDone)
+		ticker := time.NewTicker(recoveryEvery)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				recoverStale(ctx, conn, cfg.LeaseTimeout)
+			}
+		}
+	}()
+	defer func() { <-recoveryDone }()
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -166,10 +245,9 @@ func Run(ctx context.Context, conn *sql.DB, secrets *settings.Secrets, cfg Confi
 		}
 
 		// Check credentials before claiming: a run claimed here but blocked
-		// before credentials exist would sit forever with worker_id set, since
-		// ClaimNextRun only looks at unclaimed rows. Waiting to claim until
-		// we can actually proceed keeps every claimed run either running or
-		// finished.
+		// before credentials exist would sit claimed until its lease expired.
+		// Waiting to claim until we can actually proceed keeps every claimed
+		// run either running or finished.
 		if _, _, ok := pluggyCredentials(ctx, conn, secrets); !ok {
 			sleep(ctx, cfg.PollInterval)
 			continue
@@ -185,7 +263,7 @@ func Run(ctx context.Context, conn *sql.DB, secrets *settings.Secrets, cfg Confi
 			sleep(ctx, cfg.PollInterval)
 			continue
 		}
-		if err := ProcessClaim(ctx, conn, secrets, cfg, syncRunID, sourceID); err != nil {
+		if err := ProcessClaim(ctx, conn, secrets, cfg, workerID, syncRunID, sourceID); err != nil {
 			log.Printf("sync_run_processing_failed run_id=%s: %v", syncRunID, err)
 		}
 	}

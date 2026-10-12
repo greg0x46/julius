@@ -1,7 +1,10 @@
 package httpapi_test
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"io"
 	"net/http"
 	"testing"
 
@@ -11,6 +14,117 @@ import (
 	"github.com/greg0x46/julius/internal/categories"
 	"github.com/greg0x46/julius/internal/money"
 )
+
+func TestCreateManualTransactionIdempotentRetry(t *testing.T) {
+	srv, conn := newTestServer(t)
+	seed := insertAccount(t, conn, "BANK", "Conta corrente", nil, nil)
+	key := uuid.NewString()
+	create := map[string]any{
+		"account_id": seed.accountID, "description": "Feira", "amount": "-42.50", "occurred_at": "2026-03-01",
+	}
+	request := func(body map[string]any, key string) *http.Response {
+		t.Helper()
+		data, err := json.Marshal(body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		req, err := http.NewRequest(http.MethodPost, srv.URL+"/api/transactions", bytes.NewReader(data))
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Origin", testOrigin)
+		req.Header.Set("X-Julius-Request", "1")
+		req.Header.Set("Idempotency-Key", key)
+		if token, ok := fixtureTokens.Load(req.URL.Host); ok {
+			req.AddCookie(&http.Cookie{Name: "julius_session", Value: token.(string)})
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return resp
+	}
+	first := request(create, key)
+	if first.StatusCode != 201 {
+		body, _ := io.ReadAll(first.Body)
+		t.Fatalf("first status %d: %s", first.StatusCode, body)
+	}
+	var original map[string]any
+	decodeJSON(t, first, &original)
+	retry := request(create, key)
+	if retry.StatusCode != 201 {
+		body, _ := io.ReadAll(retry.Body)
+		t.Fatalf("retry status %d: %s", retry.StatusCode, body)
+	}
+	var repeated map[string]any
+	decodeJSON(t, retry, &repeated)
+	if repeated["id"] != original["id"] {
+		t.Fatalf("retry returned new ID %v instead of %v", repeated["id"], original["id"])
+	}
+	var count int
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM financial_transactions WHERE description = 'Feira'`).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Fatalf("transactions = %d, want one", count)
+	}
+
+	create["amount"] = "-43.00"
+	conflict := request(create, key)
+	if conflict.StatusCode != 409 {
+		body, _ := io.ReadAll(conflict.Body)
+		t.Fatalf("different payload status %d: %s", conflict.StatusCode, body)
+	}
+	conflict.Body.Close()
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM financial_transactions WHERE description = 'Feira'`).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 1 {
+		t.Fatalf("transactions after conflict = %d, want one", count)
+	}
+}
+
+func TestCreateManualIdempotencyKeyRollsBackOnFailure(t *testing.T) {
+	srv, conn := newTestServer(t)
+	seed := insertAccount(t, conn, "BANK", "Conta corrente", nil, nil)
+	key := uuid.NewString()
+	body := map[string]any{"account_id": seed.accountID, "description": "Repetir", "amount": "1", "occurred_at": "2026-03-01", "category_id": uuid.NewString()}
+	post := func() *http.Response {
+		data, _ := json.Marshal(body)
+		req, _ := http.NewRequest(http.MethodPost, srv.URL+"/api/transactions", bytes.NewReader(data))
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Origin", testOrigin)
+		req.Header.Set("X-Julius-Request", "1")
+		req.Header.Set("Idempotency-Key", key)
+		if token, ok := fixtureTokens.Load(req.URL.Host); ok {
+			req.AddCookie(&http.Cookie{Name: "julius_session", Value: token.(string)})
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return resp
+	}
+	failed := post()
+	failed.Body.Close()
+	if failed.StatusCode != 422 {
+		t.Fatalf("invalid category status = %d", failed.StatusCode)
+	}
+	var count int
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM manual_transaction_idempotency WHERE idempotency_key = ?`, key).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Fatalf("failed attempt reserved key")
+	}
+	delete(body, "category_id")
+	retry := post()
+	retry.Body.Close()
+	if retry.StatusCode != 201 {
+		t.Fatalf("corrected retry status = %d", retry.StatusCode)
+	}
+}
 
 // A rule whose target category was later deactivated is a server-side problem:
 // the client never sent a category, so it must not be told its input is invalid.

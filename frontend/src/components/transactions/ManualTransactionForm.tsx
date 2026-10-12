@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 
 import type { Account, Category, ManualTransactionWrite } from "../../api/contracts";
 import { categoryKindLabel, renderCategoryIcon } from "../../presentation/categoryLabels";
+import { useAccounts } from "../../hooks/useAccounts";
 import { AccountSelect } from "../forms/AccountSelect";
 import { FormDrawer } from "../forms/FormDrawer";
 import { FormField } from "../forms/FormField";
@@ -76,6 +77,8 @@ export function ManualTransactionFields({
   /** The validation problem of the last submit: marks its field and says why under it. */
   issue?: ManualIssue | null;
 }) {
+  const { accounts } = useAccounts();
+  const account = accounts.find((item) => item.id === draft.accountId);
   useFocusIssue(issue);
   const messageFor = (field: ManualField) => (issue?.field === field ? issue.message : undefined);
   const invalid = (field: ManualField) => (issue?.field === field ? true : undefined);
@@ -88,7 +91,7 @@ export function ManualTransactionFields({
         label="Conta"
         htmlFor={manualFieldId("account")}
         error={messageFor("account")}
-        hint="Não altera o saldo da conta, que vem do banco: só entra no extrato e nos totais."
+        hint={account?.origin === "manual" ? "Transações efetivadas alteram o saldo desta conta na moeda selecionada." : "Não altera o saldo da conta, que vem do banco: só entra no extrato e nos totais."}
       >
         <AccountSelect
           id={manualFieldId("account")}
@@ -132,6 +135,7 @@ export function ManualTransactionFields({
 
       <FormField label="Valor" htmlFor={manualFieldId("amount")} error={messageFor("amount")}>
         <MoneyInput
+          currencyCode={account?.currency_code ?? "BRL"}
           id={manualFieldId("amount")}
           aria-invalid={invalid("amount")}
           aria-describedby={invalid("amount") ? `${manualFieldId("amount")}-error` : undefined}
@@ -194,7 +198,7 @@ export function ManualTransactionForm({
   onSubmit: (write: ManualTransactionWrite) => void;
   onCancel: () => void;
 }) {
-  const defaultAccountId = accounts[0]?.id ?? "";
+  const defaultAccountId = accounts.find((account) => !account.archived_at)?.id ?? "";
   const [draft, setDraft] = useState<ManualDraft>(() => blankManualDraft(defaultAccountId));
   const [issue, setIssue] = useState<ManualIssue | null>(null);
 

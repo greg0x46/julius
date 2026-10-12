@@ -1,7 +1,10 @@
 import react from "@vitejs/plugin-react";
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
 
 const apiProxyTarget = process.env.JULIUS_DEV_API_URL ?? "http://localhost:8000";
+
+// .ts tests that need the DOM; every other .ts test runs without jsdom.
+const domTsTests = ["src/api/statementImports.test.ts"];
 
 export default defineConfig({
   cacheDir: ".vite-cache",
@@ -17,14 +20,32 @@ export default defineConfig({
       ? [process.env.JULIUS_DEV_ALLOWED_HOST]
       : undefined,
   },
+  // Project split and worker count are explained in TESTING.md.
   test: {
-    environment: "jsdom",
-    include: ["src/**/*.test.{ts,tsx}"],
-    setupFiles: "./src/test/setup.ts",
     restoreMocks: true,
     clearMocks: true,
-    maxWorkers: 1,
+    maxWorkers: 2,
     pool: "threads",
     testTimeout: 15_000,
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: "dom",
+          environment: "jsdom",
+          include: ["src/**/*.test.tsx", ...domTsTests],
+          setupFiles: "./src/test/setup.dom.ts",
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: "node",
+          environment: "node",
+          include: ["src/**/*.test.ts"],
+          exclude: [...configDefaults.exclude, ...domTsTests],
+        },
+      },
+    ],
   },
 });

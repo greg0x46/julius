@@ -44,7 +44,7 @@ export function AccountSelect({
 
   const options = useMemo(
     () =>
-      accounts.map((account) => ({
+      accounts.filter((account) => !account.archived_at).map((account) => ({
         value: account.id,
         label: accountDisplayName(account),
         secondary: secondaryLine(account),

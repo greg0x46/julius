@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/shopspring/decimal"
@@ -745,8 +746,12 @@ func writeManualTransactionError(w http.ResponseWriter, err error, explicitCateg
 		transactionNotFoundProblem(w)
 	case errors.Is(err, transactions.ErrNotManual):
 		writeProblem(w, 409, "transaction-not-manual", "Transação não é manual", notManualDetail)
+	case errors.Is(err, transactions.ErrAccountArchived):
+		writeProblem(w, 409, "account-archived", "Conta arquivada", "Reative a conta antes de registrar ou editar movimentações.")
 	case errors.Is(err, transactions.ErrAccountNotFound):
 		accountNotFoundProblem(w)
+	case errors.Is(err, ledger.ErrIdempotencyConflict):
+		writeProblem(w, 409, "idempotency-key-conflict", "Chave de repetição já utilizada", "Use uma nova chave para uma transação diferente.")
 	case explicitCategory && errors.Is(err, categories.ErrCategoryInvalid):
 		invalidCategoryProblem(w)
 	default:
@@ -759,6 +764,11 @@ func writeManualTransactionError(w http.ResponseWriter, err error, explicitCateg
 // category and automation ordering lives in ledger.Service.
 func handleCreateManualTransaction(svc *ledger.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		keys := r.Header.Values("Idempotency-Key")
+		if len(keys) > 1 || (len(keys) == 1 && !validManualIdempotencyKey(keys[0])) {
+			writeProblem(w, 422, "invalid-idempotency-key", "Chave de repetição inválida", "Use de 8 a 128 caracteres ASCII sem espaços.")
+			return
+		}
 		var req manualTransactionRequest
 		if err := decodeStrict(r, &req); err != nil {
 			invalidManualTransactionProblem(w)
@@ -769,13 +779,30 @@ func handleCreateManualTransaction(svc *ledger.Service) http.HandlerFunc {
 			invalidManualTransactionProblem(w)
 			return
 		}
-		item, err := svc.CreateManual(r.Context(), input, req.CategoryID)
+		key := ""
+		if len(keys) == 1 {
+			key = keys[0]
+		}
+		// The current auth model has exactly one owner (auth_owner.id = 1).
+		item, err := svc.CreateManualIdempotent(r.Context(), input, req.CategoryID, key, 1)
 		if err != nil {
 			writeManualTransactionError(w, err, req.CategoryID != nil, "", "")
 			return
 		}
 		writeJSON(w, http.StatusCreated, toItemDTO(item))
 	}
+}
+
+func validManualIdempotencyKey(key string) bool {
+	if len(key) < 8 || len(key) > 128 || strings.ContainsAny(key, " \t\r\n,") {
+		return false
+	}
+	for _, b := range []byte(key) {
+		if b < '!' || b > '~' {
+			return false
+		}
+	}
+	return true
 }
 
 // handleUpdateManualTransaction edits a lançamento manual's core fields and,

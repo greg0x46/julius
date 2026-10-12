@@ -70,6 +70,30 @@ export function subtractBRL(minuend: string, subtrahend: string): string {
   return fromCents(toCents(minuend) - toCents(subtrahend));
 }
 
+/** The amount itself, or "0.00" when it is negative; "-0.00" counts as zero. */
+export function clampBRLAtZero(value: string): string {
+  const cents = toCents(value);
+  return fromCents(cents < 0n ? 0n : cents);
+}
+
+/** The smallest of one or more amounts. */
+export function minBRL(values: string[]): string {
+  if (values.length === 0) throw new RangeError("minBRL needs at least one value");
+  return fromCents(values.map(toCents).reduce((min, cents) => (cents < min ? cents : min)));
+}
+
+/**
+ * Splits a non-negative amount into `divisor` shares, dropping the leftover
+ * fraction of a cent. BigInt division truncates toward zero, which is only a
+ * floor for non-negative amounts, so a negative one is rejected.
+ */
+export function divideBRLFloor(value: string, divisor: number): string {
+  if (!Number.isInteger(divisor) || divisor <= 0) throw new RangeError("divisor must be a positive integer");
+  const cents = toCents(value);
+  if (cents < 0n) throw new RangeError("value must not be negative");
+  return fromCents(cents / BigInt(divisor));
+}
+
 /** How a figure reads: individual transaction, net result, stock balance, or plain. */
 export type MoneyToneKind = "flow" | "result" | "balance" | "neutral";
 

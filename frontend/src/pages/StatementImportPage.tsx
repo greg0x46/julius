@@ -27,6 +27,7 @@ export function StatementImportPage() {
   const [accountId, setAccountId] = useState<string>();
   const [newAccountName, setNewAccountName] = useState("");
   const [allowPartial, setAllowPartial] = useState(false);
+  const [ambiguousDecisions, setAmbiguousDecisions] = useState<Record<number, "import" | "ignore">>({});
   const resultRef = useRef<HTMLDivElement>(null);
 
   const preview = previewing.data;
@@ -48,6 +49,7 @@ export function StatementImportPage() {
 
   function loadPreview(selectedFile: File, selectedAccountId?: string) {
     setAllowPartial(false);
+    setAmbiguousDecisions({});
     previewing.request(selectedFile, selectedAccountId);
   }
 
@@ -67,19 +69,22 @@ export function StatementImportPage() {
   function confirm() {
     if (!file || !preview) return;
     confirming.submit({
-      file, preview, allowPartial,
+      file, preview, allowPartial, ambiguousDecisions,
       target: targetKind === "existing" ? { accountId } : { newAccountName: newAccountName.trim() },
     });
   }
 
   const targetReady = targetKind === "new" ? newAccountName.trim().length > 0 : Boolean(accountId);
+  const ambiguousRows = preview?.rows.filter((row) => row.status === "ambiguous") ?? [];
+  const selectedNew = (preview?.counts.new ?? 0) + ambiguousRows.filter((row) => ambiguousDecisions[row.line_number] === "import").length;
   const canConfirm = file !== null && preview !== null && targetReady && !busy && !result &&
-    (preview.counts.invalid === 0 || allowPartial) && !(targetKind === "new" && preview.counts.new === 0);
+    ambiguousRows.every((row) => Boolean(ambiguousDecisions[row.line_number])) &&
+    (preview.counts.invalid === 0 || allowPartial) && !(targetKind === "new" && selectedNew === 0);
 
   // Only a preview still waiting for its confirmation has an action to offer.
   const confirmAction = preview && !result ? (
     <Button type="primary" loading={busy} disabled={!canConfirm} onClick={confirm}>
-      {preview.counts.new === 0 ? "Registrar reenvio sem novas transações" : `Importar ${preview.counts.new} ${preview.counts.new === 1 ? "transação" : "transações"}`}
+      {selectedNew === 0 ? "Registrar reenvio sem novas transações" : `Importar ${selectedNew} ${selectedNew === 1 ? "transação" : "transações"}`}
     </Button>
   ) : undefined;
 
@@ -149,8 +154,9 @@ export function StatementImportPage() {
             <div className="statement-import-review-notes">
               {!targetReady && <Typography.Text type="secondary">Informe a conta para confirmar.</Typography.Text>}
               {targetKind === "new" && preview.counts.new === 0 && <Alert type="info" showIcon message="Não há transações válidas para criar esta conta." />}
-              {preview.counts.new === 0 && preview.counts.duplicate > 0 &&
+              {preview.counts.new === 0 && preview.counts.duplicate > 0 && ambiguousRows.length === 0 &&
                 <Alert type="info" showIcon message="Este extrato já foi importado nesta conta. Nenhuma transação nova será criada." />}
+              {ambiguousRows.length > 0 && <Alert type="warning" showIcon message="Revise as movimentações iguais às de outro arquivo e escolha importar ou ignorar cada uma." />}
               {preview.warnings.map((warning, index) => <Alert key={index} type="warning" showIcon message={warning} />)}
               {preview.counts.invalid > 0 && <Alert type="warning" showIcon
                 message={`${preview.counts.invalid} linha(s) inválida(s). Corrija o arquivo ou escolha importar apenas as válidas.`} />}
@@ -158,7 +164,8 @@ export function StatementImportPage() {
                 Importar somente as linhas válidas; as inválidas serão ignoradas
               </Checkbox>}
             </div>
-            <StatementPreviewRows rows={preview.rows} />
+            <StatementPreviewRows rows={preview.rows} ambiguousDecisions={ambiguousDecisions}
+              onAmbiguousDecision={(line, decision) => setAmbiguousDecisions((current) => ({ ...current, [line]: decision }))} />
           </Section>
         )}
 
