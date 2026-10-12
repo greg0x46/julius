@@ -26,7 +26,7 @@ change.
 
 ```
 cmd/julius/                entry point + subcommands (auth, seed)
-cmd/migrate-to-postgres/   one-shot SQLite → Postgres copier
+cmd/migrate-legacy/        one-shot legacy SQLite → SQLite/Postgres converter
 internal/
   db/                      connections/pool, goose migrations (sqlite/ and postgres/), dbtest/
   httpapi/                 handlers, routing (server.go), DTOs, Problem errors

@@ -44,7 +44,12 @@ password-derivation functions in settings exist only for migration and tests.
 Owner/session timestamps use UTC text in SQLite and native `TIMESTAMPTZ` in
 Postgres, retaining second-level lifetime and idle-timeout semantics. Database
 opening refuses the old schema generation before any automatic migration; a
-separate legacy conversion tool is not implemented.
+`cmd/migrate-legacy` converts a final legacy SQLite backup into a separate fresh
+SQLite/Postgres target. Unix-second owner/session timestamps become UTC instants
+without extending sessions; encrypted settings, hashes and revisions copy
+unchanged with the same external master key. Dry-run rolls back imported data
+and reports row errors; count and native account balance checks gate completion.
+See README "Database schema generations" for cutover and retry steps.
 
 The server refuses pending configuration or an invalid key. A lost key cannot
 be recovered with the password; key rotation is not implemented. Instructions
