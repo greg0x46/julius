@@ -161,24 +161,42 @@ an invalid key.
 ### Publish and install a version
 
 Changes flow `agent/*` or feature branch → **`stage`** → release PR → **`main`**
-→ GitHub release:
+→ published release → deployment:
 
 1. A pull request into `stage` is squashed into one Conventional Commit whose
    subject ends in `(#PR)`. CI runs on every push and pull request for `stage`
    and `main`, but `stage` never publishes anything. The `stage` build is what
    the development instance runs, so each change is validated there by hand,
    with the *How to validate in dev* steps of its pull request.
-2. When `stage` is ready, a release candidate `release/vX.Y.Z` is cut from one
-   exact `stage` commit. Its only extra commit adds the `vX.Y.Z` section to
-   [`CHANGELOG.md`](CHANGELOG.md) (`scripts/update-changelog.sh`). A pull
-   request from it into `main` is merged with a **merge commit**, never squash
-   or rebase, so the individual commits stay reachable.
-3. A push to `main` that passes CI publishes a GitHub release with the
+2. A release candidate is cut automatically, not by hand. When Backend (Go) and
+   Frontend (Node) have passed on the exact `stage` head and there is something
+   to release, `release/vX.Y.Z` is cut from that commit. Its only extra commit
+   adds the `vX.Y.Z` section to [`CHANGELOG.md`](CHANGELOG.md)
+   (`scripts/update-changelog.sh`; the only place the changelog is written), and
+   a pull request `chore(release): vX.Y.Z` into `main` lists the original pull
+   requests and `Closes #N` for their issues. The candidate is frozen: pull
+   requests squashed into `stage` afterwards wait for the next release. If
+   `main` moves first, the candidate is closed, its branch is kept as
+   `stale/release-vX.Y.Z-<sha7>` and a new one is cut.
+3. Only the owner merges that pull request, with a **merge commit**, never
+   squash or rebase, so the individual commits stay reachable. The ruleset on
+   `main` allows no other method; it also requires a pull request, the
+   up-to-date Backend (Go) and Frontend (Node) checks and resolved
+   conversations, and forbids force-push and deletion. Merging closes the
+   issues. GitHub deletes `release/vX.Y.Z` on merge; the tag is the lasting
+   reference.
+4. A push to `main` that passes CI publishes a GitHub release with the
    `julius-linux-amd64` binary, `SHA256SUMS` and the provenance attestation
    (`julius-linux-amd64.sigstore.json`), as long as there is something to
    release. The release notes are the committed `CHANGELOG.md` section of that
    version; if the section is missing or is not the newest, the release job
-   fails instead of publishing. Afterwards `main` is merged back into `stage`.
+   fails instead of publishing. **Published is not deployed:** installing the
+   release is a separate step of your environment, and a release only counts
+   as deployed when that step reports it.
+5. Once the tag and the GitHub release exist, `main` is merged back into
+   `stage` (`chore(release): merge main into stage after vX.Y.Z`, a plain push,
+   no rebase or force-push), keeping the pull requests squashed into `stage`
+   in the meantime. Until `main` is inside `stage` no new candidate is cut.
 
 The version follows SemVer from the
 [Conventional Commits](https://www.conventionalcommits.org/) since the last
