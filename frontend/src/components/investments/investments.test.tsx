@@ -42,6 +42,7 @@ const position: InvestmentPosition = {
   asset_type: "Tesouro",
   quantity: "3.2",
   average_cost: "10000.00",
+  total_cost: "32000.00",
   current_value: "44180.21",
   current_unit_price: null,
   valued_on: "2026-09-30",

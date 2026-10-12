@@ -110,5 +110,8 @@ describe("shared Go/TypeScript financial contracts", () => {
     expect(positions[0].valued_on).toBe("2026-07-30");
     expect(positions.at(-1)?.average_cost).toBeNull();
     expectTypeOf(positions[0].average_cost).toEqualTypeOf<string | null>();
+    expect(positions[0].total_cost).toBe("9007199254740993.123456789012345678");
+    expect(positions.at(-1)?.total_cost).toBeNull();
+    expect(() => parseInvestmentPositionList({ items: [{ ...positions[0], total_cost: 100 }] })).toThrow();
   });
 });

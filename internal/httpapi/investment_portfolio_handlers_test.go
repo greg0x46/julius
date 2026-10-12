@@ -28,7 +28,7 @@ var (
 	}
 	investmentPositionResponseKeys = []string{
 		"id", "source", "account_id", "asset_id", "portfolio_id", "name", "ticker", "asset_type",
-		"quantity", "average_cost", "current_value", "current_unit_price", "valued_on",
+		"quantity", "average_cost", "total_cost", "current_value", "current_unit_price", "valued_on",
 		"currency_code", "closed", "linked_investment_id", "notes", "valuation_basis",
 	}
 	investmentOperationResponseKeys = []string{
@@ -325,6 +325,7 @@ func TestInvestmentPositionLifecycleOverHTTP(t *testing.T) {
 	}
 	assertMoney(t, "quantity", created["quantity"], "10")
 	assertMoney(t, "average_cost", created["average_cost"], "9.50")
+	assertMoney(t, "total_cost", created["total_cost"], "95.00")
 	assertMoney(t, "current_value", created["current_value"], "95.00")
 	if created["valuation_basis"] != "cost_basis" {
 		t.Errorf("valuation_basis = %v, want cost_basis without a valuation", created["valuation_basis"])
@@ -895,6 +896,7 @@ func TestInvestmentValuesCarryNoDecimalTailOverHTTP(t *testing.T) {
 		"initial_quantity": "3", "initial_value": "100", "occurred_on": "2026-01-05",
 	}, http.StatusCreated)
 	exact("current_value at cost", thirds["current_value"], "100")
+	exact("total_cost", thirds["total_cost"], "100")
 	investmentCall(t, srv, http.MethodPost, "/api/investment-operations", map[string]any{
 		"account_id": account, "position_id": investmentID(t, thirds), "kind": "valuation",
 		"occurred_on": "2026-01-10", "amount": "1000",

@@ -93,7 +93,7 @@ func financialContractPayloads() map[string]any {
 		}
 		positions = append(positions, investmentPositionToDTO(investments.Position{
 			ID: id, AccountID: id, Source: source, Name: "Synthetic position", AssetType: "EQUITY", CurrencyCode: &brl,
-			Quantity: small, AverageCost: &amount, CurrentValue: amount, CurrentUnitPrice: &amount, ValuedOn: &day, ValuationBasis: basis,
+			Quantity: small, AverageCost: &amount, TotalCost: &amount, CurrentValue: amount, CurrentUnitPrice: &amount, ValuedOn: &day, ValuationBasis: basis,
 		}))
 	}
 	positions = append(positions, investmentPositionToDTO(investments.Position{ID: id, AccountID: id, Source: investments.PositionSourceManual, Name: "Empty position", AssetType: "other", ValuationBasis: investments.ValuationBasisCostBasis}))
