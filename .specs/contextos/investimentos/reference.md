@@ -385,5 +385,5 @@ UUIDs. `db.Open` rejects the old schema generation; conversion is separate work.
 ## Monetary precision
 
 Investment cash fields and portfolio targets keep decimal strings through editing
-and submission. Contribution totals use exact arithmetic; BRL rounding happens
-only at display ([policy](../../precisao-monetaria.md)).
+and submission. Contribution totals and quantity × average-cost gain calculations
+use exact arithmetic; BRL rounding happens only at display ([policy](../../precisao-monetaria.md)).
