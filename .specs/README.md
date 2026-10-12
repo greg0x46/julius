@@ -75,6 +75,11 @@ The SQLite-to-Postgres copier supports this baseline and converts integer flags
 according to the destination's boolean column types; it does not convert legacy
 schemas.
 
+## Monetary boundaries
+
+[`precisao-monetaria.md`](precisao-monetaria.md) defines exact money input/output,
+operation-specific rounding and native-currency display.
+
 ## Cross-cutting design work
 
 - [`reorganizacao-schema/inventario.md`](reorganizacao-schema/inventario.md) —
