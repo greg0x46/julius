@@ -40,6 +40,7 @@ func TestHistoricalFXReportingOverHTTP(t *testing.T) {
 }
 
 func TestMissingFXReportingOverHTTP(t *testing.T) {
+	unavailableReportingFXProvider(t)
 	srv, conn := newTestServer(t)
 	id := insertTransaction(t, conn)
 	if _, err := conn.Exec(`UPDATE financial_transactions SET amount = '10', amount_in_account_currency = NULL, currency_code = 'USD', occurred_at = ? WHERE id = ?`, "2099-03-15T12:00:00.000000000Z", id); err != nil {

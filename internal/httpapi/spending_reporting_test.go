@@ -1,6 +1,7 @@
 package httpapi_test
 
 import (
+	"errors"
 	"net/http"
 	"testing"
 	"time"
@@ -8,7 +9,26 @@ import (
 	"github.com/greg0x46/julius/internal/db"
 )
 
+type reportingTransport func(*http.Request) (*http.Response, error)
+
+func (transport reportingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	return transport(req)
+}
+
+func unavailableReportingFXProvider(t *testing.T) {
+	t.Helper()
+	original := http.DefaultTransport
+	http.DefaultTransport = reportingTransport(func(req *http.Request) (*http.Response, error) {
+		if req.URL.Hostname() == "api.frankfurter.dev" {
+			return nil, errors.New("FX provider unavailable in test")
+		}
+		return original.RoundTrip(req)
+	})
+	t.Cleanup(func() { http.DefaultTransport = original })
+}
+
 func TestSpendingByCategoryDisclosesReportingCoverage(t *testing.T) {
+	unavailableReportingFXProvider(t)
 	for _, status := range []string{"complete", "stale", "unavailable"} {
 		t.Run(status, func(t *testing.T) {
 			srv, conn := newTestServer(t)
