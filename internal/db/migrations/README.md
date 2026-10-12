@@ -44,7 +44,9 @@ dialect syntax and native type-domain checks; `TestBaselineNativeTypes` separate
 pins every money/decimal/date/instant/boolean column against the inventory.
 Postgres tests require a disposable `JULIUS_TEST_POSTGRES_DSN`. Guard tests cover
 both the first and final legacy versions, unchanged migration history, and an
-unsupported generation.
+unsupported generation. Shared constraint tests also pin currency/enum domains,
+boolean flags, and exact decimal round trips beyond floating-point range. The
+financial invariant matrix links this precision rule to its tests.
 
 SQLite table rebuilds should remain transactional where possible. Turning off
 foreign keys requires `-- +goose NO TRANSACTION`; prefer ordering inserts and
