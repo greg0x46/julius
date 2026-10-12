@@ -5,6 +5,7 @@ export interface ImportCounts {
   total: number;
   new: number;
   duplicate: number;
+  ambiguous?: number;
   invalid: number;
 }
 
@@ -16,7 +17,7 @@ export interface ImportRow {
   currency: string | null;
   payment_method: string | null;
   balance: string | null;
-  status: "new" | "duplicate" | "invalid";
+  status: "new" | "duplicate" | "ambiguous" | "invalid";
   errors: string[];
   warnings: string[];
 }
@@ -66,7 +67,8 @@ const counts = (value: unknown): ImportCounts => {
   for (const key of ["total", "new", "duplicate", "invalid"] as const) {
     if (!Number.isInteger(item[key]) || (item[key] as number) < 0) throw new Error("Invalid response");
   }
-  return { total: item.total as number, new: item.new as number, duplicate: item.duplicate as number, invalid: item.invalid as number };
+  if (item.ambiguous !== undefined && (!Number.isInteger(item.ambiguous) || (item.ambiguous as number) < 0)) throw new Error("Invalid response");
+  return { total: item.total as number, new: item.new as number, duplicate: item.duplicate as number, ambiguous: (item.ambiguous as number | undefined) ?? 0, invalid: item.invalid as number };
 };
 
 function parsePreview(value: unknown): ImportPreview {
@@ -80,7 +82,7 @@ function parsePreview(value: unknown): ImportPreview {
     warnings: strings(item.warnings),
     rows: item.rows.map((value): ImportRow => {
       const row = record(value);
-      if (!Number.isInteger(row.line_number) || !["new", "duplicate", "invalid"].includes(String(row.status))) throw new Error("Invalid response");
+      if (!Number.isInteger(row.line_number) || !["new", "duplicate", "ambiguous", "invalid"].includes(String(row.status))) throw new Error("Invalid response");
       return {
         line_number: row.line_number as number, occurred_at: optionalStr(row.occurred_at),
         description: row.description === undefined ? "" : str(row.description), amount: optionalStr(row.amount), currency: optionalStr(row.currency),
@@ -125,7 +127,7 @@ export function previewStatement(file: File, accountId?: string): Promise<Import
   return request("/api/statement-imports/preview", { method: "POST", body }, 200, parsePreview);
 }
 
-export function confirmStatement(file: File, preview: ImportPreview, target: { accountId?: string; newAccountName?: string }, allowPartial: boolean): Promise<ImportResult> {
+export function confirmStatement(file: File, preview: ImportPreview, target: { accountId?: string; newAccountName?: string }, allowPartial: boolean, ambiguousDecisions: Record<number, "import" | "ignore"> = {}): Promise<ImportResult> {
   const body = new FormData();
   body.append("file", file);
   if (target.accountId) body.append("account_id", target.accountId);
@@ -135,6 +137,11 @@ export function confirmStatement(file: File, preview: ImportPreview, target: { a
   body.append("expected_format", preview.format);
   body.append("expected_format_version", preview.format_version);
   body.append("allow_partial", String(allowPartial));
+  for (const row of preview.rows) {
+    if (row.status === "ambiguous" && ambiguousDecisions[row.line_number]) {
+      body.append(`ambiguous_line_${row.line_number}`, ambiguousDecisions[row.line_number]);
+    }
+  }
   return request("/api/statement-imports", { method: "POST", body }, 201, (value) => {
     const item = record(value);
     return { run_id: str(item.run_id), account_id: str(item.account_id), counts: counts(item.counts) };

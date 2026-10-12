@@ -32,6 +32,25 @@ it("accepts omitted fields on an invalid row and sends the preview identity on c
   expect(new Headers(init.headers).has("content-type")).toBe(false);
 });
 
+it("sends the selected decision for an ambiguous statement line", async () => {
+  const preview = {
+    format: "flash_csv", format_version: "1", sha256: "other-file", preview_fingerprint: "reviewed", filename: "other.csv",
+    currency: "BRL", counts: { total: 1, new: 0, duplicate: 0, ambiguous: 1, invalid: 0 }, warnings: [],
+    rows: [{ line_number: 7, status: "ambiguous", errors: [], warnings: ["movimentação idêntica"] }],
+  };
+  const fetchMock = vi.fn()
+    .mockResolvedValueOnce(new Response(JSON.stringify(preview), { status: 200 }))
+    .mockResolvedValueOnce(new Response(JSON.stringify({ run_id: "run", account_id: "acc", counts: preview.counts }), { status: 201 }));
+  vi.stubGlobal("fetch", fetchMock);
+  const file = new File(["synthetic"], "other.csv", { type: "text/csv" });
+  const parsed = await previewStatement(file, "acc");
+  expect(parsed.rows[0].status).toBe("ambiguous");
+  await confirmStatement(file, parsed, { accountId: "acc" }, false, { 7: "import" });
+  const body = fetchMock.mock.calls[1][1].body as FormData;
+  expect(body.get("ambiguous_line_7")).toBe("import");
+  expect(body.get("expected_preview_fingerprint")).toBe("reviewed");
+});
+
 // jsdom has no object URLs and would try to navigate on an anchor click, so the
 // download flow is observed through stand-ins for both.
 function stubDownload() {

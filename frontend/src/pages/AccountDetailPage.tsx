@@ -2,6 +2,7 @@ import { Skeleton } from "antd";
 import { useParams } from "react-router-dom";
 
 import { isUuid } from "../api/contracts";
+import { ManualAccountActions } from "../components/accounts/ManualAccountActions";
 import { AccountBillsTable } from "../components/accounts/AccountBillsTable";
 import { AccountCardsTable } from "../components/accounts/AccountCardsTable";
 import { AccountSummary } from "../components/accounts/AccountSummary";
@@ -96,6 +97,7 @@ function ValidAccountDetail({ id }: { id: string }) {
             savingClosingDay={account.savingClosingDay}
           />
 
+          <ManualAccountActions account={snapshot} />
           {snapshot.account_type === "CREDIT" && (
             <>
               <AccountCardsTable

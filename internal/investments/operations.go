@@ -300,13 +300,28 @@ func CreateOperations(ctx context.Context, conn *sql.DB, inputs []OperationInput
 	return result, nil
 }
 
+// positionLedgerKind reports the kinds a manual holding of an integrated
+// custody may record. They only move the holding, never the provider's cash.
+func positionLedgerKind(kind OperationKind) bool {
+	switch kind {
+	case OperationInitialBalance, OperationBuy, OperationSell, OperationValuation:
+		return true
+	default:
+		return false
+	}
+}
+
 func validateOperationAccount(ctx context.Context, q Querier, in OperationInput) error {
 	account, err := getRawAccount(ctx, q, in.AccountID)
 	if err != nil {
 		return err
 	}
-	if account.Kind == AccountKindIntegrated && (!reconcilableKind(in.Kind) || in.PositionID != nil) {
-		return ErrIntegratedReadOnly
+	if account.Kind == AccountKindIntegrated {
+		cashNote := reconcilableKind(in.Kind) && in.PositionID == nil
+		holding := positionLedgerKind(in.Kind) && in.PositionID != nil && *in.PositionID != ""
+		if !cashNote && !holding {
+			return ErrIntegratedReadOnly
+		}
 	}
 	return validateOperationShape(Operation{AccountID: in.AccountID, PositionID: in.PositionID,
 		Kind: in.Kind, OccurredOn: in.OccurredOn, Amount: in.Amount, Quantity: in.Quantity,

@@ -13,6 +13,7 @@ import (
 	"github.com/greg0x46/julius/internal/automation"
 	"github.com/greg0x46/julius/internal/categories"
 	"github.com/greg0x46/julius/internal/db"
+	"github.com/greg0x46/julius/internal/db/dbtest"
 	"github.com/greg0x46/julius/internal/money"
 	"github.com/greg0x46/julius/internal/pluggy"
 	"github.com/greg0x46/julius/internal/syncsvc"
@@ -27,9 +28,8 @@ type retryFixture struct {
 	provider *fakeProvider
 }
 
-func newRetryFixture(t *testing.T) retryFixture {
+func newRetryFixture(t *testing.T, conn *sql.DB) retryFixture {
 	t.Helper()
-	conn := newTestConn(t)
 	sourceID, runID := newSyncRun(t, conn)
 	insertRawImport(t, conn, "raw-accounts", runID, sourceID)
 	provider := &fakeProvider{
@@ -90,9 +90,15 @@ func assertRetryRun(t *testing.T, conn *sql.DB, runID, wantStatus string, wantIn
 }
 
 func TestExecuteRetriesFailedInsertWithSamePayload(t *testing.T) {
+	for _, backend := range dbtest.Backends() {
+		t.Run(backend.Name, func(t *testing.T) { testExecuteRetriesFailedInsert(t, backend.Open) })
+	}
+}
+
+func testExecuteRetriesFailedInsert(t *testing.T, open func(*testing.T) *sql.DB) {
 	for _, stage := range []string{"card_payment", "source_category", "learned_category", "automation"} {
 		t.Run(stage, func(t *testing.T) {
-			f := newRetryFixture(t)
+			f := newRetryFixture(t, open(t))
 			ctx := context.Background()
 			target := pluggy.TransactionSnapshot{
 				ExternalID: "target", ExternalAccountID: "acc-1", Description: strp("Target"),
@@ -143,14 +149,12 @@ func TestExecuteRetriesFailedInsertWithSamePayload(t *testing.T) {
 				})
 				wantCategory, wantOrigin = categories.CardPaymentCategoryID, "rule"
 			}
+			dropFault := func() {}
 			if stage != "automation" {
 				// Fail after the decision write, exposing partial category/events
 				// persistence as well as loss of retry on an already-stored hash.
-				if _, err := f.conn.Exec(`CREATE TRIGGER fail_category_event BEFORE INSERT ON transaction_category_events
-					WHEN NEW.origin = '` + faultOrigin + `' AND NEW.transaction_id IN (SELECT id FROM financial_transactions WHERE external_id = 'target')
-					BEGIN SELECT RAISE(ABORT, 'injected category event failure'); END`); err != nil {
-					t.Fatal(err)
-				}
+				dropFault = dbtest.FailInserts(t, f.conn, "transaction_category_events",
+					`NEW.origin = '`+faultOrigin+`' AND NEW.transaction_id IN (SELECT id FROM financial_transactions WHERE external_id = 'target')`)
 			}
 			neighbor := pluggy.TransactionSnapshot{ExternalID: "neighbor", ExternalAccountID: "acc-1", Description: strp("Neighbor"), MovementType: strp("DEBIT")}
 			records := []pluggy.TransactionSnapshot{target, neighbor}
@@ -173,11 +177,7 @@ func TestExecuteRetriesFailedInsertWithSamePayload(t *testing.T) {
 					t.Fatalf("%s retained %d partial records", table, count)
 				}
 			}
-			if stage != "automation" {
-				if _, err := f.conn.Exec(`DROP TRIGGER fail_category_event`); err != nil {
-					t.Fatal(err)
-				}
-			}
+			dropFault()
 			retryRun := f.sync(t, records, hook)
 			assertRetryRun(t, f.conn, retryRun, "completed", 1, 0, 0)
 			var category, origin string
@@ -197,7 +197,11 @@ func TestExecuteRetriesFailedInsertWithSamePayload(t *testing.T) {
 }
 
 func TestExecuteRetriesFailedUpdateWithSamePayload(t *testing.T) {
-	f := newRetryFixture(t)
+	dbtest.Each(t, testExecuteRetriesFailedUpdate)
+}
+
+func testExecuteRetriesFailedUpdate(t *testing.T, conn *sql.DB) {
+	f := newRetryFixture(t, conn)
 	ctx := context.Background()
 	initial := pluggy.TransactionSnapshot{
 		ExternalID: "target", ExternalAccountID: "acc-1", Description: strp("Original"),

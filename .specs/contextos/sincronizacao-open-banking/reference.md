@@ -1,70 +1,118 @@
-# Sincronização Open Banking
+# Open Banking sync
 
-> Referência viva deste contexto — o que existe e funciona hoje. Mantenha
-> atualizado ao mudar a feature. Para o racional/histórico de decisões,
-> não há spec de feature dedicado (a integração Pluggy é a base histórica
-> do projeto). Para o papel deste contexto na arquitetura de domínio, ver
-> `.specs/motores-de-dominio.md` — não é ele mesmo um motor de domínio
-> (é provedor de ingestão para o motor de Lançamentos), ver a seção
-> "Não são motores" lá.
+> Living reference — what exists and works today. Keep it updated when the
+> feature changes. No dedicated feature spec (the Pluggy integration is the
+> project's historical base). This context is not a domain engine — it is an
+> ingestion provider for the Ledger engine; see "Not engines" in
+> `.specs/motores-de-dominio.md`.
 
-## O que é
+## What it is
 
-Um worker em background consulta a Pluggy periodicamente em busca de novas
-transações e dados de conta, registrando cada execução como um "sync run"
-auditável (histórico, métricas, falhas) — não uma importação caixa-preta.
+A background worker polls Pluggy periodically for new transactions and account
+data, recording each execution as an auditable "sync run" (history, metrics,
+failures) — not a black-box import.
 
-Podem existir várias conexões (um `data_sources` por item da Pluggy, ou seja,
-um por banco). Todas usam o mesmo client ID/secret — são itens da mesma
-aplicação Pluggy — e cada sync run pertence a exatamente uma conexão.
+Several connections may exist (one `data_sources` row per Pluggy item, i.e. one
+per bank). All use the same client ID/secret — they are items of the same Pluggy
+application — and each sync run belongs to exactly one connection.
 
 ## Backend
 
-- `internal/datasources` — registro de conexões: lista/cadastra/renomeia e
-  ativa/desativa `data_sources`. Não há exclusão: desativar preserva contas,
-  transações e histórico e apenas tira a conexão dos syncs futuros.
-- `internal/pluggy` — adapter da API Pluggy (`Adapter`, `Config`, auth/
-  retry), mapeia payloads brutos para `SourceSnapshot`/contas/investimentos/
-  faturas. Sem rotas próprias.
-- `internal/syncsvc` — `Service.Execute` orquestra uma execução de sync
-  contra um `Provider` (o adapter Pluggy): processa contas, investimentos,
-  faturas, registra imports brutos e falhas/rejeições.
-  Cada lançamento usa uma transação de banco que inclui o upsert, o hash,
-  as categorias, o hook de automação, os eventos de auditoria e os contadores.
-  Se qualquer etapa falhar, todo o registro é revertido e a rejeição é
-  registrada separadamente; os demais registros da página continuam.
-  Uma nova sync com o mesmo payload tenta novamente a inserção/atualização,
-  pois a falha não confirmou o novo hash. Registros concluídos com hash
-  igual continuam `unchanged`, sem reaplicar categorias ou automação.
-- `internal/worker` — loop de polling em background (`ClaimNextRun`,
-  `ProcessClaim`, `Run`). O item consultado vem do `source_id` da execução,
-  não de configuração global. Assume uma única instância do worker rodando
-  por vez — não coordena reivindicação de execuções entre múltiplos processos
-  (relevante ao rodar várias instâncias contra um Postgres compartilhado, ver
-  README raiz). Executa uma run por vez, então N conexões sincronizam em
-  série.
+- `internal/datasources` — connection registry: list/create/rename and
+  activate/deactivate `data_sources`. There is no deletion: deactivating
+  preserves accounts, transactions and history and only removes the connection
+  from future syncs.
+- `internal/pluggy` — Pluggy API adapter (`Adapter`, `Config`, auth/retry), maps
+  raw payloads to `SourceSnapshot`/accounts/investments/bills. No routes of its
+  own.
+- `internal/syncsvc` — `Service.Execute` orchestrates a sync run against a
+  `Provider` (the Pluggy adapter): processes accounts, investments, bills,
+  records raw imports and failures/rejections. Each entry uses a database
+  transaction covering the upsert, hash, categories, automation hook, audit
+  events and counters. If any step fails, the whole record is rolled back and
+  the rejection is recorded separately; the other records on the page continue.
+  A new sync with the same payload retries the insert/update, since the failure
+  did not commit the new hash. Completed records with an equal hash stay
+  `unchanged`, without re-applying categories or automation.
+- `internal/worker` — background polling loop (`ClaimNextRun`, `ProcessClaim`,
+  `Run`). The item queried comes from the run's `source_id`, not from global
+  configuration. Runs one run at a time per instance, so N connections sync
+  serially.
+  - Atomic claim: a single `UPDATE ... WHERE worker_id IS NULL ... RETURNING`
+    sets `worker_id`/`heartbeat_at`; with several instances on the same
+    Postgres, exactly one wins each run.
+  - Lease: the owner updates `heartbeat_at` every 15 s; if the heartbeat no
+    longer finds the run as its own, execution is cancelled
+    (`sync_run_claim_lost`).
+  - Owner-only writes: raw imports and each persistence transaction verify run
+    ownership in the same transaction that writes the data. `finalize`,
+    `failGeneral` and `FailRun` also require the owner; otherwise they return
+    `syncsvc.ErrClaimLost`. A run already terminal is a no-op (no double
+    completion).
+  - Recovery: at start and every ~45 s, independently of another sync's
+    execution, claimed runs with no heartbeat for 90 s become `failed` with
+    `general_error_code = 'interrupted'`, via compare-and-set (a single failure
+    recorded even with concurrent recoveries). There is no automatic retry; the
+    daily schedule or "Sincronizar agora" creates a new run. Unclaimed runs
+    survive a restart and run later. With one instance, a run interrupted by a
+    crash is only recovered when the lease expires (up to ~90 s after restart),
+    and until then the connection shows as syncing.
+  - Limits: SQLite serves a single process (one connection; sharing the file
+    across processes is unsupported). Multiple instances require Postgres.
 
-## Rotas HTTP
+## Identity and preservation of user decisions
+
+- A synced entry's identity is `(source_id, external_id)` (unique in SQLite and
+  Postgres). The same external account/transaction in two connections yields two
+  independent rows.
+- A new sync of the same record compares `normalized_hash`: equal is `unchanged`
+  (nothing is written besides the normalization event); different is `updated`
+  and rewrites only the provider's fields. PENDING → POSTED and provider
+  corrections keep the same `id`.
+- Provider fields (overwritten on update): description, amounts, status,
+  `occurred_at`, merchant, source category, provider ids and dates,
+  `current_raw_import_id` and `normalized_hash`.
+- User data (never written by a provider update): manual category and its
+  events, manual inclusion decision, `payable_transaction_links`,
+  `scenario_realizations` (settlement, allocation and reconciliation) and
+  `financial_accounts.manual_closing_day`. Entries have no user note field, so
+  there is no note to preserve.
+- Derived decisions (automatic, learned, card-payment) are written only on
+  insert; a correction does not recompute them. Automation runs again on
+  `updated`, so a rule may start to apply, but it never overrides a manual
+  decision.
+- If the same connection returns an `external_id` already stored under another
+  account, the record is rejected (`unsafe_account_association`) and the
+  existing row, its hash and the user's decisions stay intact; the other records
+  on the page continue.
+- Investment movements get the same protection: an `external_id` already stored
+  under another investment is rejected (`unsafe_investment_association`),
+  without changing the existing movement; the other movements continue.
+- Matches between Pluggy, manual entry and file are never merged.
+- Coverage: `internal/syncsvc/ingestion_test.go` and `transaction_retry_test.go`
+  run on SQLite and, with `JULIUS_TEST_POSTGRES_DSN`, on Postgres
+  (`internal/db/dbtest`).
+
+## HTTP routes
 
 `GET/POST /api/data-sources`, `GET/PATCH /api/data-sources/{id}`.
 
-`POST/GET /api/sync-runs`, `GET /api/sync-runs/{id}`. O POST aceita
-`source_id` opcional: sem ele, enfileira uma execução por conexão ativa
-(pulando as que já estão sincronizando) e responde 202 com a lista do que
-começou; só responde 409 quando nada pôde começar.
+`POST/GET /api/sync-runs`, `GET /api/sync-runs/{id}`. POST accepts an optional
+`source_id`: without it, it queues one run per active connection (skipping those
+already syncing) and responds 202 with the list of what started; it responds 409
+only when nothing could start.
 
 ## Frontend
 
-- `/open-banking` — conexões cadastradas (adicionar, renomear, ativar/
-  desativar, sincronizar uma só) e lista/histórico de execuções de sync, com
-  ação de sincronizar todas.
-- `/open-banking/sync-runs/:id` — detalhe de uma execução, com polling
-  enquanto ela está em andamento.
+- `/open-banking` — registered connections (add, rename, activate/deactivate,
+  sync a single one) and the run list/history, with a sync-all action.
+- `/open-banking/sync-runs/:id` — run detail, polling while it is in progress.
 
-## Notas
+## Notes
 
-- O item é criado no painel da Pluggy e colado aqui — não há suporte a
-  connect token / widget do Pluggy Connect no adapter.
-- Saldo de conta reportado pela Pluggy **não** é a referência de verdade do
-  sistema — não considera regras de inclusão/exclusão de transações. Ver
-  contexto de Transações.
+- The item is created in the Pluggy dashboard and pasted here — the adapter has
+  no support for the Pluggy Connect connect token / widget.
+- The account balance reported by Pluggy is the reference for cash on hand, but
+  not for income/expense totals or card debt — it ignores transaction
+  inclusion/exclusion rules. See Transactions and section 1 of
+  `.specs/motores-de-dominio.md`.

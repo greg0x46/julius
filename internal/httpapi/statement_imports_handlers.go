@@ -27,6 +27,7 @@ type importCounts struct {
 	Total     int `json:"total"`
 	New       int `json:"new"`
 	Duplicate int `json:"duplicate"`
+	Ambiguous int `json:"ambiguous"`
 	Invalid   int `json:"invalid"`
 }
 type importPreview struct {
@@ -120,10 +121,17 @@ func digest(parts ...string) string {
 	return hex.EncodeToString(s[:])
 }
 
-// warnBalanceDiffers flags a row already imported whose stored balance
-// differs from the file's; confirmation reads it back to skip the account
-// balance update.
+// warnBalanceDiffers flags a same-looking movement with a different balance.
+// The balance separates distinct movements; the preview still calls attention
+// to a possible correction of an earlier file.
 const warnBalanceDiffers = "saldo difere da importação anterior; revisão necessária"
+const warnOtherFileMatch = "movimentação idêntica em outro arquivo; confira se é uma nova compra"
+
+func sameStatementBalance(stored, incoming string) bool {
+	a, aErr := decimal.NewFromString(stored)
+	b, bErr := decimal.NewFromString(incoming)
+	return aErr == nil && bErr == nil && a.Equal(b)
+}
 
 // amountSpellings lists the text forms one statement amount can have in the
 // TEXT amount columns. The file side is always fixed at two decimals
@@ -154,6 +162,7 @@ func classifyStatement(ctx context.Context, q interface {
 	QueryRowContext(context.Context, string, ...any) *sql.Row
 }, p *importPreview, accountID string) error {
 	seen := map[string]int{}
+	legacySeen := map[string]int{}
 	p.Counts = importCounts{Total: len(p.Rows)}
 	for i := range p.Rows {
 		row := &p.Rows[i]
@@ -163,17 +172,50 @@ func classifyStatement(ctx context.Context, q interface {
 		}
 		normalized := strings.ToLower(strings.Join(strings.Fields(row.Description), " "))
 		base := digest(row.OccurredAt, normalized, row.Amount, strings.ToLower(row.PaymentMethod))
-		seen[base]++
-		row.Identity = digest("statement-v1", accountID, base, fmt.Sprint(seen[base]))
+		legacySeen[base]++
+		// A Flash timestamp has only minute precision. Two genuine purchases
+		// can therefore have identical text, amount and payment method. Their
+		// resulting balances distinguish them, while an exact replay retains
+		// the same identity. Count equal balances separately so the identity
+		// does not depend on which statement was imported first.
+		key := digest(base, row.Balance)
+		seen[key]++
+		row.Identity = digest("statement-v2", accountID, key, fmt.Sprint(seen[key]))
 		row.ContentHash = digest(row.Identity, row.Balance)
 		row.Status = "new"
 		if accountID != "" {
+			matchedID := row.Identity
 			var oldBalance sql.NullString
-			err := q.QueryRowContext(ctx, `SELECT balance_after FROM financial_transactions WHERE account_id=? AND external_id=?`, accountID, row.Identity).Scan(&oldBalance)
+			forcedID := digest("statement-v3", accountID, p.SHA256, fmt.Sprint(row.LineNumber))
+			err := q.QueryRowContext(ctx, `SELECT balance_after FROM financial_transactions WHERE account_id=? AND external_id=?`, accountID, forcedID).Scan(&oldBalance)
+			if err == nil {
+				matchedID = forcedID
+			} else if err == sql.ErrNoRows {
+				err = q.QueryRowContext(ctx, `SELECT balance_after FROM financial_transactions WHERE account_id=? AND external_id=?`, accountID, row.Identity).Scan(&oldBalance)
+			}
+			if err == sql.ErrNoRows {
+				// Statements imported before v2 used an identity without balance.
+				// Match those only when the balance agrees; otherwise keep the
+				// new movement and show the ambiguity in the preview.
+				legacyID := digest("statement-v1", accountID, base, fmt.Sprint(legacySeen[base]))
+				err = q.QueryRowContext(ctx, `SELECT balance_after FROM financial_transactions WHERE account_id=? AND external_id=?`, accountID, legacyID).Scan(&oldBalance)
+				if err == nil && (!oldBalance.Valid || !sameStatementBalance(oldBalance.String, row.Balance)) {
+					row.Warnings = append(row.Warnings, warnBalanceDiffers)
+					err = sql.ErrNoRows
+				} else if err == nil {
+					matchedID = legacyID
+				}
+			}
 			if err == nil {
 				row.Status = "duplicate"
-				if oldBalance.Valid && oldBalance.String != row.Balance {
-					row.Warnings = append(row.Warnings, warnBalanceDiffers)
+				var originalFileHash string
+				err = q.QueryRowContext(ctx, `SELECT ri.payload_sha256 FROM financial_transactions ft JOIN raw_imports ri ON ri.id=ft.current_raw_import_id WHERE ft.account_id=? AND ft.external_id=?`, accountID, matchedID).Scan(&originalFileHash)
+				if err != nil {
+					return err
+				}
+				if originalFileHash != p.SHA256 {
+					row.Warnings = append(row.Warnings, warnOtherFileMatch)
+					row.Status = "ambiguous"
 				}
 			} else if err != sql.ErrNoRows {
 				return err
@@ -181,8 +223,21 @@ func classifyStatement(ctx context.Context, q interface {
 		}
 		if row.Status == "duplicate" {
 			p.Counts.Duplicate++
+		} else if row.Status == "ambiguous" {
+			p.Counts.Ambiguous++
 		} else {
 			p.Counts.New++
+			if accountID != "" && !slices.Contains(row.Warnings, warnBalanceDiffers) {
+				var similarFile int
+				// File imports store balance_after at exactly two decimals.
+				err := q.QueryRowContext(ctx, `SELECT 1 FROM financial_transactions WHERE account_id=? AND origin='synced' AND occurred_at=? AND amount=? AND LOWER(TRIM(description))=? AND LOWER(COALESCE(source_category,''))=? AND balance_after<>? LIMIT 1`,
+					accountID, row.OccurredAt, row.Amount, normalized, strings.ToLower(row.PaymentMethod), row.Balance).Scan(&similarFile)
+				if err == nil {
+					row.Warnings = append(row.Warnings, warnBalanceDiffers)
+				} else if err != sql.ErrNoRows {
+					return err
+				}
+			}
 			// The amount is matched under every spelling it may be stored with;
 			// occurred_at stays an equality so the lookup remains selective.
 			in, amountArgs := db.InClause(amountSpellings(row.Amount))
@@ -203,6 +258,11 @@ func classifyStatement(ctx context.Context, q interface {
 				} else if err != sql.ErrNoRows {
 					return err
 				}
+			}
+			if slices.Contains(row.Warnings, warnBalanceDiffers) {
+				row.Status = "ambiguous"
+				p.Counts.New--
+				p.Counts.Ambiguous++
 			}
 		}
 	}
@@ -369,6 +429,26 @@ func handleStatementConfirm(conn *sql.DB) http.HandlerFunc {
 			writeProblem(w, 409, "preview-changed", "Prévia alterada", "As movimentações da conta mudaram. Gere uma nova prévia.")
 			return
 		}
+		for i := range p.Rows {
+			row := &p.Rows[i]
+			if row.Status != "ambiguous" {
+				continue
+			}
+			switch r.FormValue(fmt.Sprintf("ambiguous_line_%d", row.LineNumber)) {
+			case "import":
+				row.Status = "new"
+				row.Identity = digest("statement-v3", accountID, p.SHA256, fmt.Sprint(row.LineNumber))
+				row.ContentHash = digest(row.Identity, row.Balance)
+				p.Counts.New++
+			case "ignore":
+				row.Status = "duplicate"
+				p.Counts.Duplicate++
+			default:
+				writeProblem(w, 422, "ambiguous-row", "Movimentação ambígua", "Escolha importar ou ignorar cada movimentação ambígua.")
+				return
+			}
+		}
+		p.Counts.Ambiguous = 0
 		if p.Counts.New == 0 && newName != "" {
 			writeProblem(w, 422, "empty-import", "Nada para importar", "O extrato não contém movimentações válidas.")
 			return

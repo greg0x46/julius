@@ -73,6 +73,7 @@ type RawImportWriter struct {
 	DB        *sql.DB
 	SyncRunID string
 	SourceID  string
+	WorkerID  string
 }
 
 func (w *RawImportWriter) Write(envelope pluggy.RawResponseEnvelope) (string, error) {
@@ -86,7 +87,28 @@ func (w *RawImportWriter) Write(envelope pluggy.RawResponseEnvelope) (string, er
 	if receivedAt.IsZero() {
 		receivedAt = time.Now().UTC()
 	}
-	_, err = w.DB.ExecContext(context.Background(), `
+	ctx := context.Background()
+	tx, err := w.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return "", err
+	}
+	defer tx.Rollback()
+	if w.WorkerID != "" {
+		result, err := tx.ExecContext(ctx,
+			`UPDATE sync_runs SET heartbeat_at = ? WHERE id = ? AND status = 'in_progress' AND worker_id = ?`,
+			db.FormatTime(time.Now()), w.SyncRunID, w.WorkerID)
+		if err != nil {
+			return "", err
+		}
+		affected, err := result.RowsAffected()
+		if err != nil {
+			return "", err
+		}
+		if affected == 0 {
+			return "", ErrClaimLost
+		}
+	}
+	_, err = tx.ExecContext(ctx, `
 		INSERT INTO raw_imports (
 			id, sync_run_id, source_id, scope, external_account_id, page_sequence,
 			request_attempt, request_method, request_path, http_status,
@@ -98,6 +120,9 @@ func (w *RawImportWriter) Write(envelope pluggy.RawResponseEnvelope) (string, er
 		envelope.Content, hex.EncodeToString(sum[:]), db.FormatTime(receivedAt),
 	)
 	if err != nil {
+		return "", err
+	}
+	if err := tx.Commit(); err != nil {
 		return "", err
 	}
 	return id, nil

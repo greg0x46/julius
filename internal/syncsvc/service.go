@@ -90,6 +90,63 @@ type Service struct {
 	SyncRunID             string
 	SourceID              string
 	OnTransactionUpserted TransactionUpsertedHook
+	// WorkerID is the claim owner; when set, finishing the run fails with
+	// ErrClaimLost if another worker owns it. Empty skips the check.
+	WorkerID string
+}
+
+// beginOwnedTx locks the run row before any sync side effect. Recovery and
+// heartbeat update that same row, so ownership cannot change before the
+// returned transaction commits. Refreshing the heartbeat also prevents a
+// slow database write from expiring an otherwise active claim.
+func (s *Service) beginOwnedTx(ctx context.Context) (*sql.Tx, error) {
+	tx, err := s.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	query := `UPDATE sync_runs SET heartbeat_at = ? WHERE id = ? AND status = 'in_progress'`
+	args := []any{db.FormatTime(time.Now()), s.SyncRunID}
+	if s.WorkerID != "" {
+		query += ` AND worker_id = ?`
+		args = append(args, s.WorkerID)
+	}
+	result, err := tx.ExecContext(ctx, query, args...)
+	if err == nil {
+		var affected int64
+		affected, err = result.RowsAffected()
+		if err == nil && affected == 0 {
+			err = ErrClaimLost
+		}
+	}
+	if err != nil {
+		_ = tx.Rollback()
+		return nil, err
+	}
+	return tx, nil
+}
+
+func (s *Service) execOwned(ctx context.Context, query string, args ...any) error {
+	tx, err := s.beginOwnedTx(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(ctx, query, args...); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func (s *Service) recordSyncedQuotes(ctx context.Context, holding investments.SyncedHolding, rawImportID *string) error {
+	tx, err := s.beginOwnedTx(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if err := investments.RecordSyncedQuotes(ctx, tx, holding, rawImportID); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // Execute mirrors SyncService.execute.
@@ -135,6 +192,9 @@ func (s *Service) Execute(ctx context.Context) error {
 	for _, record := range accountsPage.Accounts {
 		accountID, err := s.upsertAccount(ctx, record, accountsPage.RawImportID)
 		if err != nil {
+			if errors.Is(err, ErrClaimLost) {
+				return err
+			}
 			log.Printf("account_persistence_failed run_id=%s account=%s: %v", s.SyncRunID, record.ExternalID, err)
 			extID := record.ExternalID
 			if ferr := s.recordFailure(ctx, pluggy.StageAccount, "internal_error", nil, nil, &extID); ferr != nil {
@@ -213,6 +273,9 @@ func (s *Service) processInvestments(ctx context.Context) error {
 	for _, record := range investmentsPage.Investments {
 		investmentID, err := s.upsertInvestment(ctx, record, investmentsPage.RawImportID)
 		if err != nil {
+			if errors.Is(err, ErrClaimLost) {
+				return err
+			}
 			log.Printf("investment_persistence_failed run_id=%s investment=%s: %v", s.SyncRunID, record.ExternalID, err)
 			extID := record.ExternalID
 			if ferr := s.recordInvestmentFailure(ctx, pluggy.StageInvestment, "internal_error", nil, nil, &extID); ferr != nil {
@@ -226,7 +289,10 @@ func (s *Service) processInvestments(ctx context.Context) error {
 		// The holding itself is already stored; a quote that fails to record
 		// only leaves a gap in the price series, which the next sync fills.
 		rawImportID := investmentsPage.RawImportID
-		if err := investments.RecordSyncedQuotes(ctx, s.DB, HoldingFromSnapshot(record), &rawImportID); err != nil {
+		if err := s.recordSyncedQuotes(ctx, HoldingFromSnapshot(record), &rawImportID); err != nil {
+			if errors.Is(err, ErrClaimLost) {
+				return err
+			}
 			log.Printf("investment_quote_failed run_id=%s investment=%s: %v", s.SyncRunID, record.ExternalID, err)
 		}
 
@@ -258,9 +324,16 @@ func (s *Service) processInvestments(ctx context.Context) error {
 		}
 		for _, txRecord := range txPage.Transactions {
 			if err := s.upsertInvestmentTransaction(ctx, investmentID, txRecord, txPage.RawImportID); err != nil {
+				if errors.Is(err, ErrClaimLost) {
+					return err
+				}
 				txExtID := txRecord.ExternalID
+				code := "internal_error"
+				if errors.Is(err, errInvestmentMismatch) {
+					code = "unsafe_investment_association"
+				}
 				if rerr := s.recordInvestmentRejection(ctx, pluggy.RejectedRecord{
-					EntityType: "investment_transaction", ExternalID: &txExtID, Code: "internal_error", SafeMessage: SafeMessage("internal_error"),
+					EntityType: "investment_transaction", ExternalID: &txExtID, Code: code, SafeMessage: SafeMessage(code),
 				}, txPage.RawImportID, &investmentID, &extID); rerr != nil {
 					return rerr
 				}
@@ -297,6 +370,9 @@ func (s *Service) processBills(ctx context.Context, accountID, externalAccountID
 	}
 	for _, record := range billsPage.Bills {
 		if _, err := s.upsertBill(ctx, accountID, record, billsPage.RawImportID); err != nil {
+			if errors.Is(err, ErrClaimLost) {
+				return err
+			}
 			log.Printf("bill_persistence_failed run_id=%s account=%s bill=%s: %v", s.SyncRunID, externalAccountID, record.ExternalID, err)
 			extID := record.ExternalID
 			if ferr := s.recordBillRejection(ctx, pluggy.RejectedRecord{
@@ -317,7 +393,7 @@ func (s *Service) upsertBill(ctx context.Context, accountID string, snapshot plu
 	digest := pluggy.BillHash(snapshot)
 	now := db.FormatTime(time.Now())
 
-	tx, err := s.DB.BeginTx(ctx, nil)
+	tx, err := s.beginOwnedTx(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -376,7 +452,7 @@ func (s *Service) upsertBill(ctx context.Context, accountID string, snapshot plu
 }
 
 func (s *Service) incrementBillsProcessed(ctx context.Context) error {
-	_, err := s.DB.ExecContext(ctx,
+	err := s.execOwned(ctx,
 		`UPDATE sync_runs SET bills_processed = bills_processed + 1 WHERE id = ? AND status = 'in_progress'`,
 		s.SyncRunID)
 	return err
@@ -384,7 +460,7 @@ func (s *Service) incrementBillsProcessed(ctx context.Context) error {
 
 func (s *Service) recordBillRejection(ctx context.Context, rejection pluggy.RejectedRecord, rawImportID string, accountID, externalAccountID *string) error {
 	now := db.FormatTime(time.Now())
-	tx, err := s.DB.BeginTx(ctx, nil)
+	tx, err := s.beginOwnedTx(ctx)
 	if err != nil {
 		return err
 	}
@@ -412,7 +488,7 @@ func (s *Service) recordBillRejection(ctx context.Context, rejection pluggy.Reje
 
 func (s *Service) recordBillFailure(ctx context.Context, stage pluggy.FailureStage, code string, rawImportID *string, accountID, externalAccountID *string) error {
 	now := db.FormatTime(time.Now())
-	_, err := s.DB.ExecContext(ctx, `
+	err := s.execOwned(ctx, `
 		INSERT INTO sync_failures (id, sync_run_id, raw_import_id, account_id, external_account_id, stage, error_code, safe_message, created_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		uuid.NewString(), s.SyncRunID, rawImportID, accountID, externalAccountID, string(stage), code, SafeMessage(code), now,
@@ -421,7 +497,7 @@ func (s *Service) recordBillFailure(ctx context.Context, stage pluggy.FailureSta
 }
 
 func (s *Service) updateSourceName(ctx context.Context, displayName *string) error {
-	_, err := s.DB.ExecContext(ctx, `UPDATE data_sources SET display_name = ?, updated_at = ? WHERE id = ?`,
+	err := s.execOwned(ctx, `UPDATE data_sources SET display_name = ?, updated_at = ? WHERE id = ?`,
 		displayName, db.FormatTime(time.Now()), s.SourceID)
 	return err
 }
@@ -444,7 +520,7 @@ func (s *Service) upsertAccount(ctx context.Context, snapshot pluggy.AccountSnap
 	digest := pluggy.AccountHash(snapshot)
 	now := db.FormatTime(time.Now())
 
-	tx, err := s.DB.BeginTx(ctx, nil)
+	tx, err := s.beginOwnedTx(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -510,14 +586,9 @@ func (s *Service) upsertAccount(ctx context.Context, snapshot pluggy.AccountSnap
 }
 
 func (s *Service) incrementAccountsProcessed(ctx context.Context) error {
-	res, err := s.DB.ExecContext(ctx,
+	return s.execOwned(ctx,
 		`UPDATE sync_runs SET accounts_processed = accounts_processed + 1 WHERE id = ? AND status = 'in_progress'`,
 		s.SyncRunID)
-	if err != nil {
-		return err
-	}
-	_, err = res.RowsAffected()
-	return err
 }
 
 func (s *Service) processTransactionPage(ctx context.Context, accountID, externalAccountID string, page pluggy.TransactionsPage) error {
@@ -529,8 +600,12 @@ func (s *Service) processTransactionPage(ctx context.Context, accountID, externa
 	for _, record := range page.Transactions {
 		if err := s.upsertTransaction(ctx, accountID, record, page.RawImportID); err != nil {
 			extID := record.ExternalID
+			code := "internal_error"
+			if errors.Is(err, errAccountMismatch) {
+				code = "unsafe_account_association"
+			}
 			if rerr := s.recordRejection(ctx, pluggy.RejectedRecord{
-				EntityType: "transaction", ExternalID: &extID, Code: "internal_error", SafeMessage: SafeMessage("internal_error"),
+				EntityType: "transaction", ExternalID: &extID, Code: code, SafeMessage: SafeMessage(code),
 			}, page.RawImportID, &accountID, &externalAccountID); rerr != nil {
 				return rerr
 			}
@@ -538,6 +613,11 @@ func (s *Service) processTransactionPage(ctx context.Context, accountID, externa
 	}
 	return nil
 }
+
+// errAccountMismatch rejects a record whose (source_id, external_id) already
+// belongs to another account: merging it would move user decisions across
+// accounts, so the stored row is left untouched instead.
+var errAccountMismatch = errors.New("transaction external id belongs to another account")
 
 // upsertTransaction runs in its own transaction per record — a deliberate
 // simplification of the reference's per-page transaction with a savepoint
@@ -552,7 +632,7 @@ func (s *Service) upsertTransaction(ctx context.Context, accountID string, snaps
 	digest := pluggy.TransactionHash(snapshot)
 	now := db.FormatTime(time.Now())
 
-	tx, err := s.DB.BeginTx(ctx, nil)
+	tx, err := s.beginOwnedTx(ctx)
 	if err != nil {
 		return err
 	}
@@ -585,10 +665,13 @@ func (s *Service) upsertTransaction(ctx context.Context, accountID string, snaps
 		return err
 	}
 
-	var transactionID, existingHash string
-	if err := tx.QueryRowContext(ctx, `SELECT id, normalized_hash FROM financial_transactions WHERE source_id = ? AND external_id = ?`,
-		s.SourceID, snapshot.ExternalID).Scan(&transactionID, &existingHash); err != nil {
+	var transactionID, existingHash, existingAccountID string
+	if err := tx.QueryRowContext(ctx, `SELECT id, normalized_hash, account_id FROM financial_transactions WHERE source_id = ? AND external_id = ?`,
+		s.SourceID, snapshot.ExternalID).Scan(&transactionID, &existingHash, &existingAccountID); err != nil {
 		return err
+	}
+	if existingAccountID != accountID {
+		return errAccountMismatch
 	}
 
 	outcome := "unchanged"
@@ -690,7 +773,7 @@ func stringOrEmpty(s *string) string {
 }
 
 func (s *Service) incrementInvestmentsProcessed(ctx context.Context) error {
-	_, err := s.DB.ExecContext(ctx,
+	err := s.execOwned(ctx,
 		`UPDATE sync_runs SET investments_processed = investments_processed + 1 WHERE id = ? AND status = 'in_progress'`,
 		s.SyncRunID)
 	return err
@@ -700,7 +783,7 @@ func (s *Service) upsertInvestment(ctx context.Context, snapshot pluggy.Investme
 	digest := pluggy.InvestmentHash(snapshot)
 	now := db.FormatTime(time.Now())
 
-	tx, err := s.DB.BeginTx(ctx, nil)
+	tx, err := s.beginOwnedTx(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -784,6 +867,8 @@ func (s *Service) upsertInvestment(ctx context.Context, snapshot pluggy.Investme
 	return investmentID, tx.Commit()
 }
 
+var errInvestmentMismatch = errors.New("investment transaction external id belongs to another investment")
+
 // upsertInvestmentTransaction mirrors upsertTransaction, minus the
 // categories.ApplyAutomatic/OnTransactionUpserted hooks: those are
 // spending-transaction-specific domain logic, and an investment movement
@@ -792,7 +877,7 @@ func (s *Service) upsertInvestmentTransaction(ctx context.Context, investmentID 
 	digest := pluggy.InvestmentTransactionHash(snapshot)
 	now := db.FormatTime(time.Now())
 
-	tx, err := s.DB.BeginTx(ctx, nil)
+	tx, err := s.beginOwnedTx(ctx)
 	if err != nil {
 		return err
 	}
@@ -816,10 +901,13 @@ func (s *Service) upsertInvestmentTransaction(ctx context.Context, investmentID 
 		return err
 	}
 
-	var transactionID, existingHash string
-	if err := tx.QueryRowContext(ctx, `SELECT id, normalized_hash FROM financial_investment_transactions WHERE source_id = ? AND external_id = ?`,
-		s.SourceID, snapshot.ExternalID).Scan(&transactionID, &existingHash); err != nil {
+	var transactionID, existingHash, existingInvestmentID string
+	if err := tx.QueryRowContext(ctx, `SELECT id, normalized_hash, investment_id FROM financial_investment_transactions WHERE source_id = ? AND external_id = ?`,
+		s.SourceID, snapshot.ExternalID).Scan(&transactionID, &existingHash, &existingInvestmentID); err != nil {
 		return err
+	}
+	if existingInvestmentID != investmentID {
+		return errInvestmentMismatch
 	}
 
 	outcome := "unchanged"
@@ -866,7 +954,7 @@ func (s *Service) upsertInvestmentTransaction(ctx context.Context, investmentID 
 
 func (s *Service) recordInvestmentRejection(ctx context.Context, rejection pluggy.RejectedRecord, rawImportID string, investmentID, externalInvestmentID *string) error {
 	now := db.FormatTime(time.Now())
-	tx, err := s.DB.BeginTx(ctx, nil)
+	tx, err := s.beginOwnedTx(ctx)
 	if err != nil {
 		return err
 	}
@@ -894,7 +982,7 @@ func (s *Service) recordInvestmentRejection(ctx context.Context, rejection plugg
 
 func (s *Service) recordInvestmentFailure(ctx context.Context, stage pluggy.FailureStage, code string, rawImportID *string, investmentID, externalInvestmentID *string) error {
 	now := db.FormatTime(time.Now())
-	_, err := s.DB.ExecContext(ctx, `
+	err := s.execOwned(ctx, `
 		INSERT INTO sync_failures (id, sync_run_id, raw_import_id, investment_id, external_investment_id, stage, error_code, safe_message, created_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		uuid.NewString(), s.SyncRunID, rawImportID, investmentID, externalInvestmentID, string(stage), code, SafeMessage(code), now,
@@ -904,7 +992,7 @@ func (s *Service) recordInvestmentFailure(ctx context.Context, stage pluggy.Fail
 
 func (s *Service) recordRejection(ctx context.Context, rejection pluggy.RejectedRecord, rawImportID string, accountID, externalAccountID *string) error {
 	now := db.FormatTime(time.Now())
-	tx, err := s.DB.BeginTx(ctx, nil)
+	tx, err := s.beginOwnedTx(ctx)
 	if err != nil {
 		return err
 	}
@@ -936,7 +1024,7 @@ func (s *Service) recordRejection(ctx context.Context, rejection pluggy.Rejected
 
 func (s *Service) recordFailure(ctx context.Context, stage pluggy.FailureStage, code string, rawImportID *string, accountID, externalAccountID *string) error {
 	now := db.FormatTime(time.Now())
-	_, err := s.DB.ExecContext(ctx, `
+	err := s.execOwned(ctx, `
 		INSERT INTO sync_failures (id, sync_run_id, raw_import_id, account_id, external_account_id, stage, error_code, safe_message, created_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		uuid.NewString(), s.SyncRunID, rawImportID, accountID, externalAccountID, string(stage), code, SafeMessage(code), now,
@@ -953,27 +1041,21 @@ func (s *Service) failGeneral(ctx context.Context, provErr *pluggy.ProviderError
 	}
 	defer tx.Rollback()
 
-	var status string
-	if err := tx.QueryRowContext(ctx, `SELECT status FROM sync_runs WHERE id = ?`, s.SyncRunID).Scan(&status); err != nil {
+	message := SafeMessage(provErr.Code)
+	err = fencedTerminalUpdate(ctx, tx, s.SyncRunID, s.WorkerID,
+		`status = 'failed', finished_at = ?, general_error_code = ?, general_error_message = ?`,
+		now, provErr.Code, message)
+	if errors.Is(err, errRunFinished) {
+		return nil
+	}
+	if err != nil {
 		return err
 	}
-	if status != "in_progress" {
-		return tx.Commit()
-	}
-	message := SafeMessage(provErr.Code)
 	if _, err := tx.ExecContext(ctx, `
 		INSERT INTO sync_failures (id, sync_run_id, raw_import_id, external_account_id, stage, error_code, safe_message, created_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 		uuid.NewString(), s.SyncRunID, provErr.RawImportID, provErr.ExternalAccountID, string(provErr.Stage), provErr.Code, message, now,
 	); err != nil {
-		return err
-	}
-	_, err = tx.ExecContext(ctx, `
-		UPDATE sync_runs SET status = 'failed', finished_at = ?, general_error_code = ?, general_error_message = ?
-		WHERE id = ?`,
-		now, provErr.Code, message, s.SyncRunID,
-	)
-	if err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -987,14 +1069,6 @@ func (s *Service) finalize(ctx context.Context) error {
 	}
 	defer tx.Rollback()
 
-	var status string
-	if err := tx.QueryRowContext(ctx, `SELECT status FROM sync_runs WHERE id = ?`, s.SyncRunID).Scan(&status); err != nil {
-		return err
-	}
-	if status != "in_progress" {
-		return tx.Commit()
-	}
-
 	var failureCount, safeCount int
 	if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM sync_failures WHERE sync_run_id = ?`, s.SyncRunID).Scan(&failureCount); err != nil {
 		return err
@@ -1003,7 +1077,11 @@ func (s *Service) finalize(ctx context.Context) error {
 		return err
 	}
 	finalStatus := selectFinalStatus(failureCount > 0, safeCount > 0, false)
-	if _, err := tx.ExecContext(ctx, `UPDATE sync_runs SET status = ?, finished_at = ? WHERE id = ?`, finalStatus, now, s.SyncRunID); err != nil {
+	err = fencedTerminalUpdate(ctx, tx, s.SyncRunID, s.WorkerID, `status = ?, finished_at = ?`, finalStatus, now)
+	if errors.Is(err, errRunFinished) {
+		return nil
+	}
+	if err != nil {
 		return err
 	}
 	log.Printf("sync_run_completed run_id=%s status=%s", s.SyncRunID, finalStatus)

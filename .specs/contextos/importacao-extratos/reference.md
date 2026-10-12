@@ -1,72 +1,89 @@
-# Importação de extratos
+# Statement import
 
-## O que existe
+## What exists
 
-Em **Contas e cartões → Importar extrato**, o usuário envia um CSV, escolhe
-uma conta de arquivo existente ou cria uma nova, revisa a prévia por linha
-e confirma. A tela mostra período, saldo, linhas novas, já importadas e
-inválidas, avisos e histórico recente. Linhas inválidas só são ignoradas
-quando o usuário escolhe explicitamente importar as válidas. A tela oferece o
-download de um CSV modelo, com linhas de exemplo fictícias, para quem precisa
-montar o arquivo no formato aceito.
+Under **Contas e cartões → Importar extrato**, the user uploads a CSV, picks an
+existing file account or creates a new one, reviews the per-row preview and
+confirms. The screen shows period, balance, new / already imported / invalid
+rows, warnings and recent history. Invalid rows are skipped only when the user
+explicitly chooses to import the valid ones. The screen offers a template CSV
+download, with fictitious sample rows, for anyone who has to build the file in
+the accepted format.
 
-O primeiro formato aceito é o CSV Flash com as colunas `Data`, `Hora`,
-`Movimentação`, `Valor`, `Meio de Pagamento` e `Saldo`. O parser considera o
-fuso `America/Sao_Paulo` e valores decimais BRL exatos. O detector e o parser
-ficam em `internal/statementimport`; novos formatos entram como adaptadores
-registrados ali; cada adaptador também fornece o seu CSV modelo, montado a
-partir do mesmo cabeçalho que o parser confere. O detector aceita o que o
-parser aceita (BOM, CRLF, campos entre aspas e espaços após as vírgulas). O
-nome do arquivo não determina o período.
+The first accepted format is the Flash CSV with columns `Data`, `Hora`,
+`Movimentação`, `Valor`, `Meio de Pagamento` and `Saldo`. The parser uses the
+`America/Sao_Paulo` time zone and exact BRL decimals. Detector and parser live
+in `internal/statementimport`; new formats are adapters registered there, and
+each adapter also supplies its own template CSV, built from the same header the
+parser checks. The detector accepts what the parser accepts (BOM, CRLF, quoted
+fields, spaces after commas). The file name never determines the period.
 
-## Dados e regras
+## Data and rules
 
-- Contas de arquivo usam `data_sources.provider = 'file'` e aparecem junto
-  às demais contas. A agenda, o worker e a tela Open Banking processam apenas
-  fontes `pluggy`.
-- A prévia não grava dados. A confirmação reenvia o arquivo e confere SHA-256,
-  formato, versão e classificação das linhas; uma mudança exige nova prévia.
-- A identidade de cada movimento é derivada de conta, instante, descrição,
-  valor, meio e ordinal entre linhas iguais. Isso evita duplicatas ao reenviar
-  o arquivo ou enviar períodos sobrepostos. Saldo diferente para um movimento
-  já importado é avisado para revisão; o lançamento anterior não é alterado.
-- O saldo de conta avança somente com uma linha de instante posterior ao
-  saldo atual e com saldo final não ambíguo. Ao importar somente as válidas,
-  uma linha inválida com data ilegível ou não mais antiga que a última linha
-  válida impede a atualização do saldo (os movimentos válidos entram
-  normalmente), porque o saldo poderia ficar defasado; linhas inválidas mais
-  antigas não interferem. Diferenças de continuidade são exibidas como aviso;
-  o sistema não cria movimentos para fechar diferenças.
-- Confirmação grava execução, CSV bruto, conta, movimentos e eventos em uma
-  transação de banco. O arquivo bruto fica no banco para auditoria, sem ser
-  incluído em logs ou respostas. A execução fica separada das sincronizações
-  Open Banking. A categorização aprendida e a automação são aplicadas aos
-  lançamentos novos.
-- Transações de arquivo aparecem com origem **Arquivo** no extrato e detalhe;
-  o filtro de origem distingue Arquivo, Conexão automática e Manual.
+- File accounts use `data_sources.provider = 'file'` and appear alongside the
+  other accounts. The schedule, the worker and the Open Banking screen process
+  only `pluggy` sources.
+- The preview writes nothing. Confirmation re-uploads the file and checks
+  SHA-256, format, version and row classification; any change requires a new
+  preview.
+- Each movement's identity is derived from account, instant, description,
+  amount, payment method, final balance and ordinal among equal rows. This
+  avoids duplicates when re-uploading the file or uploading overlapping periods:
+  a repeat records only a new run and a new import record, with no entries,
+  decisions or balance change. A row with the same textual data but a different
+  final balance is flagged as ambiguous and requires a decision; the earlier
+  row is not changed. The account balance does not advance in that ambiguous
+  import. The old identity (without balance) is still recognized when
+  re-uploading already imported movements whose balance matches.
+- If an identical row (balance included) already came from another file, the
+  preview flags the match as ambiguous. Confirmation requires a per-row choice:
+  ignore as a repeat or import as another purchase. The new identity uses the
+  file and line number, so re-uploading the file after that choice does not
+  create another purchase. If the classification changes between preview and
+  confirmation, a new preview is required.
+- Identical rows within the same file are distinct movements (ordinal 1, 2, ...).
+  Known limit: a later file with more identical rows than the earlier one
+  imports only the excess.
+- The identity includes the account: the same file in two accounts yields
+  independent entries.
+- The account balance advances only with a row later than the current balance
+  and with an unambiguous final balance. When importing only the valid rows, an
+  invalid row with an unreadable date or one not older than the last valid row
+  prevents the balance update (the valid movements are still imported), because
+  the balance could end up stale; older invalid rows do not interfere.
+  Continuity gaps are shown as warnings; the system never creates movements to
+  close a gap.
+- Confirmation writes run, raw CSV, account, movements and events in one
+  database transaction; any failure undoes everything (including rows already
+  inserted and the new account) and the same upload can be repeated. The raw
+  file stays in the database for audit and is not included in logs or
+  responses. The run is separate from Open Banking syncs.
+  Learned categorization and automation apply to the new entries.
+- File transactions show origin **Arquivo** in the statement and detail; the
+  origin filter distinguishes Arquivo, Conexão automática and Manual.
 
 ## API
 
-- `POST /api/statement-imports/preview` — upload multipart, `file`,
-  `account_id` opcional, `format` opcional; retorna linhas, contagens,
-  formato, versão, hash e impressão da prévia.
-- `POST /api/statement-imports` — mesmo arquivo, conta existente ou nome de
-  conta nova, hash/formato/versão/impressão esperados e `allow_partial`;
-  retorna conta, execução e contagens gravadas.
-- `GET /api/statement-imports/accounts` — contas de arquivo em BRL.
-- `GET /api/statement-imports` — até 100 importações recentes.
-- `GET /api/statement-imports/template` — CSV modelo (`format` opcional,
-  padrão `flash_csv`), como anexo `modelo-extrato-flash.csv`; formato
-  desconhecido responde 422.
+- `POST /api/statement-imports/preview` — multipart upload, `file`, optional
+  `account_id`, optional `format`; returns rows, counts, format, version, hash
+  and the preview fingerprint.
+- `POST /api/statement-imports` — same file, existing account or new account
+  name, expected hash/format/version/fingerprint and `allow_partial`; returns
+  account, run and the counts written.
+- `GET /api/statement-imports/accounts` — BRL file accounts.
+- `GET /api/statement-imports` — up to 100 recent imports.
+- `GET /api/statement-imports/template` — template CSV (optional `format`,
+  default `flash_csv`), as attachment `modelo-extrato-flash.csv`; unknown format
+  returns 422.
 
-Erros de leitura do arquivo respondem 422 com a mensagem do parser, upload
-acima do limite responde 413 e falha de banco responde 503 sem detalhe
-técnico (a causa vai só para o log).
+File read errors return 422 with the parser's message, an upload over the limit
+returns 413, and a database failure returns 503 without technical detail (the
+cause goes only to the log).
 
-O upload aceita até 2 MiB e 10 mil linhas. O primeiro formato é limitado a
-contas de movimentação em BRL. Não há conciliação automática com transações
-de contas Pluggy; possíveis coincidências exatas com transações Pluggy ou
-com lançamento manual da mesma conta aparecem como aviso, sem fusão
-automática. O valor é comparado em todas as grafias com que pode estar
-gravado (`-10`, `-10.0`, `-10.00`), porque Pluggy e lançamentos manuais
-preservam a escala de origem.
+Uploads accept up to 2 MiB and 10,000 rows. The first format is limited to
+BRL checking-type accounts. There is no automatic reconciliation with Pluggy
+account transactions; exact coincidences with Pluggy transactions or with a
+manual entry of the same account appear as a warning, never merged
+automatically: the file row is written and the others are not changed. The amount is compared in every spelling it may be stored with
+(`-10`, `-10.0`, `-10.00`), because Pluggy and manual entries preserve the
+source scale.
