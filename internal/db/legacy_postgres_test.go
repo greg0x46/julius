@@ -14,6 +14,10 @@ func TestAutomaticLegacyPostgresConversion(t *testing.T) {
 	mustExec(t, conn, `INSERT INTO financial_accounts(id,name,account_type,currency_code,origin,opening_balance,created_at,updated_at) VALUES('00000000-0000-0000-0000-000000000001','Synthetic','BANK','BRL','manual','100.00000000000000000001','2026-10-10T02:00:00Z','2026-10-10T02:00:00Z')`)
 	mustExec(t, conn, `INSERT INTO financial_transactions(id,account_id,origin,amount,amount_in_account_currency,currency_code,provider_status,occurred_at,created_at,updated_at) VALUES('00000000-0000-0000-0000-000000000002','00000000-0000-0000-0000-000000000001','manual','-12.00000000000000000001','-12.00000000000000000001','BRL','POSTED','2026-10-10T02:00:00Z','2026-10-10T02:00:00Z','2026-10-10T02:00:00Z')`)
 	mustExec(t, conn, `INSERT INTO account_balance_adjustments VALUES('00000000-0000-0000-0000-000000000003','00000000-0000-0000-0000-000000000001','2','Synthetic','2026-10-10T02:00:00Z')`)
+	var originalOID int64
+	if err := conn.QueryRow(`SELECT 'auth_owner'::regclass::oid`).Scan(&originalOID); err != nil {
+		t.Fatal(err)
+	}
 	opened, err := Open(os.Getenv("JULIUS_TEST_POSTGRES_DSN"))
 	if err != nil {
 		t.Fatal(err)
@@ -27,7 +31,7 @@ func TestAutomaticLegacyPostgresConversion(t *testing.T) {
 		t.Fatal(ciphertext, err)
 	}
 	var backup string
-	if err = opened.QueryRow(`SELECT table_schema FROM information_schema.tables WHERE table_name='auth_owner' AND table_schema LIKE 'julius_legacy_%' ORDER BY table_schema DESC LIMIT 1`).Scan(&backup); err != nil {
+	if err = opened.QueryRow(`SELECT n.nspname FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE c.oid=?`, originalOID).Scan(&backup); err != nil {
 		t.Fatal(err)
 	}
 	var unix int64
