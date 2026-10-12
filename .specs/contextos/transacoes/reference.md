@@ -169,3 +169,8 @@ remain instants. Account cycle dates and bill due/closing dates are UTC calendar
 days, stored as Postgres `DATE` or SQLite date text. UUID identities use native
 Postgres UUIDs. Both dialects start at the same `0001_initial.sql` baseline;
 legacy databases are rejected before migrations and require a separate converter.
+
+Transaction queries scan nullable money and instants directly into decimal and
+time values through `internal/db/types`, preserving SQL NULL without intermediate
+text conversions. Shared test fixtures bind binary payloads and use portable
+boolean literals so query coverage runs against both typed baselines.
