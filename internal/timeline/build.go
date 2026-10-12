@@ -88,7 +88,7 @@ func eligibleRealItems(ctx context.Context, q Querier, from, to time.Time, accou
 
 	items := make([]transactions.Item, 0, len(result.Items))
 	for _, item := range result.Items {
-		if !item.TotalsEligibility.MovesCash() || item.EffectiveMoney == nil || item.OccurredAt == nil {
+		if !item.TotalsEligibility.MovesCash() || item.EffectiveMoney == nil || item.EffectiveMoney.CurrencyCode != "BRL" || item.OccurredAt == nil {
 			continue
 		}
 		if len(accountIDs) > 0 && !contains(accountIDs, item.Account.ID) {
@@ -315,8 +315,23 @@ func BuildSeries(ctx context.Context, q Querier, params BuildParams) (Series, er
 
 	sort.SliceStable(entries, func(i, j int) bool { return entries[i].Date.Before(entries[j].Date) })
 
-	points := buildPoints(cashEntries(entries, bills.settled), balance, from, to, reference, func(e Entry) bool {
-		return awaitingCash(e, reference, bills.dueOnReference)
+	manualCash, err := anchoredManualCash(ctx, q, params)
+	if err != nil {
+		return Series{}, err
+	}
+	anchored := make(map[string]bool, len(manualCash))
+	for _, entry := range manualCash {
+		anchored[entry.EventKey] = true
+	}
+	walk := make([]Entry, 0, len(entries)+len(manualCash))
+	for _, entry := range cashEntries(entries, bills.settled) {
+		if !anchored[entry.EventKey] {
+			walk = append(walk, entry)
+		}
+	}
+	walk = append(walk, manualCash...)
+	points := buildPoints(walk, balance, from, to, func(e Entry) bool {
+		return anchored[e.EventKey] || (!e.Date.After(reference) && !awaitingCash(e, reference, bills.dueOnReference))
 	})
 	lowest, firstNegative := lowestAndFirstNegative(points, reference)
 
@@ -422,11 +437,12 @@ func awaitingCash(e Entry, reference time.Time, dueOnReference map[string]bool) 
 // The exception is awaitingCash: entries dated on reference that cash on hand
 // does not include yet are walked as future ones, so the point for reference
 // is the balance at the end of the day, startingBalance minus what is still
-// due today, not startingBalance itself.
-func buildPoints(entries []Entry, startingBalance decimal.Decimal, from, to, reference time.Time, pending func(Entry) bool) []DayPoint {
+// due today, not startingBalance itself. Future-dated posted manual movements
+// already in startingBalance are also reversed before walking their dates.
+func buildPoints(entries []Entry, startingBalance decimal.Decimal, from, to time.Time, inAnchor func(Entry) bool) []DayPoint {
 	pastSum := decimal.Zero
 	for _, e := range entries {
-		if !e.Date.After(reference) && !pending(e) {
+		if inAnchor(e) {
 			pastSum = pastSum.Add(e.Amount)
 		}
 	}

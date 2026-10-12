@@ -59,7 +59,7 @@ or whose movement type cannot be given a direction, has not moved anything yet;
 reporting it as a cash movement made the timeline and net worth reverse it from
 the anchor (the unclassified one with the sign flipped).
 
-Balance note: the account balance reported by the provider **is** the reference
+Balance note: on synced accounts, the provider-reported balance **is** the reference
 for money in accounts, and **neither** path above corrects it — both are
 *reporting* decisions, not claims that the money did not leave the bank. An
 ignored entry and a transfer really moved money, so they stay inside the
@@ -74,7 +74,10 @@ Where these rules *decide* a number: income/expense totals (both paths apply)
 and card debt (only the `ignored` path). There the question is "how much will
 this bill charge me", which an inclusion decision legitimately shapes, so the
 total comes from the cycle's eligible entries, not from the reported balance
-(`transactions.CreditCardTransactionTotal`). Cash on hand comes from
+(`transactions.CreditCardTransactionTotal`). Manual bank accounts instead derive native balance from opening balance +
+posted undeleted transaction amounts + explicit adjustment deltas; their
+inclusion/category annotations do not alter cash either. Synced balances retain
+provider ownership. Cash on hand is BRL-only without a rate source and comes from
 `transactions.CashOnHand`, a single implementation shared by the Timeline
 (today's anchor) and Net Worth.
 

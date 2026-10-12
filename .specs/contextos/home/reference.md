@@ -52,7 +52,15 @@ sources**: Ledger entries and the unified scenario projection flow
 The package **does not know Payables**: a plan's link to a `Payable` is
 encapsulated in `internal/scenarios` (`Scenario.PayableID`/`Kind`, via
 `ListPlanInstallments`/`SignedAmount`). The anchor balance comes from
-`transactions.CashOnHand`.
+`transactions.CashOnHand`, including derived BRL manual-account balances.
+Foreign account amounts are excluded from both the anchor and real entries;
+there is no implicit FX conversion. Balance adjustments enter the current
+anchor and the dated balance walk, never transaction income/expense totals or
+reporting entries. The walk also reverses adjustments after a historical
+window before reconstructing its days. Posted manual movements are already in
+the anchor even when future-dated; the walk reverses them before applying them
+on their dates, so they affect the curve once. These cash-only inputs respect
+account selection and exclude foreign currencies.
 
 The reference-day point is the balance at the **end** of that day, not the
 anchor balance: a real transaction from today is already in cash and enters the

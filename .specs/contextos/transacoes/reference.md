@@ -14,9 +14,9 @@ handlers.
 Besides Pluggy-synced transactions, an entry can be created by hand
 (`origin='manual'`) in an account that already exists — same entity, same
 categorization/inclusion/automation rules, just another way in. Editing and
-deleting apply only to manual entries; a synced one never changes here. The
-account balance still comes only from the provider — a manual entry never
-changes it (see Notes).
+deleting apply only to manual entries; a synced one never changes here.
+Synced account balances still come only from the provider. Manual bank accounts derive their native balance from opening balance, posted movements
+and explicit adjustments (see Notes).
 
 Categorizing as a transfer between own accounts (`kind='transfer'`) also takes
 the entry out of totals, with its own reason (`transfer_category`) and without
@@ -44,18 +44,18 @@ marking it ignored — see the note on the two paths in
   `financial_transactions`, so an already categorized or ignored manual row
   cannot be truly deleted — `DeleteManual` sets `deleted_at` instead, and
   `viewSelect` (the base of every SELECT in this package, including `GetItem`)
-  filters on `deleted_at IS NULL`. A manual entry never enters
-  `networth.cashDeltasDescending`/`earliestCashTransactionDay` (filter
-  `origin = 'synced'`) — see Notes.
+  filters on `deleted_at IS NULL`. Manual entries on synced accounts never
+  enter net-worth balance reconstruction; posted movements on manual accounts do — see Notes.
 - Credit card (`cardflow.go`/`cardtotal.go`, moved from `internal/payables`):
   `CardDueDates`/`ProjectedEntryDate` (the date a card purchase becomes a cash
   outflow — the bill's due date, not `occurred_at`), `CreditAccountIDs`,
   `CardMetadataByTransaction` and `CreditCardTransactionTotal(At)` (how much is
   owed in the open cycle, computed from eligible entries, never from
   `financial_accounts.balance`).
-- `balance.go` — `CashOnHand`: money in accounts (sum of reported balances of
-  non-credit accounts), the single implementation, used by the Timeline and Net
-  Worth. See the balance note in `.specs/motores-de-dominio.md` section 1 for
+- `balance.go` — `CashOnHand`: BRL money in non-credit accounts
+  (provider-reported synced balances plus derived manual balances), the single
+  implementation used by the Timeline and Net Worth. See the balance note in
+  `.specs/motores-de-dominio.md` section 1 for
   why an ignored transaction stays inside the balance.
 
 ## HTTP routes
@@ -85,6 +85,22 @@ marking it ignored — see the note on the two paths in
   legacy behavior remains: each POST creates a new entry.
 - Accounts/cards: `GET /api/accounts[/{id}][/cards|/bills]`,
   `PUT /api/accounts/{id}/closing-day`.
+- Manual bank accounts: `POST /api/accounts`, `PUT /api/accounts/{id}`.
+  Body: `name`, `currency_code` (default BRL), `opening_balance` (decimal
+  string, default zero), `archived` (default false). PUT replaces these fields
+  and only accepts manual accounts (409 for synced). GET list/detail includes
+  `origin`, nullable `external_id`, `opening_balance`, `archived_at`, and
+  `has_movements`. `GET /api/accounts/currencies` lists ISO currency codes
+  from the existing `golang.org/x/text/currency` catalog.
+- `POST /api/accounts/{id}/adjustments`: signed decimal-string `amount` plus
+  `description`. Only active manual accounts accept adjustments; they are
+  balance deltas, separate from income/expense transactions. The adjustment
+  and account timestamp are written atomically. Its response is the account.
+  Currency and opening balance are locked once transactions (even deleted)
+  or adjustments exist (409); account writes and transaction creation share
+  a row lock to serialize this check. Archive/reactivate via PUT `archived`.
+  Archived accounts retain balances/history and reject creation/update of
+  transactions targeting them (409), and new adjustments (409).
 - Investments: `GET /api/investments[/{id}][/transactions]`.
 
 ## Frontend
@@ -93,7 +109,14 @@ marking it ignored — see the note on the two paths in
   edit drawer, "Novo lançamento manual" button and — for a manual entry — a
   "Manual" tag in the list and drawer, with Editar/Excluir actions.
   `ManualTransactionForm` serves create and edit.
-- `/contas-e-cartoes` + `/contas-e-cartoes/:id`.
+- `/contas-e-cartoes` + `/contas-e-cartoes/:id` — native balance rows,
+  "Nova conta" drawer (name, currency, opening balance), and manual-only edit,
+  signed balance-adjustment, archive/reactivate actions on detail. The detail
+  displays opening balance and locks its currency/initial fields after activity.
+  Drawers fill compact screens. Manual transaction amount labels follow the
+  selected account currency; archived accounts leave the account selector.
+  Optional converted equivalents are omitted because there is no rate source.
+  BRL summaries explicitly exclude foreign accounts.
 - `/investimentos` + `/investimentos/:id`.
 
 ## Notes
@@ -106,9 +129,10 @@ for full exclusion is `investment_transfer`. See
 
 Ingestion: Pluggy, manual entry and statement import are the entry paths today,
 all data providers, not part of this engine — see Open Banking sync and
-`.specs/motores-de-dominio.md` section 1. Creating a 100% manual account (with
-no Pluggy link) is out of scope for now — every manual entry points to an
-account that already exists (statement import creates its own file accounts).
+`.specs/motores-de-dominio.md` section 1. Standalone manual bank accounts use the same `financial_accounts` table,
+with `origin=manual` and NULL source/external/raw/hash identity. Synced and
+file-imported accounts keep `origin=synced` and their existing identity
+constraints. Manual investment custody accounts remain a separate model.
 
 User decisions live in their own tables, which ingestion never rewrites: manual
 category and inclusion (`transaction_category_*`, `transaction_inclusion_*`),
@@ -116,11 +140,19 @@ category and inclusion (`transaction_category_*`, `transaction_inclusion_*`),
 (PENDING → POSTED, corrections) keeps the entry's `id`. Full policy in
 [`sincronizacao-open-banking/reference.md`](../sincronizacao-open-banking/reference.md).
 
-The account balance (`CashOnHand`, Net Worth) never reflects a manual entry —
-only what the provider reports in `financial_accounts.balance`. A manual entry
-affects the statement and income/expense totals, but never the displayed
-account balance or the historical net-worth reconstruction (`networth.Backfill`
-filters `origin = 'synced'` explicitly for that). Credit card is the deliberate
-exception: `CreditCardTransactionTotal` already sums eligible entries (never the
-reported balance), so a manual entry on a credit account counts normally toward
-the open bill.
+For a manual bank account, native balance is **opening balance + sum of
+signed account-currency amounts of POSTED, undeleted transactions + sum of
+explicit adjustment deltas**. Inclusion/category changes do not change this
+balance; editing, moving or soft-deleting a transaction recomputes it on read.
+There is no persisted second balance (`balance` must be NULL on manual
+accounts). Adjustments do not enter income/expense totals. Archived accounts
+keep their money in the balance. Creating USD 10 on a USD account stores USD
+10 in both transaction amount fields; no FX conversion occurs.
+
+For synced accounts, manual entries still never change provider balances or
+historical reconstruction. Credit-card totals remain the deliberate exception:
+they sum eligible entries, so manual entries count toward the open bill.
+`CashOnHand` (Timeline/Net Worth) is a BRL aggregate and excludes foreign
+accounts. Net-worth history reverses posted manual-account movements and
+adjustment deltas, using opening balance as its historical baseline; existing
+snapshots are never rewritten.
