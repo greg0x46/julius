@@ -35,7 +35,7 @@ export function BankAccountList({
       ) : accounts.length === 0 ? (
         <EmptyState
           title="Nenhuma conta bancária"
-          hint="Conecte um banco em Configurações ou importe um extrato."
+          hint="Crie uma conta manual, conecte um banco em Configurações ou importe um extrato."
         />
       ) : (
         <ul className="list-rows" aria-label="Contas bancárias">

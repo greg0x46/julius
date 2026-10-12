@@ -57,6 +57,12 @@ authentication configuration that does not depend on the host:
 - **Statement import** — upload a Flash CSV, review the per-row preview and
   import it into a file-based account. Re-uploads and overlapping periods are
   recognized, with an import history and warnings for inconsistent data.
+- **Manual bank accounts** — create standalone accounts in an ISO 4217 currency
+  (BRL by default), including USD/EUR, without a bank connection. Native balance
+  is opening balance + posted movements + explicit adjustments. Edit, archive
+  and reactivate accounts in **Contas e cartões**; currency and opening balance
+  lock after movements. Foreign amounts stay in their original currency and
+  are excluded from BRL aggregates; no exchange-rate conversion is supplied.
 - **Transactions** — searchable/filterable transaction list, manual
   inclusion/exclusion (e.g. ignoring a chargeback or a duplicate) and
   categorization. Entries can also be created by hand in an existing account —
@@ -72,7 +78,8 @@ authentication configuration that does not depend on the host:
   history.
 - **Recurrences** — register cash-flow commitments known in advance (salary,
   rent, subscriptions), reconciled against the real transactions that settle
-  them via an automation rule.
+  them via an automation rule, even when the transaction is uncategorized or
+  has a different category.
 - **Scenarios** — user-authored hypothetical projections ("what if I travel",
   "what if I change jobs"), or the installment plan of a debt/receivable —
   they never affect real totals unless explicitly included in a query.
