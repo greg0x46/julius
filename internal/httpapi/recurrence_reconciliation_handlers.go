@@ -105,7 +105,7 @@ func toReconciledTransactionDTO(item transactions.Item) reconciledTransactionDTO
 func toOccurrenceDTO(resolved recurrences.Reconciliation) recurrenceOccurrenceDTO {
 	dto := recurrenceOccurrenceDTO{
 		Date:           resolved.Occurrence.Date.Format(dateOnlyLayout),
-		ExpectedAmount: resolved.Occurrence.ExpectedAmount.StringFixed(2),
+		ExpectedAmount: money.CanonicalDecimal(resolved.Occurrence.ExpectedAmount),
 		Status:         "unreconciled",
 	}
 	if resolved.Detached {
