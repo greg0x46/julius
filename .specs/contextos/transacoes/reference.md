@@ -174,3 +174,5 @@ Transaction queries scan nullable money and instants directly into decimal and
 time values through `internal/db/types`, preserving SQL NULL without intermediate
 text conversions. Shared test fixtures bind binary payloads and use portable
 boolean literals so query coverage runs against both typed baselines.
+`TestQueryTypedValuesBothDialects` pins exact large amounts, UTC instants,
+decision timestamps and absent values on SQLite and Postgres.
