@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"database/sql"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -36,16 +37,16 @@ const (
 // deliberately: a recurring scenario with no category has no representation in
 // the old recurring_commitments shape, which each Down block documents.
 func TestDownUpRoundTrip(t *testing.T) {
-	conn, err := Open(filepath.Join(t.TempDir(), "roundtrip.db"))
+	conn, err := sql.Open("sqlite", filepath.Join(t.TempDir(), "roundtrip.db"))
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
 	t.Cleanup(func() { conn.Close() })
-	if err := Migrate(conn); err != nil {
+	if err := migrate(conn, goose.DialectSQLite3, legacyMigrationsFS, "migrations/archive/sqlite"); err != nil {
 		t.Fatalf("initial up: %v", err)
 	}
 
-	migrations, err := fs.Sub(sqliteMigrationsFS, "migrations/sqlite")
+	migrations, err := fs.Sub(legacyMigrationsFS, "migrations/archive/sqlite")
 	if err != nil {
 		t.Fatalf("sub fs: %v", err)
 	}
@@ -71,13 +72,14 @@ func TestPostgresDownUpRoundTrip(t *testing.T) {
 	}
 	// Open already applies the Postgres migrations, so the tree is fully
 	// migrated by the time the rollback below starts.
-	conn, err := Open(dsn)
+	conn, _ := postgresMigrationProviderAt(t, 46)
+	var err error
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
 	t.Cleanup(func() { conn.Close() })
 
-	migrations, err := fs.Sub(postgresMigrationsFS, "migrations/postgres")
+	migrations, err := fs.Sub(legacyMigrationsFS, "migrations/archive/postgres")
 	if err != nil {
 		t.Fatalf("sub fs: %v", err)
 	}

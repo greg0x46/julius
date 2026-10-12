@@ -72,7 +72,7 @@ func Create(ctx context.Context, q Querier, name string, kind money.CategoryKind
 	c := Category{ID: uuid.NewString(), Name: name, Kind: kind, IsActive: true, Icon: icon, Color: color, CreatedAt: now, UpdatedAt: now}
 	_, err := q.ExecContext(ctx,
 		`INSERT INTO categories (id, name, kind, is_active, icon, color, created_at, updated_at)
-		 VALUES (?, ?, ?, 1, ?, ?, ?, ?)`,
+		 VALUES (?, ?, ?, TRUE, ?, ?, ?, ?)`,
 		c.ID, c.Name, string(c.Kind), c.Icon, c.Color, db.FormatTime(now), db.FormatTime(now),
 	)
 	if err != nil {
@@ -102,10 +102,7 @@ func Update(ctx context.Context, q Querier, id string, name *string, isActive *b
 	}
 	existing.UpdatedAt = time.Now().UTC()
 
-	activeInt := 0
-	if existing.IsActive {
-		activeInt = 1
-	}
+	activeInt := existing.IsActive
 	_, err = q.ExecContext(ctx,
 		`UPDATE categories SET name = ?, is_active = ?, icon = ?, color = ?, updated_at = ? WHERE id = ?`,
 		existing.Name, activeInt, existing.Icon, existing.Color, db.FormatTime(existing.UpdatedAt), id,

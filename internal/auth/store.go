@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/greg0x46/julius/internal/db"
 	"github.com/greg0x46/julius/internal/settings"
 )
 
@@ -74,7 +75,7 @@ func (s *Store) Initialize(ctx context.Context, email, password string, master [
 	if err != nil {
 		return err
 	}
-	if _, err := tx.ExecContext(ctx, `INSERT INTO auth_owner(id,email,password_hash,created_at) VALUES(1,?,?,?)`, email, hash, s.Now().Unix()); err != nil {
+	if _, err := tx.ExecContext(ctx, `INSERT INTO auth_owner(id,email,password_hash,created_at) VALUES(1,?,?,?)`, email, hash, db.FormatTime(s.Now().Truncate(time.Second))); err != nil {
 		return err
 	}
 	return tx.Commit()
@@ -95,17 +96,17 @@ func (s *Store) Login(ctx context.Context, email, password string) (string, erro
 		return "", err
 	}
 	token := base64.RawURLEncoding.EncodeToString(raw)
-	now := s.Now().Unix()
+	now := s.Now().Truncate(time.Second)
 	tx, err := s.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return "", err
 	}
 	defer tx.Rollback()
-	if _, err = tx.ExecContext(ctx, `DELETE FROM auth_sessions WHERE expires_at <= ? OR last_seen_at <= ?`, now, now-int64(IdleTimeout/time.Second)); err != nil {
+	if _, err = tx.ExecContext(ctx, `DELETE FROM auth_sessions WHERE expires_at <= ? OR last_seen_at <= ?`, db.FormatTime(now), db.FormatTime(now.Add(-IdleTimeout))); err != nil {
 		return "", err
 	}
 	// Compare the verified hash so a concurrent reset cannot issue an old-password session.
-	result, err := tx.ExecContext(ctx, `INSERT INTO auth_sessions(token_hash,owner_id,revision,created_at,last_seen_at,expires_at) SELECT ?,id,revision,?,?,? FROM auth_owner WHERE id=1 AND password_hash=?`, digest(token), now, now, now+int64(Lifetime/time.Second), hash)
+	result, err := tx.ExecContext(ctx, `INSERT INTO auth_sessions(token_hash,owner_id,revision,created_at,last_seen_at,expires_at) SELECT ?,id,revision,?,?,? FROM auth_owner WHERE id=1 AND password_hash=?`, digest(token), db.FormatTime(now), db.FormatTime(now), db.FormatTime(now.Add(Lifetime)), hash)
 	if err != nil {
 		return "", err
 	}
@@ -126,8 +127,8 @@ func (s *Store) Authenticate(ctx context.Context, token string) (string, error) 
 	if err != nil || len(raw) != 32 {
 		return "", ErrSession
 	}
-	now := s.Now().Unix()
-	result, err := s.DB.ExecContext(ctx, `UPDATE auth_sessions SET last_seen_at=? WHERE token_hash=? AND expires_at>? AND last_seen_at>? AND revision=(SELECT revision FROM auth_owner WHERE id=1)`, now, digest(token), now, now-int64(IdleTimeout/time.Second))
+	now := s.Now().Truncate(time.Second)
+	result, err := s.DB.ExecContext(ctx, `UPDATE auth_sessions SET last_seen_at=? WHERE token_hash=? AND expires_at>? AND last_seen_at>? AND revision=(SELECT revision FROM auth_owner WHERE id=1)`, db.FormatTime(now), digest(token), db.FormatTime(now), db.FormatTime(now.Add(-IdleTimeout)))
 	if err != nil {
 		return "", err
 	}

@@ -197,7 +197,7 @@ func Create(ctx context.Context, conn *sql.DB, write Write) (Rule, error) {
 	_, err = tx.ExecContext(ctx, `
 		INSERT INTO automation_rules (id, name, is_active, logic_operator, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?)`,
-		id, write.Name, boolToInt(write.IsActive), string(write.LogicOperator), db.FormatTime(now), db.FormatTime(now),
+		id, write.Name, write.IsActive, string(write.LogicOperator), db.FormatTime(now), db.FormatTime(now),
 	)
 	if err != nil {
 		return Rule{}, err
@@ -229,7 +229,7 @@ func Update(ctx context.Context, conn *sql.DB, id string, write Write) (Rule, er
 	now := time.Now().UTC()
 	res, err := tx.ExecContext(ctx, `
 		UPDATE automation_rules SET name = ?, is_active = ?, logic_operator = ?, updated_at = ? WHERE id = ?`,
-		write.Name, boolToInt(write.IsActive), string(write.LogicOperator), db.FormatTime(now), id,
+		write.Name, write.IsActive, string(write.LogicOperator), db.FormatTime(now), id,
 	)
 	if err != nil {
 		return Rule{}, err
@@ -263,7 +263,7 @@ func Update(ctx context.Context, conn *sql.DB, id string, write Write) (Rule, er
 func SetActive(ctx context.Context, conn *sql.DB, id string, isActive bool) (Rule, error) {
 	now := db.FormatTime(time.Now())
 	res, err := conn.ExecContext(ctx, `UPDATE automation_rules SET is_active = ?, updated_at = ? WHERE id = ?`,
-		boolToInt(isActive), now, id)
+		isActive, now, id)
 	if err != nil {
 		return Rule{}, err
 	}
@@ -387,7 +387,7 @@ func List(ctx context.Context, q Querier) ([]Rule, error) {
 
 // ListActive mirrors load_active_rules.
 func ListActive(ctx context.Context, q Querier) ([]Rule, error) {
-	return listWhere(ctx, q, "is_active = 1")
+	return listWhere(ctx, q, "is_active = TRUE")
 }
 
 // ListActiveReconcileTargets returns, for every active rule whose action is
@@ -401,7 +401,7 @@ func ListActiveReconcileTargets(ctx context.Context, q Querier) (map[string]Rule
 		       a.scenario_id
 		FROM automation_rules r
 		JOIN automation_rule_actions a ON a.rule_id = r.id
-		WHERE r.is_active = 1 AND a.action_type = 'reconcile'`)
+		WHERE r.is_active = TRUE AND a.action_type = 'reconcile'`)
 	if err != nil {
 		return nil, err
 	}
@@ -510,11 +510,4 @@ func setToSortedSlice(set map[string]bool) []string {
 	}
 	sort.Slice(out, func(i, j int) bool { return strings.ToLower(out[i]) < strings.ToLower(out[j]) })
 	return out
-}
-
-func boolToInt(b bool) int {
-	if b {
-		return 1
-	}
-	return 0
 }

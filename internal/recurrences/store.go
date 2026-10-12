@@ -90,7 +90,7 @@ func Create(ctx context.Context, conn *sql.DB, write Write) (RecurringCommitment
 	if _, err := tx.ExecContext(ctx, `
 		INSERT INTO scenarios (id, kind, name, payable_id, is_active, is_accounting_source, created_at, updated_at)
 		VALUES (?, 'recurring', ?, NULL, ?, 0, ?, ?)`,
-		c.ID, c.Name, boolToInt(c.IsActive), db.FormatTime(now), db.FormatTime(now),
+		c.ID, c.Name, c.IsActive, db.FormatTime(now), db.FormatTime(now),
 	); err != nil {
 		return RecurringCommitment{}, err
 	}
@@ -125,7 +125,7 @@ func Update(ctx context.Context, conn *sql.DB, id string, write Write) (Recurrin
 	res, err := tx.ExecContext(ctx, `
 		UPDATE scenarios SET name = ?, is_active = ?, updated_at = ?
 		WHERE id = ? AND kind = 'recurring'`,
-		c.Name, boolToInt(c.IsActive), db.FormatTime(now), id)
+		c.Name, c.IsActive, db.FormatTime(now), id)
 	if err != nil {
 		return RecurringCommitment{}, err
 	}
@@ -164,7 +164,7 @@ func SetActive(ctx context.Context, q Querier, id string, isActive bool) (Recurr
 	res, err := q.ExecContext(ctx, `
 		UPDATE scenarios SET is_active = ?, updated_at = ?
 		WHERE id = ? AND kind = 'recurring'`,
-		boolToInt(isActive), db.FormatTime(time.Now().UTC()), id)
+		isActive, db.FormatTime(time.Now().UTC()), id)
 	if err != nil {
 		return RecurringCommitment{}, err
 	}
@@ -299,7 +299,7 @@ func List(ctx context.Context, q Querier) ([]RecurringCommitment, error) {
 // ListActive returns only commitments whose Scenario is active — the set
 // internal/projections projects occurrences from.
 func ListActive(ctx context.Context, q Querier) ([]RecurringCommitment, error) {
-	return listWhere(ctx, q, "s.is_active = 1")
+	return listWhere(ctx, q, "s.is_active = TRUE")
 }
 
 func formatDatePtr(t *time.Time) any {
@@ -307,13 +307,6 @@ func formatDatePtr(t *time.Time) any {
 		return nil
 	}
 	return formatDate(*t)
-}
-
-func boolToInt(b bool) int {
-	if b {
-		return 1
-	}
-	return 0
 }
 
 func insertSchedule(ctx context.Context, q Querier, c RecurringCommitment) error {

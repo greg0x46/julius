@@ -41,13 +41,6 @@ func parseDate(s string) (time.Time, error) { return dbtypes.ParseDate(s) }
 
 const scenarioColumns = `id, kind, name, payable_id, is_active, is_accounting_source, created_at, updated_at`
 
-func boolToInt(value bool) int {
-	if value {
-		return 1
-	}
-	return 0
-}
-
 // CreateScenario mirrors creating a Scenario row. Callers are responsible
 // for enforcing kind-specific rules (payableID required, and its kind must
 // agree with kind) before calling this — the schema also enforces
@@ -76,7 +69,7 @@ func CreateScenario(ctx context.Context, q Querier, kind Kind, name string, paya
 		}
 		var count int
 		if err := q.QueryRowContext(ctx,
-			`SELECT COUNT(1) FROM scenarios WHERE payable_id = ? AND is_accounting_source = 1`, payableID,
+			`SELECT COUNT(1) FROM scenarios WHERE payable_id = ? AND is_accounting_source = TRUE`, payableID,
 		).Scan(&count); err != nil {
 			return Scenario{}, err
 		}
@@ -94,7 +87,7 @@ func CreateScenario(ctx context.Context, q Querier, kind Kind, name string, paya
 	_, err := q.ExecContext(ctx, `
 		INSERT INTO scenarios (id, kind, name, payable_id, is_active, is_accounting_source, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		s.ID, string(s.Kind), s.Name, s.PayableID, boolToInt(s.IsActive), boolToInt(s.IsAccountingSource),
+		s.ID, string(s.Kind), s.Name, s.PayableID, s.IsActive, s.IsAccountingSource,
 		db.FormatTime(now), db.FormatTime(now),
 	)
 	if err != nil {
@@ -301,7 +294,7 @@ func SetActive(ctx context.Context, q Querier, id string, active bool) (Scenario
 	now := db.FormatTime(time.Now().UTC())
 	result, err := q.ExecContext(ctx,
 		`UPDATE scenarios SET is_active = ?, updated_at = ? WHERE id = ?`,
-		boolToInt(active), now, id,
+		active, now, id,
 	)
 	if err != nil {
 		return Scenario{}, err
@@ -331,7 +324,7 @@ func ListScenarios(ctx context.Context, q Querier, filter ListFilter) ([]Scenari
 	}
 	if filter.IsActive != nil {
 		clauses = append(clauses, "is_active = ?")
-		args = append(args, boolToInt(*filter.IsActive))
+		args = append(args, *filter.IsActive)
 	}
 	if filter.PayableID != nil {
 		clauses = append(clauses, "payable_id = ?")
