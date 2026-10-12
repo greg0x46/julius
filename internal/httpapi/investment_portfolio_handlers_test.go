@@ -681,6 +681,66 @@ func TestIntegratedInvestmentRecordsAreReadOnlyOverHTTP(t *testing.T) {
 	}
 }
 
+func TestManualHoldingInIntegratedAccountOverHTTP(t *testing.T) {
+	srv, conn := newTestServer(t)
+	holding := insertInvestment(t, conn) // provider holding worth 1000.50
+	grouping := integratedAccountID(t, conn, holding)
+	investmentItems(t, srv, "/api/investment-accounts")
+
+	created := investmentCall(t, srv, http.MethodPost, "/api/investment-positions", map[string]any{
+		"account_id": grouping, "name": "Bitcoin", "ticker": "BTC", "asset_type": "Criptoativo",
+		"initial_quantity": "0.5", "initial_unit_cost": "1000.00", "occurred_on": "2026-01-05",
+	}, http.StatusCreated)
+	id := investmentID(t, created)
+	if created["source"] != "manual" || created["account_id"] != grouping {
+		t.Errorf("created = %+v", created)
+	}
+	assertMoney(t, "current_value", created["current_value"], "500.00")
+
+	investmentCall(t, srv, http.MethodPost, "/api/investment-operations", map[string]any{
+		"account_id": grouping, "position_id": id, "kind": "buy",
+		"occurred_on": "2026-01-10", "amount": "600.00", "quantity": "0.5",
+	}, http.StatusCreated)
+	updated := investmentCall(t, srv, http.MethodPut, "/api/investment-positions/"+id, map[string]any{
+		"name": "Bitcoin", "ticker": "BTC", "asset_type": "Criptoativo", "portfolio_id": nil, "notes": "carteira fria",
+	}, http.StatusOK)
+	if updated["notes"] != "carteira fria" {
+		t.Errorf("update = %+v", updated)
+	}
+
+	summary := investmentCall(t, srv, http.MethodGet, "/api/investment-summary", nil, http.StatusOK)
+	assertMoney(t, "manual_value", summary["manual_value"], "1100.00")
+	assertMoney(t, "synced_value", summary["synced_value"], "1000.50")
+	assertMoney(t, "total_value", summary["total_value"], "2100.50")
+	accounts, _ := summary["accounts"].([]any)
+	if len(accounts) != 1 {
+		t.Fatalf("accounts = %+v, want only the grouping", summary["accounts"])
+	}
+	row, _ := accounts[0].(map[string]any)
+	assertMoney(t, "grouping current_value", row["current_value"], "2100.50")
+	assertMoney(t, "grouping cash_balance", row["cash_balance"], "0")
+
+	// The provider holding next to it stays read-only.
+	if slug := investmentProblem(t, srv, http.MethodPut, "/api/investment-positions/"+holding,
+		map[string]any{"name": "Fundo renomeado", "ticker": nil, "asset_type": "Fundo", "portfolio_id": nil, "notes": nil},
+		http.StatusConflict); slug != "investment-integrated-read-only" {
+		t.Errorf("synced rename slug = %q", slug)
+	}
+	if slug := investmentProblem(t, srv, http.MethodDelete, "/api/investment-positions/"+holding, nil,
+		http.StatusConflict); slug != "investment-integrated-read-only" {
+		t.Errorf("synced delete slug = %q", slug)
+	}
+
+	operations := investmentItems(t, srv, "/api/investment-operations?position_id="+id)
+	for i := len(operations) - 1; i >= 0; i-- {
+		investmentCall(t, srv, http.MethodDelete, "/api/investment-operations/"+investmentID(t, operations[i]), nil, http.StatusNoContent)
+	}
+	investmentCall(t, srv, http.MethodDelete, "/api/investment-positions/"+id, nil, http.StatusNoContent)
+	if positions := investmentItems(t, srv, "/api/investment-positions"); len(positions) != 1 || positions[0]["id"] != holding {
+		t.Errorf("positions after delete = %+v", positions)
+	}
+}
+
 func TestInvestmentSummaryOverHTTP(t *testing.T) {
 	srv, conn := newTestServer(t)
 	holding := insertInvestment(t, conn) // provider holding worth 1000.50

@@ -114,7 +114,9 @@ the history with no period limit, without reclassifying it automatically.
 
 Integrated accounts keep the balances reported by the institution. Use
 **Vincular caixa da corretora** (link brokerage cash) when the imported
-financial account already represents the same cash. Goals group positions from
+financial account already represents the same cash. Manual holdings (such as
+crypto that Open Finance does not expose) can be added to an integrated account,
+next to the institution's positions, and are never overwritten by a sync. Goals group positions from
 any institution without changing their value. Manual quotes are dated;
 corrections to operations recompute subsequent costs and are rejected if they
 would produce negative cash or a negative position.

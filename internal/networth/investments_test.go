@@ -39,6 +39,29 @@ func TestManualInvestmentsAndLinkedBrokerageCashCountOnce(t *testing.T) {
 	assertDecimalEqual(t, "linked net worth", b.NetWorth, "3100")
 }
 
+func TestManualHoldingInIntegratedAccountCountsOnce(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	f.addInvestment("2000")
+	if err := investments.EnsureIntegratedAccounts(ctx, f.conn); err != nil {
+		t.Fatal(err)
+	}
+	ticker := "BTC"
+	if _, err := investments.CreatePosition(ctx, f.conn, investments.PositionInput{
+		AccountID: "integrated:" + f.sourceID, Name: "Bitcoin", Ticker: &ticker, AssetType: "Criptoativo",
+		InitialQuantity: decimal.RequireFromString("0.5"), InitialUnitCost: decimal.RequireFromString("1000"),
+		OccurredOn: time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	b, err := networth.Compute(ctx, f.conn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertDecimalEqual(t, "investments", b.InvestmentBalance, "2500")
+	assertDecimalEqual(t, "net worth", b.NetWorth, "2500")
+}
+
 func TestInvestmentLifecycleConservesWealthAndSeparatesSpending(t *testing.T) {
 	f := newFixture(t)
 	ctx := context.Background()
