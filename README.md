@@ -96,7 +96,8 @@ authentication configuration that does not depend on the host:
   portfolios, per-asset operations, manual valuations and optional automatic
   quotes (B3 and crypto), enabled by default with a persistent daily schedule. Contributions and withdrawals reconciled with the
   statement show up apart from spending, keeping their cash effect and avoiding
-  double counting in net worth.
+  double counting in net worth. Manual-position returns use the exact recorded
+  acquisition cost, rather than reconstructing it from the displayed average cost.
 - **Browser authentication** — email and password login for the owner account,
   persisted sessions, logout and password change. No public sign-up.
 - **Secrets encrypted at rest** — Pluggy credentials protected with
