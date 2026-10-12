@@ -102,6 +102,9 @@ type timeValue struct{ value string }
 type accountLedger struct {
 	cash      decimal.Decimal
 	positions map[string]*positionLedger
+	// cashless marks an integrated custody: its cash is the provider's, so
+	// local trades never move or validate it.
+	cashless bool
 }
 
 func newAccountLedger() accountLedger {
@@ -173,12 +176,15 @@ func replayAccountUntil(ctx context.Context, q Querier, accountID string, until 
 	if err != nil {
 		return accountLedger{}, err
 	}
-	// Local annotations never increment or decrement provider balances.
-	if account.Kind == AccountKindIntegrated {
-		return newAccountLedger(), nil
-	}
 	query := `SELECT ` + operationColumns + ` FROM investment_operations WHERE account_id = ?`
 	args := []any{accountID}
+	ledger := newAccountLedger()
+	// An integrated custody only replays its manual holdings: local cash
+	// annotations never increment or decrement provider balances.
+	if account.Kind == AccountKindIntegrated {
+		query += ` AND position_id IS NOT NULL`
+		ledger.cashless = true
+	}
 	if until != nil {
 		query += ` AND occurred_on <= ?`
 		args = append(args, formatDate(*until))
@@ -189,7 +195,6 @@ func replayAccountUntil(ctx context.Context, q Querier, accountID string, until 
 	}
 	defer rows.Close()
 
-	ledger := newAccountLedger()
 	for rows.Next() {
 		op, err := scanOperation(rows)
 		if err != nil {
@@ -201,6 +206,9 @@ func replayAccountUntil(ctx context.Context, q Querier, accountID string, until 
 	}
 	if err := rows.Err(); err != nil {
 		return accountLedger{}, err
+	}
+	if ledger.cashless {
+		ledger.cash = decimal.Zero
 	}
 	return ledger, nil
 }
@@ -284,7 +292,7 @@ func applyOperation(ledger *accountLedger, op Operation) error {
 		p.valuedQuantity = p.quantity
 		p.valuedOn = &timeValue{value: op.OccurredOn.Format(DateLayout)}
 	}
-	if ledger.cash.IsNegative() {
+	if !ledger.cashless && ledger.cash.IsNegative() {
 		return fmt.Errorf("operation %s: %w", op.ID, ErrNegativeCash)
 	}
 	return nil

@@ -370,7 +370,9 @@ func CreatePosition(ctx context.Context, conn *sql.DB, in PositionInput) (Positi
 	}
 	defer tx.Rollback()
 
-	if _, err := requireManualAccount(ctx, tx, in.AccountID); err != nil {
+	// Integrated custodies accept manual holdings too; the replay keeps them
+	// apart from the provider's balances.
+	if _, err := getRawAccount(ctx, tx, in.AccountID); err != nil {
 		return Position{}, err
 	}
 	asset, err := resolveAsset(ctx, tx, in)
