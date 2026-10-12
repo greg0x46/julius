@@ -27,9 +27,18 @@ instants now use the same timestamp representation as other stores.
 version 1. `db.Open` and `db.Migrate` reject application databases without that
 marker before applying migrations. This binary initializes empty databases and
 reopens generation 1 databases; it does **not** convert existing installations.
-Keep the old binary and a backup until a separate legacy conversion tool is
-available. Never delete the old database or rewrite its Goose version to bypass
-the guard. The SQLite-to-Postgres copier also cannot convert legacy generations.
+Use `cmd/migrate-legacy` with a read-only final legacy SQLite backup and a
+separate fresh SQLite/Postgres target; see README "Database schema generations".
+Keep the old binary, database and master key until cutover is validated. Never
+delete the old database or rewrite its Goose version to bypass the guard. The
+generic SQLite-to-Postgres copier has been replaced by this temporary tool.
+It converts the inventory allowlist, checks native types, fills new columns from
+baseline defaults, and explicitly skips obsolete tables and Goose metadata.
+Real copies use one transaction per table; dry-run uses row savepoints in one
+rollback transaction so it can check FKs and report all row errors. Validation
+compares every surviving table count, native account balance and account movement
+sum with exact decimal arithmetic. Targets with application data or edited seeds
+are refused; a failed real copy requires a fresh target for retry.
 
 `archive/sqlite` and `archive/postgres` retain the original migrations unchanged.
 They are embedded only in tests that pin historical data migrations and rollbacks,

@@ -51,8 +51,8 @@ authentication configuration that does not depend on the host:
 
 ## Features
 
-- **Typed database baseline** — both dialects share one migration sequence,
-  with native exact Postgres types and a startup guard that rejects the old
+- **Typed database baseline** — a one-shot legacy converter preserves existing
+  data; both dialects share one migration sequence, with native exact Postgres types and a startup guard that rejects the old
   schema generation. Existing installations need a separate conversion before
   using this binary; see [Database schema generations](#database-schema-generations).
 - **Open Banking sync** — a background worker polls Pluggy periodically for
@@ -329,10 +329,41 @@ stores money as exact `NUMERIC`, instants as `TIMESTAMPTZ`, calendar days as
 text money and UTC timestamps. Both dialects use the same migration numbers.
 
 **Existing installations:** databases from the old migration sequence are
-rejected at startup, without applying migrations. Keep a backup and continue
-using the previous binary until a separate legacy conversion tool is available.
-Do not delete your database or change its migration version to bypass the guard.
-The SQLite-to-Postgres copier does not convert an old schema generation.
+rejected at startup, without applying migrations. Use the one-shot
+`cmd/migrate-legacy` tool with a separate target; it replaces
+`cmd/migrate-to-postgres`. Keep the old binary, database and external master key.
+Do not change the old database's migration version to bypass the guard.
+
+1. Stop Julius and make a consistent SQLite backup. The source must have reached
+   the final legacy schema (SQLite migration `00047_manual_bank_accounts`); if
+   necessary, upgrade it with the previous binary before taking the backup.
+2. Choose a new SQLite path or a fresh Postgres database. Keep both applications
+   stopped throughout conversion. The tool initializes the target schema and
+   refuses existing application data, except untouched baseline category seeds.
+3. Run a dry-run against the backup:
+
+   ```sh
+   go run ./cmd/migrate-legacy -sqlite legacy-backup.db -target converted.db -dry-run
+   # For Postgres, replace converted.db with a postgres:// DSN.
+   ```
+
+   It reports all malformed rows and constraint errors together, with table,
+   row identity and value. Require `zero errors` and matching row counts,
+   per-account balances and movement sums. Imported data and replaced category
+   seeds roll back; the new target schema remains initialized.
+4. Repeat the same command without `-dry-run`. Require `copy complete; counts
+   and balances match` before starting Julius with the target database and the
+   same master key. Check accounts, transactions, decisions and sign-in before
+   retiring the previous installation.
+
+The source opens read-only without applying migrations. IDs, encrypted settings,
+raw payloads, sessions and user decisions carry over; auth timestamps and calendar
+fields follow the documented [conversion contract](.specs/reorganizacao-schema/inventario.md).
+Postgres rejects legacy IDs that cannot fit its UUID columns; SQLite preserves
+opaque legacy IDs. No rounding or guessed values are used. An interrupted or
+failed real copy can leave earlier tables committed: discard only the separate
+target and retry with a fresh one. Keep the source untouched as the rollback
+backup. This tool is temporary and should be removed after cutover.
 
 ### Running with Postgres
 
