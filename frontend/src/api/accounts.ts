@@ -98,3 +98,35 @@ export function listAccountBills(accountId: string, signal?: AbortSignal): Promi
     parseAccountBillList,
   );
 }
+
+export interface ManualAccountWrite {
+  name: string;
+  currency_code: string;
+  opening_balance: string;
+  archived: boolean;
+}
+
+export function writeManualAccount(accountId: string | null, body: ManualAccountWrite): Promise<Account> {
+  return send(accountId ? `/api/accounts/${encodeURIComponent(accountId)}` : "/api/accounts", {
+    method: accountId ? "PUT" : "POST",
+    headers: { Accept: "application/json", "content-type": "application/json" },
+    body: JSON.stringify(body),
+  }, accountId ? 200 : 201, parseAccount);
+}
+
+export function adjustManualAccount(accountId: string, amount: string, description: string): Promise<Account> {
+  return send(`/api/accounts/${encodeURIComponent(accountId)}/adjustments`, {
+    method: "POST",
+    headers: { Accept: "application/json", "content-type": "application/json" },
+    body: JSON.stringify({ amount, description }),
+  }, 200, parseAccount);
+}
+
+export function listAccountCurrencies(signal?: AbortSignal): Promise<string[]> {
+  return send("/api/accounts/currencies", { ...get, signal }, 200, (value) => {
+    if (!Array.isArray(value) || !value.every((code) => typeof code === "string" && /^[A-Z]{3}$/.test(code))) {
+      throw new TypeError("Lista de moedas inválida.");
+    }
+    return value as string[];
+  });
+}

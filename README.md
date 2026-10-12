@@ -15,7 +15,8 @@ as an option. For online access, the host must provide HTTPS.
 
 ## Domain documentation and contributing
 
-Contributions, new features and refactors are welcome. Before touching an area
+Contributions, new features and refactors are welcome. Coding agents: start at
+[`AGENTS.md`](AGENTS.md). Before touching an area
 of the domain, see [`.specs/README.md`](.specs/README.md) — the navigation hub
 of the `.specs/` folder, with the domain architecture
 (`motores-de-dominio.md`), the current state of each feature
@@ -24,6 +25,11 @@ decisions. When you finish a new feature or change an existing one, update the
 matching context's `reference.md` (and the "Features" section below, if it is
 relevant enough) in the same PR — stale specs hinder the next contributor as
 much as stale code does.
+
+Open pull requests against the **`stage`** branch (not `main`) and fill in the
+pull request template, including the *How to validate in dev* steps. See
+[Publish and install a version](#publish-and-install-a-version) for how changes
+reach a release.
 
 ## Why a single binary
 
@@ -51,6 +57,12 @@ authentication configuration that does not depend on the host:
 - **Statement import** — upload a Flash CSV, review the per-row preview and
   import it into a file-based account. Re-uploads and overlapping periods are
   recognized, with an import history and warnings for inconsistent data.
+- **Manual bank accounts** — create standalone accounts in an ISO 4217 currency
+  (BRL by default), including USD/EUR, without a bank connection. Native balance
+  is opening balance + posted movements + explicit adjustments. Edit, archive
+  and reactivate accounts in **Contas e cartões**; currency and opening balance
+  lock after movements. Foreign amounts stay in their original currency and
+  are excluded from BRL aggregates; no exchange-rate conversion is supplied.
 - **Transactions** — searchable/filterable transaction list, manual
   inclusion/exclusion (e.g. ignoring a chargeback or a duplicate) and
   categorization. Entries can also be created by hand in an existing account —
@@ -65,7 +77,8 @@ authentication configuration that does not depend on the host:
   history.
 - **Recurrences** — register cash-flow commitments known in advance (salary,
   rent, subscriptions), reconciled against the real transactions that settle
-  them via an automation rule.
+  them via an automation rule, even when the transaction is uncategorized or
+  has a different category.
 - **Scenarios** — user-authored hypothetical projections ("what if I travel",
   "what if I change jobs"), or the installment plan of a debt/receivable —
   they never affect real totals unless explicitly included in a query.
@@ -149,21 +162,54 @@ an invalid key.
 
 ### Publish and install a version
 
-Every push to `main` that passes CI publishes a GitHub release with the
-`julius-linux-amd64` binary, `SHA256SUMS` and the provenance attestation
-(`julius-linux-amd64.sigstore.json`), as long as there is something to
-release. The version follows SemVer from the
+Changes flow `agent/*` or feature branch → **`stage`** → release PR → **`main`**
+→ GitHub release:
+
+1. A pull request into `stage` is squashed into one Conventional Commit whose
+   subject ends in `(#PR)`. CI runs on every push and pull request for `stage`
+   and `main`, but `stage` never publishes anything. The `stage` build is what
+   the development instance runs, so each change is validated there by hand,
+   with the *How to validate in dev* steps of its pull request.
+2. When `stage` is ready, a release candidate `release/vX.Y.Z` is cut from one
+   exact `stage` commit. Its only extra commit adds the `vX.Y.Z` section to
+   [`CHANGELOG.md`](CHANGELOG.md) (`scripts/update-changelog.sh`). A pull
+   request from it into `main` is merged with a **merge commit**, never squash
+   or rebase, so the individual commits stay reachable.
+3. A push to `main` that passes CI publishes a GitHub release with the
+   `julius-linux-amd64` binary, `SHA256SUMS` and the provenance attestation
+   (`julius-linux-amd64.sigstore.json`), as long as there is something to
+   release. The release notes are the committed `CHANGELOG.md` section of that
+   version; if the section is missing or is not the newest, the release job
+   fails instead of publishing. Afterwards `main` is merged back into `stage`.
+
+The version follows SemVer from the
 [Conventional Commits](https://www.conventionalcommits.org/) since the last
 tag: `feat` bumps the minor, `fix`/`perf` bump the patch, and a breaking change
 (`feat!:` or a `BREAKING CHANGE:` footer) bumps the major (the minor while on
 `0.x`). Other types (`docs`, `chore`, `refactor`…) and non-conventional commits
-do not create a release. To see locally what the next version would be, run
-`scripts/next-version.sh` (or `--notes` for the release notes) after
-`git fetch --tags`.
+do not create a release. A commit and the revert of that same commit cancel out;
+a revert that cannot be matched is listed under "Needs review" in the notes.
+To see locally what the next version and notes would be, run
+`scripts/next-version.sh` (or `--notes`) after `git fetch --tags`.
+`CHANGELOG.md` is written only when a release is prepared and starts after
+v0.3.0; the earlier releases are on the GitHub releases page.
 
 To install, download the binary from the release, verify the checksum and run
 it with the configuration described in the next sections; how to start it and
 keep it running (system service, container, etc.) depends on your environment.
+
+The scripts have shell tests that run against throwaway Git histories:
+`scripts/tests/run.sh`.
+
+Dependabot version updates open against `stage`. Security updates still open
+against `main`; see "Dependabot" in [`AGENTS.md`](AGENTS.md) for how they are
+handled.
+
+**Database.** Every change merged into `stage` is migrated on the persistent
+development database before it reaches production, and nothing restores that
+database automatically. Migrations must therefore be forward-only (never edit
+one that is already merged; add a new one) and safe on existing data. For the numbering rules see
+[`internal/db/migrations/README.md`](internal/db/migrations/README.md).
 
 ### Authentication and encryption key
 
@@ -284,9 +330,15 @@ The Postgres connection pool can be tuned through environment variables
 An invalid value makes startup (and any `-db` command) fail with an error
 naming the variable, instead of silently falling back to the default.
 
-The background sync worker assumes only one instance runs it at a time — it
-does not currently coordinate claiming sync runs across multiple
-processes/instances.
+Several instances can share one Postgres database: each sync run is claimed
+atomically by exactly one instance, which heartbeats it while running. Only
+that owner can persist sync data or finish the run. A separate recovery loop
+continues while other runs execute. A run whose owner stops heartbeating for 90
+seconds is marked failed (`interrupted`) and not retried; the next scheduled
+or manual sync starts a new one. After a crash, an interrupted run is
+therefore recovered up to ~90 seconds after restart rather than immediately.
+SQLite supports a single process only; do not share a SQLite file between
+instances.
 
 #### Documenting the schema with SchemaSpy
 
@@ -338,7 +390,7 @@ export JULIUS_QUOTES_PROVIDERS="yahoo,brapi,coingecko" # default
 By default Yahoo Finance is the primary source for both markets; brapi is the
 B3 fallback and CoinGecko the crypto one. The optional brapi token is
 configured in the UI. Details in the
-[investments reference](.specs/contextos/investimentos/reference.md#cotação-automática).
+[investments reference](.specs/contextos/investimentos/reference.md#automatic-quotes).
 
 Assets are registered with a financial class (fixed income, variable income,
 multi-market, currency, crypto assets or other) and an instrument type. The
@@ -407,6 +459,13 @@ The Postgres integration tests are skipped unless
 `JULIUS_TEST_POSTGRES_DSN` points at a disposable database. They reset its
 `public` schema, so run them with `go test -p 1 ./...`, as CI does.
 
+The release scripts (`scripts/next-version.sh`, `update-changelog.sh`,
+`changelog-section.sh`) and the CI/Dependabot configuration are covered by
+`scripts/tests/run.sh`, which CI also runs.
+
+The frontend suite runs as two Vitest projects (jsdom and plain Node); see
+[`frontend/TESTING.md`](frontend/TESTING.md) for the split and worker count.
+
 `npm run test:e2e` (Playwright) is declared in `package.json` but has no
 `playwright.config.*` or tests yet — scaffolded, not implemented.
 
@@ -431,30 +490,6 @@ during setup.
 
 ## Project structure
 
-```
-cmd/julius/     entry point: wires the DB, HTTP server and background worker
-internal/
-  db/                SQLite/Postgres connection and migrations
-  pluggy/             Pluggy API client and data mapping
-  syncsvc/             sync run orchestration
-  worker/              background sync polling loop
-  money/                shared domain primitives (classification, effective amount)
-  transactions/           transaction queries and inclusion state
-  categories/              category catalog and categorization
-  rules/                     composable matching core (conditions/operators)
-  automation/                 automation rule engine, built on internal/rules
-  recurrences/                   recurring commitments, reconciled via automation
-  payables/                        debts/receivables and links to the transactions that settle them
-  scenarios/                         hypothetical projections and payment plans
-  timeline/                            merges entries + recurrences + scenarios into a single series
-  networth/                              net worth snapshots
-  auth/                                    owner account, passwords and browser sessions
-  settings/                                encrypted settings and migration of legacy secrets
-  httpapi/                                   HTTP handlers and routing
-  webui/                                       embeds the built frontend
-frontend/            React/TypeScript SPA (Vite)
-```
-
-For what each one does today (routes, pages, implementation status), see
-[`.specs/README.md`](.specs/README.md) and each context's `reference.md` under
-`.specs/contextos/`.
+Package map, commands and conventions: [`AGENTS.md`](AGENTS.md). What each area
+does today (routes, pages, implementation status): [`.specs/README.md`](.specs/README.md)
+and each context's `reference.md` under `.specs/contextos/`.

@@ -1,6 +1,11 @@
+// Setup for the jsdom ("dom") Vitest project only.
 import "@testing-library/jest-dom/vitest";
-import { cleanup } from "@testing-library/react";
+import { cleanup, configure } from "@testing-library/react";
 import { afterEach, vi } from "vitest";
+
+// The default 1 s findBy*/waitFor timeout is too tight for antd renders
+// when several workers share the CPU.
+configure({ asyncUtilTimeout: 5000 });
 
 // jsdom has no viewport. Answer antd's breakpoint queries as a desktop
 // would (every min-width matches, no max-width does) so components that

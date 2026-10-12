@@ -5,6 +5,10 @@ export const creditAccountId = "55555555-5555-4555-8555-555555555555";
 
 export const bankAccount: Account = {
   id: bankAccountId,
+  origin: "synced",
+  opening_balance: null,
+  archived_at: null,
+  has_movements: false,
   external_id: "acc-bank-1",
   source_display_name: "Banco Exemplo",
   institution: "Banco Exemplo",
@@ -28,6 +32,10 @@ export const bankAccount: Account = {
 
 export const creditAccount: Account = {
   id: creditAccountId,
+  origin: "synced",
+  opening_balance: null,
+  archived_at: null,
+  has_movements: false,
   external_id: "acc-credit-1",
   source_display_name: "Banco Exemplo",
   institution: "Banco Exemplo",

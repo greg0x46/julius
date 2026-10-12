@@ -26,6 +26,7 @@ it("creates a position from the catalog even when the asset has no positions", a
         submitting={false} submitError={null} onCreate={onCreate} onUpdate={vi.fn()} onCancel={vi.fn()} />
     </QueryClientProvider>,
   );
+  await screen.findByText("Ativo existente (opcional)");
   fireEvent.mouseDown(await screen.findByRole("combobox", { name: "Ativo existente (opcional)" }));
   await userEvent.click(await screen.findByText("BTC · Bitcoin", { selector: ".ant-select-item-option-content" }));
   expect(screen.getByRole("textbox", { name: "Nome" })).toHaveValue("Bitcoin");

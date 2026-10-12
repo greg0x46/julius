@@ -24,7 +24,11 @@ import (
 // separately by handleListAccountCards.
 type accountDTO struct {
 	ID                string  `json:"id"`
-	ExternalID        string  `json:"external_id"`
+	Origin            string  `json:"origin"`
+	OpeningBalance    *string `json:"opening_balance"`
+	ArchivedAt        *string `json:"archived_at"`
+	HasMovements      bool    `json:"has_movements"`
+	ExternalID        *string `json:"external_id"`
 	SourceDisplayName *string `json:"source_display_name"`
 	Institution       *string `json:"institution"`
 	// InstitutionName is the display-safe institution: the user's own label
@@ -65,11 +69,13 @@ const accountSelectColumns = `
 	fa.account_type, fa.account_subtype, fa.balance, fa.credit_limit,
 	fa.available_credit_limit, fa.currency_code, fa.balance_close_date,
 	fa.balance_due_date, fa.manual_closing_day, fa.provider_updated_at, fa.updated_at,
-	NULLIF(ds.label, '')`
+	NULLIF(ds.label, ''), fa.origin, fa.opening_balance, fa.archived_at,
+ EXISTS(SELECT 1 FROM financial_transactions ft WHERE ft.account_id = fa.id) OR
+ EXISTS(SELECT 1 FROM account_balance_adjustments aba WHERE aba.account_id = fa.id)`
 
 const accountSelectFrom = `
 	FROM financial_accounts fa
-	JOIN data_sources ds ON ds.id = fa.source_id`
+	LEFT JOIN data_sources ds ON ds.id = fa.source_id`
 
 func accountsUnavailableProblem(w http.ResponseWriter) {
 	writeProblem(w, 503, "accounts-unavailable", "Contas temporariamente indisponíveis", "Tente novamente em instantes.")
@@ -92,7 +98,7 @@ func scanAccount(row interface{ Scan(...any) error }) (accountDTO, error) {
 	if err := row.Scan(&d.ID, &d.ExternalID, &d.SourceDisplayName, &d.Institution, &d.Name, &d.Number,
 		&d.AccountType, &d.AccountSubtype, &d.Balance, &d.CreditLimit,
 		&d.AvailableCreditLimit, &d.CurrencyCode, &closeRaw,
-		&dueRaw, &manualClosing, &providerUpdRaw, &updatedRaw, &connectionLbl); err != nil {
+		&dueRaw, &manualClosing, &providerUpdRaw, &updatedRaw, &connectionLbl, &d.Origin, &d.OpeningBalance, &d.ArchivedAt, &d.HasMovements); err != nil {
 		return accountDTO{}, err
 	}
 	if manualClosing.Valid {
@@ -292,6 +298,14 @@ func handleListAccounts(conn *sql.DB) http.HandlerFunc {
 			return
 		}
 
+		rows.Close()
+		for i := range result {
+			result[i].Balance, err = transactions.AccountBalance(r.Context(), conn, result[i].ID)
+			if err != nil {
+				accountsUnavailableProblem(w)
+				return
+			}
+		}
 		billDays, err := latestBillClosingDay(r.Context(), conn, billClosingDayCandidates(result))
 		if err != nil {
 			accountsUnavailableProblem(w)
@@ -319,6 +333,11 @@ func handleGetAccount(conn *sql.DB) http.HandlerFunc {
 			return
 		}
 		billDays, err := latestBillClosingDay(r.Context(), conn, billClosingDayCandidates([]accountDTO{d}))
+		if err != nil {
+			accountsUnavailableProblem(w)
+			return
+		}
+		d.Balance, err = transactions.AccountBalance(r.Context(), conn, d.ID)
 		if err != nil {
 			accountsUnavailableProblem(w)
 			return
@@ -377,6 +396,11 @@ func handleSetAccountClosingDay(conn *sql.DB) http.HandlerFunc {
 			return
 		}
 		billDays, err := latestBillClosingDay(r.Context(), conn, billClosingDayCandidates([]accountDTO{d}))
+		if err != nil {
+			accountsUnavailableProblem(w)
+			return
+		}
+		d.Balance, err = transactions.AccountBalance(r.Context(), conn, d.ID)
 		if err != nil {
 			accountsUnavailableProblem(w)
 			return

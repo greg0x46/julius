@@ -30,9 +30,7 @@ import (
 //
 //   - CashBalance: today's non-CREDIT account balances, walked backward by
 //     reversing each eligible transaction's effect in turn (same
-//     eligibility/inclusion rules the rest of the app uses — an ignored
-//     transaction is never reversed, matching how it never entered the
-//     balance's story to begin with as far as this app is concerned).
+//     eligibility rules for actual cash, including ignored bank movements).
 //   - CreditCardBalance: transactions.CreditCardTransactionTotalAt, which
 //     already accepts an arbitrary reference date — reused as-is per bill
 //     cycle, so it naturally reports 0 for a day before any known bill
@@ -206,20 +204,19 @@ type cashTransactionDelta struct {
 // past day's reconstructed balance must reverse it out too, or every day
 // before an ignored transaction ends up off by its full amount.
 //
-// origin = 'synced' excludes every lançamento manual for the opposite
-// reason: financial_accounts.balance is only ever what the provider itself
-// reports, and a manual row never touched that — the account it sits on may
-// even be a Pluggy account, but the money it describes moved outside what
-// Pluggy tracks (a cash purchase, an unlinked account). Reversing it out of
-// a past day's reconstructed balance would subtract money that today's real
-// balance never included in the first place.
+// Manual entries on synced accounts are excluded: they never changed the
+// provider balance. Manual accounts reverse their posted movements and
+// adjustment deltas; opening balance remains the historical baseline.
 func cashDeltasDescending(ctx context.Context, q Querier) ([]cashTransactionDelta, error) {
 	rows, err := q.QueryContext(ctx, `
 		SELECT ft.amount, ft.amount_in_account_currency, ft.currency_code, fa.currency_code,
 		       ft.occurred_at, ft.provider_status, ft.movement_type
 		FROM financial_transactions ft
 		JOIN financial_accounts fa ON fa.id = ft.account_id
-		WHERE (fa.account_type IS NULL OR fa.account_type != 'CREDIT') AND ft.origin = 'synced'`)
+		WHERE (fa.account_type IS NULL OR fa.account_type != 'CREDIT') AND (fa.currency_code IS NULL OR fa.currency_code = 'BRL') AND ft.deleted_at IS NULL AND (ft.origin = 'synced' OR (fa.origin = 'manual' AND ft.provider_status = 'POSTED'))
+ UNION ALL SELECT aba.amount, aba.amount, fa.currency_code, fa.currency_code,
+ aba.created_at, 'POSTED', CASE WHEN SUBSTR(aba.amount, 1, 1) = '-' THEN 'DEBIT' ELSE 'CREDIT' END
+ FROM account_balance_adjustments aba JOIN financial_accounts fa ON fa.id = aba.account_id WHERE fa.currency_code = 'BRL'`)
 	if err != nil {
 		return nil, fmt.Errorf("query cash transactions: %w", err)
 	}
@@ -318,11 +315,13 @@ func decimalFromNullString(value sql.NullString) (*decimal.Decimal, error) {
 func earliestCashTransactionDay(ctx context.Context, q Querier) (day time.Time, ok bool, err error) {
 	var raw sql.NullString
 	err = q.QueryRowContext(ctx, `
-		SELECT MIN(ft.occurred_at)
+		SELECT MIN(occurred_at) FROM (SELECT ft.occurred_at
 		FROM financial_transactions ft
 		JOIN financial_accounts fa ON fa.id = ft.account_id
 		WHERE (fa.account_type IS NULL OR fa.account_type != 'CREDIT')
-		  AND ft.occurred_at IS NOT NULL AND ft.origin = 'synced'`).Scan(&raw)
+		  AND ft.occurred_at IS NOT NULL AND (fa.currency_code IS NULL OR fa.currency_code = 'BRL') AND ft.deleted_at IS NULL AND (ft.origin = 'synced' OR (fa.origin = 'manual' AND ft.provider_status = 'POSTED'))
+ UNION ALL SELECT aba.created_at FROM account_balance_adjustments aba
+ JOIN financial_accounts fa ON fa.id = aba.account_id WHERE fa.currency_code = 'BRL') history`).Scan(&raw)
 	if err != nil || !raw.Valid {
 		return time.Time{}, false, err
 	}

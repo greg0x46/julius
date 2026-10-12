@@ -1,3 +1,4 @@
+import { DailyAllowanceCard } from "../components/home/DailyAllowanceCard";
 import { ProjectionSummaryCard } from "../components/home/ProjectionSummaryCard";
 import { SpendingByCategoryCard } from "../components/home/SpendingByCategoryCard";
 import { PeriodBalanceCard } from "../components/home/PeriodBalanceCard";
@@ -27,8 +28,9 @@ export function HomePage() {
       {/* Areas, not nesting: the order on a phone (result, chart, categories)
           differs from the wide layout (see home.css). */}
       <div className="dashboard-layout">
-        <div className="dashboard-area-result">
+        <div className="dashboard-area-result dashboard-stack">
           <PeriodBalanceCard period={period} />
+          <DailyAllowanceCard />
         </div>
         <div className="dashboard-area-chart">
           <ProjectionSummaryCard period={period} />

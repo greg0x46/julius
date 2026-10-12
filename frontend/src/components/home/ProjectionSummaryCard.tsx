@@ -1,7 +1,6 @@
 import { QuestionCircleOutlined } from "@ant-design/icons";
 import { Popover, Skeleton } from "antd";
-import dayjs from "dayjs";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 
 import type { TimelineDayPoint } from "../../api/contracts";
@@ -11,6 +10,7 @@ import { periodNavigation } from "../filters/periodNavigation";
 import { ProjectionTimeline } from "../timeline/ProjectionTimeline";
 import { useHomePeriodBounds } from "../../hooks/useHomePeriodBounds";
 import { useTimeline } from "../../hooks/useTimeline";
+import { useToday } from "../../hooks/useToday";
 import { formatDateOnly } from "../../presentation/dates";
 import { formatBRL } from "../../presentation/money";
 import { EmptyState, Section } from "../layout";
@@ -23,19 +23,6 @@ function lowestPoint(points: TimelineDayPoint[]): TimelineDayPoint | null {
     (lowest, point) => (lowest === null || Number(point.balance) < Number(lowest.balance) ? point : lowest),
     null,
   );
-}
-
-// The dashboard is left open for hours, so "today" cannot be whatever it was
-// when the tab was first painted: at midnight the balance anchor, and with it
-// the whole window, must move to the new day.
-function useToday(): dayjs.Dayjs {
-  const [today, setToday] = useState(() => dayjs());
-  useEffect(() => {
-    const msToMidnight = today.add(1, "day").startOf("day").diff(dayjs());
-    const timer = window.setTimeout(() => setToday(dayjs()), Math.max(msToMidnight, 0) + 1_000);
-    return () => window.clearTimeout(timer);
-  }, [today]);
-  return today;
 }
 
 /**
