@@ -381,3 +381,9 @@ rule (midnight UTC is already a day, other instants use BRT). Observation/as-of
 values remain instants. Integrated custody IDs remain opaque
 `integrated:<source id>` text; records with UUID identities use native Postgres
 UUIDs. `db.Open` rejects the old schema generation; conversion is separate work.
+
+## Monetary precision
+
+Investment cash fields and portfolio targets keep decimal strings through editing
+and submission. Contribution totals use exact arithmetic; BRL rounding happens
+only at display ([policy](../../precisao-monetaria.md)).

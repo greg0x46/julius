@@ -1,3 +1,4 @@
+import { isPositiveDecimal } from "./decimal";
 import type { Category, TransactionItem } from "../api/contracts";
 import type { RecurringCommitmentDraft } from "../components/recurringCommitments/RecurringCommitmentForm";
 import { isZeroDecimal } from "./decimal";
@@ -67,8 +68,8 @@ export function recurringCommitmentPrefill(item: TransactionItem): Partial<Recur
   if (!item.effective_money || item.effective_money.currency_code !== "BRL" || !item.occurred_at) {
     return null;
   }
-  const amount = Math.abs(Number(item.effective_money.value));
-  if (!Number.isFinite(amount) || amount <= 0) return null;
+  const amount = item.effective_money.value.replace(/^-/, "");
+  if (!isPositiveDecimal(amount)) return null;
   return {
     name: item.description ?? "",
     kind: item.classification === "inflow" ? "income" : "expense",

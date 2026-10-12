@@ -51,6 +51,11 @@ authentication configuration that does not depend on the host:
 
 ## Features
 
+- **Exact money boundaries** — amounts stay decimal strings through entry,
+  editing, calculation and HTTP. BRL display rounds to cents with ties away
+  from zero; saved fractional cents and large values retain their precision.
+  See the [monetary precision policy](.specs/precisao-monetaria.md).
+
 - **Typed database baseline** — both dialects share one migration sequence,
   with native exact Postgres types and a startup guard that rejects the old
   schema generation. Existing installations need a separate conversion before
