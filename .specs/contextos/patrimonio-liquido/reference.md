@@ -28,8 +28,12 @@ than the valuation (`market_quote`); with neither, the value is the informed
 cost. The backfill still does not invent historical appreciation of
 investments.
 
-Manual transactions never enter the historical reconstruction
-(`origin = 'synced'` filter) — see Transactions, Notes.
+Cash is a BRL aggregate: foreign account balances and movements are excluded
+without FX rates. Manual bank-account balances derive from opening balance,
+posted undeleted transactions and adjustment deltas. Their movements and dated
+adjustments enter historical reconstruction; opening balance is the baseline.
+Manual transactions on synced accounts still never enter reconstruction,
+since they did not change the provider balance. See Transactions, Notes.
 
 ## HTTP routes
 
