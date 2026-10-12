@@ -8,8 +8,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/greg0x46/julius/internal/dates"
 	"github.com/shopspring/decimal"
+
+	"github.com/greg0x46/julius/internal/dates"
 )
 
 const TimeLayout = "2006-01-02T15:04:05.000000000Z"
@@ -88,7 +89,8 @@ func ParseUUID(value any) (uuid.UUID, error) {
 	return uuid.Parse(s)
 }
 
-// ParseID also accepts opaque provider and legacy identifiers.
+// ParseID also accepts opaque provider and legacy identifiers. Byte slices
+// remain text; use ParseUUID for binary UUIDs to avoid changing opaque IDs.
 func ParseID(value any) (string, error) {
 	switch v := value.(type) {
 	case uuid.UUID, [16]byte:

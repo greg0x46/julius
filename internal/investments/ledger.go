@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	dbtypes "github.com/greg0x46/julius/internal/db/types"
 	"github.com/shopspring/decimal"
 )
 
@@ -300,9 +301,9 @@ func scanOperation(row interface{ Scan(...any) error }) (Operation, error) {
 		occurredOnRaw, amountRaw, feesRaw, taxesRaw                 string
 		createdAtRaw, updatedAtRaw                                  string
 	)
-	if err := row.Scan(&op.ID, &op.AccountID, &positionID, &transferID, &op.Kind, &occurredOnRaw, &amountRaw,
-		&quantityRaw, &unitPriceRaw, &feesRaw, &taxesRaw, &notesRaw, &op.Source,
-		&createdAtRaw, &updatedAtRaw); err != nil {
+	if err := row.Scan(dbtypes.ID(&op.ID), dbtypes.ID(&op.AccountID), dbtypes.ID(&positionID), dbtypes.ID(&transferID), &op.Kind, dbtypes.Date(&occurredOnRaw), dbtypes.Decimal(&amountRaw),
+		dbtypes.Decimal(&quantityRaw), dbtypes.Decimal(&unitPriceRaw), dbtypes.Decimal(&feesRaw), dbtypes.Decimal(&taxesRaw), &notesRaw, &op.Source,
+		dbtypes.Time(&createdAtRaw), dbtypes.Time(&updatedAtRaw)); err != nil {
 		return Operation{}, err
 	}
 	if positionID.Valid {

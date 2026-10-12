@@ -10,6 +10,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/greg0x46/julius/internal/db"
+	dbtypes "github.com/greg0x46/julius/internal/db/types"
 	"github.com/greg0x46/julius/internal/money"
 )
 
@@ -34,7 +35,7 @@ type Querier interface {
 const dateLayout = "2006-01-02"
 
 func formatDate(t time.Time) string         { return t.UTC().Format(dateLayout) }
-func parseDate(s string) (time.Time, error) { return time.Parse(dateLayout, s) }
+func parseDate(s string) (time.Time, error) { return dbtypes.ParseDate(s) }
 
 // A recurring commitment is a Scenario of kind 'recurring' plus its row in
 // scenario_recurring_schedules: identity, name and activation on the scenario,
@@ -216,9 +217,9 @@ func scanCommitment(scan func(dest ...any) error) (RecurringCommitment, error) {
 		createdAtRaw, updatedAtRaw string
 	)
 	if err := scan(
-		&c.ID, &c.Name, &kindRaw, &amountRaw, &c.CategoryID, &accountID,
-		&cadenceRaw, &c.DayOfMonth, &monthOfYear, &startDateRaw, &endDateRaw, &isActive,
-		&createdAtRaw, &updatedAtRaw,
+		dbtypes.ID(&c.ID), &c.Name, &kindRaw, dbtypes.Decimal(&amountRaw), dbtypes.ID(&c.CategoryID), dbtypes.ID(&accountID),
+		&cadenceRaw, &c.DayOfMonth, &monthOfYear, dbtypes.Date(&startDateRaw), dbtypes.Date(&endDateRaw), dbtypes.Bool(&isActive),
+		dbtypes.Time(&createdAtRaw), dbtypes.Time(&updatedAtRaw),
 	); err != nil {
 		return RecurringCommitment{}, err
 	}
@@ -246,10 +247,10 @@ func scanCommitment(scan func(dest ...any) error) (RecurringCommitment, error) {
 		}
 		c.EndDate = &end
 	}
-	if c.CreatedAt, err = db.ParseTime(createdAtRaw); err != nil {
+	if c.CreatedAt, err = dbtypes.ParseTime(createdAtRaw); err != nil {
 		return RecurringCommitment{}, err
 	}
-	if c.UpdatedAt, err = db.ParseTime(updatedAtRaw); err != nil {
+	if c.UpdatedAt, err = dbtypes.ParseTime(updatedAtRaw); err != nil {
 		return RecurringCommitment{}, err
 	}
 	return c, nil

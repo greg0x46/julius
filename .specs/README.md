@@ -58,6 +58,16 @@ renamed. Frontend routes and UI labels are also Portuguese.
 | `investimentos` | Investments, quotes, reconciliation | `investments`, `quotes`, `marketdata` |
 | `configuracoes-autenticacao` | Settings, authentication | `auth`, `settings` |
 
+## Shared database read boundary
+
+`internal/db/types` decodes timestamps, calendar dates, booleans, identifiers
+and exact decimals returned by SQLite and Postgres. Stores and SQL-backed HTTP
+handlers use its scan adapters, including nullable columns; native driver values
+are normalized there before domain logic runs. Opaque provider and legacy IDs
+remain intact; `ParseUUID` is available for UUID values. Decimal reads accept
+text and integers and reject floating-point values. Schema and write formats
+are unchanged (`internal/db.FormatTime` retains fixed-width UTC timestamps).
+
 ## Shared frontend building blocks
 
 Not tied to a single context:

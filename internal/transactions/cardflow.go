@@ -11,6 +11,7 @@ import (
 	"github.com/greg0x46/julius/internal/categories"
 	"github.com/greg0x46/julius/internal/dates"
 	"github.com/greg0x46/julius/internal/db"
+	dbtypes "github.com/greg0x46/julius/internal/db/types"
 )
 
 // CardDueDates indexes financial_bills so a credit card transaction can be
@@ -54,16 +55,16 @@ func FetchCardDueDates(ctx context.Context, q Querier) (CardDueDates, error) {
 	for rows.Next() {
 		var accountID, internalID, externalID, dueDateRaw string
 		var closingDateRaw sql.NullString
-		if err := rows.Scan(&accountID, &internalID, &externalID, &dueDateRaw, &closingDateRaw); err != nil {
+		if err := rows.Scan(dbtypes.ID(&accountID), dbtypes.ID(&internalID), dbtypes.ID(&externalID), dbtypes.Time(&dueDateRaw), dbtypes.Time(&closingDateRaw)); err != nil {
 			return CardDueDates{}, err
 		}
-		parsed, err := db.ParseTime(dueDateRaw)
+		parsed, err := dbtypes.ParseTime(dueDateRaw)
 		if err != nil {
 			return CardDueDates{}, fmt.Errorf("parse bill due_date %q: %w", dueDateRaw, err)
 		}
 		bill := cardBill{due: dates.Day(parsed)}
 		if closingDateRaw.Valid {
-			parsedClosing, err := db.ParseNullTime(closingDateRaw)
+			parsedClosing, err := dbtypes.ParseNullTime(closingDateRaw)
 			if err != nil {
 				return CardDueDates{}, fmt.Errorf("parse bill closing_date %q: %w", closingDateRaw.String, err)
 			}
@@ -288,7 +289,7 @@ func CreditAccountIDs(ctx context.Context, q Querier) (map[string]bool, error) {
 	ids := make(map[string]bool)
 	for rows.Next() {
 		var id string
-		if err := rows.Scan(&id); err != nil {
+		if err := rows.Scan(dbtypes.ID(&id)); err != nil {
 			return nil, err
 		}
 		ids[id] = true
@@ -328,7 +329,7 @@ func CardTransactionSignals(ctx context.Context, q Querier, transactionIDs []str
 	for rows.Next() {
 		var id string
 		var metadata, movementType, sourceCategory, sourceCategoryID, additionalInfo sql.NullString
-		if err := rows.Scan(&id, &metadata, &movementType, &sourceCategory, &sourceCategoryID, &additionalInfo); err != nil {
+		if err := rows.Scan(dbtypes.ID(&id), &metadata, &movementType, &sourceCategory, dbtypes.ID(&sourceCategoryID), &additionalInfo); err != nil {
 			return nil, err
 		}
 		signal := CardTransactionSignal{

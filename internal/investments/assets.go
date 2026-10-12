@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/greg0x46/julius/internal/db"
+	dbtypes "github.com/greg0x46/julius/internal/db/types"
 )
 
 func assetCanonicalKey(name string, ticker *string, assetType string) string {
@@ -38,8 +39,8 @@ func scanAsset(row interface{ Scan(...any) error }) (Asset, error) {
 	var asset Asset
 	var ticker, quoteSource, quoteSymbol sql.NullString
 	var created, updated string
-	err := row.Scan(&asset.ID, &asset.CanonicalKey, &asset.Name, &ticker, &asset.AssetType, &asset.AssetClass, &asset.CurrencyCode,
-		&quoteSource, &quoteSymbol, &created, &updated)
+	err := row.Scan(dbtypes.ID(&asset.ID), &asset.CanonicalKey, &asset.Name, &ticker, &asset.AssetType, &asset.AssetClass, &asset.CurrencyCode,
+		&quoteSource, &quoteSymbol, dbtypes.Time(&created), dbtypes.Time(&updated))
 	if err != nil {
 		return Asset{}, err
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 
+	dbtypes "github.com/greg0x46/julius/internal/db/types"
 	"github.com/greg0x46/julius/internal/money"
 	"github.com/shopspring/decimal"
 )
@@ -13,7 +14,7 @@ import (
 func AccountBalance(ctx context.Context, q Querier, id string) (*string, error) {
 	var origin string
 	var balance, opening sql.NullString
-	if err := q.QueryRowContext(ctx, `SELECT origin, balance, opening_balance FROM financial_accounts WHERE id = ?`, id).Scan(&origin, &balance, &opening); err != nil {
+	if err := q.QueryRowContext(ctx, `SELECT origin, balance, opening_balance FROM financial_accounts WHERE id = ?`, id).Scan(&origin, dbtypes.Decimal(&balance), dbtypes.Decimal(&opening)); err != nil {
 		return nil, err
 	}
 	if origin != "manual" {
@@ -35,7 +36,7 @@ func AccountBalance(ctx context.Context, q Querier, id string) (*string, error) 
 	defer rows.Close()
 	for rows.Next() {
 		var raw string
-		if err := rows.Scan(&raw); err != nil {
+		if err := rows.Scan(dbtypes.Decimal(&raw)); err != nil {
 			return nil, err
 		}
 		amount, err := decimal.NewFromString(raw)
@@ -63,7 +64,7 @@ func LockAccount(ctx context.Context, q Querier, id string) error {
 	}
 	if n == 0 {
 		var exists bool
-		if err := q.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM financial_accounts WHERE id = ?)`, id).Scan(&exists); err != nil {
+		if err := q.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM financial_accounts WHERE id = ?)`, id).Scan(dbtypes.Bool(&exists)); err != nil {
 			return err
 		}
 		if exists {

@@ -58,6 +58,11 @@ marking it ignored — see the note on the two paths in
   `.specs/motores-de-dominio.md` section 1 for
   why an ignored transaction stays inside the balance.
 
+Database reads (including accounts, cards and investment presentation) use
+`internal/db/types` scan adapters for dates, timestamps, IDs, booleans and
+decimals. The shared boundary is documented in [the doc map](../../README.md);
+ledger rules and persisted formats are unchanged.
+
 ## HTTP routes
 
 - `POST /api/transactions/query`, `GET /api/transactions/spending-by-category`,

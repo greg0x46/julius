@@ -12,7 +12,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/greg0x46/julius/internal/categories"
-	"github.com/greg0x46/julius/internal/db"
+	dbtypes "github.com/greg0x46/julius/internal/db/types"
 	"github.com/greg0x46/julius/internal/investments"
 	"github.com/greg0x46/julius/internal/money"
 	"github.com/greg0x46/julius/internal/settings"
@@ -179,10 +179,10 @@ func fetchBillDueDates(ctx context.Context, q Querier) (map[string]time.Time, er
 	dueDates := make(map[string]time.Time)
 	for rows.Next() {
 		var accountID, externalID, dueDate string
-		if err := rows.Scan(&accountID, &externalID, &dueDate); err != nil {
+		if err := rows.Scan(dbtypes.ID(&accountID), dbtypes.ID(&externalID), dbtypes.Time(&dueDate)); err != nil {
 			return nil, err
 		}
-		parsed, err := db.ParseNullTime(sql.NullString{String: dueDate, Valid: true})
+		parsed, err := dbtypes.ParseNullTime(sql.NullString{String: dueDate, Valid: true})
 		if err != nil {
 			return nil, err
 		}
@@ -226,13 +226,13 @@ func scanRow(rows *sql.Rows) (row, error) {
 		categoryColor              sql.NullString
 	)
 	err := rows.Scan(
-		&r.id, &r.accountID, &externalID, &r.origin, &sourceProvider, &description, &amount,
-		&amountAcct, &currencyCode, &occurredAt,
+		dbtypes.ID(&r.id), dbtypes.ID(&r.accountID), dbtypes.ID(&externalID), &r.origin, &sourceProvider, &description, dbtypes.Decimal(&amount),
+		dbtypes.Decimal(&amountAcct), &currencyCode, dbtypes.Time(&occurredAt),
 		&providerStatus, &movementType, &sourceCategory, &creditCardMetadata,
 		&accountName, &accountInstitution, &accountCurrencyCode, &accountType,
-		&inclusionState, &inclusionChangedAt, &inclusionOrigin, &inclusionRuleName,
-		&categoryDecisionCategoryID, &categoryDecisionChangedAt, &categoryDecisionOrigin,
-		&categoryID, &categoryName, &categoryKind, &categoryIsActive, &categoryIcon, &categoryColor,
+		&inclusionState, dbtypes.Time(&inclusionChangedAt), &inclusionOrigin, &inclusionRuleName,
+		dbtypes.ID(&categoryDecisionCategoryID), dbtypes.Time(&categoryDecisionChangedAt), &categoryDecisionOrigin,
+		dbtypes.ID(&categoryID), &categoryName, &categoryKind, dbtypes.Bool(&categoryIsActive), &categoryIcon, &categoryColor,
 	)
 	if err != nil {
 		return row{}, err
@@ -270,13 +270,13 @@ func scanRow(rows *sql.Rows) (row, error) {
 	if r.amountInAccountCurrency, err = nullDecimal(amountAcct); err != nil {
 		return row{}, err
 	}
-	if r.occurredAt, err = db.ParseNullTime(occurredAt); err != nil {
+	if r.occurredAt, err = dbtypes.ParseNullTime(occurredAt); err != nil {
 		return row{}, err
 	}
-	if r.inclusionChangedAt, err = db.ParseNullTime(inclusionChangedAt); err != nil {
+	if r.inclusionChangedAt, err = dbtypes.ParseNullTime(inclusionChangedAt); err != nil {
 		return row{}, err
 	}
-	if r.categoryDecisionChangedAt, err = db.ParseNullTime(categoryDecisionChangedAt); err != nil {
+	if r.categoryDecisionChangedAt, err = dbtypes.ParseNullTime(categoryDecisionChangedAt); err != nil {
 		return row{}, err
 	}
 	return r, nil

@@ -9,7 +9,7 @@ import (
 
 	"github.com/shopspring/decimal"
 
-	"github.com/greg0x46/julius/internal/db"
+	dbtypes "github.com/greg0x46/julius/internal/db/types"
 )
 
 // Rendimento is derived from one formula for every holding, manual or
@@ -274,18 +274,18 @@ func loadSyncedSeries(ctx context.Context, q Querier, cache *YieldCache, id stri
 	soldQty, boughtQty := decimal.Zero, decimal.Zero
 	for rows.Next() {
 		var direction, quantityRaw, amountRaw, occurredRaw, tradeRaw sql.NullString
-		if err := rows.Scan(&direction, &quantityRaw, &amountRaw, &occurredRaw, &tradeRaw); err != nil {
+		if err := rows.Scan(&direction, dbtypes.Decimal(&quantityRaw), dbtypes.Decimal(&amountRaw), dbtypes.Time(&occurredRaw), dbtypes.Time(&tradeRaw)); err != nil {
 			return nil, err
 		}
 		s.movements++
 		inflow := direction.String == "inflow"
 		amount, amountErr := decimal.NewFromString(amountRaw.String)
-		when, err := db.ParseNullTime(tradeRaw)
+		when, err := dbtypes.ParseNullTime(tradeRaw)
 		if err != nil {
 			return nil, err
 		}
 		if when == nil {
-			if when, err = db.ParseNullTime(occurredRaw); err != nil {
+			if when, err = dbtypes.ParseNullTime(occurredRaw); err != nil {
 				return nil, err
 			}
 		}
@@ -453,7 +453,7 @@ func loadManualSeries(ctx context.Context, q Querier, positionID string) (*manua
 	err := q.QueryRowContext(ctx, `
 		SELECT p.account_id, p.asset_id, a.quote_source
 		FROM investment_positions p JOIN investment_assets a ON a.id = p.asset_id
-		WHERE p.id = ?`, positionID).Scan(&accountID, &assetID, &quoteSource)
+		WHERE p.id = ?`, positionID).Scan(dbtypes.ID(&accountID), dbtypes.ID(&assetID), &quoteSource)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrPositionNotFound
 	}

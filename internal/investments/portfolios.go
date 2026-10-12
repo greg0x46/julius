@@ -11,6 +11,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/greg0x46/julius/internal/db"
+	dbtypes "github.com/greg0x46/julius/internal/db/types"
 )
 
 const portfolioColumns = `id, name, target_amount, target_date, notes, created_at, updated_at`
@@ -21,7 +22,7 @@ func scanPortfolio(row interface{ Scan(...any) error }) (Portfolio, error) {
 		targetAmountRaw, targetDateRaw, notes sql.NullString
 		createdAtRaw, updatedAtRaw            string
 	)
-	if err := row.Scan(&p.ID, &p.Name, &targetAmountRaw, &targetDateRaw, &notes, &createdAtRaw, &updatedAtRaw); err != nil {
+	if err := row.Scan(dbtypes.ID(&p.ID), &p.Name, dbtypes.Decimal(&targetAmountRaw), dbtypes.Date(&targetDateRaw), &notes, dbtypes.Time(&createdAtRaw), dbtypes.Time(&updatedAtRaw)); err != nil {
 		return Portfolio{}, err
 	}
 	if targetAmountRaw.Valid {

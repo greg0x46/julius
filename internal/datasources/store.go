@@ -15,6 +15,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/greg0x46/julius/internal/db"
+	dbtypes "github.com/greg0x46/julius/internal/db/types"
 )
 
 // ProviderPluggy is the Open Banking provider: the connections users manage on
@@ -84,16 +85,16 @@ func scan(row rowScanner) (DataSource, error) {
 		createdAtRaw string
 		updatedAtRaw string
 	)
-	if err := row.Scan(&d.ID, &d.Provider, &d.ExternalItemID, &d.DisplayName, &d.Label,
-		&isActive, &createdAtRaw, &updatedAtRaw); err != nil {
+	if err := row.Scan(dbtypes.ID(&d.ID), &d.Provider, dbtypes.ID(&d.ExternalItemID), &d.DisplayName, &d.Label,
+		dbtypes.Bool(&isActive), dbtypes.Time(&createdAtRaw), dbtypes.Time(&updatedAtRaw)); err != nil {
 		return DataSource{}, err
 	}
 	d.IsActive = isActive == 1
 	var err error
-	if d.CreatedAt, err = db.ParseTime(createdAtRaw); err != nil {
+	if d.CreatedAt, err = dbtypes.ParseTime(createdAtRaw); err != nil {
 		return DataSource{}, err
 	}
-	if d.UpdatedAt, err = db.ParseTime(updatedAtRaw); err != nil {
+	if d.UpdatedAt, err = dbtypes.ParseTime(updatedAtRaw); err != nil {
 		return DataSource{}, err
 	}
 	return d, nil

@@ -11,6 +11,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/greg0x46/julius/internal/db"
+	dbtypes "github.com/greg0x46/julius/internal/db/types"
 	"github.com/greg0x46/julius/internal/money"
 )
 
@@ -159,7 +160,7 @@ func scanAssetQuote(row interface{ Scan(...any) error }) (AssetQuote, error) {
 		origin          string
 		rawImportID     sql.NullString
 	)
-	if err := row.Scan(&quote.AssetID, &quotedOn, &price, &quote.Source, &origin, &rawImportID); err != nil {
+	if err := row.Scan(dbtypes.ID(&quote.AssetID), dbtypes.Date(&quotedOn), dbtypes.Decimal(&price), &quote.Source, &origin, dbtypes.ID(&rawImportID)); err != nil {
 		return AssetQuote{}, err
 	}
 	quote.Origin = QuoteOrigin(origin)
@@ -218,9 +219,9 @@ type syncedHoldingRow struct {
 }
 
 func (r *syncedHoldingRow) dests() []any {
-	return []any{&r.externalID, &r.name, &r.code, &r.isin, &r.investmentType, &r.subtype,
-		&r.currency, &r.cnpj, &r.rate, &r.rateType, &r.issueDate, &r.purchaseDate, &r.dueDate,
-		&r.quantity, &r.value, &r.amount, &r.amountOriginal, &r.asOfDate}
+	return []any{dbtypes.ID(&r.externalID), &r.name, &r.code, &r.isin, &r.investmentType, &r.subtype,
+		&r.currency, &r.cnpj, dbtypes.Decimal(&r.rate), &r.rateType, dbtypes.Time(&r.issueDate), dbtypes.Time(&r.purchaseDate), dbtypes.Time(&r.dueDate),
+		dbtypes.Decimal(&r.quantity), dbtypes.Decimal(&r.value), dbtypes.Decimal(&r.amount), dbtypes.Decimal(&r.amountOriginal), dbtypes.Time(&r.asOfDate)}
 }
 
 func (r *syncedHoldingRow) holding() (SyncedHolding, error) {
@@ -259,7 +260,7 @@ func (r *syncedHoldingRow) holding() (SyncedHolding, error) {
 		{r.issueDate, &h.IssueDate}, {r.purchaseDate, &h.PurchaseDate},
 		{r.dueDate, &h.DueDate}, {r.asOfDate, &h.AsOfDate},
 	} {
-		v, err := db.ParseNullTime(item.raw)
+		v, err := dbtypes.ParseNullTime(item.raw)
 		if err != nil {
 			return SyncedHolding{}, err
 		}

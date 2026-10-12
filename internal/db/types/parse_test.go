@@ -52,7 +52,7 @@ func TestParseUUID(t *testing.T) {
 	}
 }
 func TestParseID(t *testing.T) {
-	for _, s := range []string{"integrated:source", "provider-1", "opaque-sixteen!!x", ""} {
+	for _, s := range []string{"integrated:source", "provider-1", "opaque-sixteen!!", ""} {
 		for _, v := range []any{s, []byte(s), sql.NullString{String: s, Valid: true}} {
 			got, err := ParseID(v)
 			if err != nil || got != s {

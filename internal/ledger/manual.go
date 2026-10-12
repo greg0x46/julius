@@ -11,6 +11,7 @@ import (
 
 	"github.com/greg0x46/julius/internal/categories"
 	"github.com/greg0x46/julius/internal/db"
+	dbtypes "github.com/greg0x46/julius/internal/db/types"
 	"github.com/greg0x46/julius/internal/transactions"
 )
 
@@ -63,7 +64,7 @@ func (s *Service) CreateManualIdempotent(ctx context.Context, in transactions.Ma
 			var savedHash string
 			var id sql.NullString
 			if err := tx.QueryRowContext(ctx, `SELECT request_hash, transaction_id FROM manual_transaction_idempotency
-				WHERE owner_id = ? AND idempotency_key = ?`, ownerID, key).Scan(&savedHash, &id); err != nil {
+				WHERE owner_id = ? AND idempotency_key = ?`, ownerID, key).Scan(&savedHash, dbtypes.ID(&id)); err != nil {
 				return transactions.Item{}, err
 			}
 			if savedHash != fingerprint {

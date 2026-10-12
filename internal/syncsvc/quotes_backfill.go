@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/greg0x46/julius/internal/db"
+	dbtypes "github.com/greg0x46/julius/internal/db/types"
 	"github.com/greg0x46/julius/internal/investments"
 	"github.com/greg0x46/julius/internal/pluggy"
 )
@@ -36,7 +37,7 @@ func BackfillAssetQuotes(ctx context.Context, conn *sql.DB) (int, error) {
 	var done bool
 	if err := conn.QueryRowContext(ctx,
 		`SELECT EXISTS (SELECT 1 FROM investment_asset_quotes WHERE origin = ?)`, string(investments.QuoteOriginSync)).
-		Scan(&done); err != nil {
+		Scan(dbtypes.Bool(&done)); err != nil {
 		return 0, err
 	}
 	if done {
@@ -63,7 +64,7 @@ func BackfillAssetQuotes(ctx context.Context, conn *sql.DB) (int, error) {
 	payloads := []payloadRow{}
 	for rows.Next() {
 		var row payloadRow
-		if err := rows.Scan(&row.id, &row.sourceID, &row.payload); err != nil {
+		if err := rows.Scan(dbtypes.ID(&row.id), dbtypes.ID(&row.sourceID), &row.payload); err != nil {
 			rows.Close()
 			return 0, err
 		}
