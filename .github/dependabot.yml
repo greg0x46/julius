@@ -9,7 +9,7 @@
 #
 # `target-branch` applies to VERSION updates only. Dependabot SECURITY updates
 # are not redirected by it and keep targeting the default branch (`main`); see
-# "Dependabot security updates" in AGENTS.md for the controlled procedure.
+# "Dependabot" in AGENTS.md for the controlled procedure.
 version: 2
 
 updates:

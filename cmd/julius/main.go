@@ -60,12 +60,6 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	// Opt-in and independent of the sync schedule above: unset means no
-	// automatic quoting, so a fresh install never starts market requests.
-	quotesSchedule, quotesScheduled, err := quotes.ParseSchedule(os.Getenv("JULIUS_QUOTES_SCHEDULE"))
-	if err != nil {
-		log.Fatal(err)
-	}
 	quoteProviders, err := marketdata.ParseProviders(os.Getenv("JULIUS_QUOTES_PROVIDERS"))
 	if err != nil {
 		log.Fatal(err)
@@ -76,6 +70,11 @@ func main() {
 	}
 	defer conn.Close()
 	if err := auth.NewStore(conn).Ready(context.Background(), master); err != nil {
+		log.Fatal(err)
+	}
+
+	quotesConfig, err := quotes.InitializeSchedule(context.Background(), conn, os.Getenv("JULIUS_QUOTES_SCHEDULE"))
+	if err != nil {
 		log.Fatal(err)
 	}
 
@@ -140,10 +139,8 @@ func main() {
 		go worker.RunSchedule(ctx, conn, schedule)
 	}
 
-	if quotesScheduled {
-		log.Printf("quote refresh scheduled daily at %02d:%02d %s", quotesSchedule.Hour, quotesSchedule.Minute, quotesSchedule.Location)
-		go quotes.RunSchedule(ctx, conn, marketService, quotesSchedule)
-	}
+	log.Printf("quote refresh enabled=%t daily at %s %s", quotesConfig.Enabled, quotesConfig.Time, quotesConfig.Timezone)
+	go quotes.RunSchedule(ctx, conn, marketService)
 
 	handler := httpapi.NewServer(conn, frontend, secrets, config)
 	log.Printf("listening on http://%s", *addr)

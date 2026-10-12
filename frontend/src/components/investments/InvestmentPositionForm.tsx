@@ -33,7 +33,7 @@ type Draft = {
 
 function blankDraft(accounts: InvestmentAccount[]): Draft {
   return {
-    accountId: accounts.find((account) => account.kind === "manual" && account.active)?.id ?? "",
+    accountId: accounts.find((account) => account.active)?.id ?? "",
     assetId: null,
     portfolioId: null,
     name: "",
@@ -108,7 +108,7 @@ export function InvestmentPositionForm({
   }, [open, position, accounts]);
 
   const editableAccounts = useMemo(
-    () => accounts.filter((account) => account.kind === "manual" && account.active),
+    () => accounts.filter((account) => account.active),
     [accounts],
   );
   const accountOptions = editableAccounts.map((account) => ({ value: account.id, label: account.name }));
@@ -128,7 +128,7 @@ export function InvestmentPositionForm({
       return;
     }
     if (!isEditing && draft.accountId === "") {
-      setError("Selecione uma conta de investimento manual.");
+      setError("Selecione uma conta de investimento.");
       return;
     }
     if ((draft.initialQuantity !== null && !positive(draft.initialQuantity)) || (draft.initialUnitCost !== null && !positive(draft.initialUnitCost))) {
@@ -182,7 +182,8 @@ export function InvestmentPositionForm({
       {!isEditing && (
         <p className="form-field-hint">
           Posição manual em reais. Ativos com cotação automática buscam preços de mercado. Para os demais, registre
-          avaliações manuais; sem avaliação, o valor exibido é o custo acumulado.
+          avaliações manuais; sem avaliação, o valor exibido é o custo acumulado. Numa conta integrada, a posição
+          fica ao lado das posições da instituição e a sincronização não a altera.
         </p>
       )}
       <FormField
@@ -195,7 +196,7 @@ export function InvestmentPositionForm({
           value={draft.accountId || undefined}
           options={accountOptions}
           disabled={isEditing}
-          placeholder="Selecione uma conta manual"
+          placeholder="Selecione uma conta de investimento"
           onChange={(value: string) => setDraft((current) => ({ ...current, accountId: value }))}
         />
       </FormField>

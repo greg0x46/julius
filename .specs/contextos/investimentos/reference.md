@@ -18,6 +18,15 @@ connection. Goals and reconciliations are local choices. A brokerage cash
 balance already present in `financial_accounts` can be linked, without adding
 its balance to net worth again.
 
+An integrated account also accepts manual holdings (for example, a crypto
+asset that Open Finance does not expose). They are created, edited and deleted
+as in a manual account and listed next to the provider's positions, which stay
+read-only. The ledger of an integrated account replays only operations that
+carry a position and never computes cash, which remains whatever the
+institution reports. The sync writes only provider data and series quotes, so
+it never changes the quantity, cost, source, goal or valuations of a manual
+holding. In the UI, manual rows of an integrated account carry a "Manual" tag.
+
 Manual operations use reais and decimal arithmetic. Purchases fold costs into
 the weighted average cost; sales write off proportional cost. Corrections
 reprocess history and reject negative cash or quantity. Valuations are manual
@@ -57,8 +66,11 @@ modifying the bank-reported balance.
 ## Net worth and limits
 
 Net worth sums synced positions once, manual positions, and manual investment
-cash not yet represented in a linked financial account. Goal portfolios are not
-summed again. No appreciation is invented for historical snapshots without data.
+cash not yet represented in a linked financial account. Manual holdings in an
+integrated account count like any other manual holding (including in
+`ManualNetWorth`), without double-counting the provider's positions. Goal
+portfolios are not summed again. No appreciation is invented for historical
+snapshots without data.
 
 This version records operations; it does not place orders or move money at the
 bank. It does not include tax computation, short positions, FX on manual
@@ -138,8 +150,24 @@ manual valuations or the integrated institution's values.
 A code that cannot be read in the market's format is rejected on save (`400`),
 with the reason.
 
-Fetching is opt-in: it only runs with `JULIUS_QUOTES_SCHEDULE` set (`HH:MM`
-or `HH:MM Zone/IANA`), once a day and at process start.
+Automatic refresh is enabled by default, daily at `19:00` in
+`America/Sao_Paulo`. `enabled`, `time` and `timezone` are stored together in
+`settings` and read by the scheduler without restarting the process. Changing
+the time or zone reschedules the next run; disabling also suspends history
+backfill. An active spot batch can finish; disabling is checked before the
+history stage and subsequent work cycles.
+
+At startup and when re-enabled, the scheduler fetches only missing prices for
+today and missing history; a restart does not repeat requests already covered.
+The daily run updates prices for today. Quote dates remain Brazilian calendar
+days regardless of the scheduling timezone. API changes wake the local
+scheduler immediately; writes by another process are detected within a minute.
+
+`JULIUS_QUOTES_SCHEDULE` (`HH:MM` or `HH:MM Zone/IANA`) initializes only a
+configuration that has not yet been saved. With no zone it uses `Local`; an
+empty value uses the default schedule. Once saved, persisted settings take
+precedence in full, including when disabled, and later environment changes are
+ignored.
 
 ### Providers
 
@@ -290,9 +318,13 @@ UI offers contribution with purchase and reinvested income. Quantity and price
 compute the gross amount in decimal when `amount` is not given.
 
 Integrated accounts accept local records of contribution, withdrawal, income,
-fee and tax. These records feed reports and reconciliation; they never
-recompute the provider's balances or positions. Purchase, sale, opening balance
-and quote of integrated positions remain the institution's data.
+fee and tax, without a position. These records feed reports and reconciliation;
+they never recompute the provider's balances or positions. Buys, sells,
+opening balances with a position and manual quotes apply only to the manual
+holdings of the account itself; buys and sells do not change the institution's
+cash. A cash-only opening balance is rejected, and transfers between
+custodies stay restricted to manual accounts (`ErrIntegratedReadOnly`). Buys,
+sells, balances and quotes of the provider's positions remain institution data.
 
 A bank entry can also be reconciled directly with a movement imported from an
 integrated account, with no manual record: `POST /api/investment-reconciliations`

@@ -142,13 +142,29 @@ real statements, balances, or Pluggy payloads.
 - `git fetch` before pushing; other sessions may push too. Never push directly
   to `main` or `stage`.
 
-**Releases.** Only a push to `main` can publish; pushes and PRs on `stage` run
-the same CI but never release or tag.
-- A release candidate is a frozen `release/vX.Y.Z` branch cut from one `stage`
-  SHA. It adds exactly one commit, `docs(changelog): vX.Y.Z`, and is promoted
-  with a PR into `main` that is merged with a **merge commit, never squash or
+**Releases.** Only a push to `main` can publish; pushes and PRs on `stage`
+run the same CI but never release or tag. Promotion is automatic up to the
+release PR; only the owner merges it.
+- A release candidate is a frozen `release/vX.Y.Z` branch cut by automation
+  from one `stage` SHA whose Backend (Go) and Frontend (Node) checks passed. It
+  adds exactly one commit, `docs(changelog): vX.Y.Z`, and is promoted with a PR
+  `chore(release): vX.Y.Z` into `main` that lists the original PRs and carries
+  the `Closes #N` lines. Agents never merge it and never push to the branch.
+  Later `stage` commits wait for the next release. If `main` advances before it
+  is merged, the candidate is closed, its branch is archived as
+  `stale/release-vX.Y.Z-<sha7>` and a new one is cut.
+- The PR is merged by the owner with a **merge commit, never squash or
   rebase** (squashing would erase the per-PR commits the version is computed
-  from). After the release is published, `main` is merged back into `stage`.
+  from). The ruleset on `main` allows only that method, requires the Backend
+  and Frontend checks to be up to date with `main`, and forbids force-push and
+  deletion. GitHub deletes `release/vX.Y.Z` when the PR is merged.
+- A release is *published* when CI on `main` creates the tag and the GitHub
+  release; it is *deployed* only when the environment that installs it says so.
+  Don't treat one as the other.
+- After publication, `main` is merged back into `stage` (merge commit
+  `chore(release): merge main into stage after vX.Y.Z`; never rebase or
+  force-push `stage`). No new candidate is cut while `main` has commits that
+  `stage` lacks.
 - `scripts/next-version.sh` is the only place that decides versions: `feat` →
   minor, `fix`/`perf` → patch, `!`/`BREAKING CHANGE` → major (minor on 0.x);
   everything else, and merge commits, release nothing. Preview with
@@ -173,10 +189,13 @@ workflow actions as `build(ci)`, npm dev dependencies as `build(deps-dev)`
 still open against `main`. Controlled procedure: prefer applying the same bump
 on `stage` (retarget the Dependabot PR to `stage`, or make an equivalent
 `fix(deps)` PR) and let it ship with the next promotion. Only for an urgent
-fix merge it into `main` directly, then right away merge `main` into `stage`
-(no rebase, no force-push) and, if a release PR is already open, close it so a
-new candidate is cut from the updated base; the `main` release job needs the
-`docs(changelog)` step above.
+fix merge it into `main` directly (with a merge commit, the only method the
+ruleset allows, once its checks are up to date), then fix the release path:
+the `main` release job needs a `docs(changelog)` change on `main` (run
+`scripts/update-changelog.sh` there), and `main` must be merged into `stage`
+(no rebase, no force-push) before a new candidate can be cut. An open release
+PR becomes stale once `main` advances and is closed and re-cut by the
+promotion automation.
 
 **Docs and hygiene.**
 - Finishing a feature or behavior change: update the matching

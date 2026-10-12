@@ -70,6 +70,7 @@ authentication configuration that does not depend on the host:
   deletion limited to these manual entries.
 - **Automation rules** — condition-based rules that categorize new
   transactions automatically and can be applied retroactively to existing ones.
+  A single rule can both categorize and reconcile a recurring commitment.
 - **Payables (debts and receivables)** — track a real total (debt, installment
   purchase, receivable) and link the transactions that settle it, with
   eligibility rules for which transactions can be linked.
@@ -89,7 +90,7 @@ authentication configuration that does not depend on the host:
   time.
 - **Investments** — integrated and manual investment accounts, goal-based
   portfolios, per-asset operations, manual valuations and optional automatic
-  quotes (B3 and crypto). Contributions and withdrawals reconciled with the
+  quotes (B3 and crypto), enabled by default with a persistent daily schedule. Contributions and withdrawals reconciled with the
   statement show up apart from spending, keeping their cash effect and avoiding
   double counting in net worth.
 - **Browser authentication** — email and password login for the owner account,
@@ -114,7 +115,9 @@ the history with no period limit, without reclassifying it automatically.
 
 Integrated accounts keep the balances reported by the institution. Use
 **Vincular caixa da corretora** (link brokerage cash) when the imported
-financial account already represents the same cash. Goals group positions from
+financial account already represents the same cash. Manual holdings (such as
+crypto that Open Finance does not expose) can be added to an integrated account,
+next to the institution's positions, and are never overwritten by a sync. Goals group positions from
 any institution without changing their value. Manual quotes are dated;
 corrections to operations recompute subsequent costs and are rejected if they
 would produce negative cash or a negative position.
@@ -161,24 +164,42 @@ an invalid key.
 ### Publish and install a version
 
 Changes flow `agent/*` or feature branch → **`stage`** → release PR → **`main`**
-→ GitHub release:
+→ published release → deployment:
 
 1. A pull request into `stage` is squashed into one Conventional Commit whose
    subject ends in `(#PR)`. CI runs on every push and pull request for `stage`
    and `main`, but `stage` never publishes anything. The `stage` build is what
    the development instance runs, so each change is validated there by hand,
    with the *How to validate in dev* steps of its pull request.
-2. When `stage` is ready, a release candidate `release/vX.Y.Z` is cut from one
-   exact `stage` commit. Its only extra commit adds the `vX.Y.Z` section to
-   [`CHANGELOG.md`](CHANGELOG.md) (`scripts/update-changelog.sh`). A pull
-   request from it into `main` is merged with a **merge commit**, never squash
-   or rebase, so the individual commits stay reachable.
-3. A push to `main` that passes CI publishes a GitHub release with the
+2. A release candidate is cut automatically, not by hand. When Backend (Go) and
+   Frontend (Node) have passed on the exact `stage` head and there is something
+   to release, `release/vX.Y.Z` is cut from that commit. Its only extra commit
+   adds the `vX.Y.Z` section to [`CHANGELOG.md`](CHANGELOG.md)
+   (`scripts/update-changelog.sh`; the only place the changelog is written), and
+   a pull request `chore(release): vX.Y.Z` into `main` lists the original pull
+   requests and `Closes #N` for their issues. The candidate is frozen: pull
+   requests squashed into `stage` afterwards wait for the next release. If
+   `main` moves first, the candidate is closed, its branch is kept as
+   `stale/release-vX.Y.Z-<sha7>` and a new one is cut.
+3. Only the owner merges that pull request, with a **merge commit**, never
+   squash or rebase, so the individual commits stay reachable. The ruleset on
+   `main` allows no other method; it also requires a pull request, the
+   up-to-date Backend (Go) and Frontend (Node) checks and resolved
+   conversations, and forbids force-push and deletion. Merging closes the
+   issues. GitHub deletes `release/vX.Y.Z` on merge; the tag is the lasting
+   reference.
+4. A push to `main` that passes CI publishes a GitHub release with the
    `julius-linux-amd64` binary, `SHA256SUMS` and the provenance attestation
    (`julius-linux-amd64.sigstore.json`), as long as there is something to
    release. The release notes are the committed `CHANGELOG.md` section of that
    version; if the section is missing or is not the newest, the release job
-   fails instead of publishing. Afterwards `main` is merged back into `stage`.
+   fails instead of publishing. **Published is not deployed:** installing the
+   release is a separate step of your environment, and a release only counts
+   as deployed when that step reports it.
+5. Once the tag and the GitHub release exist, `main` is merged back into
+   `stage` (`chore(release): merge main into stage after vX.Y.Z`, a plain push,
+   no rebase or force-push), keeping the pull requests squashed into `stage`
+   in the meantime. Until `main` is inside `stage` no new candidate is cut.
 
 The version follows SemVer from the
 [Conventional Commits](https://www.conventionalcommits.org/) since the last
@@ -374,16 +395,35 @@ Investment assets with automatic quotes enabled have the price of their manual
 positions fetched automatically and stored in the asset's price series. The
 position value is computed on every read (quantity × latest price); a manual
 valuation dated on or after the latest price takes precedence over it. Fetching
-is opt-in: set `JULIUS_QUOTES_SCHEDULE` (same format as the sync schedule)
-to run once a day and when the process starts. Providers are tried in order,
+is enabled by default at 19:00 America/Sao_Paulo. The backend persists
+`enabled`, `time` and `timezone` and applies changes without a restart.
+Startup and re-enabling fetch missing prices and history; disabling also stops
+backfill. The active spot batch may finish; disabling prevents the following
+history stage and later work cycles. Providers are tried in order,
 with automatic fallback; `JULIUS_QUOTES_PROVIDERS` sets the order
 (comma-separated; an omitted provider is disabled; an unknown name prevents
 startup):
 
 ```sh
-export JULIUS_QUOTES_SCHEDULE="19:00 America/Sao_Paulo"
+export JULIUS_QUOTES_SCHEDULE="19:00 America/Sao_Paulo" # first initialization only
 export JULIUS_QUOTES_PROVIDERS="yahoo,brapi,coingecko" # default
 ```
+
+An authenticated owner can read `GET /api/settings/quotes` and partially update
+`PUT /api/settings/quotes`, with the session cookie, configured `Origin` and
+`X-Julius-Request: 1`. Example JSON to change the schedule:
+
+```json
+{"enabled": true, "time": "20:30", "timezone": "America/Sao_Paulo"}
+```
+
+Send `{"enabled": false}` to disable it. Omitted fields are preserved;
+`brapi_token` stays write-only, and an explicit empty string clears it.
+`time` must be strict HH:MM and `timezone` must be loadable. Saved settings
+survive restarts and take precedence over `JULIUS_QUOTES_SCHEDULE`, which
+initializes only an absent configuration (HH:MM alone keeps process-local time).
+An unset or empty environment uses the enabled default. API changes wake the
+scheduler immediately; other persisted changes are checked every minute.
 
 By default Yahoo Finance is the primary source for both markets; brapi is the
 B3 fallback and CoinGecko the crypto one. The optional brapi token is

@@ -1,4 +1,5 @@
 import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
@@ -137,6 +138,32 @@ describe("investment cards", () => {
     const fundRow = within(table).getByText("Fundo X").closest("tr")!;
     expect(within(fundRow).getByText("+R$ 195,00")).toBeVisible();
     expect(within(fundRow).getByText("Custo médio R$ 100,00")).toBeVisible();
+  });
+
+  it("offers a new manual position on an integrated account but keeps the account itself read-only", async () => {
+    renderAccountCard();
+    await userEvent.click(screen.getByRole("button", { name: "Ações de Nubank" }));
+    expect(await screen.findByRole("menuitem", { name: "Nova posição" })).toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: "Editar conta" })).toBeNull();
+    expect(screen.queryByRole("menuitem", { name: "Excluir conta" })).toBeNull();
+  });
+
+  it("tags the manual holding of an integrated account and lets it be edited and deleted", async () => {
+    renderAccountCard();
+    const table = screen.getByRole("table", { name: "Posições" });
+    expect(within(within(table).getByText("Fundo X").closest("tr")!).getByText(/· Manual/)).toBeVisible();
+    expect(within(within(table).getByText("LCA Nubank").closest("tr")!).queryByText(/· Manual/)).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Ações de Fundo X" }));
+    expect(await screen.findByRole("menuitem", { name: "Editar" })).toBeInTheDocument();
+    expect(screen.getByRole("menuitem", { name: "Excluir" })).toBeInTheDocument();
+  });
+
+  it("keeps the provider holding of an integrated account read-only", async () => {
+    renderAccountCard();
+    await userEvent.click(screen.getByRole("button", { name: "Ações de LCA Nubank" }));
+    expect(await screen.findByRole("menuitem", { name: "Ver detalhes" })).toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: "Editar" })).toBeNull();
+    expect(screen.queryByRole("menuitem", { name: "Excluir" })).toBeNull();
   });
 
   it("gives the goal the same figures but no cash balance, which a goal does not hold", () => {
