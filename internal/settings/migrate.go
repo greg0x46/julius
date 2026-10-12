@@ -18,7 +18,7 @@ func VerifyMaster(ctx context.Context, q Querier, key []byte) error {
 		return fmt.Errorf("chave de criptografia inválida ou migração pendente")
 	}
 	// Fail before starting the worker if any encrypted setting is damaged.
-	rows, err := q.QueryContext(ctx, `SELECT key FROM settings WHERE is_encrypted = 1`)
+	rows, err := q.QueryContext(ctx, `SELECT key FROM settings WHERE is_encrypted = TRUE`)
 	if err != nil {
 		return err
 	}
@@ -50,7 +50,7 @@ func MigrateEncryption(ctx context.Context, q Querier, password string, master [
 	if err != nil {
 		return err
 	}
-	rows, err := q.QueryContext(ctx, `SELECT key FROM settings WHERE is_encrypted = 1`)
+	rows, err := q.QueryContext(ctx, `SELECT key FROM settings WHERE is_encrypted = TRUE`)
 	if err != nil {
 		return err
 	}

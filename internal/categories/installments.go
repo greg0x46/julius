@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	dbtypes "github.com/greg0x46/julius/internal/db/types"
 	"strings"
 )
 
@@ -37,7 +38,7 @@ func findInstallmentGroup(ctx context.Context, q Querier, transactionID string) 
 	err := q.QueryRowContext(ctx,
 		`SELECT account_id, description, credit_card_metadata FROM financial_transactions WHERE id = ?`,
 		transactionID,
-	).Scan(&accountID, &description, &metadataRaw)
+	).Scan(dbtypes.ID(&accountID), &description, &metadataRaw)
 	if errors.Is(err, sql.ErrNoRows) {
 		return []string{transactionID}, nil
 	}
@@ -79,7 +80,7 @@ func findInstallmentGroup(ctx context.Context, q Querier, transactionID string) 
 			candidateDescription string
 			candidateMetadataRaw string
 		)
-		if err := rows.Scan(&candidateID, &candidateDescription, &candidateMetadataRaw); err != nil {
+		if err := rows.Scan(dbtypes.ID(&candidateID), &candidateDescription, &candidateMetadataRaw); err != nil {
 			return nil, err
 		}
 		if candidateID == transactionID {

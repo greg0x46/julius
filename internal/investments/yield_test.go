@@ -47,7 +47,7 @@ func (f *ledgerFixture) addHolding(h investments.SyncedHolding) string {
 		) VALUES (?, ?, ?, ?, ?, ?, ?, 'BRL', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'hash', ?, ?)`,
 		id, f.sourceID, h.ExternalID, h.Name, h.Code, h.InvestmentType, h.Subtype, h.IssuerCNPJ,
 		decimalArg(h.Rate, h.Rate != nil), h.RateType,
-		db.FormatTimePtr(h.IssueDate), db.FormatTimePtr(h.PurchaseDate), db.FormatTimePtr(h.DueDate),
+		investments.FormatProviderDatePtr(h.IssueDate), investments.FormatProviderDatePtr(h.PurchaseDate), investments.FormatProviderDatePtr(h.DueDate),
 		decimalArg(h.Quantity, h.Quantity != nil), decimalArg(h.Amount, h.Amount != nil),
 		decimalArg(h.AmountOriginal, h.AmountOriginal != nil), db.FormatTimePtr(h.AsOfDate),
 		f.rawImportID, now, now)

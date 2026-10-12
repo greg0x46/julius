@@ -11,6 +11,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/greg0x46/julius/internal/db/dbtest"
+	dbtypes "github.com/greg0x46/julius/internal/db/types"
 )
 
 type fakeProvider struct {
@@ -91,7 +92,7 @@ func TestLatestPersistsRateWithProvenance(t *testing.T) {
 		var rate, source, effective string
 		if err := conn.QueryRow(`SELECT rate, source, effective_on FROM exchange_rates
 			WHERE base_currency = 'USD' AND quote_currency = 'BRL' AND as_of = '2026-10-11'`).
-			Scan(&rate, &source, &effective); err != nil {
+			Scan(&rate, &source, dbtypes.Date(&effective)); err != nil {
 			t.Fatal(err)
 		}
 		if rate != "5.005" || source != "fake" || effective != "2026-10-09" {
@@ -234,7 +235,7 @@ func TestStaleHistoricalRateRefreshesAfterTTL(t *testing.T) {
 		var value, effective string
 		if err := conn.QueryRow(`SELECT rate, effective_on FROM exchange_rates
 			WHERE base_currency = 'USD' AND quote_currency = 'BRL' AND as_of = '2026-10-07'`).
-			Scan(&value, &effective); err != nil {
+			Scan(&value, dbtypes.Date(&effective)); err != nil {
 			t.Fatal(err)
 		}
 		if value != "5.4" || effective != "2026-10-07" {

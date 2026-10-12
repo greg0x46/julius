@@ -51,6 +51,10 @@ authentication configuration that does not depend on the host:
 
 ## Features
 
+- **Typed database baseline** — a one-shot legacy converter preserves existing
+  data; both dialects share one migration sequence, with native exact Postgres types and a startup guard that rejects the old
+  schema generation. Existing installations need a separate conversion before
+  using this binary; see [Database schema generations](#database-schema-generations).
 - **Open Banking sync** — a background worker polls Pluggy periodically for
   new transactions and account data, recorded as auditable sync runs (history,
   metrics, failures) instead of a black-box import.
@@ -70,6 +74,7 @@ authentication configuration that does not depend on the host:
   deletion limited to these manual entries.
 - **Automation rules** — condition-based rules that categorize new
   transactions automatically and can be applied retroactively to existing ones.
+  A single rule can both categorize and reconcile a recurring commitment.
 - **Payables (debts and receivables)** — track a real total (debt, installment
   purchase, receivable) and link the transactions that settle it, with
   eligibility rules for which transactions can be linked.
@@ -89,7 +94,7 @@ authentication configuration that does not depend on the host:
   time.
 - **Investments** — integrated and manual investment accounts, goal-based
   portfolios, per-asset operations, manual valuations and optional automatic
-  quotes (B3 and crypto). Contributions and withdrawals reconciled with the
+  quotes (B3 and crypto), enabled by default with a persistent daily schedule. Contributions and withdrawals reconciled with the
   statement show up apart from spending, keeping their cash effect and avoiding
   double counting in net worth.
 - **Browser authentication** — email and password login for the owner account,
@@ -316,6 +321,63 @@ is stored in the database; if it does not exist, protected mode is used, and if
 it cannot be read the API becomes unavailable — it never opens because of a
 configuration failure.
 
+### Database schema generations
+
+This binary initializes a new schema generation on empty databases. Postgres
+stores money as exact `NUMERIC`, instants as `TIMESTAMPTZ`, calendar days as
+`DATE`, flags as `BOOLEAN`, and UUID identities as `UUID`; SQLite retains exact
+text money and UTC timestamps. Both dialects use the same migration numbers.
+
+**Existing Postgres installations:** startup automatically converts the final
+legacy schema (version 46) into generation 1 in the same database. Stop old
+application instances before upgrading and retain an external database backup.
+The database role needs permission to create schemas. A transaction locks the
+legacy tables, builds the native baseline, copies and verifies every converted
+row, then activates it without changing the DSN. The original tables, migration
+history and append-only trigger function remain in a `julius_legacy_<id>` schema;
+the startup log identifies it. Concurrent startups serialize, and subsequent
+starts skip conversion. Any invalid value, schema mismatch or constraint failure
+rolls back the entire operation and prevents startup with the original intact.
+Older Postgres schemas must first reach version 46 using the legacy binary.
+The backup schema is retained indefinitely; do not delete it before acceptance.
+
+**Existing SQLite installations:** databases from the old migration sequence are
+rejected at startup, without applying migrations. Use the one-shot
+`cmd/migrate-legacy` tool with a separate target; it replaces
+`cmd/migrate-to-postgres`. Keep the old binary, database and external master key.
+Do not change the old database's migration version to bypass the guard.
+
+1. Stop Julius and make a consistent SQLite backup. The source must have reached
+   the final legacy schema (SQLite migration `00047_manual_bank_accounts`); if
+   necessary, upgrade it with the previous binary before taking the backup.
+2. Choose a new SQLite path or a fresh Postgres database. Keep both applications
+   stopped throughout conversion. The tool initializes the target schema and
+   refuses existing application data, except untouched baseline category seeds.
+3. Run a dry-run against the backup:
+
+   ```sh
+   go run ./cmd/migrate-legacy -sqlite legacy-backup.db -target converted.db -dry-run
+   # For Postgres, replace converted.db with a postgres:// DSN.
+   ```
+
+   It reports all malformed rows and constraint errors together, with table,
+   row identity and value. Require `zero errors` and matching row counts,
+   per-account balances and movement sums. Imported data and replaced category
+   seeds roll back; the new target schema remains initialized.
+4. Repeat the same command without `-dry-run`. Require `copy complete; counts
+   and balances match` before starting Julius with the target database and the
+   same master key. Check accounts, transactions, decisions and sign-in before
+   retiring the previous installation.
+
+The source opens read-only without applying migrations. IDs, encrypted settings,
+raw payloads, sessions and user decisions carry over; auth timestamps and calendar
+fields follow the documented [conversion contract](.specs/reorganizacao-schema/inventario.md).
+Postgres rejects legacy IDs that cannot fit its UUID columns; SQLite preserves
+opaque legacy IDs. No rounding or guessed values are used. An interrupted or
+failed real copy can leave earlier tables committed: discard only the separate
+target and retry with a fresh one. Keep the source untouched as the rollback
+backup. This tool is temporary and should be removed after cutover.
+
 ### Running with Postgres
 
 SQLite remains the default for local use. To run against a shared Postgres —
@@ -394,16 +456,35 @@ Investment assets with automatic quotes enabled have the price of their manual
 positions fetched automatically and stored in the asset's price series. The
 position value is computed on every read (quantity × latest price); a manual
 valuation dated on or after the latest price takes precedence over it. Fetching
-is opt-in: set `JULIUS_QUOTES_SCHEDULE` (same format as the sync schedule)
-to run once a day and when the process starts. Providers are tried in order,
+is enabled by default at 19:00 America/Sao_Paulo. The backend persists
+`enabled`, `time` and `timezone` and applies changes without a restart.
+Startup and re-enabling fetch missing prices and history; disabling also stops
+backfill. The active spot batch may finish; disabling prevents the following
+history stage and later work cycles. Providers are tried in order,
 with automatic fallback; `JULIUS_QUOTES_PROVIDERS` sets the order
 (comma-separated; an omitted provider is disabled; an unknown name prevents
 startup):
 
 ```sh
-export JULIUS_QUOTES_SCHEDULE="19:00 America/Sao_Paulo"
+export JULIUS_QUOTES_SCHEDULE="19:00 America/Sao_Paulo" # first initialization only
 export JULIUS_QUOTES_PROVIDERS="yahoo,brapi,coingecko" # default
 ```
+
+An authenticated owner can read `GET /api/settings/quotes` and partially update
+`PUT /api/settings/quotes`, with the session cookie, configured `Origin` and
+`X-Julius-Request: 1`. Example JSON to change the schedule:
+
+```json
+{"enabled": true, "time": "20:30", "timezone": "America/Sao_Paulo"}
+```
+
+Send `{"enabled": false}` to disable it. Omitted fields are preserved;
+`brapi_token` stays write-only, and an explicit empty string clears it.
+`time` must be strict HH:MM and `timezone` must be loadable. Saved settings
+survive restarts and take precedence over `JULIUS_QUOTES_SCHEDULE`, which
+initializes only an absent configuration (HH:MM alone keeps process-local time).
+An unset or empty environment uses the enabled default. API changes wake the
+scheduler immediately; other persisted changes are checked every minute.
 
 By default Yahoo Finance is the primary source for both markets; brapi is the
 B3 fallback and CoinGecko the crypto one. The optional brapi token is

@@ -40,7 +40,7 @@ func TestPostgresPayablesMigrationPreservesData(t *testing.T) {
 	conn := sql.OpenDB(connector)
 	t.Cleanup(func() { conn.Close() })
 
-	migrations, err := fs.Sub(postgresMigrationsFS, "migrations/postgres")
+	migrations, err := fs.Sub(legacyMigrationsFS, "migrations/archive/postgres")
 	if err != nil {
 		t.Fatalf("root migrations fs: %v", err)
 	}
@@ -194,7 +194,7 @@ func postgresMigrationProviderAt(t *testing.T, version int64) (*sql.DB, *goose.P
 	conn := sql.OpenDB(connector)
 	t.Cleanup(func() { conn.Close() })
 
-	migrations, err := fs.Sub(postgresMigrationsFS, "migrations/postgres")
+	migrations, err := fs.Sub(legacyMigrationsFS, "migrations/archive/postgres")
 	if err != nil {
 		t.Fatalf("root migrations fs: %v", err)
 	}

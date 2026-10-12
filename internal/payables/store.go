@@ -20,6 +20,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/greg0x46/julius/internal/db"
+	dbtypes "github.com/greg0x46/julius/internal/db/types"
 	"github.com/greg0x46/julius/internal/money"
 	"github.com/greg0x46/julius/internal/transactions"
 )
@@ -97,7 +98,7 @@ func scanPayable(row *sql.Row) (Payable, error) {
 		totalAmountRaw, startingSettledAmountRaw string
 		createdAtRaw, updatedAtRaw               string
 	)
-	if err := row.Scan(&p.ID, &kindRaw, &p.Name, &totalAmountRaw, &startingSettledAmountRaw, &createdAtRaw, &updatedAtRaw); err != nil {
+	if err := row.Scan(dbtypes.ID(&p.ID), &kindRaw, &p.Name, dbtypes.Decimal(&totalAmountRaw), dbtypes.Decimal(&startingSettledAmountRaw), dbtypes.Time(&createdAtRaw), dbtypes.Time(&updatedAtRaw)); err != nil {
 		return Payable{}, err
 	}
 	p.Kind = Kind(kindRaw)
@@ -108,10 +109,10 @@ func scanPayable(row *sql.Row) (Payable, error) {
 	if p.StartingSettledAmount, err = decimal.NewFromString(startingSettledAmountRaw); err != nil {
 		return Payable{}, err
 	}
-	if p.CreatedAt, err = db.ParseTime(createdAtRaw); err != nil {
+	if p.CreatedAt, err = dbtypes.ParseTime(createdAtRaw); err != nil {
 		return Payable{}, err
 	}
-	if p.UpdatedAt, err = db.ParseTime(updatedAtRaw); err != nil {
+	if p.UpdatedAt, err = dbtypes.ParseTime(updatedAtRaw); err != nil {
 		return Payable{}, err
 	}
 	return p, nil
@@ -153,7 +154,7 @@ func List(ctx context.Context, q Querier, kind *Kind) ([]Payable, error) {
 			totalAmountRaw, startingSettledAmountRaw string
 			createdAtRaw, updatedAtRaw               string
 		)
-		if err := rows.Scan(&p.ID, &kindRaw, &p.Name, &totalAmountRaw, &startingSettledAmountRaw, &createdAtRaw, &updatedAtRaw); err != nil {
+		if err := rows.Scan(dbtypes.ID(&p.ID), &kindRaw, &p.Name, dbtypes.Decimal(&totalAmountRaw), dbtypes.Decimal(&startingSettledAmountRaw), dbtypes.Time(&createdAtRaw), dbtypes.Time(&updatedAtRaw)); err != nil {
 			return nil, err
 		}
 		p.Kind = Kind(kindRaw)
@@ -163,10 +164,10 @@ func List(ctx context.Context, q Querier, kind *Kind) ([]Payable, error) {
 		if p.StartingSettledAmount, err = decimal.NewFromString(startingSettledAmountRaw); err != nil {
 			return nil, err
 		}
-		if p.CreatedAt, err = db.ParseTime(createdAtRaw); err != nil {
+		if p.CreatedAt, err = dbtypes.ParseTime(createdAtRaw); err != nil {
 			return nil, err
 		}
-		if p.UpdatedAt, err = db.ParseTime(updatedAtRaw); err != nil {
+		if p.UpdatedAt, err = dbtypes.ParseTime(updatedAtRaw); err != nil {
 			return nil, err
 		}
 		list = append(list, p)
@@ -202,14 +203,14 @@ func linksFor(ctx context.Context, q Querier, payableIDs []string) (map[string][
 		       CASE
 		         WHEN NOT EXISTS (
 					SELECT 1 FROM scenarios s0
-					WHERE s0.payable_id = l.payable_id AND s0.is_accounting_source = 1
+					WHERE s0.payable_id = l.payable_id AND s0.is_accounting_source = TRUE
 				 ) THEN 1
 		         WHEN EXISTS (
 					SELECT 1
 					FROM scenario_realizations sr
 					JOIN scenarios s ON s.id = sr.scenario_id
 					WHERE s.payable_id = l.payable_id
-					  AND s.is_accounting_source = 1
+					  AND s.is_accounting_source = TRUE
 					  AND sr.relation_type = 'settlement'
 					  AND sr.state = 'linked'
 					  AND sr.transaction_id = l.transaction_id
@@ -226,13 +227,13 @@ func linksFor(ctx context.Context, q Querier, payableIDs []string) (map[string][
 		var l Link
 		var countsAsSettlement int
 		var linkedAmountRaw, linkedAtRaw string
-		if err := rows.Scan(&l.ID, &l.PayableID, &l.TransactionID, &linkedAmountRaw, &linkedAtRaw, &countsAsSettlement); err != nil {
+		if err := rows.Scan(dbtypes.ID(&l.ID), dbtypes.ID(&l.PayableID), dbtypes.ID(&l.TransactionID), dbtypes.Decimal(&linkedAmountRaw), dbtypes.Time(&linkedAtRaw), dbtypes.Bool(&countsAsSettlement)); err != nil {
 			return nil, err
 		}
 		if l.LinkedAmount, err = decimal.NewFromString(linkedAmountRaw); err != nil {
 			return nil, err
 		}
-		if l.LinkedAt, err = db.ParseTime(linkedAtRaw); err != nil {
+		if l.LinkedAt, err = dbtypes.ParseTime(linkedAtRaw); err != nil {
 			return nil, err
 		}
 		result[l.PayableID] = append(result[l.PayableID], loadedLink{Link: l, countsAsSettlement: countsAsSettlement != 0})
@@ -248,7 +249,7 @@ func GetLink(ctx context.Context, q Querier, id string) (Link, error) {
 	var linkedAmountRaw, linkedAtRaw string
 	err := q.QueryRowContext(ctx,
 		`SELECT id, payable_id, transaction_id, linked_amount, linked_at FROM payable_transaction_links WHERE id = ?`, id,
-	).Scan(&l.ID, &l.PayableID, &l.TransactionID, &linkedAmountRaw, &linkedAtRaw)
+	).Scan(dbtypes.ID(&l.ID), dbtypes.ID(&l.PayableID), dbtypes.ID(&l.TransactionID), dbtypes.Decimal(&linkedAmountRaw), dbtypes.Time(&linkedAtRaw))
 	if errors.Is(err, sql.ErrNoRows) {
 		return Link{}, ErrLinkNotFound
 	}
@@ -258,7 +259,7 @@ func GetLink(ctx context.Context, q Querier, id string) (Link, error) {
 	if l.LinkedAmount, err = decimal.NewFromString(linkedAmountRaw); err != nil {
 		return Link{}, err
 	}
-	if l.LinkedAt, err = db.ParseTime(linkedAtRaw); err != nil {
+	if l.LinkedAt, err = dbtypes.ParseTime(linkedAtRaw); err != nil {
 		return Link{}, err
 	}
 	return l, nil
@@ -323,8 +324,8 @@ const transactionSnapshotFrom = `FROM financial_transactions ft
 	LEFT JOIN transaction_inclusion_decisions tid ON tid.transaction_id = ft.id`
 
 func (sc *snapshotScan) dest() []any {
-	return []any{&sc.description, &sc.occurredAt, &sc.movementType, &sc.amount,
-		&sc.amountInAcct, &sc.currencyCode, &sc.acctCurrency, &sc.acctName, &sc.inclusionState}
+	return []any{&sc.description, dbtypes.Time(&sc.occurredAt), &sc.movementType, dbtypes.Decimal(&sc.amount),
+		dbtypes.Decimal(&sc.amountInAcct), &sc.currencyCode, &sc.acctCurrency, &sc.acctName, &sc.inclusionState}
 }
 
 func (sc *snapshotScan) snapshot() (transactionSnapshot, error) {
@@ -348,7 +349,7 @@ func (sc *snapshotScan) snapshot() (transactionSnapshot, error) {
 		s.inclusionState = &sc.inclusionState.String
 	}
 	if sc.occurredAt.Valid {
-		t, err := db.ParseTime(sc.occurredAt.String)
+		t, err := dbtypes.ParseTime(sc.occurredAt.String)
 		if err != nil {
 			return transactionSnapshot{}, err
 		}
@@ -412,7 +413,7 @@ func loadTransactions(ctx context.Context, q Querier, transactionIDs []string) (
 	for rows.Next() {
 		var id string
 		var sc snapshotScan
-		if err := rows.Scan(append([]any{&id}, sc.dest()...)...); err != nil {
+		if err := rows.Scan(append([]any{dbtypes.ID(&id)}, sc.dest()...)...); err != nil {
 			return nil, err
 		}
 		s, err := sc.snapshot()
@@ -480,7 +481,7 @@ func ListEligibleTransactions(ctx context.Context, q Querier, kind Kind, search 
 			acctCurrency, acctName                  sql.NullString
 			inclusionState                          sql.NullString
 		)
-		if err := rows.Scan(&id, &description, &occurredAtRaw, &movementType, &amountRaw, &amountInAcctRaw,
+		if err := rows.Scan(dbtypes.ID(&id), &description, dbtypes.Time(&occurredAtRaw), &movementType, dbtypes.Decimal(&amountRaw), dbtypes.Decimal(&amountInAcctRaw),
 			&currencyCode, &acctCurrency, &acctName, &inclusionState); err != nil {
 			return nil, err
 		}
@@ -504,7 +505,7 @@ func ListEligibleTransactions(ctx context.Context, q Querier, kind Kind, search 
 			s.inclusionState = &inclusionState.String
 		}
 		if occurredAtRaw.Valid {
-			t, err := db.ParseTime(occurredAtRaw.String)
+			t, err := dbtypes.ParseTime(occurredAtRaw.String)
 			if err != nil {
 				return nil, err
 			}
@@ -596,7 +597,7 @@ func CreateLink(ctx context.Context, conn *sql.DB, kind Kind, payableID, transac
 	}
 
 	var existingLinkID sql.NullString
-	if err := conn.QueryRowContext(ctx, `SELECT id FROM payable_transaction_links WHERE transaction_id = ?`, transactionID).Scan(&existingLinkID); err != nil && !errors.Is(err, sql.ErrNoRows) {
+	if err := conn.QueryRowContext(ctx, `SELECT id FROM payable_transaction_links WHERE transaction_id = ?`, transactionID).Scan(dbtypes.ID(&existingLinkID)); err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return CreateLinkResult{}, err
 	}
 	alreadyLinked := existingLinkID.Valid
@@ -646,7 +647,7 @@ func createSettlement(ctx context.Context, q Querier, link Link) error {
 	var scenarioID string
 	err := q.QueryRowContext(ctx, `
 		SELECT id FROM scenarios
-		WHERE payable_id = ? AND is_accounting_source = 1`, link.PayableID).Scan(&scenarioID)
+		WHERE payable_id = ? AND is_accounting_source = TRUE`, link.PayableID).Scan(dbtypes.ID(&scenarioID))
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil
 	}
@@ -670,7 +671,7 @@ func createSettlement(ctx context.Context, q Querier, link Link) error {
 // that would silently no-op on a mismatched payable_id).
 func DeleteLink(ctx context.Context, conn *sql.DB, payableID, linkID string) (bool, error) {
 	var storedPayableID, transactionID string
-	err := conn.QueryRowContext(ctx, `SELECT payable_id, transaction_id FROM payable_transaction_links WHERE id = ?`, linkID).Scan(&storedPayableID, &transactionID)
+	err := conn.QueryRowContext(ctx, `SELECT payable_id, transaction_id FROM payable_transaction_links WHERE id = ?`, linkID).Scan(dbtypes.ID(&storedPayableID), dbtypes.ID(&transactionID))
 	if errors.Is(err, sql.ErrNoRows) || (err == nil && storedPayableID != payableID) {
 		return false, nil
 	}

@@ -150,8 +150,24 @@ manual valuations or the integrated institution's values.
 A code that cannot be read in the market's format is rejected on save (`400`),
 with the reason.
 
-Fetching is opt-in: it only runs with `JULIUS_QUOTES_SCHEDULE` set (`HH:MM`
-or `HH:MM Zone/IANA`), once a day and at process start.
+Automatic refresh is enabled by default, daily at `19:00` in
+`America/Sao_Paulo`. `enabled`, `time` and `timezone` are stored together in
+`settings` and read by the scheduler without restarting the process. Changing
+the time or zone reschedules the next run; disabling also suspends history
+backfill. An active spot batch can finish; disabling is checked before the
+history stage and subsequent work cycles.
+
+At startup and when re-enabled, the scheduler fetches only missing prices for
+today and missing history; a restart does not repeat requests already covered.
+The daily run updates prices for today. Quote dates remain Brazilian calendar
+days regardless of the scheduling timezone. API changes wake the local
+scheduler immediately; writes by another process are detected within a minute.
+
+`JULIUS_QUOTES_SCHEDULE` (`HH:MM` or `HH:MM Zone/IANA`) initializes only a
+configuration that has not yet been saved. With no zone it uses `Local`; an
+empty value uses the default schedule. Once saved, persisted settings take
+precedence in full, including when disabled, and later environment changes are
+ignored.
 
 ### Providers
 
@@ -354,3 +370,14 @@ Imported positions in other currencies keep their original currency and value.
 With no FX conversion in this version, they stay out of the investment totals,
 goals and the investments portion of net worth in reais. The UI flags when
 positions exist outside those totals.
+
+## Database representation
+
+Exact amounts, prices and quantities use Postgres `NUMERIC` and SQLite decimal
+text. Issue/purchase/due dates are calendar dates (`DATE` in Postgres, date text
+in SQLite), normalized on the provider's BRT wall clock; quote identity retains
+its existing provider-day semantics. Trade dates retain the existing movement-day
+rule (midnight UTC is already a day, other instants use BRT). Observation/as-of
+values remain instants. Integrated custody IDs remain opaque
+`integrated:<source id>` text; records with UUID identities use native Postgres
+UUIDs. `db.Open` rejects the old schema generation; conversion is separate work.

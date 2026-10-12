@@ -41,6 +41,19 @@ password-derivation functions in settings exist only for migration and tests.
   sessions; does not need or change the key. Passwords are read without echo
   from a terminal.
 
+Owner/session timestamps use UTC text in SQLite and native `TIMESTAMPTZ` in
+Postgres, retaining second-level lifetime and idle-timeout semantics. Database
+opening automatically converts final legacy Postgres in one transaction while
+retaining the original tables in a backup schema, including hashes, revisions,
+encrypted settings and session deadlines. Concurrent startups serialize and
+invalid data rolls back the conversion. Legacy SQLite requires a
+`cmd/migrate-legacy` converts a final legacy SQLite backup into a separate fresh
+SQLite/Postgres target. Unix-second owner/session timestamps become UTC instants
+without extending sessions; encrypted settings, hashes and revisions copy
+unchanged with the same external master key. Dry-run rolls back imported data
+and reports row errors; count and native account balance checks gate completion.
+See README "Database schema generations" for cutover and retry steps.
+
 The server refuses pending configuration or an invalid key. A lost key cannot
 be recovered with the password; key rotation is not implemented. Instructions
 are in the README.
@@ -55,7 +68,8 @@ are in the README.
 | PUT /api/auth/password | Takes current_password/password, revokes all sessions, returns authenticated=false |
 | PUT /api/auth/config | Enables/disables authentication (see README "open mode") |
 | PUT /api/settings/pluggy | Stores pluggy_client_id/pluggy_client_secret encrypted; optional pluggy_item_id creates a connection in the same transaction; returns saved=true |
-| PUT /api/settings/quotes | Stores the optional brapi token |
+| GET /api/settings/quotes | Returns only enabled, time and timezone; never returns the token |
+| PUT /api/settings/quotes | Partially updates enabled/time/timezone and optional brapi_token atomically; returns saved=true |
 | GET/PUT /api/preferences | Existing preferences, now authenticated |
 
 All `/api` routes are private by default, except the login and status
@@ -86,3 +100,22 @@ Postgres uses `JULIUS_TEST_POSTGRES_DSN` with a schema isolated per auth
 test. Claiming of sync runs by the worker is coordinated across instances via
 Postgres (see Open Banking sync); the rate limit stays per instance. No
 multiple users, MFA or email recovery. Hosting and provisioning are external.
+
+## Quote schedule settings
+
+`enabled` is a boolean, `time` requires canonical `HH:MM` (00:00–23:59), and
+`timezone` must be a loadable zone such as `America/Sao_Paulo`. Omitted fields
+keep their current values; `enabled: false` disables refresh, and
+`brapi_token: ""` clears the token. The token stays encrypted and write-only.
+A time-only update does not require or alter the key/token. Invalid values
+return 422; database or key failures return 503 without a partial write. GET
+and PUT require a session, and PUT keeps the usual CSRF protection. The
+default is enabled at 19:00 America/Sao_Paulo. The running scheduler applies
+changes without restart, including suspending history backfill. Legacy
+environment initialization and precedence are described under Investments.
+The UI keeps the existing token form without schedule controls.
+
+Schedule initialization stores the unencrypted flag using SQL `FALSE`, which
+works with SQLite integer flags and Postgres native booleans.
+`TestInitializeScheduleBothDialects` covers startup initialization;
+`TestQuoteSettingsPostgresRoundTrip` covers HTTP schedule writes.

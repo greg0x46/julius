@@ -10,6 +10,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/greg0x46/julius/internal/db"
+	dbtypes "github.com/greg0x46/julius/internal/db/types"
 	"github.com/greg0x46/julius/internal/money"
 )
 
@@ -34,14 +35,14 @@ type Querier interface {
 const dateLayout = "2006-01-02"
 
 func formatDate(t time.Time) string         { return t.UTC().Format(dateLayout) }
-func parseDate(s string) (time.Time, error) { return time.Parse(dateLayout, s) }
+func parseDate(s string) (time.Time, error) { return dbtypes.ParseDate(s) }
 
 // A recurring commitment is a Scenario of kind 'recurring' plus its row in
 // scenario_recurring_schedules: identity, name and activation on the scenario,
 // cash flow and calendar on the schedule. The two are always written together,
 // so every read here is that join.
 const selectCommitment = `
-	SELECT s.id, s.name, r.cashflow_kind, r.amount, COALESCE(r.category_id, ''), r.account_id,
+	SELECT s.id, s.name, r.cashflow_kind, r.amount, r.category_id, r.account_id,
 	       r.cadence, r.day_of_month, r.month_of_year, r.start_date, r.end_date,
 	       s.is_active, s.created_at, s.updated_at
 	FROM scenarios s
@@ -88,8 +89,8 @@ func Create(ctx context.Context, conn *sql.DB, write Write) (RecurringCommitment
 	}
 	if _, err := tx.ExecContext(ctx, `
 		INSERT INTO scenarios (id, kind, name, payable_id, is_active, is_accounting_source, created_at, updated_at)
-		VALUES (?, 'recurring', ?, NULL, ?, 0, ?, ?)`,
-		c.ID, c.Name, boolToInt(c.IsActive), db.FormatTime(now), db.FormatTime(now),
+		VALUES (?, 'recurring', ?, NULL, ?, ?, ?, ?)`,
+		c.ID, c.Name, c.IsActive, false, db.FormatTime(now), db.FormatTime(now),
 	); err != nil {
 		return RecurringCommitment{}, err
 	}
@@ -124,7 +125,7 @@ func Update(ctx context.Context, conn *sql.DB, id string, write Write) (Recurrin
 	res, err := tx.ExecContext(ctx, `
 		UPDATE scenarios SET name = ?, is_active = ?, updated_at = ?
 		WHERE id = ? AND kind = 'recurring'`,
-		c.Name, boolToInt(c.IsActive), db.FormatTime(now), id)
+		c.Name, c.IsActive, db.FormatTime(now), id)
 	if err != nil {
 		return RecurringCommitment{}, err
 	}
@@ -163,7 +164,7 @@ func SetActive(ctx context.Context, q Querier, id string, isActive bool) (Recurr
 	res, err := q.ExecContext(ctx, `
 		UPDATE scenarios SET is_active = ?, updated_at = ?
 		WHERE id = ? AND kind = 'recurring'`,
-		boolToInt(isActive), db.FormatTime(time.Now().UTC()), id)
+		isActive, db.FormatTime(time.Now().UTC()), id)
 	if err != nil {
 		return RecurringCommitment{}, err
 	}
@@ -208,7 +209,7 @@ func scanCommitment(scan func(dest ...any) error) (RecurringCommitment, error) {
 		c                          RecurringCommitment
 		kindRaw, cadenceRaw        string
 		amountRaw                  string
-		accountID                  sql.NullString
+		categoryID, accountID      sql.NullString
 		monthOfYear                sql.NullInt64
 		startDateRaw               string
 		endDateRaw                 sql.NullString
@@ -216,13 +217,14 @@ func scanCommitment(scan func(dest ...any) error) (RecurringCommitment, error) {
 		createdAtRaw, updatedAtRaw string
 	)
 	if err := scan(
-		&c.ID, &c.Name, &kindRaw, &amountRaw, &c.CategoryID, &accountID,
-		&cadenceRaw, &c.DayOfMonth, &monthOfYear, &startDateRaw, &endDateRaw, &isActive,
-		&createdAtRaw, &updatedAtRaw,
+		dbtypes.ID(&c.ID), &c.Name, &kindRaw, dbtypes.Decimal(&amountRaw), dbtypes.ID(&categoryID), dbtypes.ID(&accountID),
+		&cadenceRaw, &c.DayOfMonth, &monthOfYear, dbtypes.Date(&startDateRaw), dbtypes.Date(&endDateRaw), dbtypes.Bool(&isActive),
+		dbtypes.Time(&createdAtRaw), dbtypes.Time(&updatedAtRaw),
 	); err != nil {
 		return RecurringCommitment{}, err
 	}
 	c.Kind = Kind(kindRaw)
+	c.CategoryID = categoryID.String
 	c.Cadence = Cadence(cadenceRaw)
 	c.IsActive = isActive != 0
 	if accountID.Valid {
@@ -246,10 +248,10 @@ func scanCommitment(scan func(dest ...any) error) (RecurringCommitment, error) {
 		}
 		c.EndDate = &end
 	}
-	if c.CreatedAt, err = db.ParseTime(createdAtRaw); err != nil {
+	if c.CreatedAt, err = dbtypes.ParseTime(createdAtRaw); err != nil {
 		return RecurringCommitment{}, err
 	}
-	if c.UpdatedAt, err = db.ParseTime(updatedAtRaw); err != nil {
+	if c.UpdatedAt, err = dbtypes.ParseTime(updatedAtRaw); err != nil {
 		return RecurringCommitment{}, err
 	}
 	return c, nil
@@ -298,7 +300,7 @@ func List(ctx context.Context, q Querier) ([]RecurringCommitment, error) {
 // ListActive returns only commitments whose Scenario is active — the set
 // internal/projections projects occurrences from.
 func ListActive(ctx context.Context, q Querier) ([]RecurringCommitment, error) {
-	return listWhere(ctx, q, "s.is_active = 1")
+	return listWhere(ctx, q, "s.is_active = TRUE")
 }
 
 func formatDatePtr(t *time.Time) any {
@@ -306,13 +308,6 @@ func formatDatePtr(t *time.Time) any {
 		return nil
 	}
 	return formatDate(*t)
-}
-
-func boolToInt(b bool) int {
-	if b {
-		return 1
-	}
-	return 0
 }
 
 func insertSchedule(ctx context.Context, q Querier, c RecurringCommitment) error {

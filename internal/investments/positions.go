@@ -11,6 +11,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/greg0x46/julius/internal/db"
+	dbtypes "github.com/greg0x46/julius/internal/db/types"
 	"github.com/greg0x46/julius/internal/money"
 )
 
@@ -141,8 +142,8 @@ func listManualPositions(ctx context.Context, q Querier, scope positionScope) ([
 			createdAtRaw, updatedAtRaw              string
 		)
 		var assetID string
-		if err := rows.Scan(&position.ID, &position.AccountID, &assetID, &position.Name, &ticker, &position.AssetType,
-			&quoteSource, &notes, &createdAtRaw, &updatedAtRaw, &portfolioID); err != nil {
+		if err := rows.Scan(dbtypes.ID(&position.ID), dbtypes.ID(&position.AccountID), dbtypes.ID(&assetID), &position.Name, &ticker, &position.AssetType,
+			&quoteSource, &notes, dbtypes.Time(&createdAtRaw), dbtypes.Time(&updatedAtRaw), dbtypes.ID(&portfolioID)); err != nil {
 			return nil, err
 		}
 		quoted[assetID] = quoteSource.Valid && quoteSource.String != ""
@@ -277,8 +278,8 @@ func listSyncedPositions(ctx context.Context, q Querier, scope positionScope) ([
 			createdAtRaw, updatedAtRaw string
 			row                        syncedHoldingRow
 		)
-		if err := rows.Scan(append([]any{&position.ID, &position.AccountID, &balance, &createdAtRaw, &updatedAtRaw,
-			&portfolioID}, row.dests()...)...); err != nil {
+		if err := rows.Scan(append([]any{dbtypes.ID(&position.ID), dbtypes.ID(&position.AccountID), dbtypes.Decimal(&balance), dbtypes.Time(&createdAtRaw), dbtypes.Time(&updatedAtRaw),
+			dbtypes.ID(&portfolioID)}, row.dests()...)...); err != nil {
 			return nil, err
 		}
 		holding, err := row.holding()
@@ -380,7 +381,7 @@ func CreatePosition(ctx context.Context, conn *sql.DB, in PositionInput) (Positi
 		return Position{}, err
 	}
 	var alreadyExists bool
-	if err := tx.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM investment_positions WHERE account_id = ? AND asset_id = ?)`, in.AccountID, asset.ID).Scan(&alreadyExists); err != nil {
+	if err := tx.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM investment_positions WHERE account_id = ? AND asset_id = ?)`, in.AccountID, asset.ID).Scan(dbtypes.Bool(&alreadyExists)); err != nil {
 		return Position{}, err
 	}
 	if alreadyExists {

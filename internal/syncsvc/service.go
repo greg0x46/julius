@@ -13,6 +13,7 @@ import (
 
 	"github.com/greg0x46/julius/internal/categories"
 	"github.com/greg0x46/julius/internal/db"
+	dbtypes "github.com/greg0x46/julius/internal/db/types"
 	"github.com/greg0x46/julius/internal/investments"
 	"github.com/greg0x46/julius/internal/money"
 	"github.com/greg0x46/julius/internal/pluggy"
@@ -408,10 +409,10 @@ func (s *Service) upsertBill(ctx context.Context, accountID string, snapshot plu
 		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT (source_id, external_id) DO NOTHING
 		RETURNING id`,
-		newID, s.SourceID, accountID, snapshot.ExternalID, db.FormatTimePtr(snapshot.DueDate), db.FormatTimePtr(snapshot.ClosingDate),
+		newID, s.SourceID, accountID, snapshot.ExternalID, db.FormatDatePtr(snapshot.DueDate), db.FormatDatePtr(snapshot.ClosingDate),
 		decimalToStorage(snapshot.TotalAmount), snapshot.CurrencyCode, decimalToStorage(snapshot.MinimumPaymentAmount),
 		rawImportID, digest, now, now,
-	).Scan(&insertedID)
+	).Scan(dbtypes.ID(&insertedID))
 	inserted := err == nil
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return "", err
@@ -419,7 +420,7 @@ func (s *Service) upsertBill(ctx context.Context, accountID string, snapshot plu
 
 	var billID, existingHash string
 	if err := tx.QueryRowContext(ctx, `SELECT id, normalized_hash FROM financial_bills WHERE source_id = ? AND external_id = ?`,
-		s.SourceID, snapshot.ExternalID).Scan(&billID, &existingHash); err != nil {
+		s.SourceID, snapshot.ExternalID).Scan(dbtypes.ID(&billID), &existingHash); err != nil {
 		return "", err
 	}
 
@@ -433,7 +434,7 @@ func (s *Service) upsertBill(ctx context.Context, accountID string, snapshot plu
 			UPDATE financial_bills SET due_date = ?, closing_date = ?, total_amount = ?, currency_code = ?,
 				minimum_payment_amount = ?, current_raw_import_id = ?, normalized_hash = ?, updated_at = ?
 			WHERE id = ?`,
-			db.FormatTimePtr(snapshot.DueDate), db.FormatTimePtr(snapshot.ClosingDate), decimalToStorage(snapshot.TotalAmount),
+			db.FormatDatePtr(snapshot.DueDate), db.FormatDatePtr(snapshot.ClosingDate), decimalToStorage(snapshot.TotalAmount),
 			snapshot.CurrencyCode, decimalToStorage(snapshot.MinimumPaymentAmount), rawImportID, digest, now, billID,
 		)
 		if err != nil {
@@ -539,9 +540,9 @@ func (s *Service) upsertAccount(ctx context.Context, snapshot pluggy.AccountSnap
 		RETURNING id`,
 		newID, s.SourceID, snapshot.ExternalID, snapshot.Institution, snapshot.Name, snapshot.Number,
 		snapshot.AccountType, snapshot.AccountSubtype, decimalToStorage(snapshot.Balance), decimalToStorage(snapshot.CreditLimit),
-		decimalToStorage(snapshot.AvailableCreditLimit), db.FormatTimePtr(snapshot.BalanceCloseDate), db.FormatTimePtr(snapshot.BalanceDueDate),
+		decimalToStorage(snapshot.AvailableCreditLimit), db.FormatDatePtr(snapshot.BalanceCloseDate), db.FormatDatePtr(snapshot.BalanceDueDate),
 		snapshot.CurrencyCode, db.FormatTimePtr(snapshot.ProviderUpdatedAt), rawImportID, digest, now, now,
-	).Scan(&insertedID)
+	).Scan(dbtypes.ID(&insertedID))
 	inserted := err == nil
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return "", err
@@ -549,7 +550,7 @@ func (s *Service) upsertAccount(ctx context.Context, snapshot pluggy.AccountSnap
 
 	var accountID, existingHash string
 	if err := tx.QueryRowContext(ctx, `SELECT id, normalized_hash FROM financial_accounts WHERE source_id = ? AND external_id = ?`,
-		s.SourceID, snapshot.ExternalID).Scan(&accountID, &existingHash); err != nil {
+		s.SourceID, snapshot.ExternalID).Scan(dbtypes.ID(&accountID), &existingHash); err != nil {
 		return "", err
 	}
 
@@ -567,7 +568,7 @@ func (s *Service) upsertAccount(ctx context.Context, snapshot pluggy.AccountSnap
 			WHERE id = ?`,
 			snapshot.Institution, snapshot.Name, snapshot.Number, snapshot.AccountType,
 			snapshot.AccountSubtype, decimalToStorage(snapshot.Balance), decimalToStorage(snapshot.CreditLimit),
-			decimalToStorage(snapshot.AvailableCreditLimit), db.FormatTimePtr(snapshot.BalanceCloseDate), db.FormatTimePtr(snapshot.BalanceDueDate),
+			decimalToStorage(snapshot.AvailableCreditLimit), db.FormatDatePtr(snapshot.BalanceCloseDate), db.FormatDatePtr(snapshot.BalanceDueDate),
 			snapshot.CurrencyCode, db.FormatTimePtr(snapshot.ProviderUpdatedAt), rawImportID, digest, now, accountID,
 		)
 		if err != nil {
@@ -659,7 +660,7 @@ func (s *Service) upsertTransaction(ctx context.Context, accountID string, snaps
 		snapshot.OperationTypeAdditionalInfo, snapshot.OperationCategory, snapshot.ProviderID, snapshot.ProviderOrder,
 		db.FormatTimePtr(snapshot.ProviderCreatedAt), db.FormatTimePtr(snapshot.ProviderUpdatedAt),
 		rawImportID, digest, now, now,
-	).Scan(&insertedID)
+	).Scan(dbtypes.ID(&insertedID))
 	inserted := err == nil
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return err
@@ -667,7 +668,7 @@ func (s *Service) upsertTransaction(ctx context.Context, accountID string, snaps
 
 	var transactionID, existingHash, existingAccountID string
 	if err := tx.QueryRowContext(ctx, `SELECT id, normalized_hash, account_id FROM financial_transactions WHERE source_id = ? AND external_id = ?`,
-		s.SourceID, snapshot.ExternalID).Scan(&transactionID, &existingHash, &existingAccountID); err != nil {
+		s.SourceID, snapshot.ExternalID).Scan(dbtypes.ID(&transactionID), &existingHash, dbtypes.ID(&existingAccountID)); err != nil {
 		return err
 	}
 	if existingAccountID != accountID {
@@ -805,15 +806,15 @@ func (s *Service) upsertInvestment(ctx context.Context, snapshot pluggy.Investme
 		RETURNING id`,
 		newID, s.SourceID, snapshot.ExternalID, snapshot.InvestmentType, snapshot.Subtype, snapshot.Name,
 		decimalToStorage(snapshot.Balance), snapshot.CurrencyCode, snapshot.Number, snapshot.Owner, snapshot.TaxNumber,
-		db.FormatTimePtr(snapshot.DueDate), snapshot.Issuer, snapshot.IssuerCode, decimalToStorage(snapshot.Rate),
+		investments.FormatProviderDatePtr(snapshot.DueDate), snapshot.Issuer, snapshot.IssuerCode, decimalToStorage(snapshot.Rate),
 		snapshot.RateType, decimalToStorage(snapshot.FixedAnnualRate), decimalToStorage(snapshot.AnnualRate),
 		decimalToStorage(snapshot.LastTwelveMonthsRate), decimalToStorage(snapshot.Quantity), decimalToStorage(snapshot.Value),
 		decimalToStorage(snapshot.Amount), decimalToStorage(snapshot.AmountProfit), decimalToStorage(snapshot.AmountWithdrawal),
 		decimalToStorage(snapshot.AmountOriginal), decimalToStorage(snapshot.Taxes), decimalToStorage(snapshot.Taxes2),
-		db.FormatTimePtr(snapshot.AsOfDate), db.FormatTimePtr(snapshot.IssueDate), db.FormatTimePtr(snapshot.PurchaseDate),
+		db.FormatTimePtr(snapshot.AsOfDate), investments.FormatProviderDatePtr(snapshot.IssueDate), investments.FormatProviderDatePtr(snapshot.PurchaseDate),
 		snapshot.IssuerCNPJ, db.FormatTimePtr(snapshot.ProviderUpdatedAt), snapshot.ISIN, snapshot.Code,
 		snapshot.ProviderStatus, rawImportID, digest, now, now,
-	).Scan(&insertedID)
+	).Scan(dbtypes.ID(&insertedID))
 	inserted := err == nil
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return "", err
@@ -821,7 +822,7 @@ func (s *Service) upsertInvestment(ctx context.Context, snapshot pluggy.Investme
 
 	var investmentID, existingHash string
 	if err := tx.QueryRowContext(ctx, `SELECT id, normalized_hash FROM financial_investments WHERE source_id = ? AND external_id = ?`,
-		s.SourceID, snapshot.ExternalID).Scan(&investmentID, &existingHash); err != nil {
+		s.SourceID, snapshot.ExternalID).Scan(dbtypes.ID(&investmentID), &existingHash); err != nil {
 		return "", err
 	}
 
@@ -842,13 +843,13 @@ func (s *Service) upsertInvestment(ctx context.Context, snapshot pluggy.Investme
 				provider_status = ?, current_raw_import_id = ?, normalized_hash = ?, updated_at = ?
 			WHERE id = ?`,
 			snapshot.InvestmentType, snapshot.Subtype, snapshot.Name, decimalToStorage(snapshot.Balance),
-			snapshot.CurrencyCode, snapshot.Number, snapshot.Owner, snapshot.TaxNumber, db.FormatTimePtr(snapshot.DueDate),
+			snapshot.CurrencyCode, snapshot.Number, snapshot.Owner, snapshot.TaxNumber, investments.FormatProviderDatePtr(snapshot.DueDate),
 			snapshot.Issuer, snapshot.IssuerCode, decimalToStorage(snapshot.Rate), snapshot.RateType,
 			decimalToStorage(snapshot.FixedAnnualRate), decimalToStorage(snapshot.AnnualRate),
 			decimalToStorage(snapshot.LastTwelveMonthsRate), decimalToStorage(snapshot.Quantity), decimalToStorage(snapshot.Value),
 			decimalToStorage(snapshot.Amount), decimalToStorage(snapshot.AmountProfit), decimalToStorage(snapshot.AmountWithdrawal),
 			decimalToStorage(snapshot.AmountOriginal), decimalToStorage(snapshot.Taxes), decimalToStorage(snapshot.Taxes2),
-			db.FormatTimePtr(snapshot.AsOfDate), db.FormatTimePtr(snapshot.IssueDate), db.FormatTimePtr(snapshot.PurchaseDate),
+			db.FormatTimePtr(snapshot.AsOfDate), investments.FormatProviderDatePtr(snapshot.IssueDate), investments.FormatProviderDatePtr(snapshot.PurchaseDate),
 			snapshot.IssuerCNPJ, db.FormatTimePtr(snapshot.ProviderUpdatedAt), snapshot.ISIN, snapshot.Code,
 			snapshot.ProviderStatus, rawImportID, digest, now, investmentID,
 		)
@@ -894,8 +895,8 @@ func (s *Service) upsertInvestmentTransaction(ctx context.Context, investmentID 
 		RETURNING id`,
 		newID, s.SourceID, investmentID, snapshot.ExternalID, snapshot.MovementType, snapshot.Direction,
 		decimalToStorage(snapshot.Quantity), decimalToStorage(snapshot.Value), decimalToStorage(snapshot.Amount),
-		db.FormatTimePtr(snapshot.OccurredAt), db.FormatTimePtr(snapshot.TradeDate), rawImportID, digest, now, now,
-	).Scan(&insertedID)
+		db.FormatTimePtr(snapshot.OccurredAt), investmentTradeDate(snapshot.TradeDate), rawImportID, digest, now, now,
+	).Scan(dbtypes.ID(&insertedID))
 	inserted := err == nil
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return err
@@ -903,7 +904,7 @@ func (s *Service) upsertInvestmentTransaction(ctx context.Context, investmentID 
 
 	var transactionID, existingHash, existingInvestmentID string
 	if err := tx.QueryRowContext(ctx, `SELECT id, normalized_hash, investment_id FROM financial_investment_transactions WHERE source_id = ? AND external_id = ?`,
-		s.SourceID, snapshot.ExternalID).Scan(&transactionID, &existingHash, &existingInvestmentID); err != nil {
+		s.SourceID, snapshot.ExternalID).Scan(dbtypes.ID(&transactionID), &existingHash, dbtypes.ID(&existingInvestmentID)); err != nil {
 		return err
 	}
 	if existingInvestmentID != investmentID {
@@ -921,7 +922,7 @@ func (s *Service) upsertInvestmentTransaction(ctx context.Context, investmentID 
 				amount = ?, occurred_at = ?, trade_date = ?, current_raw_import_id = ?, normalized_hash = ?, updated_at = ?
 			WHERE id = ?`,
 			snapshot.MovementType, snapshot.Direction, decimalToStorage(snapshot.Quantity), decimalToStorage(snapshot.Value),
-			decimalToStorage(snapshot.Amount), db.FormatTimePtr(snapshot.OccurredAt), db.FormatTimePtr(snapshot.TradeDate),
+			decimalToStorage(snapshot.Amount), db.FormatTimePtr(snapshot.OccurredAt), investmentTradeDate(snapshot.TradeDate),
 			rawImportID, digest, now, transactionID,
 		)
 		if err != nil {
@@ -1086,4 +1087,11 @@ func (s *Service) finalize(ctx context.Context) error {
 	}
 	log.Printf("sync_run_completed run_id=%s status=%s", s.SyncRunID, finalStatus)
 	return tx.Commit()
+}
+
+func investmentTradeDate(t *time.Time) any {
+	if t == nil {
+		return nil
+	}
+	return investments.MovementDay(*t).Format(dbtypes.DateLayout)
 }

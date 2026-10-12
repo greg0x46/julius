@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/greg0x46/julius/internal/db"
+	dbtypes "github.com/greg0x46/julius/internal/db/types"
 	"github.com/greg0x46/julius/internal/money"
 )
 
@@ -76,14 +77,14 @@ func getInclusionDecision(ctx context.Context, q Querier, transactionID string) 
 		`SELECT state, revision, changed_at, origin, rule_id, rule_name
 		 FROM transaction_inclusion_decisions WHERE transaction_id = ?`,
 		transactionID,
-	).Scan(&d.state, &d.revision, &changedAtRaw, &d.origin, &ruleID, &ruleName)
+	).Scan(&d.state, &d.revision, dbtypes.Time(&changedAtRaw), &d.origin, dbtypes.ID(&ruleID), &ruleName)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
-	if d.changedAt, err = db.ParseTime(changedAtRaw); err != nil {
+	if d.changedAt, err = dbtypes.ParseTime(changedAtRaw); err != nil {
 		return nil, err
 	}
 	d.ruleID = nullString(ruleID)
