@@ -4,6 +4,17 @@ Notable changes per release. A section is added by `scripts/update-changelog.sh`
 only when a release is prepared, and the release job publishes that same text as
 the GitHub release notes. Newest release first.
 
+## v0.7.0 — 2026-10-12
+
+### Breaking changes
+
+- **db:** Replace legacy migrations with typed baselines and a schema guard ([#106](https://github.com/greg0x46/julius/pull/106))
+
+### Features
+
+- **quotes:** Persist and dynamically apply refresh settings ([#58](https://github.com/greg0x46/julius/pull/58))
+- **automation:** Apply a category from the same reconcile automation ([#93](https://github.com/greg0x46/julius/pull/93))
+
 ## v0.6.0 — 2026-10-12
 
 ### Features
