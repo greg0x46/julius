@@ -86,7 +86,7 @@ func InitializeQuoteRefresh(ctx context.Context, q Querier, config QuoteRefreshS
 	if err != nil {
 		return config, err
 	}
-	_, err = q.ExecContext(ctx, `INSERT INTO settings (key, value, is_encrypted, updated_at) VALUES (?, ?, 0, ?) ON CONFLICT (key) DO NOTHING`, KeyQuoteRefresh, string(value), db.FormatTime(time.Now()))
+	_, err = q.ExecContext(ctx, `INSERT INTO settings (key, value, is_encrypted, updated_at) VALUES (?, ?, FALSE, ?) ON CONFLICT (key) DO NOTHING`, KeyQuoteRefresh, string(value), db.FormatTime(time.Now()))
 	if err != nil {
 		return config, err
 	}

@@ -106,3 +106,8 @@ default is enabled at 19:00 America/Sao_Paulo. The running scheduler applies
 changes without restart, including suspending history backfill. Legacy
 environment initialization and precedence are described under Investments.
 The UI keeps the existing token form without schedule controls.
+
+Schedule initialization stores the unencrypted flag using SQL `FALSE`, which
+works with SQLite integer flags and Postgres native booleans.
+`TestInitializeScheduleBothDialects` covers startup initialization;
+`TestQuoteSettingsPostgresRoundTrip` covers HTTP schedule writes.
