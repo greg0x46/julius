@@ -269,7 +269,14 @@ type timelineRangeDTO struct {
 // ask for a decade of days to be safe.
 func handleGetTimelineDataRange(conn *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		dataRange, err := timeline.LoadDataRange(r.Context(), conn, time.Now().UTC())
+		timezone := r.URL.Query().Get("timezone")
+		if timezone != "" {
+			if _, err := time.LoadLocation(timezone); err != nil {
+				invalidTimelineProblem(w, "timezone inválida.")
+				return
+			}
+		}
+		dataRange, err := timeline.LoadDataRange(r.Context(), conn, time.Now().UTC(), timezone)
 		if err != nil {
 			timelineUnavailableProblem(w, err)
 			return

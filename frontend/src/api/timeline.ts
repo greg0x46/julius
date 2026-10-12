@@ -26,8 +26,9 @@ function buildQuery(params: TimelineParams): string {
   return search.toString();
 }
 
-export async function getTimelineDataRange(signal?: AbortSignal): Promise<TimelineDataRange> {
-  return readJSON(await request("/api/timeline/range", signal), parseTimelineDataRange);
+export async function getTimelineDataRange(timezone = "UTC", signal?: AbortSignal): Promise<TimelineDataRange> {
+  const search = new URLSearchParams({ timezone });
+  return readJSON(await request(`/api/timeline/range?${search}`, signal), parseTimelineDataRange);
 }
 
 export async function getTimeline(params: TimelineParams, signal?: AbortSignal): Promise<TimelineResponse> {

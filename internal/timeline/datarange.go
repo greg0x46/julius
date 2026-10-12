@@ -32,8 +32,15 @@ type DataRange struct {
 // debt's or a plan's — so To is the last of those, and the current month's
 // end when there is none, which is also the floor: a plan that finished last
 // year must not shrink the window to the past.
-func LoadDataRange(ctx context.Context, q Querier, today time.Time) (DataRange, error) {
-	day := dates.Day(today)
+func LoadDataRange(ctx context.Context, q Querier, today time.Time, timezone string) (DataRange, error) {
+	if timezone == "" {
+		timezone = "UTC"
+	}
+	loc, err := time.LoadLocation(timezone)
+	if err != nil {
+		return DataRange{}, fmt.Errorf("data range timezone: %w", err)
+	}
+	day := dates.Day(today.In(loc))
 	monthEnd := time.Date(day.Year(), day.Month(), dates.DaysInMonth(day.Year(), day.Month()), 0, 0, 0, 0, time.UTC)
 
 	from := time.Date(day.Year(), day.Month(), 1, 0, 0, 0, 0, time.UTC)
@@ -47,7 +54,7 @@ func LoadDataRange(ctx context.Context, q Querier, today time.Time) (DataRange, 
 		if err != nil {
 			return DataRange{}, fmt.Errorf("parse earliest transaction %q: %w", earliest.String, err)
 		}
-		from = dates.Day(parsed)
+		from = dates.Day(parsed.In(loc))
 	}
 
 	to := monthEnd
