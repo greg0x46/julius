@@ -34,6 +34,10 @@ var columnKinds = map[string]string{
 	"categories.id":                                                  "uuid",
 	"categories.is_active":                                           "boolean",
 	"categories.updated_at":                                          "timestamptz",
+	"data_sources.created_at":                                        "timestamptz",
+	"data_sources.id":                                                "uuid",
+	"data_sources.is_active":                                         "boolean",
+	"data_sources.updated_at":                                        "timestamptz",
 	"exchange_rates.as_of":                                           "date",
 	"exchange_rates.effective_on":                                    "date",
 	"exchange_rates.fetched_at":                                      "timestamptz",
@@ -285,8 +289,11 @@ func convert(key string, value any, postgres bool) (any, error) {
 		if err != nil {
 			return nil, err
 		}
-		if dayKind == "provider" || (dayKind == "movement" && (stamp.Hour() != 0 || stamp.Minute() != 0 || stamp.Second() != 0 || stamp.Nanosecond() != 0)) {
+		switch dayKind {
+		case "provider":
 			stamp = investments.ProviderDay(stamp)
+		case "movement":
+			stamp = investments.MovementDay(stamp)
 		}
 		return stamp.Format(types.DateLayout), nil
 	}
@@ -326,11 +333,7 @@ func convert(key string, value any, postgres bool) (any, error) {
 		if err != nil {
 			return nil, err
 		}
-		// SQLite permits legacy opaque IDs; Postgres UUID columns cannot represent them.
-		if postgres {
-			return id.String(), nil
-		}
-		return value, nil
+		return id.String(), nil
 	}
 	return value, nil
 }
