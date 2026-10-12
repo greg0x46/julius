@@ -68,6 +68,13 @@ remain intact; `ParseUUID` is available for UUID values. Decimal reads accept
 text and integers and reject floating-point values. Schema and write formats
 are unchanged (`internal/db.FormatTime` retains fixed-width UTC timestamps).
 
+## Cross-cutting design work
+
+- [`reorganizacao-schema/inventario.md`](reorganizacao-schema/inventario.md) —
+  final legacy schema snapshots, complete column inventory, data/auth scope
+  decisions and the proposed changed-column conversion map. Target DDL and the
+  legacy migration tool are not implemented yet.
+
 ## Shared frontend building blocks
 
 Not tied to a single context:
