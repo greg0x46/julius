@@ -17,7 +17,7 @@ cash amounts.
 
 | Operation | Precision and rounding |
 | --- | --- |
-| HTTP money input/output, native balances, movements, fees, taxes, prices and quantities | Decimal strings, never JSON numbers or binary floating point. No rounding to minor units. Fixed-point responses preserve value and available scale; insignificant trailing zeros can differ after database/provider normalization. Signed zero is normalized. |
+| HTTP money input/output, native balances, movements, fees, taxes, prices and quantities | Application clients send decimal strings and responses return strings, without binary floating point. No rounding to minor units. Fixed-point responses preserve value and available scale; insignificant trailing zeros can differ after database/provider normalization. Signed zero is normalized. |
 | Addition, subtraction, multiplication, minimum, clamping, reconciliation and aggregation | Exact decimal arithmetic at the operands' precision. Round only the final display, never each input before summing. |
 | Money editing | Decimal strings throughout; pt-BR comma and grouping. Show at least two fractional digits, preserving extra digits on blur and on unchanged saves. |
 | BRL read-only display | Two fractional digits, nearest cent; ties away from zero (`1.005` → `1.01`, `-1.005` → `-1.01`). A value rounded to zero has no sign or tint. |
@@ -29,6 +29,11 @@ cash amounts.
 | Provider quotes | Preserve provider decimal text; Yahoo prices round half away from zero to its instrument `priceHint` (default 2); crypto USD × BRL conversion uses at least 2 places and the instrument hint. |
 | CSV Flash cash amounts | The file contract supplies cents; normalized to 2 places. This does not constrain general HTTP input. |
 | Amount-rule percentage tolerance | Parse reference and percentage as exact decimals; calculate `abs(reference) × percentage × 0.01` without rounding. Inclusive comparison at the exact boundary. |
+
+For compatibility, older decimal-typed Go request fields also accept raw JSON
+numbers: the decimal decoder reads the original token exactly, without a float
+conversion. New clients use strings; frontend response parsers reject money
+numbers.
 
 JavaScript numbers may be used for chart coordinates and visual percentages,
 never to produce a monetary write or an authoritative monetary total. Cents-only
