@@ -7,12 +7,15 @@ NV="$SCRIPTS/next-version.sh"
 UC="$SCRIPTS/update-changelog.sh"
 CS="$SCRIPTS/changelog-section.sh"
 export JULIUS_REPO_URL=https://example.invalid/o/r
+BASELINE="$TESTS/fixtures/baseline-changelog.md"
 
-# The repository's real baseline CHANGELOG.md, committed on top of v0.3.0, then the history of a release candidate.
+# A FIXED baseline CHANGELOG.md (fixtures/baseline-changelog.md: title + "Earlier releases" note pointing at v0.3.0),
+# committed on top of a synthetic v0.3.0, then the history of a release candidate. Nothing here reads the real
+# CHANGELOG.md, tags or versions, so the tests keep passing after the repository itself has released v0.4.0, v0.4.1...
 new_repo
 c "feat: first"
 git tag v0.3.0
-cp "$SRC/CHANGELOG.md" CHANGELOG.md
+cp "$BASELINE" CHANGELOG.md
 git add CHANGELOG.md && git commit -q -m "docs: add changelog"
 c "feat(home): show daily spending allowance (#52)"
 c "fix: correct exchange-rate refresh (#79)"
@@ -52,23 +55,23 @@ eq "impossible date is a usage error" "2" "$RC"
 
 section "date handling"
 git checkout -q -- . 2>/dev/null || true
-cp "$SRC/CHANGELOG.md" CHANGELOG.md
+cp "$BASELINE" CHANGELOG.md
 run env CHANGELOG_DATE=2026-12-24 "$UC" v0.4.0
 has "CHANGELOG_DATE is used" "## v0.4.0 — 2026-12-24" "$(cat CHANGELOG.md)"
-cp "$SRC/CHANGELOG.md" CHANGELOG.md
+cp "$BASELINE" CHANGELOG.md
 run "$UC" v0.4.0
 has "default date is today (UTC)" "## v0.4.0 — $(date -u +%F)" "$(cat CHANGELOG.md)"
 
 section "nothing to release"
-new_repo; c "feat: first"; git tag v0.3.0; cp "$SRC/CHANGELOG.md" CHANGELOG.md; git add -A; git commit -q -m "docs: changelog"
+new_repo; c "feat: first"; git tag v0.3.0; cp "$BASELINE" CHANGELOG.md; git add -A; git commit -q -m "docs: changelog"
 c "docs: only docs (#1)"
 run "$UC" v0.3.1 --date 2026-10-11
 eq "no releasable commit: fails" "1" "$RC"
-ok "...and leaves the file untouched" cmp -s "$SRC/CHANGELOG.md" CHANGELOG.md
+ok "...and leaves the file untouched" cmp -s "$BASELINE" CHANGELOG.md
 
 section "two consecutive releases keep newest first"
 new_repo; c "feat: first"; git tag v0.3.0
-cp "$SRC/CHANGELOG.md" CHANGELOG.md; git add -A; git commit -q -m "docs: changelog"
+cp "$BASELINE" CHANGELOG.md; git add -A; git commit -q -m "docs: changelog"
 c "feat: one (#1)"
 "$UC" v0.4.0 --date 2026-10-01 >/dev/null
 git add -A; git commit -q -m "docs(changelog): v0.4.0"
@@ -87,7 +90,7 @@ eq "header + section" $'# Changelog\n\n## v0.3.1 — 2026-10-11' "$(head -3 CHAN
 
 section "changelog-section.sh"
 new_repo; c "feat: first"; git tag v0.3.0
-cp "$SRC/CHANGELOG.md" CHANGELOG.md; git add -A; git commit -q -m "docs: changelog"
+cp "$BASELINE" CHANGELOG.md; git add -A; git commit -q -m "docs: changelog"
 c "feat: one (#1)"; c "fix: two (#2)"
 "$UC" v0.4.0 --date 2026-10-11 >/dev/null
 notes=$("$NV" --notes)
@@ -128,7 +131,7 @@ section "release job guard: changelog top == computed version"
 tag=$("$NV")
 eq "computed tag has its section" "$tag" "$("$CS" --latest)"
 new_repo; c "feat: first"; git tag v0.3.0
-cp "$SRC/CHANGELOG.md" CHANGELOG.md; git add -A; git commit -q -m "docs: changelog"
+cp "$BASELINE" CHANGELOG.md; git add -A; git commit -q -m "docs: changelog"
 c "fix: a (#8)"
 "$UC" v0.3.1 --date 2026-10-11 >/dev/null
 git add -A; git commit -q -m "docs(changelog): v0.3.1"
@@ -141,7 +144,7 @@ eq "...which has no section, so the release job fails instead of publishing" "1"
 
 section "A24: one committed changelog, no generated dev changelog"
 new_repo; c "feat: first"; git tag v0.3.0
-cp "$SRC/CHANGELOG.md" CHANGELOG.md; git add -A; git commit -q -m "docs: changelog"
+cp "$BASELINE" CHANGELOG.md; git add -A; git commit -q -m "docs: changelog"
 c "feat: one (#1)"
 before_files=$(git ls-files | sort)
 "$NV" >/dev/null; "$NV" --notes >/dev/null
@@ -156,6 +159,8 @@ cd "$SRC"
 eq "the real repo tracks one changelog file" "CHANGELOG.md" "$(git ls-files --cached --others --exclude-standard | grep -iE '(^|/)changelog[^/]*\.(md|txt|rst)$' | tr '\n' ' ' | sed 's/ $//')"
 eq "no git-cliff config in the real repo" "" "$(git ls-files --cached --others --exclude-standard | grep -iE 'cliff' || true)"
 eq "the workflow does not use git-cliff" "" "$(grep -il 'git-cliff' .github/workflows/*.yml || true)"
+# (the fixture is named baseline-changelog.md, not CHANGELOG*, so it is not a second changelog for the check above)
+eq "the test fixture is the baseline format: title first, then the v0.3.0 note"  "# Changelog|## Earlier releases|v0.3.0" "$(head -1 "$BASELINE")|$(grep -m1 '^## ' "$BASELINE")|$(grep -o 'v0\.3\.0' "$BASELINE" | head -1)"
 eq "the real CHANGELOG.md starts with the title and the v0.3.0 baseline" "# Changelog" "$(head -1 CHANGELOG.md)"
 has "baseline references v0.3.0" "v0.3.0" "$(cat CHANGELOG.md)"
 finish
