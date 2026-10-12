@@ -32,9 +32,12 @@ reconciled the occurrences of every other month.
 `StartDate`/`EndDate`, `IsActive`). No matching criteria of its own: occurrences
 come only from the schedule (`OccurrencesInRange`); reconciliation against real
 transactions happens at read time via `internal/rules` (`Matches`/
-`MatchCandidate`), driven by `internal/automation` rules whose only action is
-`reconcile` (`ListActiveReconcileTargets` — without that rule and without a
+`MatchCandidate`), driven by `internal/automation` rules with a
+`reconcile` action (`ListActiveReconcileTargets` — without that rule and without a
 manual decision, the commitment never reconciles).
+Candidates expose description, card number, account name/institution, absolute
+effective amount and day of month, matching the fields used during transaction
+automation application.
 
 ### Manual reconciliation
 

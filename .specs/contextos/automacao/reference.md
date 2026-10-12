@@ -23,6 +23,9 @@ apply categorization on new entries, changed sync entries and retroactive
 passes, without overriding manual category decisions. Apply candidates include
 absolute effective money (account currency first) and occurrence day, so
 amount/day conditions work in both apply paths as well as reconciliation.
+Reconciliation candidates also carry the same description, account name and
+institution, and card number, so both actions evaluate the complete shared
+conditions.
 
 During sync, `NewTransactionHook` uses the entry's transaction `Querier` to
 apply rules and the payable-unlink hook. It opens no inner transaction: a

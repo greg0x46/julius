@@ -517,11 +517,12 @@ func TestCombinedCategoryAndReconcileApplication(t *testing.T) {
 			commitment := newCommitment(t, f.conn)
 			account := f.addAccount("Conta", "Banco")
 			f.exec(`UPDATE financial_accounts SET currency_code = 'BRL' WHERE id = ?`, account)
-			matching := f.addTransaction(account, "Aluguel", "")
-			manual := f.addTransaction(account, "Aluguel manual", "")
-			outside := f.addTransaction(account, "Outro dia", "")
-			wrongAmount := f.addTransaction(account, "Outro valor", "")
-			for _, id := range []string{matching, manual, outside, wrongAmount} {
+			matching := f.addTransaction(account, "Aluguel", `{"cardNumber":"1234"}`)
+			manual := f.addTransaction(account, "Aluguel manual", `{"cardNumber":"1234"}`)
+			outside := f.addTransaction(account, "Aluguel outro dia", `{"cardNumber":"1234"}`)
+			wrongAmount := f.addTransaction(account, "Aluguel outro valor", `{"cardNumber":"1234"}`)
+			wrongDescription := f.addTransaction(account, "Supermercado", `{"cardNumber":"1234"}`)
+			for _, id := range []string{matching, manual, outside, wrongAmount, wrongDescription} {
 				f.exec(`UPDATE financial_transactions SET amount = '-300', currency_code = 'USD', amount_in_account_currency = '-1500', occurred_at = ? WHERE id = ?`, db.FormatTime(time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC)), id)
 			}
 			f.exec(`UPDATE financial_transactions SET occurred_at = ? WHERE id = ?`, db.FormatTime(time.Date(2026, 1, 20, 0, 0, 0, 0, time.UTC)), outside)
@@ -537,6 +538,10 @@ func TestCombinedCategoryAndReconcileApplication(t *testing.T) {
 			write.Conditions = []automation.Condition{
 				{Field: automation.FieldAmount, Operator: automation.OperatorWithinPercent, Value: "1500:10"},
 				{Field: automation.FieldDayOfMonth, Operator: automation.OperatorDayRange, Value: "1:10"},
+				{Field: automation.FieldDescription, Operator: automation.OperatorContains, Value: "aluguel"},
+				{Field: automation.FieldAccount, Operator: automation.OperatorEquals, Value: "Conta"},
+				{Field: automation.FieldAccount, Operator: automation.OperatorEquals, Value: "Banco"},
+				{Field: automation.FieldCard, Operator: automation.OperatorEquals, Value: "1234"},
 			}
 			write.Actions = append(write.Actions, automation.ActionWrite{Type: automation.ActionSetCategory, CategoryID: &commitment.CategoryID})
 			rule, err := automation.Create(ctx, f.conn, write)
@@ -564,7 +569,7 @@ func TestCombinedCategoryAndReconcileApplication(t *testing.T) {
 					}
 					f.exec(`UPDATE financial_transactions SET amount_in_account_currency = '-1500' WHERE id = ?`, matching)
 				}
-				for _, id := range []string{matching, manual, outside, wrongAmount} {
+				for _, id := range []string{matching, manual, outside, wrongAmount, wrongDescription} {
 					for range 2 {
 						if err := automation.ApplyToNewTransaction(ctx, f.conn, id, nil); err != nil {
 							t.Fatal(err)
@@ -586,7 +591,7 @@ func TestCombinedCategoryAndReconcileApplication(t *testing.T) {
 				}
 			}
 			var count int
-			if err := f.conn.QueryRow(`SELECT COUNT(*) FROM transaction_category_decisions WHERE transaction_id IN (?, ?)`, outside, wrongAmount).Scan(&count); err != nil || count != 0 {
+			if err := f.conn.QueryRow(`SELECT COUNT(*) FROM transaction_category_decisions WHERE transaction_id IN (?, ?, ?)`, outside, wrongAmount, wrongDescription).Scan(&count); err != nil || count != 0 {
 				t.Fatalf("non-matches: %d, %v", count, err)
 			}
 			items, err := transactions.Query(ctx, f.conn, transactions.QueryRequest{Timezone: "UTC", GroupBy: money.GroupMonth, Page: 1, PageSize: 100})
