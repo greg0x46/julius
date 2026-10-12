@@ -38,6 +38,11 @@ transactions happens at read time via `internal/rules` (`Matches`/
 `reconcile` (`ListActiveReconcileTargets` — without that rule and without a
 manual decision, the commitment never reconciles).
 
+The commitment store supports both SQLite and native Postgres UUID/boolean
+columns. Nullable schedule categories read as an empty `CategoryID`; writes
+still require a category. `TestCommitmentLifecycleBothDialects` covers creation,
+reads, updates, activation and uncategorized schedule reads on both dialects.
+
 ### Manual reconciliation
 
 On top of that automatic resolution sits a layer of **user decision**, and only

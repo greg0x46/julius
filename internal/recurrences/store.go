@@ -42,7 +42,7 @@ func parseDate(s string) (time.Time, error) { return dbtypes.ParseDate(s) }
 // cash flow and calendar on the schedule. The two are always written together,
 // so every read here is that join.
 const selectCommitment = `
-	SELECT s.id, s.name, r.cashflow_kind, r.amount, COALESCE(r.category_id, ''), r.account_id,
+	SELECT s.id, s.name, r.cashflow_kind, r.amount, r.category_id, r.account_id,
 	       r.cadence, r.day_of_month, r.month_of_year, r.start_date, r.end_date,
 	       s.is_active, s.created_at, s.updated_at
 	FROM scenarios s
@@ -89,8 +89,8 @@ func Create(ctx context.Context, conn *sql.DB, write Write) (RecurringCommitment
 	}
 	if _, err := tx.ExecContext(ctx, `
 		INSERT INTO scenarios (id, kind, name, payable_id, is_active, is_accounting_source, created_at, updated_at)
-		VALUES (?, 'recurring', ?, NULL, ?, 0, ?, ?)`,
-		c.ID, c.Name, c.IsActive, db.FormatTime(now), db.FormatTime(now),
+		VALUES (?, 'recurring', ?, NULL, ?, ?, ?, ?)`,
+		c.ID, c.Name, c.IsActive, false, db.FormatTime(now), db.FormatTime(now),
 	); err != nil {
 		return RecurringCommitment{}, err
 	}
@@ -209,7 +209,7 @@ func scanCommitment(scan func(dest ...any) error) (RecurringCommitment, error) {
 		c                          RecurringCommitment
 		kindRaw, cadenceRaw        string
 		amountRaw                  string
-		accountID                  sql.NullString
+		categoryID, accountID      sql.NullString
 		monthOfYear                sql.NullInt64
 		startDateRaw               string
 		endDateRaw                 sql.NullString
@@ -217,13 +217,14 @@ func scanCommitment(scan func(dest ...any) error) (RecurringCommitment, error) {
 		createdAtRaw, updatedAtRaw string
 	)
 	if err := scan(
-		dbtypes.ID(&c.ID), &c.Name, &kindRaw, dbtypes.Decimal(&amountRaw), dbtypes.ID(&c.CategoryID), dbtypes.ID(&accountID),
+		dbtypes.ID(&c.ID), &c.Name, &kindRaw, dbtypes.Decimal(&amountRaw), dbtypes.ID(&categoryID), dbtypes.ID(&accountID),
 		&cadenceRaw, &c.DayOfMonth, &monthOfYear, dbtypes.Date(&startDateRaw), dbtypes.Date(&endDateRaw), dbtypes.Bool(&isActive),
 		dbtypes.Time(&createdAtRaw), dbtypes.Time(&updatedAtRaw),
 	); err != nil {
 		return RecurringCommitment{}, err
 	}
 	c.Kind = Kind(kindRaw)
+	c.CategoryID = categoryID.String
 	c.Cadence = Cadence(cadenceRaw)
 	c.IsActive = isActive != 0
 	if accountID.Valid {
