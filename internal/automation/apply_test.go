@@ -526,6 +526,8 @@ func TestCombinedCategoryAndReconcileApplication(t *testing.T) {
 				f.exec(`UPDATE financial_transactions SET amount = '-300', currency_code = 'USD', amount_in_account_currency = '-1500', occurred_at = ? WHERE id = ?`, db.FormatTime(time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC)), id)
 			}
 			f.exec(`UPDATE financial_transactions SET occurred_at = ? WHERE id = ?`, db.FormatTime(time.Date(2026, 1, 20, 0, 0, 0, 0, time.UTC)), outside)
+			// Strictly earlier than the manual twin so the reconciler's earliest-wins pick is not a tie.
+			f.exec(`UPDATE financial_transactions SET occurred_at = ? WHERE id = ?`, db.FormatTime(time.Date(2026, 1, 4, 0, 0, 0, 0, time.UTC)), matching)
 			f.exec(`UPDATE financial_transactions SET amount_in_account_currency = '-2500' WHERE id = ?`, wrongAmount)
 			manualCategory, err := categories.Create(ctx, f.conn, "Manual", money.Expense, "icon", "#fff")
 			if err != nil {
