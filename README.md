@@ -64,6 +64,7 @@ authentication configuration that does not depend on the host:
   deletion limited to these manual entries.
 - **Automation rules** — condition-based rules that categorize new
   transactions automatically and can be applied retroactively to existing ones.
+  A single rule can both categorize and reconcile a recurring commitment.
 - **Payables (debts and receivables)** — track a real total (debt, installment
   purchase, receivable) and link the transactions that settle it, with
   eligibility rules for which transactions can be linked.
