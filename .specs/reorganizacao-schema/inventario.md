@@ -902,3 +902,13 @@ not be assumed to enforce NOT NULL just because Postgres does.
 | `rule_id` | TEXT / NULL | text / NULL | ID |
 | `rule_name` | TEXT / NULL | text / NULL | free text |
 
+
+## Automatic Postgres cutover
+
+`internal/db/legacy_postgres.go` implements the same conversion contract for
+final legacy Postgres version 46 at startup. Native target metadata selects the
+casts; auth Unix seconds become instants and provider dates retain the calendar
+rules above. The whole copy, row equality validation and schema activation are
+atomic. Original tables and history remain in a separate backup schema; no
+source migration version is copied into the generation 1 runner. Concurrent
+starts serialize and incomplete or unmapped schemas fail without activation.
