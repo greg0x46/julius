@@ -46,6 +46,19 @@ is safe under this issue's preserve-behavior requirement.
 
 Investment reconciliation accepts operation-specific direction/currency and
 allocation limits (`investments.reconciliations`), unlike the BRL planning-link
-policy. Those checks remain owned by investments. Historical ignored-entry
+policy. Its bank-line reader uses SQL amount fallback and the stored signed
+value, rejects zero, and checks BRL before ignored inclusion; it is not
+equivalent to `money.SelectEffectiveMoney` plus the planning-link checks.
+Those checks remain owned by investments. Historical ignored-entry
 behavior and plan installment signs also remain unchanged; see the
 [invariant matrix](invariantes-financeiros.md#divergences-and-intended-changes-not-implemented).
+
+## Regression coverage
+
+The new cross-module tests preserve eligibility reasons for both directions,
+including ignored/direction/currency/conflict precedence and linkable zero
+amounts. Calendar regression fixtures create a manual ledger expense of
+BRL 25.50 and an unreconciled monthly expense of BRL 100 on day 31. In
+28-, 29-, 30- and 31-day months, the occurrence lands on the reporting bucket's
+last day: real expense remains BRL 25.50, projected expense totals BRL 125.50,
+and a BRL 1,000 cash anchor ends at BRL 874.50.
