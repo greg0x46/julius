@@ -18,6 +18,7 @@ function buildQuery(params: TimelineParams): string {
     from: params.from,
     to: params.to,
   });
+  if (params.timezone) search.set("timezone", params.timezone);
   if (params.accountIds && params.accountIds.length > 0) search.set("account_ids", params.accountIds.join(","));
   if (params.categoryIds && params.categoryIds.length > 0) search.set("category_ids", params.categoryIds.join(","));
   if (params.cardNumbers && params.cardNumbers.length > 0) search.set("card_numbers", params.cardNumbers.join(","));
@@ -25,8 +26,9 @@ function buildQuery(params: TimelineParams): string {
   return search.toString();
 }
 
-export async function getTimelineDataRange(signal?: AbortSignal): Promise<TimelineDataRange> {
-  return readJSON(await request("/api/timeline/range", signal), parseTimelineDataRange);
+export async function getTimelineDataRange(timezone = "UTC", signal?: AbortSignal): Promise<TimelineDataRange> {
+  const search = new URLSearchParams({ timezone });
+  return readJSON(await request(`/api/timeline/range?${search}`, signal), parseTimelineDataRange);
 }
 
 export async function getTimeline(params: TimelineParams, signal?: AbortSignal): Promise<TimelineResponse> {

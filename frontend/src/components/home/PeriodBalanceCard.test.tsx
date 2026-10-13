@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import * as homePeriodBounds from "../../hooks/useHomePeriodBounds";
 import * as timelineHook from "../../hooks/useTimeline";
+import { ApiError } from "../../api/problems";
 import { PeriodBalanceCard } from "./PeriodBalanceCard";
 
 vi.mock("../../hooks/useHomePeriodBounds");
@@ -73,4 +74,12 @@ describe("PeriodBalanceCard", () => {
     expect(screen.queryByText("+R$ 0,00")).toBeNull();
     expect(screen.queryByText("-R$ 0,00")).toBeNull();
   });
+});
+
+it("states missing historical rates without showing a zero period total", () => {
+  mockTotals({ income: "0.00", expense: "0.00", result: "0.00" });
+  vi.mocked(timelineHook.useTimeline).mockReturnValue({ base: null, periodTotals: null, simulation: null, scenarioImpacts: [], isLoading: false, refetch: vi.fn(), error: new ApiError("response", "Faltam cotações históricas para o relatório.", { type: "/problems/reporting-fx-unavailable", title: "Total indisponível", status: 503 }) });
+  renderCard();
+  expect(screen.getByText("Faltam cotações históricas para o relatório.")).toBeVisible();
+  expect(screen.queryByText("R$ 0,00")).not.toBeInTheDocument();
 });

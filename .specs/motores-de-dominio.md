@@ -78,8 +78,9 @@ total comes from the cycle's eligible entries, not from the reported balance
 posted undeleted transaction amounts + explicit adjustment deltas; their
 inclusion/category annotations do not alter cash either. Synced balances retain
 provider ownership. Cash on hand is BRL-only without a rate source and comes from
-`transactions.CashOnHand`, a single implementation shared by the Timeline
-(today's anchor) and Net Worth.
+`transactions.CashOnHand`, Net Worth's BRL aggregate. Timeline reuses `AccountBalance` for native
+balance ownership, then converts its reference-date anchor and historical flows
+through `internal/reporting`, with explicit FX coverage.
 
 The matrix of each of these rules, its owning module and the test that pins it
 is in [`invariantes-financeiros.md`](invariantes-financeiros.md).

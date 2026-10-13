@@ -13,6 +13,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/greg0x46/julius/internal/money"
+	"github.com/greg0x46/julius/internal/reporting"
 )
 
 // Querier is satisfied by both *sql.DB and *sql.Tx.
@@ -122,6 +123,8 @@ type CardInfo struct {
 // derived field (classification, effective money, eligibility, group key)
 // already resolved so the HTTP layer never has to re-run domain logic.
 type Item struct {
+	ReportingDate            *time.Time
+	Reporting                reporting.Conversion
 	ID                       string
 	ExternalID               string
 	Origin                   string
@@ -146,14 +149,10 @@ type Item struct {
 	GroupKey                 string
 }
 
-type CurrencyTotals struct {
-	CurrencyCode string
-	Inflow       string
-	Outflow      string
-	Balance      string
-}
+type CurrencyTotals = reporting.Totals
 
 type Group struct {
+	Reporting      reporting.Summary
 	Key            string
 	Kind           money.PeriodKind
 	StartDate      *money.Date
@@ -195,6 +194,7 @@ type AvailableFilters struct {
 
 // Result mirrors TransactionQueryResult.
 type Result struct {
+	Reporting        reporting.Summary
 	ConfirmedAt      time.Time
 	StoredTotal      int
 	Page             Page
