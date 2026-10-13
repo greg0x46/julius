@@ -11,6 +11,7 @@ import type {
 } from "../../api/contracts";
 import { investmentAccountKindLabel } from "../../presentation/investmentWorkspaceLabels";
 import { sumBRL } from "../../presentation/money";
+import { sumDecimals } from "../../presentation/decimal";
 import { Section } from "../layout";
 import { Money } from "../shared/Money";
 import { RecordMenu, type RecordMenuItem } from "../shared/RecordMenu";
@@ -83,7 +84,7 @@ export function InvestmentAccountCard({
   // the cash sitting in the investment account.
   const convert = (value: string) => valueInReferenceCurrency(value, valuation?.fx);
   const currencyCode = valuation?.currency_code ?? "BRL";
-  const currentValue = sumBRL([
+  const currentValue = sumDecimals([
     summary?.current_value ??
       sumBRL(
         positions

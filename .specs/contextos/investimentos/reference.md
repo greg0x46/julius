@@ -401,3 +401,6 @@ contribution, withdrawal and cost aggregates. Positions and operations, includin
 their currencies and amounts, stay native; foreign positions remain explicitly
 excluded from the BRL base. No positions, targets or provider balances are
 rewritten when switching reference currency.
+
+Account cards add converted position value and cash with full decimal precision;
+only the displayed total is rounded to cents, consistently with the workspace.
