@@ -1300,7 +1300,7 @@ func handleGetInvestmentSummary(conn *sql.DB) http.HandlerFunc {
 			writeInvestmentProblem(w, err)
 			return
 		}
-		valuation, ok := reportValuation(w, r, conn, time.Now())
+		valuation, ok := reportValuation(w, r, conn, time.Now().UTC())
 		if !ok {
 			return
 		}

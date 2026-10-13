@@ -1,3 +1,4 @@
+import { ApiError } from "../../api/problems";
 import { ReportValuation } from "../shared/ReportValuation";
 import { QuestionCircleOutlined } from "@ant-design/icons";
 import { Popover, Skeleton } from "antd";
@@ -142,7 +143,7 @@ export function ProjectionSummaryCard({ period }: { period: Period }) {
         {isLoading && <ProjectionSkeleton />}
         {error && !isLoading && (
           <UnavailableState onRetry={retry}>
-            {error instanceof Error ? error.message : "Não foi possível carregar o saldo."}
+            {error instanceof ApiError ? error.message : "Não foi possível carregar o saldo."}
           </UnavailableState>
         )}
 

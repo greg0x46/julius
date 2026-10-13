@@ -30,7 +30,7 @@ export function InvestmentWorkspaceSummary({
   const currencyCode = summary?.currency_code ?? "BRL";
   const movements = accountMovements(operations);
   const yieldAggregate = aggregateYield(positions, linked, costsByPosition(operations, positions, linked));
-  const cost = groupCost(operations, positions, linked);
+  const cost = groupCost(operations, positions.filter((position) => position.currency_code === "BRL"), linked);
 
   return (
     <ReportValuation valuation={summary ?? {}}>

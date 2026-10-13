@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/greg0x46/julius/internal/exchange"
 	"github.com/greg0x46/julius/internal/money"
 	"github.com/greg0x46/julius/internal/networth"
 )
@@ -80,19 +81,20 @@ func handleGetNetWorth(conn *sql.DB) http.HandlerFunc {
 			return
 		}
 
+		valuation, ok := reportValuation(w, r, conn, latest.CapturedAt)
+		if !ok {
+			return
+		}
+		fx := exchange.New(conn, nil)
 		series := make([]netWorthSnapshotDTO, len(rows))
 		for i, row := range rows {
-			valuation, ok := reportValuation(w, r, conn, row.CapturedAt)
+			valuation, ok := valuationForCurrency(w, r, fx, valuation.CurrencyCode, row.CapturedAt)
 			if !ok {
 				return
 			}
 			breakdown := toNetWorthBreakdownDTO(row.Breakdown)
 			valuation.breakdown(&breakdown)
 			series[i] = netWorthSnapshotDTO{valuationDTO: valuation, StoredCurrency: row.CurrencyCode, CapturedAt: row.CapturedAt, netWorthBreakdownDTO: breakdown, IsBackfilled: row.IsBackfilled}
-		}
-		valuation, ok := reportValuation(w, r, conn, latest.CapturedAt)
-		if !ok {
-			return
 		}
 		breakdown := toNetWorthBreakdownDTO(latest.Breakdown)
 		valuation.breakdown(&breakdown)

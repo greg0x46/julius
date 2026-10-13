@@ -176,3 +176,14 @@ text conversions. Shared test fixtures bind binary payloads and use portable
 boolean literals so query coverage runs against both typed baselines.
 `TestQueryTypedValuesBothDialects` pins exact large amounts, UTC instants,
 decision timestamps and absent values on SQLite and Postgres.
+
+## Consolidated report valuation
+
+Spending-by-category and category-breakdown responses convert their existing
+BRL aggregates with current `internal/exchange` rates to
+`finance.reference_currency` (default BRL), including projected items only
+when requested. Responses include the valuation `currency_code` and `fx`
+provenance; missing FX is 503 `exchange-unavailable`. Ledger queries and
+account balances retain their native amounts and currencies. Their original
+per-currency totals and the consolidated BRL eligibility exclusions are
+unchanged; the reference preference changes valuation/display only.

@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"database/sql"
+	"encoding/json"
 	"net/http"
 
 	"github.com/greg0x46/julius/internal/settings"
@@ -31,16 +32,19 @@ func handleGetPreferences(db *sql.DB) http.HandlerFunc {
 func handleUpdatePreferences(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var input struct {
-			TransactionsPeriodBasis string  `json:"transactions_period_basis"`
-			ReferenceCurrency       *string `json:"reference_currency"`
+			TransactionsPeriodBasis string          `json:"transactions_period_basis"`
+			ReferenceCurrency       json.RawMessage `json:"reference_currency"`
 		}
 		if err := decodeStrict(r, &input); err != nil {
 			writeProblem(w, 422, "invalid-preferences", "Preferências inválidas", "Revise os campos enviados.")
 			return
 		}
 		req := preferencesDTO{TransactionsPeriodBasis: input.TransactionsPeriodBasis}
-		if input.ReferenceCurrency != nil {
-			req.ReferenceCurrency = *input.ReferenceCurrency
+		if len(input.ReferenceCurrency) > 0 {
+			if err := json.Unmarshal(input.ReferenceCurrency, &req.ReferenceCurrency); err != nil {
+				writeProblem(w, 422, "invalid-preferences", "Preferências inválidas", "Escolha uma moeda de referência válida.")
+				return
+			}
 		}
 		if req.TransactionsPeriodBasis != settings.PeriodBasisOccurredAt && req.TransactionsPeriodBasis != settings.PeriodBasisPaidAt {
 			writeProblem(w, 422, "invalid-preferences", "Preferências inválidas",
@@ -48,7 +52,7 @@ func handleUpdatePreferences(db *sql.DB) http.HandlerFunc {
 			return
 		}
 		// Older clients omit the currency; preserve the saved preference.
-		if input.ReferenceCurrency == nil {
+		if len(input.ReferenceCurrency) == 0 {
 			code, err := settings.ReferenceCurrency(r.Context(), db)
 			if err != nil {
 				writeProblem(w, 503, "preferences-unavailable", "Preferências temporariamente indisponíveis", "")

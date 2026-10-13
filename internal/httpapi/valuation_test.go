@@ -3,7 +3,9 @@ package httpapi
 import (
 	"context"
 	"errors"
+	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -25,12 +27,14 @@ func TestReferenceValuationRequiresFX(t *testing.T) {
 	}
 	defer conn.Close()
 	fx := exchange.New(conn, unavailableFX{})
-	_, err = valuationRate(context.Background(), fx, "USD", time.Now().UTC())
-	if !errors.Is(err, exchange.ErrUnavailable) {
-		t.Fatalf("missing FX = %v", err)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest("GET", "/api/timeline", nil)
+	_, ok := valuationForCurrency(recorder, request, fx, "USD", time.Now().UTC())
+	if ok || recorder.Code != 503 || !strings.Contains(recorder.Body.String(), "exchange-unavailable") || !strings.Contains(recorder.Body.String(), "BRL para USD") {
+		t.Fatalf("missing rate response: %d %s", recorder.Code, recorder.Body.String())
 	}
-	rate, err := valuationRate(context.Background(), fx, "BRL", time.Now().UTC())
-	if err != nil || rate.Source != exchange.SourceIdentity {
-		t.Fatalf("BRL regression = %+v, %v", rate, err)
+	valuation, ok := valuationForCurrency(httptest.NewRecorder(), request, fx, "BRL", time.Now().UTC())
+	if !ok || valuation.FX.Source != exchange.SourceIdentity {
+		t.Fatalf("BRL regression = %+v", valuation)
 	}
 }

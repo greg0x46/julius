@@ -102,7 +102,7 @@ export function InvestmentAccountCard({
   // included: hiding a sold position's row must not change what it cost.
   const costs = costsByPosition(operations, allPositions, linked);
   const yieldAggregate = aggregateYield(positions, linked, costs);
-  const cost = groupCost(operations, allPositions, linked);
+  const cost = groupCost(operations, allPositions.filter((position) => position.currency_code === "BRL"), linked);
 
   const menuItems: RecordMenuItem[] = [
     { key: "operation", label: "Registrar movimentação", onClick: () => onNewOperation(account) },

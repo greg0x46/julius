@@ -233,7 +233,7 @@ func handleGetTimeline(conn *sql.DB) http.HandlerFunc {
 			}
 		}
 
-		valuation, ok := reportValuation(w, r, conn, time.Now())
+		valuation, ok := reportValuation(w, r, conn, time.Now().UTC())
 		if !ok {
 			return
 		}

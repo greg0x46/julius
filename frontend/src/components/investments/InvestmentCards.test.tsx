@@ -203,4 +203,15 @@ describe("investment cards", () => {
     expect(screen.getByText("+R$ 298,50")).toBeVisible();
     expect(screen.getByText("IR/Taxas")).toBeVisible();
   });
+  it("values the workspace total and native secondary aggregates in USD with the same FX rate", () => {
+    const fx = { base: "BRL", quote: "USD", value: "0.2", inverted: false, source: "synthetic", stale: false,
+      as_of: "2026-10-12T00:00:00Z", effective_on: "2026-10-12T00:00:00Z", fetched_at: "2026-10-12T01:00:00Z" };
+    render(<InvestmentWorkspaceSummary
+      summary={{ currency_code: "USD", fx, total_value: "464.10", cash_balance: "0", synced_value: "224.10" } as unknown as InvestmentSummary}
+      positions={[syncedPosition, manualPosition]} operations={[fee]} linked={linked} />);
+    expect(screen.getByText("USD 464,10")).toBeVisible();
+    expect(screen.getByText("+USD 59,70")).toBeVisible();
+    expect(screen.queryByText(/R\$/)).toBeNull();
+  });
+
 });

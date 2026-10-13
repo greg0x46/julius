@@ -1,3 +1,4 @@
+import { ApiError } from "../../api/problems";
 import { ReportValuation } from "../shared/ReportValuation";
 import { Skeleton } from "antd";
 import { useState } from "react";
@@ -225,7 +226,7 @@ export function SpendingByCategoryCard({ period }: { period: Period }) {
           <CategorySkeleton />
         ) : error || !data ? (
           <UnavailableState onRetry={() => void refetch()}>
-            {error instanceof Error ? error.message : "Não foi possível carregar as categorias."}
+            {error instanceof ApiError ? error.message : "Não foi possível carregar as categorias."}
           </UnavailableState>
         ) : (
           <ReportValuation valuation={data}>

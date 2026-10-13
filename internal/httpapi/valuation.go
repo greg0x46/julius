@@ -1,7 +1,6 @@
 package httpapi
 
 import (
-	"context"
 	"database/sql"
 	"net/http"
 	"time"
@@ -24,7 +23,11 @@ func reportValuation(w http.ResponseWriter, r *http.Request, conn *sql.DB, day t
 		writeProblem(w, 503, "preferences-unavailable", "Preferências temporariamente indisponíveis", "")
 		return valuationDTO{}, false
 	}
-	rate, err := valuationRate(r.Context(), exchange.New(conn, nil), code, day)
+	return valuationForCurrency(w, r, exchange.New(conn, nil), code, day)
+}
+
+func valuationForCurrency(w http.ResponseWriter, r *http.Request, fx *exchange.Service, code string, day time.Time) (valuationDTO, bool) {
+	rate, err := fx.On(r.Context(), "BRL", code, day)
 	if err != nil {
 		writeProblem(w, 503, "exchange-unavailable", "Cotação indisponível", "Não foi possível obter a cotação de BRL para "+code+". Os totais não podem ser avaliados.")
 		return valuationDTO{}, false
@@ -54,8 +57,4 @@ func (v valuationDTO) series(s *timelineSeriesDTO) {
 
 func (v valuationDTO) breakdown(b *netWorthBreakdownDTO) {
 	v.fields(&b.CashBalance, &b.InvestmentBalance, &b.CreditCardBalance, &b.PayablesDebt, &b.TotalAssets, &b.TotalLiabilities, &b.NetWorth)
-}
-
-func valuationRate(ctx context.Context, fx *exchange.Service, code string, day time.Time) (exchange.Rate, error) {
-	return fx.On(ctx, "BRL", code, day)
 }

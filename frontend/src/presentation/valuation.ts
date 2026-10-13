@@ -1,4 +1,5 @@
 import type { FXRate } from "../api/contracts/valuation";
+import { multiplyDecimals } from "./decimal";
 
 function parts(value: string): { coefficient: bigint; scale: bigint } {
   const [whole, fraction = ""] = value.split(".");
@@ -13,10 +14,11 @@ function parts(value: string): { coefficient: bigint; scale: bigint } {
 /** Exact conversion of BRL aggregates computed from native investment records. */
 export function valueInReferenceCurrency(value: string, fx?: FXRate): string {
   if (!fx || fx.base === fx.quote) return value;
+  if (!fx.inverted) return multiplyDecimals(value, fx.value);
   const amount = parts(value);
   const rate = parts(fx.value);
-  const numerator = fx.inverted ? amount.coefficient * rate.scale : amount.coefficient * rate.coefficient;
-  const denominator = fx.inverted ? amount.scale * rate.coefficient : amount.scale * rate.scale;
+  const numerator = amount.coefficient * rate.scale;
+  const denominator = amount.scale * rate.coefficient;
   const precision = 10n ** 12n;
   const negative = numerator < 0n;
   const absolute = negative ? -numerator : numerator;

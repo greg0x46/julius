@@ -1,3 +1,4 @@
+import { ApiError } from "../../api/problems";
 import { ReportValuation } from "../shared/ReportValuation";
 import dayjs from "dayjs";
 import { useMemo } from "react";
@@ -83,7 +84,7 @@ export function PeriodBalanceCard({ period }: { period: Period }) {
               if (timeline.error) timeline.refetch();
             }}
           >
-            {error instanceof Error ? error.message : "Não foi possível carregar o resultado do período."}
+            {error instanceof ApiError ? error.message : "Não foi possível carregar o resultado do período."}
           </UnavailableState>
         )}
       </Section>

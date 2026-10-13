@@ -1,3 +1,4 @@
+import { ApiError } from "../../api/problems";
 import { ReportValuation } from "../shared/ReportValuation";
 import { Skeleton } from "antd";
 import { useMemo } from "react";
@@ -44,7 +45,7 @@ export function DailyAllowanceCard() {
         )}
         {!timeline.isLoading && (
           <UnavailableState onRetry={() => timeline.refetch()}>
-            {timeline.error instanceof Error
+            {timeline.error instanceof ApiError
               ? timeline.error.message
               : "Não foi possível calcular o gasto diário disponível."}
           </UnavailableState>

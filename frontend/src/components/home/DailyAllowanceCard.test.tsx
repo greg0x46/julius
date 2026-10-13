@@ -1,3 +1,4 @@
+import { ApiError } from "../../api/problems";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -139,4 +140,11 @@ describe("DailyAllowanceCard", () => {
     expect(setItem).not.toHaveBeenCalled();
     setItem.mockRestore();
   });
+  it("explains an unavailable FX rate instead of showing a zero allowance", async () => {
+    vi.mocked(timelineApi.getTimeline).mockRejectedValue(new ApiError("response", "Falta cotação de BRL para USD."));
+    renderCard();
+    expect(await screen.findByText("Falta cotação de BRL para USD.")).toBeVisible();
+    expect(screen.queryByText(/R\$ 0,00/)).toBeNull();
+  });
+
 });

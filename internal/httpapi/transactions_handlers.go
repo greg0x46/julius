@@ -594,7 +594,7 @@ func handleSpendingByCategory(db *sql.DB) http.HandlerFunc {
 			return ai.GreaterThan(aj)
 		})
 
-		valuation, ok := reportValuation(w, r, db, time.Now())
+		valuation, ok := reportValuation(w, r, db, time.Now().UTC())
 		if !ok {
 			return
 		}
@@ -927,7 +927,7 @@ func handleCategoryBreakdown(db *sql.DB) http.HandlerFunc {
 			total = total.Add(amount)
 			result = append(result, categorySpendingItemDTO{CategoryID: item.CategoryID, CategoryName: item.CategoryName, CategoryIcon: item.CategoryIcon, CategoryColor: item.CategoryColor, Amount: item.Amount, Source: "real"})
 		}
-		valuation, ok := reportValuation(w, r, db, time.Now())
+		valuation, ok := reportValuation(w, r, db, time.Now().UTC())
 		if !ok {
 			return
 		}

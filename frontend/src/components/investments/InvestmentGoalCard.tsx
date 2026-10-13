@@ -74,7 +74,7 @@ export function InvestmentGoalCard({
 
   const costs = costsByPosition(operations, positions, linked);
   const yieldAggregate = aggregateYield(positions, linked, costs);
-  const cost = groupCost(operations, positions, linked);
+  const cost = groupCost(operations, positions.filter((position) => position.currency_code === "BRL"), linked);
 
   return (
     <Section

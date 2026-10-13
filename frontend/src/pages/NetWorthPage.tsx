@@ -1,3 +1,4 @@
+import { ApiError } from "../api/problems";
 import { ReportValuation } from "../components/shared/ReportValuation";
 import { Skeleton } from "antd";
 
@@ -13,13 +14,14 @@ export function NetWorthPage() {
   // reads as broken, not "just started". Wait for at least two days of
   // history before showing the chart.
   const hasSeries = netWorth.series.length > 1;
+  const hasStaleRates = netWorth.series.some((snapshot) => snapshot.fx?.stale);
   const hasBackfilledPoints = netWorth.series.some((s) => s.is_backfilled);
 
   // One footnote, under the chart it qualifies, for what used to be a
   // paragraph above the figures plus an info Alert below the chart.
   const footnote = `Dias sem registro são reconstruídos a partir das transações, então a série pode não cobrir todo o passado.${
     hasBackfilledPoints ? " Esses dias não incluem investimentos: não há como saber quanto deles já existia." : ""
-  }`;
+  }${hasStaleRates ? " Há dias avaliados com cotações desatualizadas." : ""}`;
 
   return (
     <Page title="Patrimônio líquido" description="Ativos menos passivos ao longo do tempo" compactMobileHeader>
@@ -34,7 +36,7 @@ export function NetWorthPage() {
       )}
       {netWorth.error && !netWorth.isLoading && (
         <UnavailableState onRetry={() => netWorth.refetch()}>
-          {netWorth.error instanceof Error
+          {netWorth.error instanceof ApiError
             ? netWorth.error.message
             : "Não foi possível carregar o patrimônio líquido"}
         </UnavailableState>

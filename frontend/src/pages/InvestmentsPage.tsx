@@ -1,3 +1,4 @@
+import { ApiError } from "../api/problems";
 import { AimOutlined, BankOutlined, PieChartOutlined, SwapOutlined } from "@ant-design/icons";
 import { Alert, Button, Skeleton, Switch } from "antd";
 import { useMemo, useState } from "react";
@@ -293,9 +294,9 @@ export function InvestmentsPage() {
       actions={createMenu}
       tabs={<PageTabs label="Visão dos investimentos" options={viewOptions} value={view} onChange={setView} />}
     >
-      {workspace.error && !workspace.isLoading && view !== "synced" && (
+      {workspace.error && !workspace.isLoading && (
         <UnavailableState onRetry={() => void workspace.refetch()}>
-          Não foi possível carregar os investimentos
+          {workspace.error instanceof ApiError ? workspace.error.message : "Não foi possível carregar os investimentos"}
         </UnavailableState>
       )}
       {actionError && (
