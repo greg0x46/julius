@@ -6,7 +6,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "../api/problems";
 import * as statementApi from "../api/statementImports";
 import type { ImportHistoryItem, ImportPreview, ImportRow } from "../api/statementImports";
-import { StatementPreviewRows } from "../components/statementImport/StatementPreviewRows";
 import * as compactScreen from "../components/shared/useCompactScreen";
 import { QueryTestProvider } from "../test/QueryTestProvider";
 import { StatementImportPage } from "./StatementImportPage";
@@ -200,7 +199,9 @@ describe("StatementImportPage", () => {
     it("pages through the rows, 20 at a time", async () => {
       const user = userEvent.setup();
       const rows = Array.from({ length: 45 }, (_, index) => row({ line_number: index + 2, description: `Movimento ${index + 1}` }));
-      render(<StatementPreviewRows rows={rows} />);
+      vi.mocked(statementApi.previewStatement).mockResolvedValue(preview(rows));
+      renderPage();
+      await user.upload(screen.getByLabelText("Arquivo CSV"), csv());
 
       const list = await screen.findByRole("list", { name: "Linhas do arquivo" });
       expect(within(list).getAllByRole("listitem")).toHaveLength(20);
@@ -219,7 +220,10 @@ describe("StatementImportPage", () => {
     });
 
     it("keeps warnings visible and does not paginate a short file", async () => {
-      render(<StatementPreviewRows rows={[row({ warnings: ["saldo divergente"] })]} />);
+      const user = userEvent.setup();
+      vi.mocked(statementApi.previewStatement).mockResolvedValue(preview([row({ warnings: ["saldo divergente"] })]));
+      renderPage();
+      await user.upload(screen.getByLabelText("Arquivo CSV"), csv());
 
       const warning = await screen.findByText("saldo divergente");
       expect(warning).toBeVisible();
