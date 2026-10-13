@@ -49,6 +49,13 @@ describe("netContributed", () => {
     ).toBe("900.00");
   });
 
+  it("keeps fractional cents and large principal exact", () => {
+    expect(netContributed([
+      movement({ direction: "inflow", amount: "9007199254740993.005" }),
+      movement({ direction: "outflow", amount: "9007199254740993.001" }),
+    ])).toBe("0.004");
+  });
+
   it("returns null when no aplicação was captured", () => {
     expect(netContributed([movement({ movement_type: "SELL", direction: "outflow" })])).toBeNull();
   });

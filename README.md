@@ -51,10 +51,18 @@ authentication configuration that does not depend on the host:
 
 ## Features
 
+- **Exact money boundaries** — amounts stay decimal strings through entry,
+  editing, calculation and HTTP. BRL display rounds to cents with ties away
+  from zero; saved fractional cents and large values retain their precision.
+  See the [monetary precision policy](.specs/precisao-monetaria.md).
+
+- **Build identifier** — every signed-in page has a small footer showing the
+  release tag, `stage` or `dev`, with a link to the build commit when available.
 - **Typed database baseline** — a one-shot legacy converter preserves existing
-  data; both dialects share one migration sequence, with native exact Postgres types and a startup guard that rejects the old
-  schema generation. Existing installations need a separate conversion before
-  using this binary; see [Database schema generations](#database-schema-generations).
+  data; both dialects share one migration sequence with native exact Postgres
+  types. Final legacy Postgres schemas convert at startup; legacy SQLite
+  databases need the separate converter. See
+  [Database schema generations](#database-schema-generations).
 - **Open Banking sync** — a background worker polls Pluggy periodically for
   new transactions and account data, recorded as auditable sync runs (history,
   metrics, failures) instead of a black-box import.
@@ -101,6 +109,7 @@ authentication configuration that does not depend on the host:
   quotes (B3 and crypto), enabled by default with a persistent daily schedule. Contributions and withdrawals reconciled with the
   statement show up apart from spending, keeping their cash effect and avoiding
   double counting in net worth.
+  A curated starter asset catalog is populated automatically on startup.
 - **Browser authentication** — email and password login for the owner account,
   persisted sessions, logout and password change. No public sign-up.
 - **Secrets encrypted at rest** — Pluggy credentials protected with
@@ -164,6 +173,14 @@ Contracts and limits are in the
 ```sh
 ./build.sh
 ```
+
+The frontend bakes build metadata into the binary. Release CI passes the selected
+release tag as `VITE_APP_VERSION` and the exact build SHA as `VITE_APP_COMMIT`;
+stage CI passes `stage` and its SHA. Local builds on the `stage` branch default
+to `stage`; other local builds and the dev server default to `dev`, using Git
+HEAD when available. Source archives without Git still show `dev` without a
+commit link. These optional build-time overrides also work with `./build.sh`;
+the frontend package version is never used as the application version.
 
 Before starting, configure the encryption key and create or migrate the
 account. The server refuses to start without prepared authentication or with
@@ -500,7 +517,13 @@ multi-market, currency, crypto assets or other) and an instrument type. The
 quote market is derived from the type; fixed-income and crypto ETFs can use B3
 prices.
 
-To load an optional starter catalog with 27 well-known assets:
+On every application startup, after database migrations, Julius inserts missing
+entries from a curated starter catalog of 27 well-known assets, including BTC,
+ETH, SOL, USDC and B3 instruments, and logs the number inserted. Existing assets,
+classification and quotation preferences are preserved. No positions, balances,
+operations, transactions or price requests are created by seeding.
+
+The manual command remains available:
 
 ```sh
 go run ./cmd/julius seed investment-assets

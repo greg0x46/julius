@@ -8,6 +8,7 @@ import (
 
 	"github.com/shopspring/decimal"
 
+	"github.com/greg0x46/julius/internal/money"
 	"github.com/greg0x46/julius/internal/recurrences"
 )
 
@@ -35,7 +36,7 @@ func toRecurringCommitmentDTO(c recurrences.RecurringCommitment) recurringCommit
 		endDate = &s
 	}
 	return recurringCommitmentDTO{
-		ID: c.ID, Name: c.Name, Kind: string(c.Kind), Amount: c.Amount.StringFixed(2),
+		ID: c.ID, Name: c.Name, Kind: string(c.Kind), Amount: money.CanonicalDecimal(c.Amount),
 		CategoryID: c.CategoryID, AccountID: c.AccountID, Cadence: string(c.Cadence),
 		DayOfMonth: c.DayOfMonth, MonthOfYear: c.MonthOfYear,
 		StartDate: c.StartDate.Format(dateOnlyLayout), EndDate: endDate,

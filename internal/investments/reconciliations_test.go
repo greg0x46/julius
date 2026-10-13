@@ -281,7 +281,7 @@ func TestProviderMovementBecomesTheReconciliationPivot(t *testing.T) {
 	f := newLedgerFixture(t)
 	bank := f.addBankTransaction("-1000", day(13))
 	movement := f.addInvestmentMovement()
-	f.exec(`UPDATE financial_investment_transactions SET trade_date = ? WHERE id = ?`, "2026-09-13T00:00:00.000000000Z", movement)
+	f.exec(`UPDATE financial_investment_transactions SET trade_date = ? WHERE id = ?`, "2026-09-13", movement)
 
 	link, err := f.linkProvider(bank, movement, "1000")
 	if err != nil {

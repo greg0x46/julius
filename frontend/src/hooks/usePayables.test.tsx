@@ -63,7 +63,7 @@ describe("usePayables", () => {
       result.current.createPayable({
         kind: "debt",
         name: debt.name,
-        total_amount: 1000,
+        total_amount: "1000",
         initial_remaining_amount: null,
       }),
     );
@@ -79,12 +79,12 @@ describe("usePayables", () => {
     await waitFor(() => expect(result.current.payables).toEqual([debt]));
 
     await act(() =>
-      result.current.updatePayable({ payableId, write: { name: "Renomeada", total_amount: 1000 } }),
+      result.current.updatePayable({ payableId, write: { name: "Renomeada", total_amount: "1000" } }),
     );
 
     expect(payablesApi.updatePayable).toHaveBeenCalledWith(payableId, {
       name: "Renomeada",
-      total_amount: 1000,
+      total_amount: "1000",
     });
   });
 

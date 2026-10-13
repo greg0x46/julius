@@ -1,41 +1,8 @@
 import type { Investment, InvestmentOperation, InvestmentPosition } from "../../api/contracts";
 import { formatDateOnly } from "../../presentation/dates";
 import { yieldUnavailable } from "../../presentation/investmentLabels";
+import { multiplyDecimals } from "../../presentation/decimal";
 import { subtractBRL, sumBRL } from "../../presentation/money";
-
-/**
- * Money stays in decimal strings everywhere in the workspace. money.ts already
- * adds and subtracts BRL; the only extra operation the views need is
- * quantidade × custo médio, whose operands carry more than two decimals.
- * Doing it in BigInt keeps a position's acquisition cost exact instead of
- * letting a float decide whether a rentabilidade is a few cents off.
- */
-function scaled(value: string): { digits: bigint; scale: number } {
-  const negative = value.startsWith("-");
-  const unsigned = negative ? value.slice(1) : value;
-  const [integer = "0", fraction = ""] = unsigned.split(".");
-  const digits = BigInt(`${integer === "" ? "0" : integer}${fraction}`);
-  return { digits: negative ? -digits : digits, scale: fraction.length };
-}
-
-function multiplyToBRL(left: string, right: string): string {
-  const a = scaled(left);
-  const b = scaled(right);
-  const product = a.digits * b.digits;
-  const scale = a.scale + b.scale;
-  const negative = product < 0n;
-  let magnitude = negative ? -product : product;
-  if (scale < 2) {
-    magnitude *= 10n ** BigInt(2 - scale);
-  } else if (scale > 2) {
-    const divisor = 10n ** BigInt(scale - 2);
-    const remainder = magnitude % divisor;
-    magnitude /= divisor;
-    if (remainder * 2n >= divisor) magnitude += 1n;
-  }
-  const digits = magnitude.toString().padStart(3, "0");
-  return `${negative ? "-" : ""}${digits.slice(0, -2)}.${digits.slice(-2)}`;
-}
 
 export function isZeroBRL(value: string | null): boolean {
   return value === null || /^-?0*(\.0*)?$/.test(value);
@@ -117,7 +84,7 @@ export function positionYield(position: InvestmentPosition, linked: LinkedInvest
       short: "Sem quantidade registrada",
     };
   }
-  const basis = multiplyToBRL(position.average_cost, position.quantity);
+  const basis = multiplyDecimals(position.average_cost, position.quantity);
   const gross = subtractBRL(position.current_value, basis);
   const net = subtractBRL(gross, cost);
   return { known: true, value: net, percent: (Number(net) / Number(basis)) * 100, basis, gross };

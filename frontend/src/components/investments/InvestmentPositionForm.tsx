@@ -1,3 +1,4 @@
+import { isPositiveDecimal } from "../../presentation/decimal";
 import { DatePicker, Input, InputNumber, Select } from "antd";
 import dayjs, { type Dayjs } from "dayjs";
 import { useEffect, useMemo, useState } from "react";
@@ -65,7 +66,7 @@ function draftFrom(position: InvestmentPosition | null, accounts: InvestmentAcco
 }
 
 function positive(value: string | null): boolean {
-  return value !== null && Number(value) > 0;
+  return value !== null && isPositiveDecimal(value);
 }
 
 export function InvestmentPositionForm({
@@ -299,7 +300,7 @@ export function InvestmentPositionForm({
           >
             <MoneyInput
               id="investment-position-value"
-              min={0.01}
+              min="0"
               value={toMoneyInput(draft.initialValue)}
               onChange={(value) => setDraft((current) => ({ ...current, initialValue: fromMoneyInput(value) }))}
             />
