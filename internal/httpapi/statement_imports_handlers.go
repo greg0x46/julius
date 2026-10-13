@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -33,10 +34,22 @@ type importCounts struct {
 }
 type importPreview struct {
 	statementimport.Parsed
-	Filename           string       `json:"filename"`
-	Counts             importCounts `json:"counts"`
-	PreviewFingerprint string       `json:"preview_fingerprint"`
+	Filename           string                    `json:"filename"`
+	Counts             importCounts              `json:"counts"`
+	PreviewFingerprint string                    `json:"preview_fingerprint"`
+	Conflicts          map[int]statementConflict `json:"conflicts"`
 }
+type statementConflict struct {
+	ID            string  `json:"id"`
+	OccurredAt    string  `json:"occurred_at"`
+	Description   string  `json:"description"`
+	Amount        string  `json:"amount"`
+	Currency      string  `json:"currency"`
+	PaymentMethod string  `json:"payment_method"`
+	Balance       *string `json:"balance"`
+	Filename      string  `json:"filename,omitempty"`
+}
+
 type importAccount struct {
 	ID           string `json:"id"`
 	Name         string `json:"name"`
@@ -126,7 +139,6 @@ func digest(parts ...string) string {
 // The balance separates distinct movements; the preview still calls attention
 // to a possible correction of an earlier file.
 const warnBalanceDiffers = "saldo difere da importação anterior; revisão necessária"
-const warnOtherFileMatch = "movimentação idêntica em outro arquivo; confira se é uma nova compra"
 
 func sameStatementBalance(stored, incoming string) bool {
 	a, aErr := decimal.NewFromString(stored)
@@ -159,12 +171,63 @@ func amountSpellings(amount string) []string {
 	}
 	return out
 }
+
+// Fall back to normalized data for prior and explicitly chosen identities.
+func matchStatementTransaction(ctx context.Context, q interface {
+	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
+}, accountID string, incoming statementimport.Row, ordinal int) (*statementConflict, bool, error) {
+	in, amounts := db.InClause(amountSpellings(incoming.Amount))
+	args := append([]any{accountID, incoming.OccurredAt}, amounts...)
+	rows, err := q.QueryContext(ctx, `SELECT ft.id,ft.occurred_at,ft.description,ft.amount,ft.currency_code,COALESCE(ft.source_category,''),ft.balance_after,COALESCE(si.filename,'')
+ FROM financial_transactions ft JOIN data_sources ds ON ds.id=ft.source_id
+ LEFT JOIN raw_imports ri ON ri.id=ft.current_raw_import_id
+ LEFT JOIN statement_imports si ON si.sync_run_id=ri.sync_run_id
+ WHERE ft.account_id=? AND ds.provider='file' AND ft.origin='synced' AND ft.occurred_at=? AND ft.amount IN (`+in+`) ORDER BY ft.created_at,ft.id`, args...)
+	if err != nil {
+		return nil, false, err
+	}
+	defer rows.Close()
+	var different, exact *statementConflict
+	count := 0
+	normalize := func(s string) string { return strings.ToLower(strings.Join(strings.Fields(s), " ")) }
+	for rows.Next() {
+		var match statementConflict
+		var balance sql.NullString
+		if err := rows.Scan(dbtypes.ID(&match.ID), dbtypes.Time(&match.OccurredAt), &match.Description, dbtypes.Decimal(&match.Amount), &match.Currency, &match.PaymentMethod, dbtypes.Decimal(&balance), &match.Filename); err != nil {
+			return nil, false, err
+		}
+		if normalize(match.Description) != normalize(incoming.Description) || strings.ToLower(match.PaymentMethod) != strings.ToLower(incoming.PaymentMethod) {
+			continue
+		}
+		if balance.Valid {
+			match.Balance = &balance.String
+		}
+		if balance.Valid && sameStatementBalance(balance.String, incoming.Balance) {
+			count++
+			if count == ordinal {
+				exact = &match
+			}
+		} else if different == nil {
+			different = &match
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, false, err
+	}
+	if exact != nil {
+		return exact, true, nil
+	}
+	return different, false, nil
+}
+
 func classifyStatement(ctx context.Context, q interface {
+	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
 	QueryRowContext(context.Context, string, ...any) *sql.Row
 }, p *importPreview, accountID string) error {
 	seen := map[string]int{}
 	legacySeen := map[string]int{}
 	p.Counts = importCounts{Total: len(p.Rows)}
+	p.Conflicts = map[int]statementConflict{}
 	for i := range p.Rows {
 		row := &p.Rows[i]
 		if row.Status == "invalid" {
@@ -185,13 +248,21 @@ func classifyStatement(ctx context.Context, q interface {
 		row.ContentHash = digest(row.Identity, row.Balance)
 		row.Status = "new"
 		if accountID != "" {
-			matchedID := row.Identity
+			var ignored int
+			ignoredID := digest("statement-ignore", accountID, p.SHA256, fmt.Sprint(row.LineNumber))
+			err := q.QueryRowContext(ctx, `SELECT 1 FROM normalization_events ne JOIN financial_transactions ft ON ft.id=ne.transaction_id WHERE ft.account_id=? AND ne.external_id=? AND ne.outcome='unchanged' LIMIT 1`, accountID, ignoredID).Scan(&ignored)
+			if err == nil {
+				row.Status = "duplicate"
+				p.Counts.Duplicate++
+				continue
+			}
+			if err != sql.ErrNoRows {
+				return err
+			}
 			var oldBalance sql.NullString
 			forcedID := digest("statement-v3", accountID, p.SHA256, fmt.Sprint(row.LineNumber))
-			err := q.QueryRowContext(ctx, `SELECT balance_after FROM financial_transactions WHERE account_id=? AND external_id=?`, accountID, forcedID).Scan(dbtypes.Decimal(&oldBalance))
-			if err == nil {
-				matchedID = forcedID
-			} else if err == sql.ErrNoRows {
+			err = q.QueryRowContext(ctx, `SELECT balance_after FROM financial_transactions WHERE account_id=? AND external_id=?`, accountID, forcedID).Scan(dbtypes.Decimal(&oldBalance))
+			if err == sql.ErrNoRows {
 				err = q.QueryRowContext(ctx, `SELECT balance_after FROM financial_transactions WHERE account_id=? AND external_id=?`, accountID, row.Identity).Scan(dbtypes.Decimal(&oldBalance))
 			}
 			if err == sql.ErrNoRows {
@@ -200,24 +271,13 @@ func classifyStatement(ctx context.Context, q interface {
 				// new movement and show the ambiguity in the preview.
 				legacyID := digest("statement-v1", accountID, base, fmt.Sprint(legacySeen[base]))
 				err = q.QueryRowContext(ctx, `SELECT balance_after FROM financial_transactions WHERE account_id=? AND external_id=?`, accountID, legacyID).Scan(dbtypes.Decimal(&oldBalance))
-				if err == nil && (!oldBalance.Valid || !sameStatementBalance(oldBalance.String, row.Balance)) {
-					row.Warnings = append(row.Warnings, warnBalanceDiffers)
-					err = sql.ErrNoRows
-				} else if err == nil {
-					matchedID = legacyID
-				}
+			}
+			if err == nil && (!oldBalance.Valid || !sameStatementBalance(oldBalance.String, row.Balance)) {
+				row.Warnings = append(row.Warnings, warnBalanceDiffers)
+				err = sql.ErrNoRows
 			}
 			if err == nil {
 				row.Status = "duplicate"
-				var originalFileHash string
-				err = q.QueryRowContext(ctx, `SELECT ri.payload_sha256 FROM financial_transactions ft JOIN raw_imports ri ON ri.id=ft.current_raw_import_id WHERE ft.account_id=? AND ft.external_id=?`, accountID, matchedID).Scan(&originalFileHash)
-				if err != nil {
-					return err
-				}
-				if originalFileHash != p.SHA256 {
-					row.Warnings = append(row.Warnings, warnOtherFileMatch)
-					row.Status = "ambiguous"
-				}
 			} else if err != sql.ErrNoRows {
 				return err
 			}
@@ -228,15 +288,23 @@ func classifyStatement(ctx context.Context, q interface {
 			p.Counts.Ambiguous++
 		} else {
 			p.Counts.New++
-			if accountID != "" && !slices.Contains(row.Warnings, warnBalanceDiffers) {
-				var similarFile int
-				// File imports store balance_after at exactly two decimals.
-				err := q.QueryRowContext(ctx, `SELECT 1 FROM financial_transactions WHERE account_id=? AND origin='synced' AND occurred_at=? AND amount=? AND LOWER(TRIM(description))=? AND LOWER(COALESCE(source_category,''))=? AND balance_after<>? LIMIT 1`,
-					accountID, row.OccurredAt, row.Amount, normalized, strings.ToLower(row.PaymentMethod), row.Balance).Scan(&similarFile)
-				if err == nil {
-					row.Warnings = append(row.Warnings, warnBalanceDiffers)
-				} else if err != sql.ErrNoRows {
+			if accountID != "" {
+				match, exact, err := matchStatementTransaction(ctx, q, accountID, *row, seen[key])
+				if err != nil {
 					return err
+				}
+				if match != nil {
+					if exact {
+						row.Status = "duplicate"
+						row.Warnings = slices.DeleteFunc(row.Warnings, func(w string) bool { return w == warnBalanceDiffers })
+						p.Counts.New--
+						p.Counts.Duplicate++
+						continue
+					}
+					p.Conflicts[row.LineNumber] = *match
+					if !slices.Contains(row.Warnings, warnBalanceDiffers) {
+						row.Warnings = append(row.Warnings, warnBalanceDiffers)
+					}
 				}
 			}
 			// The amount is matched under every spelling it may be stored with;
@@ -271,7 +339,8 @@ func classifyStatement(ctx context.Context, q interface {
 	order := make([]int, 0, len(p.Rows))
 	states := make([]string, 0, len(p.Rows))
 	for i := range p.Rows {
-		states = append(states, p.Rows[i].Status+"|"+strings.Join(p.Rows[i].Warnings, "|"))
+		conflict, _ := json.Marshal(p.Conflicts[p.Rows[i].LineNumber])
+		states = append(states, p.Rows[i].Status+"|"+strings.Join(p.Rows[i].Warnings, "|")+"|"+string(conflict))
 		if p.Rows[i].Status != "invalid" {
 			order = append(order, i)
 		}
@@ -295,6 +364,7 @@ func classifyStatement(ctx context.Context, q interface {
 	return nil
 }
 func makeStatementPreview(ctx context.Context, q interface {
+	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
 	QueryRowContext(context.Context, string, ...any) *sql.Row
 }, data []byte, filename, format, accountID string) (importPreview, error) {
 	parsed, err := statementimport.Parse(data, format)
@@ -442,6 +512,7 @@ func handleStatementConfirm(conn *sql.DB) http.HandlerFunc {
 				row.ContentHash = digest(row.Identity, row.Balance)
 				p.Counts.New++
 			case "ignore":
+				row.Identity = digest("statement-ignore", accountID, p.SHA256, fmt.Sprint(row.LineNumber))
 				row.Status = "duplicate"
 				p.Counts.Duplicate++
 			default:
@@ -496,6 +567,12 @@ func handleStatementConfirm(conn *sql.DB) http.HandlerFunc {
 				continue
 			}
 			if row.Status == "duplicate" {
+				if match, ok := p.Conflicts[row.LineNumber]; ok {
+					if _, e := tx.ExecContext(r.Context(), `INSERT INTO normalization_events (id,sync_run_id,raw_import_id,entity_type,transaction_id,external_id,outcome,normalized_hash,created_at) VALUES (?,?,?,'transaction',?,?,'unchanged',?,?)`, uuid.NewString(), runID, rawID, match.ID, row.Identity, row.ContentHash, now); e != nil {
+						importFailure(w, e)
+						return
+					}
+				}
 				duplicates++
 				continue
 			}

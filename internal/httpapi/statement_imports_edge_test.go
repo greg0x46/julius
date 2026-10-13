@@ -47,11 +47,12 @@ func newStatementTestDB(t *testing.T) *sql.DB {
 }
 
 type statementPreviewBody struct {
-	Format             string       `json:"format"`
-	FormatVersion      string       `json:"format_version"`
-	SHA256             string       `json:"sha256"`
-	PreviewFingerprint string       `json:"preview_fingerprint"`
-	Counts             importCounts `json:"counts"`
+	Conflicts          map[int]statementConflict `json:"conflicts"`
+	Format             string                    `json:"format"`
+	FormatVersion      string                    `json:"format_version"`
+	SHA256             string                    `json:"sha256"`
+	PreviewFingerprint string                    `json:"preview_fingerprint"`
+	Counts             importCounts              `json:"counts"`
 	Rows               []struct {
 		Status   string   `json:"status"`
 		Warnings []string `json:"warnings"`
@@ -558,16 +559,16 @@ func TestStatementRowOrderDoesNotChangeIdentity(t *testing.T) {
 				t.Fatalf("balance %v", balance)
 			}
 			p := previewStatementFile(t, conn, tc.again, map[string]string{"account_id": accountID})
-			if p.Counts.Ambiguous != 2 || p.Counts.New != 0 {
+			if p.Counts.Duplicate != 2 || p.Counts.New != 0 {
 				t.Fatalf("counts %+v", p.Counts)
 			}
 			for _, row := range p.Rows {
-				if row.Status != "ambiguous" || !p.hasWarning(warnOtherFileMatch) {
+				if row.Status != "duplicate" {
 					t.Fatalf("row %+v", row)
 				}
 			}
 			_, counts = importStatementFile(t, conn, tc.again, map[string]string{
-				"account_id": accountID, "ambiguous_line_2": "ignore", "ambiguous_line_3": "ignore",
+				"account_id": accountID,
 			})
 			if counts.New != 0 || counts.Duplicate != 2 {
 				t.Fatalf("second import %+v", counts)
