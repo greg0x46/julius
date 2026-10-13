@@ -233,3 +233,9 @@ text conversions. Shared test fixtures bind binary payloads and use portable
 boolean literals so query coverage runs against both typed baselines.
 `TestQueryTypedValuesBothDialects` pins exact large amounts, UTC instants,
 decision timestamps and absent values on SQLite and Postgres.
+
+## Monetary precision
+
+HTTP amounts retain fractional minor units and large values as decimal strings.
+Manual edits preserve their precision; display rounding follows the shared
+[monetary policy](../../precisao-monetaria.md).

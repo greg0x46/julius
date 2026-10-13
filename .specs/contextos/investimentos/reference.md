@@ -388,3 +388,9 @@ calendar-date adapters in presentation and reconciliation reads, accepting SQLit
 date-only text as well as legacy timestamps. Integrated custody IDs remain opaque
 `integrated:<source id>` text; records with UUID identities use native Postgres
 UUIDs. `db.Open` rejects the old schema generation; conversion is separate work.
+
+## Monetary precision
+
+Investment cash fields and portfolio targets keep decimal strings through editing
+and submission. Contribution totals and quantity × average-cost gain calculations
+use exact arithmetic; BRL rounding happens only at display ([policy](../../precisao-monetaria.md)).

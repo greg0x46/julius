@@ -51,12 +51,18 @@ authentication configuration that does not depend on the host:
 
 ## Features
 
+- **Exact money boundaries** — amounts stay decimal strings through entry,
+  editing, calculation and HTTP. BRL display rounds to cents with ties away
+  from zero; saved fractional cents and large values retain their precision.
+  See the [monetary precision policy](.specs/precisao-monetaria.md).
+
 - **Build identifier** — every signed-in page has a small footer showing the
   release tag, `stage` or `dev`, with a link to the build commit when available.
 - **Typed database baseline** — a one-shot legacy converter preserves existing
-  data; both dialects share one migration sequence, with native exact Postgres types and a startup guard that rejects the old
-  schema generation. Existing installations need a separate conversion before
-  using this binary; see [Database schema generations](#database-schema-generations).
+  data; both dialects share one migration sequence with native exact Postgres
+  types. Final legacy Postgres schemas convert at startup; legacy SQLite
+  databases need the separate converter. See
+  [Database schema generations](#database-schema-generations).
 - **Open Banking sync** — a background worker polls Pluggy periodically for
   new transactions and account data, recorded as auditable sync runs (history,
   metrics, failures) instead of a black-box import.

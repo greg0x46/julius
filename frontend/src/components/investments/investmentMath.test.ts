@@ -33,14 +33,20 @@ describe("positionYield", () => {
     expect(quoted).toEqual(typed);
     if (!quoted.known) return;
     // 44.180,21 over 3,2 × 10.000,00.
-    expect(quoted.basis).toBe("32000.00");
-    expect(quoted.value).toBe("12180.21");
+    expect(quoted.basis).toBe("32000.000");
+    expect(quoted.value).toBe("12180.210");
     expect(quoted.percent).toBeCloseTo(38.0631, 3);
   });
 
   it("deducts the position's costs from a market-quoted gain", () => {
     const estimate = positionYield(position, new Map(), "180.21");
-    expect(estimate.known && estimate.value).toBe("12000.00");
+    expect(estimate.known && estimate.value).toBe("12000.000");
+  });
+
+  it("subtracts fractional acquisition cost before rounding gain for display", () => {
+    const estimate = positionYield({ ...position, average_cost: "0.331", quantity: "3", current_value: "1.00" }, new Map(), "0.003");
+    expect(estimate.known && estimate.basis).toBe("0.993");
+    expect(estimate.known && estimate.value).toBe("0.004");
   });
 
   it("does not invent a gain for a position still valued at cost", () => {
