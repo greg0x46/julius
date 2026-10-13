@@ -109,6 +109,7 @@ authentication configuration that does not depend on the host:
   quotes (B3 and crypto), enabled by default with a persistent daily schedule. Contributions and withdrawals reconciled with the
   statement show up apart from spending, keeping their cash effect and avoiding
   double counting in net worth.
+  A curated starter asset catalog is populated automatically on startup.
 - **Browser authentication** — email and password login for the owner account,
   persisted sessions, logout and password change. No public sign-up.
 - **Secrets encrypted at rest** — Pluggy credentials protected with
@@ -516,7 +517,13 @@ multi-market, currency, crypto assets or other) and an instrument type. The
 quote market is derived from the type; fixed-income and crypto ETFs can use B3
 prices.
 
-To load an optional starter catalog with 27 well-known assets:
+On every application startup, after database migrations, Julius inserts missing
+entries from a curated starter catalog of 27 well-known assets, including BTC,
+ETH, SOL, USDC and B3 instruments, and logs the number inserted. Existing assets,
+classification and quotation preferences are preserved. No positions, balances,
+operations, transactions or price requests are created by seeding.
+
+The manual command remains available:
 
 ```sh
 go run ./cmd/julius seed investment-assets
