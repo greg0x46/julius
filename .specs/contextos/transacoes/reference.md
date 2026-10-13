@@ -20,7 +20,7 @@ and explicit adjustments (see Notes).
 
 Categorizing as a transfer between own accounts (`kind='transfer'`) also takes
 the entry out of totals, with its own reason (`transfer_category`) and without
-marking it ignored — see the note on the two paths in
+marking it ignored — see the note on reporting exclusions in
 `.specs/motores-de-dominio.md` section 1.
 
 ## Backend
@@ -176,3 +176,81 @@ text conversions. Shared test fixtures bind binary payloads and use portable
 boolean literals so query coverage runs against both typed baselines.
 `TestQueryTypedValuesBothDialects` pins exact large amounts, UTC instants,
 decision timestamps and absent values on SQLite and Postgres.
+
+## Transfers between owner accounts
+
+`transactions/transfers.go` owns lightweight annotations in `transfer_links`
+and `transfer_transaction_links` (native migration `0002` in both dialects).
+Each relationship contains one source and one destination, plus an optional
+separate fee movement. A transaction belongs to at most one relationship in
+any role. All financial accounts belong to the installation's single owner;
+there is no external-account or multi-owner pairing path.
+
+`ledger.Service.LinkTransfer` pairs existing synced or manual movements without
+changing provider rows or category/inclusion decisions. `CreateManualTransfer`
+creates both movements, optionally a fee, applies normal learned categories and
+automation, and links everything in one database transaction. Any validation or
+write failure rolls back all new rows. New pairs require active manual accounts;
+existing pairs may use synced accounts. Credit-card accounts are rejected.
+
+Both legs require a known native account-currency amount, a known account
+currency, opposite signed DEBIT/CREDIT directions, distinct accounts, considered
+inclusion and POSTED/PENDING status. Same-currency principal must have equal
+absolute amounts. Unknown/deleted movements, duplicate links, and existing
+investment reconciliations are rejected. A fee must be a separate included
+outflow on either participating account; it cannot be an ignored or
+transfer-categorized movement. Pairing never infers a fee from market rates.
+
+Source/destination amounts stay in `financial_transactions`, in their account
+currencies. Detail reads these current amounts and computes **absolute source
+amount / absolute destination amount**, rounded to 16 decimal places: BRL 540
+sent and USD 100 received display `1 USD = 5.4 BRL`. This execution rate is not
+a market quote and is not stored as a derived value. Provider corrections are
+reflected on read; an unavailable/zero destination amount makes the rate
+unavailable. The annotation remains until explicitly unlinked or removed by
+ignoring/deleting a participating movement.
+
+Linked principal receives `linked_transfer` after ordinary eligibility checks,
+leaves income/expense/category totals and still satisfies `MovesCash()`.
+Native account balance and cash reconstruction retain the original movements.
+Fee reporting uses its ordinary transaction exactly once; later user decisions
+continue to govern that fee. No second cost entry or inferred spread exists.
+
+Manual edits of a participating movement return 409 until unlinking. Soft
+deletion or ignoring any participant removes the whole relationship in the
+same transaction; other movements survive and resume their current category
+and inclusion decisions. Explicit unlink does the same without deleting any
+movement or changing a decision. An existing transfer category therefore
+continues to exclude that movement after unlinking. Relinking requires an
+explicit new pairing and the same validation.
+
+### HTTP and UI
+
+- `POST /api/transfers`: existing `source_transaction_id`,
+  `destination_transaction_id`, optional `fee_transaction_id`; or `source`,
+  `destination`, optional `fee` manual-entry bodies (signed decimal-string
+  amounts and calendar dates; categories omitted/null). Do not combine modes.
+  Returns the transfer detail with 201. Writes use ordinary auth/CSRF protection.
+- `GET /api/transactions/{id}/transfer`: detail for any participant, or JSON
+  null when it has no relationship. Source/destination include transaction ID,
+  account ID/name, signed native amount and currency; `effective_rate` includes
+  the source units per destination unit; `fee` is nullable.
+- `DELETE /api/transfers/{id}`: unlink, 204; missing link 404. Duplicate or
+  investment-linked participants are 409; invalid pairing is 422; database
+  failures are 503 without internals.
+- `/transacoes`: **Nova transferência** opens a manual-account form with native
+  amount inputs, exact decimal-string arithmetic, execution-rate preview and
+  optional separate fee in the source currency. The existing transaction panel
+  adds **Transferência entre contas** for pairing, reading both native amounts,
+  rate and fee, and confirming unlink. Counterpart and fee pickers support
+  search/pagination and native currency labels. Principal inclusion is disabled
+  while linked, with an explanation; errors retain selections and offer retries.
+
+Tests: `TestLinkedTransfersPreserveNativeCashAndReporting`,
+`TestSyncedTransferLinkingAndUnlinkDecisions`,
+`TestTransferValidationAndAtomicManualPairs`,
+`TestTransferRejectsInvalidFeesAndKeepsPreviousTransferCategory`,
+`TestTransferHTTPCreateReadUnlinkAndValidation`,
+`TestTransferMigrationPreservesExistingMovements`; frontend
+`TransactionTransferScreen.test.tsx`, `ManualTransferForm.test.tsx`,
+`transferRate.test.ts` and `transfers.test.ts`.

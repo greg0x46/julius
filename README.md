@@ -61,6 +61,12 @@ authentication configuration that does not depend on the host:
 - **Statement import** — upload a Flash CSV, review the per-row preview and
   import it into a file-based account. Re-uploads and overlapping periods are
   recognized, with an import history and warnings for inconsistent data.
+- **Transfers between own accounts** — link existing synced/manual outflows and
+  inflows, including different currencies, or create both movements together
+  in manual accounts. Native amounts and balances stay intact; principal stays
+  outside income/expense reports. Details show the effective execution rate
+  and an optional separate, explicitly recorded fee. No fee is inferred from
+  an FX spread. Unlinking keeps the movements and their prior reporting decisions.
 - **Manual bank accounts** — create standalone accounts in an ISO 4217 currency
   (BRL by default), including USD/EUR, without a bank connection. Native balance
   is opening balance + posted movements + explicit adjustments. Edit, archive
