@@ -46,11 +46,12 @@ export const moneySourceLabel = (source: "account_currency" | "transaction_curre
 // (e.g. accumulating several MonthSummary rows client-side) without a
 // bignum dependency — same BigInt-cents technique fixedTwo already uses,
 // just exposed for addition instead of only formatting.
-function toCents(value: string): bigint {
+function toCents(value: string, round = false): bigint {
   const negative = value.startsWith("-");
   const unsigned = negative ? value.slice(1) : value;
   const [integer = "0", fraction = ""] = unsigned.split(".");
-  const cents = BigInt(`${integer}${fraction.padEnd(2, "0").slice(0, 2)}`);
+  let cents = BigInt(`${integer}${fraction.padEnd(2, "0").slice(0, 2)}`);
+  if (round && (fraction[2] ?? "0") >= "5") cents += 1n;
   return negative ? -cents : cents;
 }
 
@@ -70,6 +71,11 @@ export function subtractBRL(minuend: string, subtrahend: string): string {
   return fromCents(toCents(minuend) - toCents(subtrahend));
 }
 
+/** Rounds an exact decimal amount to cents, with halves away from zero. */
+export function roundBRL(value: string): string {
+  return fromCents(toCents(value, true));
+}
+
 /** The amount itself, or "0.00" when it is negative; "-0.00" counts as zero. */
 export function clampBRLAtZero(value: string): string {
   const cents = toCents(value);
@@ -79,7 +85,7 @@ export function clampBRLAtZero(value: string): string {
 /** The smallest of one or more amounts. */
 export function minBRL(values: string[]): string {
   if (values.length === 0) throw new RangeError("minBRL needs at least one value");
-  return fromCents(values.map(toCents).reduce((min, cents) => (cents < min ? cents : min)));
+  return fromCents(values.map((value) => toCents(value)).reduce((min, cents) => (cents < min ? cents : min)));
 }
 
 /**

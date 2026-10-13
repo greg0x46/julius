@@ -389,9 +389,11 @@ UUIDs. `db.Open` rejects the old schema generation; conversion is separate work.
 
 Position responses expose nullable `total_cost`, the exact acquisition cost
 from the backend ledger. The frontend uses it for manual yield instead of
-reconstructing quantity × average_cost; older responses without it show the
-existing unknown-cost state. Workspace net yield/cost/movement aggregates still
-run locally and are inventoried as a migration gap in the API contract doc.
+reconstructing quantity × average_cost, rounding the exact cost to cents for
+the displayed gain (including proportional costs after partial sales). Older
+responses without it show the existing unknown-cost state. Workspace net
+yield/cost/movement aggregates still run locally and are inventoried as a
+migration gap in the API contract doc.
 
 ## API contract verification
 

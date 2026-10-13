@@ -1,7 +1,7 @@
 import type { Investment, InvestmentOperation, InvestmentPosition } from "../../api/contracts";
 import { formatDateOnly } from "../../presentation/dates";
 import { yieldUnavailable } from "../../presentation/investmentLabels";
-import { subtractBRL, sumBRL } from "../../presentation/money";
+import { roundBRL, subtractBRL, sumBRL } from "../../presentation/money";
 
 export function isZeroBRL(value: string | null): boolean {
   return value === null || /^-?0*(\.0*)?$/.test(value);
@@ -84,7 +84,7 @@ export function positionYield(position: InvestmentPosition, linked: LinkedInvest
     };
   }
   const basis = position.total_cost;
-  const gross = subtractBRL(position.current_value, basis);
+  const gross = subtractBRL(position.current_value, roundBRL(basis));
   const net = subtractBRL(gross, cost);
   return { known: true, value: net, percent: (Number(net) / Number(basis)) * 100, basis, gross };
 }

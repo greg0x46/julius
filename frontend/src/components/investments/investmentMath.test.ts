@@ -51,6 +51,14 @@ describe("positionYield", () => {
     expect(estimate).toMatchObject({ known: false, short: "Sem custo de aquisição" });
   });
 
+  it("rounds the proportional acquisition cost remaining after a partial sale", () => {
+    const estimate = positionYield({
+      ...position, quantity: "2", average_cost: "33.3333333333333334",
+      total_cost: "66.6666666666666667", current_value: "80.00",
+    }, new Map());
+    expect(estimate).toMatchObject({ known: true, basis: "66.6666666666666667", gross: "13.33", value: "13.33" });
+  });
+
   it("deducts the position's costs from a market-quoted gain", () => {
     const estimate = positionYield(position, new Map(), "180.21");
     expect(estimate.known && estimate.value).toBe("12000.00");

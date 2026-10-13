@@ -1,6 +1,16 @@
 import { describe, expect, it } from "vitest";
 
-import { clampBRLAtZero, divideBRLFloor, minBRL } from "./money";
+import { clampBRLAtZero, divideBRLFloor, minBRL, roundBRL } from "./money";
+
+describe("roundBRL", () => {
+  it("rounds exact costs to cents without converting them to floating point", () => {
+    expect(roundBRL("66.6666666666666667")).toBe("66.67");
+    expect(roundBRL("-66.665")).toBe("-66.67");
+    expect(roundBRL("66.6649")).toBe("66.66");
+    expect(roundBRL("99999999999999999999.995")).toBe("100000000000000000000.00");
+    expect(roundBRL("0")).toBe("0.00");
+  });
+});
 
 describe("divideBRLFloor", () => {
   it("drops the leftover fraction of a cent", () => {
