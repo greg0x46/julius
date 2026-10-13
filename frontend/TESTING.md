@@ -81,8 +81,8 @@ VITEST_MAX_WORKERS=1 npx vitest run src/pages/StatementImportPage.test.tsx src/p
 ```
 
 Node 24.14.0, Vitest 4.1.11; three sequential runs, no concurrent checks.
-Keep the existing project split, isolation, real Ant Design controls and
-async timeouts unchanged. All baseline runs passed 4 files / 35 tests.
+The existing project split, isolation, real Ant Design controls and async
+timeouts are unchanged. All baseline runs passed 4 files / 35 tests.
 
 | Baseline | Run 1 | Run 2 | Run 3 | Median |
 | --- | --- | --- | --- | --- |
@@ -117,10 +117,11 @@ ProTable as well as the shared controls, explaining its larger import cost.
 
 Review decisions:
 
-- Statement import: pagination and short-file warning tests can render
-  `StatementPreviewRows` directly. Other page tests still cover upload,
-  approval, row decisions, loading, stale responses, retries and mobile actions.
-  Plain account-name entry can use paste instead of five updates per fixture.
+- Statement import: keep the page tests. A measured variant rendered
+  `StatementPreviewRows` directly for pagination/warnings and pasted account
+  names. The focused cases saved about 0.66 s, but the following conflict/retry
+  case regressed by about 1.4 s. Restoring typing did not fix that regression,
+  so the entire statement test change was discarded.
 - Transactions: retain page integration for selection/refetch/write behavior
   and invalid-field focus. Scope panel queries to the real drawer instead of
   repeatedly computing names for all page/filter buttons.
@@ -134,3 +135,49 @@ No artificial delays, timeout increases, disabled accessibility/pointer checks,
 or mocked UI widgets are needed. Module loading remains a separate cost;
 changing production imports or adding bundler configuration is deferred to
 keep this change limited to the measured test bottlenecks.
+
+### Rejected intermediate optimization
+
+The first variant combined focused statement preview rendering/plain-text
+paste with the retained drawer/form changes. Three one-worker runs passed
+all 35 tests, with durations 93.05 / 93.45 / 93.28 s (median 93.28 s), imports
+22.32 / 22.29 / 22.53 s, and tests 68.49 / 68.93 / 68.50 s. Despite the overall
+improvement, StatementImportPage regressed from a median 25.767 to 26.589 s.
+A diagnostic run after restoring account-name typing still took 93.31 s,
+with the conflict case at 3.316 s versus the baseline median 1.944 s. The
+statement changes were therefore reverted before final validation.
+
+### Retained changes
+
+The final variant keeps the original StatementImportPage tests and only
+changes the other three suites. Each of these runs passed 4 files / 35 tests:
+
+| Final | Run 1 | Run 2 | Run 3 | Median |
+| --- | --- | --- | --- | --- |
+| Duration | 91.58 s | 93.52 s | 91.80 s | 91.80 s |
+| Imports | 22.45 s | 22.57 s | 22.60 s | 22.57 s |
+| Tests | 66.90 s | 68.72 s | 66.97 s | 66.97 s |
+
+| Suite | Before test median | Final test median |
+| --- | --- | --- |
+| StatementImportPage | 25.767 s | 25.284 s |
+| TransactionsPage | 18.422 s | 15.734 s |
+| openBankingAndScenarios | 9.597 s | 9.332 s |
+| InvestmentAssetSettings | 18.857 s | 16.785 s |
+
+At the same worker count, total duration falls by 5.9% (97.56 to 91.80 s),
+and test execution by 7.8% (72.64 to 66.97 s). Imports remain about the same;
+this does not claim to solve the full-suite module initialization cost.
+Timings are local, not GitHub Actions measurements, and should not be
+combined with #67's concurrency gains. No full-suite before/after speedup
+is claimed from the four-file benchmark.
+
+CI now relies on `npm run build` (`tsc -b && vite build`) for strict type
+validation, removing the separate `npm run typecheck` step. Both referenced
+TypeScript projects still have `strict: true`, and the app project includes
+the tests. The standalone typecheck command remains available locally.
+
+Final full-suite validation at the unchanged two-worker default passed
+68 files / 505 tests (163.59 s) while other repository checks were running.
+This is a coverage/stability check, not a timing comparison with the isolated
+one-worker benchmark above.
