@@ -248,6 +248,9 @@ explicit new pairing and the same validation.
   rate and fee, and confirming unlink. Counterpart and fee pickers support
   search/pagination and native currency labels. Principal inclusion is disabled
   while linked, with an explanation; errors retain selections and offer retries.
+  Inclusion changes and retroactive automation refresh transfer details for all
+  participants, so ignoring a fee also clears the counterpart relationship in
+  open panels. Inactive detail queries become stale for the next visit.
 
 Tests: `TestLinkedTransfersPreserveNativeCashAndReporting`,
 `TestSyncedTransferLinkingAndUnlinkDecisions`,

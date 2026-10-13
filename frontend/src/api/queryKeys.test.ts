@@ -160,7 +160,7 @@ describe("invalidation policies", () => {
 
     const withRetro = spyClient();
     await invalidateAfterAutomationRuleChange(withRetro.client, { transactionsChanged: true });
-    expect(keysOf(withRetro.invalidateQueries)).toEqual([["automationRules"], ["transactions"]]);
+    expect(keysOf(withRetro.invalidateQueries)).toEqual([["automationRules"], ["transactions"], ["transaction-transfer"]]);
   });
 
   it("marks transactions stale without refetching", async () => {

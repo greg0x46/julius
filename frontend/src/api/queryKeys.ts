@@ -159,7 +159,9 @@ export const invalidateAfterAutomationRuleChange = async (
   options: { transactionsChanged: boolean },
 ) => {
   await invalidate(client, roots.automationRules);
-  if (options.transactionsChanged) await invalidate(client, roots.transactions);
+  if (options.transactionsChanged) {
+    await invalidateAll(client, [roots.transactions, roots.transactionTransfers]);
+  }
 };
 
 /** Toggling or deleting a rule touches only the rule list. */
@@ -176,6 +178,13 @@ export const invalidateAfterManualAccountChange = (client: Client) =>
 /** Marks every transactions query stale without refetching it. */
 export const markTransactionsStale = (client: Client) =>
   client.invalidateQueries({ queryKey: roots.transactions, refetchType: "none" });
+
+/** Ignoring a transfer participant can remove the whole relationship. */
+export const markTransactionInclusionViewsStale = (client: Client) =>
+  Promise.all([
+    markTransactionsStale(client),
+    client.invalidateQueries({ queryKey: roots.transactionTransfers, refetchType: "none" }),
+  ]);
 
 /** Closing day changes only the account record and the list that shows it. */
 export const invalidateAfterAccountClosingDayChange = (client: Client, accountId: string) =>
