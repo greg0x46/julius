@@ -43,13 +43,22 @@ totals: movement classification, effective amount, inclusion/exclusion
 fill the same table and go through the same rules. Ingestion is a data
 provider, not part of the engine.
 
-Two paths take an entry out of the totals, and they assert different things.
+Reporting exclusions assert different things.
 **Ignored** means "this should not be here" — a chargeback, a duplicate.
 **A category of kind `transfer`** means "this is real, but it is my own money
 moving between my accounts": counting it would count the same money twice,
 leaving one account and entering the other. The category is the only one whose
 kind carries a rule; `expense`/`income` stay labels. Ignored wins on
 precedence, as the user's most explicit statement (`money.Eligibility`).
+
+An explicit own-account transfer link makes the ownership decision independently
+of categories: both native movements remain intact, but linked principal gets
+`linked_transfer` after ordinary eligibility checks and stays outside reporting
+totals. The execution rate is recomputed from those actual native amounts;
+only an explicitly recorded separate fee enters expenses. Unlinking removes the
+annotation and resumes the existing decisions. Like transfer categories and
+investment principal, linked transfer principal still satisfies `MovedCash`.
+
 
 The order of checks in `money.Eligibility` is load-bearing, not cosmetic:
 `MovedCash` reads the `transfer_category` reason as an eligible cash-flow
