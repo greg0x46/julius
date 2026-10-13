@@ -114,6 +114,7 @@ export interface TransactionItem {
     reason:
       | "ignored"
       | "transfer_category"
+      | "linked_transfer"
       | "unclassified"
       | "ineligible_status"
       | "missing_money_pair"
@@ -270,6 +271,7 @@ export function parseTransactionItem(value: unknown): TransactionItem {
   const reasons = [
     "ignored",
     "transfer_category",
+    "linked_transfer",
     "unclassified",
     "ineligible_status",
     "missing_money_pair",

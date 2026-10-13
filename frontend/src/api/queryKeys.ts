@@ -32,6 +32,7 @@ const roots = {
   timeline: ["timeline"],
   timelineDataRange: ["timeline-data-range"],
   transactionReconciliation: ["transactionReconciliation"],
+  transactionTransfers: ["transaction-transfer"],
   transactions: ["transactions"],
 } as const;
 
@@ -74,6 +75,7 @@ export const queryKeys = {
   syncRunDetail: (runId: string) => [...roots.syncRuns, "detail", runId] as const,
 
   timelineFor: (params: TimelineParams) => [...roots.timeline, params] as const,
+  transactionTransfer: (id: string) => [...roots.transactionTransfers, id] as const,
   transactionsFor: (query: TransactionQuery) => [...roots.transactions, query] as const,
   transactionsInvalidTimezone: [...roots.transactions, "invalid-timezone"] as const,
   transactionsInvalidTimezoneFor: (accountId: string) =>
@@ -166,7 +168,7 @@ export const invalidateAutomationRules = (client: Client) =>
 
 /** A manual transaction create/update/delete. */
 export const invalidateAfterTransactionChange = (client: Client) =>
-  invalidateAll(client, [roots.transactions, roots.accounts, roots.timeline, roots.netWorth]);
+  invalidateAll(client, [roots.transactions, roots.accounts, roots.timeline, roots.netWorth, roots.transactionTransfers]);
 
 export const invalidateAfterManualAccountChange = (client: Client) =>
   invalidateAll(client, [roots.accounts, roots.transactions, roots.timeline, roots.netWorth]);
