@@ -142,13 +142,13 @@ describe("usePayablePlan", () => {
     await act(() =>
       result.current.allocateRealization({
         transactionId,
-        write: { payable_link_id: linkId, allocated_amount: 333.33 },
+        write: { payable_link_id: linkId, allocated_amount: "333.33" },
       }),
     );
 
     expect(scenariosApi.createRealization).toHaveBeenCalledWith(scenarioId, transactionId, {
       payable_link_id: linkId,
-      allocated_amount: 333.33,
+      allocated_amount: "333.33",
     });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["payables", payableId, "scenarios"] });
   });

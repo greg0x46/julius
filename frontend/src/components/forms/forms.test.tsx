@@ -77,14 +77,14 @@ describe("MoneyInput", () => {
 
     await userEvent.type(input, "12850,5");
     expect(input).toHaveValue("12.850,5");
-    expect(onChange).toHaveBeenLastCalledWith(12850.5);
+    expect(onChange).toHaveBeenLastCalledWith("12850.5");
 
     await userEvent.tab();
     expect(input).toHaveValue("12.850,50");
   });
 
   it("shows a controlled value grouped and with two decimals", () => {
-    render(<MoneyInput aria-label="Valor" value={1234567.8} />);
+    render(<MoneyInput aria-label="Valor" value="1234567.8" />);
     expect(screen.getByLabelText("Valor")).toHaveValue("1.234.567,80");
   });
 
@@ -95,7 +95,7 @@ describe("MoneyInput", () => {
 
     await userEvent.type(input, "12850{Backspace}");
     expect(input).toHaveValue("1.285");
-    expect(onChange).toHaveBeenLastCalledWith(1285);
+    expect(onChange).toHaveBeenLastCalledWith("1285");
   });
 
   it("reads a pasted point-decimal figure as decimal, not as thousands (1234.56 is not 123456)", async () => {
@@ -105,7 +105,7 @@ describe("MoneyInput", () => {
 
     await userEvent.click(input);
     await userEvent.paste("1234.56");
-    expect(onChange).toHaveBeenLastCalledWith(1234.56);
+    expect(onChange).toHaveBeenLastCalledWith("1234.56");
     await userEvent.tab();
     expect(input).toHaveValue("1.234,56");
   });
@@ -117,10 +117,10 @@ describe("MoneyInput", () => {
 
     await userEvent.click(input);
     await userEvent.paste("12.850");
-    expect(onChange).toHaveBeenLastCalledWith(12850);
+    expect(onChange).toHaveBeenLastCalledWith("12850");
     await userEvent.clear(input);
     await userEvent.paste("1.234,56");
-    expect(onChange).toHaveBeenLastCalledWith(1234.56);
+    expect(onChange).toHaveBeenLastCalledWith("1234.56");
   });
 
   it("takes a point typed after the whole part as the decimal point", async () => {
@@ -130,14 +130,37 @@ describe("MoneyInput", () => {
 
     await userEvent.type(input, "1234.56");
     expect(input).toHaveValue("1.234,56");
-    expect(onChange).toHaveBeenLastCalledWith(1234.56);
+    expect(onChange).toHaveBeenLastCalledWith("1234.56");
   });
+  it("preserves large fractional amounts through typing and blur", async () => {
+    const onChange = vi.fn();
+    render(<MoneyInput aria-label="Valor" onChange={onChange} />);
+    const input = screen.getByLabelText("Valor");
+    await userEvent.click(input);
+    await userEvent.paste("9.007.199.254.740.993,123456789");
+    await userEvent.tab();
+    expect(input).toHaveValue("9.007.199.254.740.993,123456789");
+    expect(onChange).toHaveBeenLastCalledWith("9007199254740993.123456789");
+  });
+
+  it("retains saved fractional cents on focus and blur", async () => {
+    const onChange = vi.fn();
+    render(<MoneyInput aria-label="Valor" value="0.000000000000000001" min="0" onChange={onChange} />);
+    const input = screen.getByLabelText("Valor");
+    await userEvent.click(input);
+    await userEvent.tab();
+    expect(input).toHaveValue("0,000000000000000001");
+    expect(onChange).not.toHaveBeenCalled();
+  });
+
 });
 
 describe("parseMoney", () => {
   it.each([
     ["12.850", "12850"],
     ["1234.56", "1234.56"],
+    ["1234.56789", "1234.56789"],
+    ["1.234,56789", "1234.56789"],
     ["1.234,56", "1234.56"],
     ["1.234", "1234"],
     ["1.234.567", "1234567"],

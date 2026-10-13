@@ -107,23 +107,15 @@ func fetchCardBillClosingDates(ctx context.Context, q Querier, loc *time.Locatio
 
 	for rows.Next() {
 		var accountID, internalID, externalID string
-		var closingDateRaw sql.NullString
-		if err := rows.Scan(dbtypes.ID(&accountID), dbtypes.ID(&internalID), dbtypes.ID(&externalID), dbtypes.Time(&closingDateRaw)); err != nil {
+		var closingDate *time.Time
+		if err := rows.Scan(dbtypes.ID(&accountID), dbtypes.ID(&internalID), dbtypes.ID(&externalID), dbtypes.Date(&closingDate)); err != nil {
 			return cardBillClosingDates{}, err
 		}
 
-		var closingDate *time.Time
-		if closingDateRaw.Valid {
-			parsed, err := dbtypes.ParseNullTime(closingDateRaw)
-			if err != nil {
-				return cardBillClosingDates{}, err
-			}
-			// closing_date is a provider calendar date stored in the
-			// canonical UTC timestamp format. Preserve that date before
-			// creating the boundary in the application's location; converting
-			// midnight UTC directly to a negative-offset local date would move
-			// the closing day backward.
-			utcDate := parsed.UTC()
+		if closingDate != nil {
+			// Preserve the provider calendar day before creating the boundary
+			// in the application's location.
+			utcDate := closingDate.UTC()
 			boundary := time.Date(utcDate.Year(), utcDate.Month(), utcDate.Day(), 0, 0, 0, 0, loc)
 			closingDate = &boundary
 			result.byAccount[accountID] = append(result.byAccount[accountID], boundary)

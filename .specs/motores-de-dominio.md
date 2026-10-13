@@ -52,12 +52,19 @@ kind carries a rule; `expense`/`income` stay labels. Ignored wins on
 precedence, as the user's most explicit statement (`money.Eligibility`).
 
 The order of checks in `money.Eligibility` is load-bearing, not cosmetic:
-`MovedCash` reads the `transfer_category` reason as "the money really left the
-account", so that reason is checked **last**, after everything that asks
-whether any movement happened at all. A transfer the provider has not settled,
-or whose movement type cannot be given a direction, has not moved anything yet;
-reporting it as a cash movement made the timeline and net worth reverse it from
-the anchor (the unclassified one with the sign flipped).
+`MovedCash` reads the `transfer_category` reason as an eligible cash-flow
+candidate, so that reason is checked **last**, after
+all other eligibility checks. An unsupported status (such as `PROCESSING`) or
+an unclassified movement must not acquire a cash effect merely by being
+categorized as a transfer.
+
+Both `PENDING` and `POSTED` pass the status check. A valid pending card purchase
+is already an expense even though its bill is not settled; status is neither
+report eligibility nor proof that bank cash moved. Period attribution and
+cash timing belong to the consumer's account/date rules, documented in
+[`transacoes/reference.md`](contextos/transacoes/reference.md#status-periods-and-settlement).
+Pending transfers also retain the current cash-flow treatment; there is no
+blanket pending exclusion.
 
 Balance note: on synced accounts, the provider-reported balance **is** the reference
 for money in accounts, and **neither** path above corrects it — both are
@@ -78,8 +85,9 @@ total comes from the cycle's eligible entries, not from the reported balance
 posted undeleted transaction amounts + explicit adjustment deltas; their
 inclusion/category annotations do not alter cash either. Synced balances retain
 provider ownership. Cash on hand is BRL-only without a rate source and comes from
-`transactions.CashOnHand`, a single implementation shared by the Timeline
-(today's anchor) and Net Worth.
+`transactions.CashOnHand`, Net Worth's BRL aggregate. Timeline reuses `AccountBalance` for native
+balance ownership, then converts its reference-date anchor and historical flows
+through `internal/reporting`, with explicit FX coverage.
 
 The matrix of each of these rules, its owning module and the test that pins it
 is in [`invariantes-financeiros.md`](invariantes-financeiros.md).

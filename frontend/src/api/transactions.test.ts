@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { formatMoney } from "../presentation/money";
 import { transactionQuery, transactionResult, transactionJsonResponse } from "../test/transactionFixtures";
 import { ApiError } from "./problems";
-import { queryTransactions, setTransactionInclusion } from "./transactions";
+import { createManualTransaction, queryTransactions, setTransactionInclusion } from "./transactions";
 import { transactionId } from "../test/transactionFixtures";
 
 describe("transaction API boundary", () => {
@@ -93,5 +93,16 @@ describe("string-only money formatting", () => {
     ["1234.5678", "USD", "USD\u00a01.234,5678"],
   ])("formats %s %s without going through floats", (value, currency, expected) => {
     expect(formatMoney(value, currency)).toBe(expected);
+  });
+});
+
+describe("money HTTP round trip", () => {
+  it.each(["-1.005", "9007199254740993.123456789012345678", "0.000000000000000001"])("retains %s through serialization and response parsing", async (amount) => {
+    const item = { ...transactionResult.items[0]!, amount, amount_in_account_currency: amount };
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(transactionJsonResponse(item, { status: 201 }));
+    const result = await createManualTransaction({ account_id: item.account.id, description: "Synthetic precision", amount, occurred_at: "2026-07-30", category_id: null }, "precision-test");
+    expect(result.amount).toBe(amount);
+    const requestBody = JSON.parse(String(fetchMock.mock.calls.at(-1)?.[1]?.body));
+    expect(requestBody.amount).toBe(amount);
   });
 });

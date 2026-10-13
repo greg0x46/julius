@@ -14,7 +14,21 @@ func (s scanner) Scan(value any) error { return s(value) }
 
 // Time and Date normalize driver values before assigning existing store destinations.
 func Time(dest any) sql.Scanner { return temporal(dest, ParseTime, TimeLayout) }
-func Date(dest any) sql.Scanner { return temporal(dest, ParseDate, DateLayout) }
+func Date(dest any) sql.Scanner { return temporal(dest, parseStoredDate, DateLayout) }
+
+func parseStoredDate(value any) (time.Time, error) {
+	day, err := ParseDate(value)
+	if err == nil {
+		return day, nil
+	}
+	// SQLite databases written before native DATE columns may still contain
+	// the previous fixed-width UTC timestamp representation.
+	instant, timestampErr := ParseTime(value)
+	if timestampErr != nil {
+		return time.Time{}, err
+	}
+	return time.Date(instant.Year(), instant.Month(), instant.Day(), 0, 0, 0, 0, time.UTC), nil
+}
 
 func temporal(dest any, parse func(any) (time.Time, error), layout string) sql.Scanner {
 	return scanner(func(value any) error {

@@ -3,6 +3,7 @@ import { Popover, Skeleton } from "antd";
 import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 
+import { reportingError } from "../../presentation/reporting";
 import type { TimelineDayPoint } from "../../api/contracts";
 import { UnavailableState } from "../AsyncState";
 import type { Period } from "../../hooks/usePeriod";
@@ -135,7 +136,7 @@ export function ProjectionSummaryCard({ period }: { period: Period }) {
     <Section title="Evolução do saldo" trailing={<ChartHelp />}>
       {isLoading && <ProjectionSkeleton />}
       {error && !isLoading && (
-        <UnavailableState onRetry={retry}>Não foi possível carregar o saldo.</UnavailableState>
+        <UnavailableState onRetry={retry}>{reportingError(error)?.message ?? "Não foi possível carregar o saldo."}</UnavailableState>
       )}
 
       {!isLoading && !error && base && bounds && hasNoActivity(base) && (
@@ -147,6 +148,7 @@ export function ProjectionSummaryCard({ period }: { period: Period }) {
 
       {!isLoading && !error && base && bounds && !hasNoActivity(base) && (
         <div className="projection-summary">
+          {base.balance_reporting?.status === "stale" && <p role="status">Saldo convertido com cotações desatualizadas.</p>}
           {/* The global control already names the chosen window, so spelling it
               out again would only repeat it — except under "todo o
               período", where the bounds come from the database and are
