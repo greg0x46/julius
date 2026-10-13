@@ -78,14 +78,13 @@ func TestReportingBalanceDisclosesStaleFXSeparatelyFromPeriodCoverage(t *testing
 	}
 }
 
-func TestReportingBalanceUnknownCurrencyIsExplicitlyUnavailable(t *testing.T) {
+func TestReportingBalanceLegacyNullCurrencyRemainsBRL(t *testing.T) {
 	f := newFixture(t)
 	account := f.addAccount("100")
 	f.exec(`UPDATE financial_accounts SET currency_code = NULL WHERE id = ?`, account)
 	ref := date(t, "2026-03-15")
-	_, err := timeline.BuildSeries(context.Background(), f.conn, timeline.BuildParams{From: ref, To: ref, ReferenceDate: ref})
-	var incomplete *reporting.IncompleteError
-	if !errors.As(err, &incomplete) || incomplete.Coverage.Status != "unavailable" || incomplete.Totals == nil {
-		t.Fatalf("unknown currency = %v", err)
+	series, err := timeline.BuildSeries(context.Background(), f.conn, timeline.BuildParams{From: ref, To: ref, ReferenceDate: ref})
+	if err != nil || series.StartingBalance.String() != "100" || series.BalanceReporting.Status != "complete" {
+		t.Fatalf("legacy NULL currency = %+v, %v", series, err)
 	}
 }
