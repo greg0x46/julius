@@ -11,6 +11,7 @@ import (
 
 	"github.com/greg0x46/julius/internal/db"
 	"github.com/greg0x46/julius/internal/exchange"
+	"github.com/shopspring/decimal"
 )
 
 type unavailableFX struct{}
@@ -36,5 +37,23 @@ func TestReferenceValuationRequiresFX(t *testing.T) {
 	valuation, ok := valuationForCurrency(httptest.NewRecorder(), request, fx, "BRL", time.Now().UTC())
 	if !ok || valuation.FX.Source != exchange.SourceIdentity {
 		t.Fatalf("BRL regression = %+v", valuation)
+	}
+}
+
+func TestTransactionReferenceTotalsPreserveNativeAndExcludeForeign(t *testing.T) {
+	native := []currencyTotalsDTO{
+		{CurrencyCode: "USD", Inflow: "100", Outflow: "5", Balance: "95"},
+		{CurrencyCode: "BRL", Inflow: "150", Outflow: "50", Balance: "100"},
+	}
+	valuation := valuationDTO{CurrencyCode: "USD", FX: exchange.Rate{Value: decimal.RequireFromString("0.2")}}
+	got := valuation.transactionTotals(native)
+	if got.CurrencyCode != "USD" || !decimal.RequireFromString(got.Inflow).Equal(decimal.NewFromInt(30)) || !decimal.RequireFromString(got.Outflow).Equal(decimal.NewFromInt(10)) || !decimal.RequireFromString(got.Balance).Equal(decimal.NewFromInt(20)) {
+		t.Fatalf("reference totals = %+v", got)
+	}
+	if native[0].Balance != "95" || native[1].Balance != "100" {
+		t.Fatalf("native totals changed: %+v", native)
+	}
+	if got := valuation.transactionTotals(native[:1]); !decimal.RequireFromString(got.Balance).IsZero() || !decimal.RequireFromString(got.Inflow).IsZero() || !decimal.RequireFromString(got.Outflow).IsZero() {
+		t.Fatalf("foreign totals entered BRL-base report: %+v", got)
 	}
 }

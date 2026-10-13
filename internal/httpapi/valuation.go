@@ -58,3 +58,15 @@ func (v valuationDTO) series(s *timelineSeriesDTO) {
 func (v valuationDTO) breakdown(b *netWorthBreakdownDTO) {
 	v.fields(&b.CashBalance, &b.InvestmentBalance, &b.CreditCardBalance, &b.PayablesDebt, &b.TotalAssets, &b.TotalLiabilities, &b.NetWorth)
 }
+
+func (v valuationDTO) transactionTotals(totals []currencyTotalsDTO) currencyTotalsDTO {
+	result := currencyTotalsDTO{CurrencyCode: v.CurrencyCode, Inflow: "0", Outflow: "0", Balance: "0"}
+	for _, total := range totals {
+		if total.CurrencyCode == "BRL" {
+			result.Inflow, result.Outflow, result.Balance = total.Inflow, total.Outflow, total.Balance
+			break
+		}
+	}
+	v.fields(&result.Inflow, &result.Outflow, &result.Balance)
+	return result
+}

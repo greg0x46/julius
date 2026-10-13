@@ -58,6 +58,21 @@ func TestReferenceCurrencyValuesReportsWithoutChangingRecords(t *testing.T) {
 			}
 			assertMoney(t, "category expense", report["total"], expense)
 		}
+		query := investmentCall(t, srv, http.MethodPost, "/api/transactions/query", map[string]any{"timezone": "UTC", "group_by": "day", "page": 1, "page_size": 50, "filters": map[string]any{}}, 200)
+		if query["currency_code"] != code || query["fx"].(map[string]any)["source"] == "" {
+			t.Fatalf("query valuation = %+v", query)
+		}
+		report := query["report_totals"].(map[string]any)
+		if report["currency_code"] != code {
+			t.Fatalf("query report currency = %+v", report)
+		}
+		assertMoney(t, "query expense", report["outflow"], expense)
+		assertMoney(t, "native query expense", query["totals"].([]any)[0].(map[string]any)["outflow"], "50")
+		assertMoney(t, "group expense", query["groups"].([]any)[0].(map[string]any)["report_totals"].(map[string]any)["outflow"], expense)
+		item := query["items"].([]any)[0].(map[string]any)
+		assertMoney(t, "native transaction", item["amount"], "-50")
+		assertMoney(t, "native effective money", item["effective_money"].(map[string]any)["value"], "-50")
+		assertMoney(t, "native reporting amount", item["reportable_amount"], "50")
 		worth := investmentCall(t, srv, http.MethodGet, "/api/net-worth", nil, 200)
 		latest := worth["latest"].(map[string]any)
 		if latest["currency_code"] != code || latest["stored_currency"] != "BRL" {

@@ -179,11 +179,13 @@ decision timestamps and absent values on SQLite and Postgres.
 
 ## Consolidated report valuation
 
-Spending-by-category and category-breakdown responses convert their existing
+Transaction-query `report_totals` (overall and per group), spending-by-category
+and category-breakdown responses convert their existing
 BRL aggregates with current `internal/exchange` rates to
 `finance.reference_currency` (default BRL), including projected items only
 when requested. Responses include the valuation `currency_code` and `fx`
-provenance; missing FX is 503 `exchange-unavailable`. Ledger queries and
+provenance; missing FX is 503 `exchange-unavailable`. The transaction summary
+and group headings use these converted totals and their explicit currency, with a warning for stale FX. Ledger query items and
 account balances retain their native amounts and currencies. Their original
 per-currency totals and the consolidated BRL eligibility exclusions are
 unchanged; the reference preference changes valuation/display only.

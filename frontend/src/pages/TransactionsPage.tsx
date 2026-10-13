@@ -1,3 +1,4 @@
+import { ReportValuation } from "../components/shared/ReportValuation";
 import { Alert, Button, Skeleton } from "antd";
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
@@ -280,6 +281,7 @@ export function TransactionsPage() {
             <TransactionSummaryBar
               totalItems={data.page.total_items}
               totals={data.page.total_items === 0 ? [] : data.totals}
+              reportTotals={data.report_totals}
               busy={query.isFetching}
             />
           ) : query.isPending && query.timezoneValid ? (
@@ -289,6 +291,7 @@ export function TransactionsPage() {
           ) : undefined
         }
       >
+        {data && <ReportValuation valuation={data}>{null}</ReportValuation>}
         {!query.timezoneValid && (
           <Alert
             type="error"

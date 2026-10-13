@@ -317,6 +317,7 @@ type groupDTO struct {
 	HasItemsBefore bool                `json:"has_items_before"`
 	HasItemsAfter  bool                `json:"has_items_after"`
 	Totals         []currencyTotalsDTO `json:"totals"`
+	ReportTotals   currencyTotalsDTO   `json:"report_totals"`
 }
 
 func dateStringPtr(d *money.Date) *string {
@@ -374,6 +375,8 @@ type availableFiltersDTO struct {
 }
 
 type transactionQueryResultDTO struct {
+	valuationDTO
+	ReportTotals     currencyTotalsDTO    `json:"report_totals"`
 	ConfirmedAt      time.Time            `json:"confirmed_at"`
 	StoredTotal      int                  `json:"stored_total"`
 	Page             pageDTO              `json:"page"`
@@ -450,7 +453,17 @@ func handleQueryTransactions(db *sql.DB) http.HandlerFunc {
 			writeProblem(w, 503, "transaction-query-unavailable", "Consulta temporariamente indisponível", "Tente novamente em instantes.")
 			return
 		}
-		writeJSON(w, http.StatusOK, toResultDTO(result))
+		valuation, ok := reportValuation(w, r, db, time.Now().UTC())
+		if !ok {
+			return
+		}
+		dto := toResultDTO(result)
+		dto.valuationDTO = valuation
+		dto.ReportTotals = valuation.transactionTotals(dto.Totals)
+		for i := range dto.Groups {
+			dto.Groups[i].ReportTotals = valuation.transactionTotals(dto.Groups[i].Totals)
+		}
+		writeJSON(w, http.StatusOK, dto)
 	}
 }
 

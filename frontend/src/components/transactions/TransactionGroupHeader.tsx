@@ -27,8 +27,8 @@ function groupLabel(group: Group): string {
  * but still the first thing to find when skimming down a long list.
  */
 export function TransactionGroupHeader({ group }: { group: Group }) {
-  const brl = group.totals.find((total) => total.currency_code === "BRL");
-  const balance = brl?.balance ?? "0";
+  const total = group.report_totals ?? group.totals.find((total) => total.currency_code === "BRL");
+  const balance = total?.balance ?? "0";
   const split = group.has_items_before || group.has_items_after;
   return (
     <header className="transaction-group-header">
@@ -40,7 +40,7 @@ export function TransactionGroupHeader({ group }: { group: Group }) {
         <div>
           <dt>Resultado</dt>
           <dd>
-            <Money value={balance} tone="result" />
+            <Money value={balance} currencyCode={total?.currency_code ?? "BRL"} tone="result" />
           </dd>
         </div>
       </dl>
