@@ -71,3 +71,61 @@ With the 5 s timeout, the 2-worker config passed again locally (108.59 s).
 Only local numbers were measured; GitHub Actions timings (`frontend` job on
 `ubuntu-24.04`, 4 vCPU) are not recorded here and no benchmark workflow was
 added.
+
+## Financial browser journeys (Playwright)
+
+From the repository root, with the Go version in `go.mod` and Node 24 available:
+
+```sh
+cd frontend
+npm ci
+npx playwright install --with-deps chromium
+npm run test:e2e
+```
+
+Browser dependency installation may require administrator access on Linux.
+No running dev instance, `.env.local`, owner provisioning, or live Pluggy/market
+credentials are needed. The command builds the frontend and a test-only Go
+launcher (`internal/e2etestserver`) using the production `httpapi.NewServer`,
+authentication, domain engines and database migrations. Every test starts its
+own local server on an OS-assigned port and initializes a fresh SQLite database
+in a temporary directory. The server and database are removed on teardown;
+the temporary launcher binary is removed after the suite. Existing databases
+and running Julius instances are never reused.
+
+The suite uses the browser to perform every financial write and authenticated
+API reads to verify persisted outcomes after reload. Julius API responses are
+not mocked. Synthetic Flash CSV rows exercise the file provider's real parser,
+preview, confirmation and deduplication. No external workers or market service
+run in the launcher, and browser requests outside its local origin are blocked.
+Dates and decimal amounts are explicit; synchronization uses responses and
+Playwright assertions, with no fixed sleeps. Each test gets a new browser
+session, including when selected individually or repeated.
+
+| Journey | Persisted financial checks |
+| --- | --- |
+| Authentication | Invalid credentials/private reads rejected; valid session survives reload with a saved account balance; replaying a logged-out cookie is rejected |
+| Manual accounts, transactions and categorization | Exact opening/derived balances, manual category decision, income/expense/result after reload |
+| Own-account transfers | Both categorized legs change their account balances without entering income or expense |
+| Statement import/reimport | Same transaction IDs and category decision, no added rows, unchanged balance and totals |
+| Investment contribution/withdrawal | Saved operation dates/amounts, investment cash, bank balance; linking principal removes it from reporting totals without changing bank cash |
+
+Own-account transfers currently use two manual movements assigned
+**Transferência entre Contas Próprias**; there is no paired bank-transfer wizard.
+Investment contributions/withdrawals are registered through **Investimentos**,
+then linked through **Transações → Vincular a investimento**. The suite covers
+these existing paths. Coverage is Chromium desktop and SQLite; live Pluggy
+sync, market quotations, background scheduling, Postgres browser journeys and
+visual regression are outside this suite. The existing Go tests cover the
+provider mocks and both database dialects independently.
+
+CI runs the command in the required **Frontend (Node)** job. On failure, the
+`playwright-failure-evidence` artifact retains the HTML report, screenshots,
+traces, server/browser logs and runner output for seven days. Locally, reports
+and evidence are in `frontend/playwright-report` and `frontend/test-results`
+(git-ignored). Inspect them from `frontend` with:
+
+```sh
+npx playwright show-report
+npx playwright show-trace test-results/<failed-test>/trace.zip
+```

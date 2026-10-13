@@ -83,6 +83,23 @@ jobs:
           cp -r dist ../internal/webui/dist
           cd .. && go build -tags embedded_frontend -o /dev/null ./cmd/julius
 
+      - name: Install Chromium and browser dependencies
+        run: npx playwright install --with-deps chromium
+      - name: Financial browser journeys
+        shell: bash
+        run: npm run test:e2e 2>&1 | tee e2e.log
+      - name: Upload browser failure evidence
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: playwright-failure-evidence
+          path: |
+            frontend/playwright-report/
+            frontend/test-results/
+            frontend/e2e.log
+          retention-days: 7
+          if-no-files-found: ignore
+
   release:
     name: Release (linux/amd64)
     needs: [backend, frontend]
