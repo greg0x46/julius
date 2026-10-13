@@ -53,24 +53,17 @@ func FetchCardDueDates(ctx context.Context, q Querier) (CardDueDates, error) {
 	defer rows.Close()
 
 	for rows.Next() {
-		var accountID, internalID, externalID, dueDateRaw string
-		var closingDateRaw sql.NullString
-		if err := rows.Scan(dbtypes.ID(&accountID), dbtypes.ID(&internalID), dbtypes.ID(&externalID), dbtypes.Time(&dueDateRaw), dbtypes.Time(&closingDateRaw)); err != nil {
+		var accountID, internalID, externalID string
+		var dueDate, closingDate *time.Time
+		if err := rows.Scan(dbtypes.ID(&accountID), dbtypes.ID(&internalID), dbtypes.ID(&externalID), dbtypes.Date(&dueDate), dbtypes.Date(&closingDate)); err != nil {
 			return CardDueDates{}, err
 		}
-		parsed, err := dbtypes.ParseTime(dueDateRaw)
-		if err != nil {
-			return CardDueDates{}, fmt.Errorf("parse bill due_date %q: %w", dueDateRaw, err)
+		if dueDate == nil {
+			return CardDueDates{}, fmt.Errorf("bill %q has no due_date", internalID)
 		}
-		bill := cardBill{due: dates.Day(parsed)}
-		if closingDateRaw.Valid {
-			parsedClosing, err := dbtypes.ParseNullTime(closingDateRaw)
-			if err != nil {
-				return CardDueDates{}, fmt.Errorf("parse bill closing_date %q: %w", closingDateRaw.String, err)
-			}
-			if parsedClosing != nil {
-				bill.closing = dates.Day(*parsedClosing)
-			}
+		bill := cardBill{due: dates.Day(*dueDate)}
+		if closingDate != nil {
+			bill.closing = dates.Day(*closingDate)
 		}
 		result.byAccount[accountID] = append(result.byAccount[accountID], bill)
 		// Pluggy's billId is the external id; the internal id is kept too so

@@ -115,6 +115,11 @@ func openPostgres(dsn string) (*sql.DB, error) {
 	conn := sql.OpenDB(connector)
 	pool.apply(conn)
 
+	if err := convertLegacyPostgres(conn); err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("convert legacy Postgres: %w", err)
+	}
+
 	locker, err := lock.NewPostgresSessionLocker(lock.WithLockTimeout(1, 300))
 	if err != nil {
 		conn.Close()

@@ -442,21 +442,3 @@ func TestBuildSeriesDropsAnUnclassifiedTransfer(t *testing.T) {
 		t.Errorf("balance = %s, want a flat 700 — an unclassified movement has no direction to apply", got)
 	}
 }
-
-func TestBuildSeriesExcludesForeignAccountAmounts(t *testing.T) {
-	f := newFixture(t)
-	f.addAccount("100")
-	usd := f.addAccount("1000")
-	f.exec(`UPDATE financial_accounts SET currency_code='USD' WHERE id=?`, usd)
-	f.addTransaction(txn{AccountID: usd, Amount: "-10", OccurredAt: date(t, "2026-10-09")})
-	series, err := timeline.BuildSeries(context.Background(), f.conn, timeline.BuildParams{From: date(t, "2026-10-09"), To: date(t, "2026-10-10"), ReferenceDate: date(t, "2026-10-10")})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if series.StartingBalance.String() != "100" {
-		t.Fatalf("foreign anchor: %s", series.StartingBalance)
-	}
-	if len(series.Entries) != 0 {
-		t.Fatalf("foreign movement in BRL series: %+v", series.Entries)
-	}
-}

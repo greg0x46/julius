@@ -260,13 +260,16 @@ func (r *syncedHoldingRow) holding() (SyncedHolding, error) {
 		{r.issueDate, &h.IssueDate}, {r.purchaseDate, &h.PurchaseDate},
 		{r.dueDate, &h.DueDate}, {r.asOfDate, &h.AsOfDate},
 	} {
-		v, err := dbtypes.ParseNullTime(item.raw)
-		if err != nil {
-			return SyncedHolding{}, err
-		}
-		if v != nil && item.dst != &h.AsOfDate {
-			// Keep the existing provider-day calculations anchored at BRT midnight.
-			day, err := dbtypes.ParseDate(item.raw.String)
+		var v *time.Time
+		if item.dst == &h.AsOfDate {
+			var err error
+			v, err = dbtypes.ParseNullTime(item.raw)
+			if err != nil {
+				return SyncedHolding{}, err
+			}
+		} else if item.raw.Valid {
+			// Provider terms are calendar days anchored at BRT midnight.
+			day, err := dbtypes.ParseDate(item.raw)
 			if err != nil {
 				return SyncedHolding{}, err
 			}

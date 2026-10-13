@@ -30,13 +30,14 @@ export function formatBRL(value: string): string {
   return `${value.startsWith("-") ? "-" : ""}R$\u00a0${fixedTwo(value).replace("-", "")}`;
 }
 
-export function formatSignedBRL(
+export function formatSignedMoney(
   value: string,
   classification: "inflow" | "outflow" | "unclassified",
+  currencyCode: string,
 ): string {
   const unsigned = value.startsWith("-") ? value.slice(1) : value;
   const sign = classification === "inflow" ? "+" : classification === "outflow" ? "-" : "";
-  return `${sign}R$\u00a0${fixedTwo(unsigned)}`;
+  return `${sign}${formatMoney(unsigned, currencyCode)}`;
 }
 
 export const moneySourceLabel = (source: "account_currency" | "transaction_currency") =>
@@ -143,13 +144,16 @@ export function moneyTone(value: string, kind: MoneyToneKind, direction?: MoneyD
   }
 }
 
-/**
- * The BRL text for a figure under the tone rule above: flow and result carry
- * the explicit "+"/"-" from `moneyTone`; balance and neutral show only the
- * natural minus of a negative value.
- */
-export function formatToneBRL(value: string, kind: MoneyToneKind, direction?: MoneyDirection): string {
-  const magnitude = formatBRL(value.trim().replace(/^-/, ""));
+export function formatToneMoney(value: string, currencyCode: string, kind: MoneyToneKind, direction?: MoneyDirection): string {
+  const magnitude = formatMoney(value.trim().replace(/^-/, ""), currencyCode);
   if (kind === "flow" || kind === "result") return `${moneyTone(value, kind, direction).sign}${magnitude}`;
   return isZeroDecimal(value) || !value.trim().startsWith("-") ? magnitude : `-${magnitude}`;
+}
+
+export function formatToneBRL(value: string, kind: MoneyToneKind, direction?: MoneyDirection): string {
+  return formatToneMoney(value, "BRL", kind, direction);
+}
+
+export function formatSignedBRL(value: string, classification: MoneyDirection): string {
+  return formatSignedMoney(value, classification, "BRL");
 }

@@ -142,7 +142,7 @@ func main() {
 	log.Printf("quote refresh enabled=%t daily at %s %s", quotesConfig.Enabled, quotesConfig.Time, quotesConfig.Timezone)
 	go quotes.RunSchedule(ctx, conn, marketService)
 
-	handler := httpapi.NewServer(conn, frontend, secrets, config)
+	handler := httpapi.NewServer(conn, frontend, secrets, config, marketService)
 	log.Printf("listening on http://%s", *addr)
 	server := &http.Server{Addr: *addr, Handler: handler, ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 60 * time.Second}
 	if err := server.ListenAndServe(); err != nil {

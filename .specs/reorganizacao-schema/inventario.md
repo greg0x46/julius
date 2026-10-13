@@ -1,7 +1,8 @@
 # Schema rework: legacy inventory and conversion contract
 
-> Design input for the schema rework; no target DDL or migration tool is
-> implemented by this document. Baseline: `3d78f17f0cd418b037a71770efeea57424166ee3`,
+> Historical source inventory and conversion contract. The native baseline and
+> `cmd/migrate-legacy` are implemented; the snapshots remain the legacy source.
+> Baseline: `3d78f17f0cd418b037a71770efeea57424166ee3`,
 > SQLite through `00047_manual_bank_accounts`, Postgres through
 > `00046_manual_bank_accounts`. Re-inventory if that baseline changes.
 
@@ -28,9 +29,9 @@
    never copy source migration versions. SQLite internal tables and Postgres
    sequences are engine metadata, not application data.
 
-These are the proposed decisions for this work, based on preserving the current
-single-owner behavior. Owner review can revise them before target DDL/tool work;
-this document does not authorize deleting data from a running database.
+These retained scope decisions preserve the current single-owner behavior. The
+converter writes only to a separate fresh target; this contract does not authorize
+deleting data from a running database.
 
 ## Evidence and reproduction
 
@@ -62,7 +63,7 @@ The three obsolete tables are **already absent** in both final schemas:
 
 `recurring_commitment_conditions`, `recurring_commitment_scenario_map`, debts,
 receivables and their old link tables are also absent. No new DROP migration is
-needed. The future legacy tool accepts a fully migrated source at this baseline;
+needed. The legacy tool accepts a fully migrated source at this baseline;
 older sources must first run their existing migrations, which move legacy data
 into the surviving tables. Do not inventory intermediate rebuild tables or
 resurrect old names from migration history.
@@ -75,7 +76,7 @@ the original text-only proposal below: exact numbers use `NUMERIC`, instants
 Opaque IDs (including integrated custody IDs), keys and provider fields remain
 text. SQLite keeps exact decimal/UTC text and integer flags. See
 [`migrations/README.md`](../../internal/db/migrations/README.md). The snapshots
-below remain the unchanged legacy source for a future conversion tool.
+below remain the unchanged legacy source for the conversion tool.
 
 ### Original conversion proposal (superseded by the implemented baseline)
 
@@ -117,9 +118,9 @@ when a manual input originally selected a calendar day.
 
 ## Changed-column mapping and conversion map
 
-This is the complete `table.column → converter` allowlist for the future legacy
-migration tool, for either dialect. There are no renames or table merges in this
-contract. Target column equals source column; unchanged columns are omitted.
+This is the complete `table.column → converter` allowlist for `cmd/migrate-legacy`,
+from final legacy SQLite to either target dialect. There are no renames or table
+merges in this contract. Target column equals source column; unchanged columns are omitted.
 All converters preserve SQL NULL where allowed and reject invalid non-NULL
 values with row identity and column context; never substitute zero, now, an empty
 string or a guessed date. Conversion failures abort the destination import.
@@ -134,13 +135,14 @@ string or a guessed date. Conversion failures abort the destination import.
 The UTC converter matches the bill calendar convention in
 `transactions/cardflow.go` and `transactions/cardtotal.go`. Investment dates use
 the provider convention in `investments/quotes.go` for due, issue and purchase
-dates. Trade dates use [`movementDay` in `investments/yield.go`](../../internal/investments/yield.go)
+dates. Trade dates use [`MovementDay` in `investments/yield.go`](../../internal/investments/yield.go)
 to preserve provider date-only movements stored at UTC midnight. Removing the
 timestamp portion of a calendar field is intentional;
-raw payloads retain provider evidence. The future readers/writers must switch
-these fields together with the migration; copying date-only values into today's
-schema would break its timestamp parsers. Auth readers/writers likewise need to
-switch from Unix seconds while preserving lifetime/revision checks.
+raw payloads retain provider evidence. Current baseline readers/writers already
+use these date-only fields and auth instants, preserving lifetime/revision checks.
+The tool also checks exact
+decimals, instants, calendar days and flags against the native baseline types;
+Postgres UUID columns reject unrepresentable legacy IDs without rewriting them.
 
 | Source → target (same name) | Legacy type (both dialects) | Target (both dialects) | Converter |
 |---|---|---|---|
@@ -161,8 +163,12 @@ The target runner creates its own `goose_db_version`; it is excluded from the
 converter allowlist. Rebuild engine-managed sequences from imported rows where
 needed rather than copying sequence state. Load dependencies before dependents,
 preserve explicit link tables, and validate FKs, row counts, money values,
-append-only events and soft deletes before switching databases. Target DDL and
-the tool's transactional/cutover implementation are separate work.
+append-only events and soft deletes before switching databases. The implemented
+tool uses FK order from the baseline, one transaction per table for real copies
+and a rollback transaction with row savepoints for dry-runs. It
+requires a fresh target, replaces only untouched seeded categories, fills any
+new columns from baseline defaults, and reports count, balance and movement-sum
+comparisons. See README "Database schema generations" for cutover instructions.
 
 ## Tables still in use
 
@@ -238,9 +244,9 @@ Reviewed against the baseline above on 2026-10-12 using only synthetic databases
   typecheck, tests and build, embedded frontend build, release-script tests,
   govulncheck and the production npm audit passed.
 
-This is an engineering consistency review. Owner acceptance of the proposed
-scope and date conversion choices remains part of reviewing this design before
-implementing the target schema and migration tool.
+This historical engineering review records the inventory work. The implemented
+baseline and converter follow the target contract above; the dumps and full
+column inventory below remain unchanged evidence of the legacy schema.
 
 ## Full column inventory
 
@@ -896,3 +902,13 @@ not be assumed to enforce NOT NULL just because Postgres does.
 | `rule_id` | TEXT / NULL | text / NULL | ID |
 | `rule_name` | TEXT / NULL | text / NULL | free text |
 
+
+## Automatic Postgres cutover
+
+`internal/db/legacy_postgres.go` implements the same conversion contract for
+final legacy Postgres version 46 at startup. Native target metadata selects the
+casts; auth Unix seconds become instants and provider dates retain the calendar
+rules above. The whole copy, row equality validation and schema activation are
+atomic. Original tables and history remain in a separate backup schema; no
+source migration version is copied into the generation 1 runner. Concurrent
+starts serialize and incomplete or unmapped schemas fail without activation.

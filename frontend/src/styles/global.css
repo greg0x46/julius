@@ -129,9 +129,26 @@ body {
   min-height: 100vh;
 }
 
-#conteudo-principal,
-.ant-pro-layout-content {
-  min-height: calc(100vh - var(--app-bar-height));
+.app-build-footer {
+  padding: 0.5rem var(--page-gutter) calc(0.5rem + env(safe-area-inset-bottom));
+  color: var(--color-text-secondary);
+  font-size: var(--fs-caption);
+  text-align: right;
+}
+
+.app-build-footer a {
+  color: inherit;
+  text-decoration: underline;
+}
+
+.app-build-footer a:hover {
+  color: var(--color-primary);
+}
+
+@media (max-width: 47.99rem) {
+  .app-layout:has(.app-page-has-bottom-bar) .app-build-footer {
+    padding-bottom: calc(5rem + env(safe-area-inset-bottom));
+  }
 }
 
 /* App shell hierarchy: product (global header) -> navigation (sidebar) ->
