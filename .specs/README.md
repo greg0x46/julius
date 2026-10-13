@@ -68,6 +68,42 @@ remain intact; `ParseUUID` is available for UUID values. Decimal reads accept
 text and integers and reject floating-point values. Schema and write formats
 are unchanged (`internal/db.FormatTime` retains fixed-width UTC timestamps).
 
+Postgres uses native exact numeric, temporal, UUID and boolean types; SQLite keeps text decimals, UTC
+instants, calendar dates and integer flags. Both start at `0001_initial.sql`.
+`db.Open` automatically converts final legacy Postgres version 46 in one transaction,
+retaining the original tables in a backup schema; it rejects legacy SQLite and
+incomplete Postgres schemas. The archived history
+is embedded only in historical tests. See
+[`migrations/README.md`](../internal/db/migrations/README.md) for the contract.
+`cmd/migrate-legacy` replaces the generic copier: a raw read-only final legacy
+SQLite source converts into a fresh SQLite/Postgres baseline. It provides
+aggregated dry-run errors, rollback, FK-ordered copy and count/balance validation.
+
+## Schema conversion contract
+
+- [`reorganizacao-schema/inventario.md`](reorganizacao-schema/inventario.md) —
+  final legacy schema snapshots, complete column inventory, data/auth scope
+  decisions and the changed-column conversion map implemented by `cmd/migrate-legacy`.
+  Both the native baseline and the temporary legacy converter are implemented.
+text and integers and reject floating-point values. Postgres uses native exact
+numeric, temporal, UUID and boolean types; SQLite keeps text decimals, UTC
+instants, calendar dates and integer flags. Both start at `0001_initial.sql`.
+`db.Open` automatically converts final legacy Postgres version 46 in one transaction,
+retaining the original tables in a backup schema; it rejects legacy SQLite and
+incomplete Postgres schemas. The archived history
+is embedded only in historical tests. See
+[`migrations/README.md`](../internal/db/migrations/README.md) for the contract.
+`cmd/migrate-legacy` replaces the generic copier: a raw read-only final legacy
+SQLite source converts into a fresh SQLite/Postgres baseline. It provides
+aggregated dry-run errors, rollback, FK-ordered copy and count/balance validation.
+
+## Schema conversion contract
+
+- [`reorganizacao-schema/inventario.md`](reorganizacao-schema/inventario.md) —
+  final legacy schema snapshots, complete column inventory, data/auth scope
+  decisions and the changed-column conversion map implemented by `cmd/migrate-legacy`.
+  Both the native baseline and the temporary legacy converter are implemented.
+
 ## Shared frontend building blocks
 
 Not tied to a single context:

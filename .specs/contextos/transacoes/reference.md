@@ -54,7 +54,8 @@ marking it ignored — see the note on the two paths in
   `financial_accounts.balance`).
 - `balance.go` — `CashOnHand`: BRL money in non-credit accounts
   (provider-reported synced balances plus derived manual balances), the single
-  implementation used by the Timeline and Net Worth. See the balance note in
+  implementation used by Net Worth. Timeline uses the same native
+  `AccountBalance` ownership before applying reporting conversion. See the balance note in
   `.specs/motores-de-dominio.md` section 1 for
   why an ignored transaction stays inside the balance.
 
@@ -62,6 +63,22 @@ Database reads (including accounts, cards and investment presentation) use
 `internal/db/types` scan adapters for dates, timestamps, IDs, booleans and
 decimals. The shared boundary is documented in [the doc map](../../README.md);
 ledger rules and persisted formats are unchanged.
+
+## Reporting conversion
+
+`internal/reporting` consolidates eligible effective account-currency money to
+BRL using `internal/exchange` historical rates for the reporting calendar date.
+Queries, groups and category reports return conversion coverage and native
+per-currency totals alongside consolidated totals. Missing rates expose
+incomplete/unavailable states with no deceptively complete subtotal. Transfers
+and existing inclusion/status rules retain their precedence; original and
+effective transaction money remain available.
+
+Transaction summaries and Home period/category cards show BRL reporting values,
+with expandable native currency totals for mixed periods. BRL-only periods retain
+the existing controls. Shared `Money` and decimal-string formatting accept an
+explicit ISO currency code. Transaction rows/details use effective currency
+with the same flow sign/tone across BRL/USD/EUR.
 
 ## HTTP routes
 
@@ -157,7 +174,22 @@ keep their money in the balance. Creating USD 10 on a USD account stores USD
 For synced accounts, manual entries still never change provider balances or
 historical reconstruction. Credit-card totals remain the deliberate exception:
 they sum eligible entries, so manual entries count toward the open bill.
-`CashOnHand` (Timeline/Net Worth) is a BRL aggregate and excludes foreign
-accounts. Net-worth history reverses posted manual-account movements and
+`CashOnHand` (Net Worth) remains a BRL aggregate and excludes foreign
+accounts; Timeline converts native balances separately for its reference-date anchor. Net-worth history reverses posted manual-account movements and
 adjustment deltas, using opening balance as its historical baseline; existing
 snapshots are never rewritten.
+
+## Database representation
+
+Money uses exact Postgres `NUMERIC` or SQLite decimal text; transaction times
+remain instants. Account cycle dates and bill due/closing dates are UTC calendar
+days, stored as Postgres `DATE` or SQLite date text. UUID identities use native
+Postgres UUIDs. Both dialects start at the same `0001_initial.sql` baseline;
+legacy databases are rejected before migrations and require a separate converter.
+
+Transaction queries scan nullable money and instants directly into decimal and
+time values through `internal/db/types`, preserving SQL NULL without intermediate
+text conversions. Shared test fixtures bind binary payloads and use portable
+boolean literals so query coverage runs against both typed baselines.
+`TestQueryTypedValuesBothDialects` pins exact large amounts, UTC instants,
+decision timestamps and absent values on SQLite and Postgres.

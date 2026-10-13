@@ -273,18 +273,17 @@ func loadSyncedSeries(ctx context.Context, q Querier, cache *YieldCache, id stri
 	defer rows.Close()
 	soldQty, boughtQty := decimal.Zero, decimal.Zero
 	for rows.Next() {
-		var direction, quantityRaw, amountRaw, occurredRaw, tradeRaw sql.NullString
-		if err := rows.Scan(&direction, dbtypes.Decimal(&quantityRaw), dbtypes.Decimal(&amountRaw), dbtypes.Time(&occurredRaw), dbtypes.Time(&tradeRaw)); err != nil {
+		var direction, quantityRaw, amountRaw, occurredRaw sql.NullString
+		var tradeDate *time.Time
+		if err := rows.Scan(&direction, dbtypes.Decimal(&quantityRaw), dbtypes.Decimal(&amountRaw), dbtypes.Time(&occurredRaw), dbtypes.Date(&tradeDate)); err != nil {
 			return nil, err
 		}
 		s.movements++
 		inflow := direction.String == "inflow"
 		amount, amountErr := decimal.NewFromString(amountRaw.String)
-		when, err := dbtypes.ParseNullTime(tradeRaw)
-		if err != nil {
-			return nil, err
-		}
+		when := tradeDate
 		if when == nil {
+			var err error
 			if when, err = dbtypes.ParseNullTime(occurredRaw); err != nil {
 				return nil, err
 			}
@@ -297,7 +296,7 @@ func loadSyncedSeries(ctx context.Context, q Querier, cache *YieldCache, id stri
 			s.complete = false
 			continue
 		}
-		event := flowEvent{day: movementDay(*when), cash: amount, inflow: inflow}
+		event := flowEvent{day: MovementDay(*when), cash: amount, inflow: inflow}
 		if !inflow {
 			event.cash = amount.Neg()
 		}
@@ -364,10 +363,10 @@ func loadSyncedSeries(ctx context.Context, q Querier, cache *YieldCache, id stri
 	return s, nil
 }
 
-// movementDay is the calendar day of a provider movement. Pluggy sends
+// MovementDay is the calendar day of a provider movement. Pluggy sends
 // movement dates as date-only values stored at UTC midnight; any other
 // instant is read on the provider's wall clock like as-of dates are.
-func movementDay(t time.Time) time.Time {
+func MovementDay(t time.Time) time.Time {
 	utc := t.UTC()
 	if utc.Hour() == 0 && utc.Minute() == 0 && utc.Second() == 0 && utc.Nanosecond() == 0 {
 		return Day(utc)

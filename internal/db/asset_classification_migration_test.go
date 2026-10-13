@@ -17,7 +17,7 @@ func TestAssetClassificationMigrationPreservesExistingTypes(t *testing.T) {
 	}
 	defer conn.Close()
 	conn.SetMaxOpenConns(1)
-	migrations, err := fs.Sub(sqliteMigrationsFS, "migrations/sqlite")
+	migrations, err := fs.Sub(legacyMigrationsFS, "migrations/archive/sqlite")
 	if err != nil {
 		t.Fatal(err)
 	}

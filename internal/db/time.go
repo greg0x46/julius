@@ -42,3 +42,11 @@ func FormatTimePtr(t *time.Time) any {
 func ParseNullTime(ns sql.NullString) (*time.Time, error) {
 	return dbtypes.ParseNullTime(ns)
 }
+
+// FormatDatePtr stores a UTC calendar day without a timestamp component.
+func FormatDatePtr(t *time.Time) any {
+	if t == nil {
+		return nil
+	}
+	return t.UTC().Format(dbtypes.DateLayout)
+}

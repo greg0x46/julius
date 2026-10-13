@@ -41,6 +41,19 @@ password-derivation functions in settings exist only for migration and tests.
   sessions; does not need or change the key. Passwords are read without echo
   from a terminal.
 
+Owner/session timestamps use UTC text in SQLite and native `TIMESTAMPTZ` in
+Postgres, retaining second-level lifetime and idle-timeout semantics. Database
+opening automatically converts final legacy Postgres in one transaction while
+retaining the original tables in a backup schema, including hashes, revisions,
+encrypted settings and session deadlines. Concurrent startups serialize and
+invalid data rolls back the conversion. Legacy SQLite requires a
+`cmd/migrate-legacy` converts a final legacy SQLite backup into a separate fresh
+SQLite/Postgres target. Unix-second owner/session timestamps become UTC instants
+without extending sessions; encrypted settings, hashes and revisions copy
+unchanged with the same external master key. Dry-run rolls back imported data
+and reports row errors; count and native account balance checks gate completion.
+See README "Database schema generations" for cutover and retry steps.
+
 The server refuses pending configuration or an invalid key. A lost key cannot
 be recovered with the password; key rotation is not implemented. Instructions
 are in the README.
@@ -55,8 +68,9 @@ are in the README.
 | PUT /api/auth/password | Takes current_password/password, revokes all sessions, returns authenticated=false |
 | PUT /api/auth/config | Enables/disables authentication (see README "open mode") |
 | PUT /api/settings/pluggy | Stores pluggy_client_id/pluggy_client_secret encrypted; optional pluggy_item_id creates a connection in the same transaction; returns saved=true |
-| GET /api/settings/quotes | Returns only enabled, time and timezone; never returns the token |
+| GET /api/settings/quotes | Returns enabled, time, timezone and last_refresh (or null); never returns the token |
 | PUT /api/settings/quotes | Partially updates enabled/time/timezone and optional brapi_token atomically; returns saved=true |
+| POST /api/settings/quotes/refresh | Runs a manual full refresh and returns its recorded outcome; 409 if another refresh is running, 503 if market data is unavailable |
 | GET/PUT /api/preferences | Existing preferences, now authenticated |
 
 All `/api` routes are private by default, except the login and status
@@ -100,4 +114,16 @@ and PUT require a session, and PUT keeps the usual CSRF protection. The
 default is enabled at 19:00 America/Sao_Paulo. The running scheduler applies
 changes without restart, including suspending history backfill. Legacy
 environment initialization and precedence are described under Investments.
-The UI keeps the existing token form without schedule controls.
+The investment settings screen shows the persisted schedule, last refresh trigger
+and result, and provides “Atualizar agora”; the brapi token form is in a collapsed
+advanced provider section. Manual refresh works with the schedule disabled. Only
+full refreshes are recorded; spot refreshes triggered by saved positions are not.
+A shared lock prevents manual and scheduled spot refreshes from overlapping.
+History backfill follows the spot refresh asynchronously and is not included in
+the recorded outcome. Provider failures leave previously stored quotations
+intact.
+
+Schedule initialization stores the unencrypted flag using SQL `FALSE`, which
+works with SQLite integer flags and Postgres native booleans.
+`TestInitializeScheduleBothDialects` covers startup initialization;
+`TestQuoteSettingsPostgresRoundTrip` covers HTTP schedule writes.

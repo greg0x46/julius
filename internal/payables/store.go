@@ -203,14 +203,14 @@ func linksFor(ctx context.Context, q Querier, payableIDs []string) (map[string][
 		       CASE
 		         WHEN NOT EXISTS (
 					SELECT 1 FROM scenarios s0
-					WHERE s0.payable_id = l.payable_id AND s0.is_accounting_source = 1
+					WHERE s0.payable_id = l.payable_id AND s0.is_accounting_source = TRUE
 				 ) THEN 1
 		         WHEN EXISTS (
 					SELECT 1
 					FROM scenario_realizations sr
 					JOIN scenarios s ON s.id = sr.scenario_id
 					WHERE s.payable_id = l.payable_id
-					  AND s.is_accounting_source = 1
+					  AND s.is_accounting_source = TRUE
 					  AND sr.relation_type = 'settlement'
 					  AND sr.state = 'linked'
 					  AND sr.transaction_id = l.transaction_id
@@ -647,7 +647,7 @@ func createSettlement(ctx context.Context, q Querier, link Link) error {
 	var scenarioID string
 	err := q.QueryRowContext(ctx, `
 		SELECT id FROM scenarios
-		WHERE payable_id = ? AND is_accounting_source = 1`, link.PayableID).Scan(dbtypes.ID(&scenarioID))
+		WHERE payable_id = ? AND is_accounting_source = TRUE`, link.PayableID).Scan(dbtypes.ID(&scenarioID))
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil
 	}

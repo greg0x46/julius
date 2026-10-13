@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/greg0x46/julius/internal/db"
 	dbtypes "github.com/greg0x46/julius/internal/db/types"
 	"github.com/greg0x46/julius/internal/investments"
 	"github.com/greg0x46/julius/internal/pluggy"
@@ -98,7 +97,7 @@ func BackfillAssetQuotes(ctx context.Context, conn *sql.DB) (int, error) {
 		if _, err := tx.ExecContext(ctx, `
 			UPDATE financial_investments SET issue_date = ?, purchase_date = ?, issuer_cnpj = ?
 			WHERE source_id = ? AND external_id = ? AND issue_date IS NULL AND purchase_date IS NULL AND issuer_cnpj IS NULL`,
-			db.FormatTimePtr(snapshot.IssueDate), db.FormatTimePtr(snapshot.PurchaseDate), snapshot.IssuerCNPJ,
+			investments.FormatProviderDatePtr(snapshot.IssueDate), investments.FormatProviderDatePtr(snapshot.PurchaseDate), snapshot.IssuerCNPJ,
 			key.sourceID, key.externalID); err != nil {
 			return 0, err
 		}

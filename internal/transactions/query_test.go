@@ -2,12 +2,14 @@ package transactions_test
 
 import (
 	"context"
+	"database/sql"
 	"testing"
 	"time"
 
 	"github.com/shopspring/decimal"
 
 	"github.com/greg0x46/julius/internal/categories"
+	"github.com/greg0x46/julius/internal/db/dbtest"
 	"github.com/greg0x46/julius/internal/money"
 	"github.com/greg0x46/julius/internal/transactions"
 )
@@ -591,4 +593,55 @@ func TestQueryCreditCardFilter(t *testing.T) {
 	if err != nil || len(result.Items) != 1 {
 		t.Fatalf("combined account filter: %+v, %v", result, err)
 	}
+}
+
+func TestQueryTypedValuesBothDialects(t *testing.T) {
+	dbtest.Each(t, func(t *testing.T, conn *sql.DB) {
+		f := newFixtureWithConn(t, conn)
+		accountID := f.addAccount(account{CurrencyCode: strp("BRL")})
+		occurred := time.Date(2026, 3, 15, 23, 30, 0, 123456000, time.FixedZone("sample", -3*60*60))
+		amount := "9007199254740993.01"
+		id := f.addTransaction(txn{AccountID: accountID, Amount: &amount, AmountInAccountCurrency: &amount,
+			CurrencyCode: strp("BRL"), OccurredAt: &occurred, ProviderStatus: strp("POSTED"), MovementType: strp("CREDIT")})
+		f.setCategory(id, categorySalario)
+		f.exec(`INSERT INTO transaction_inclusion_decisions
+   (transaction_id, state, revision, changed_at, origin) VALUES (?, 'considered', 1, ?, 'manual')`,
+			id, occurred.UTC().Format("2006-01-02T15:04:05.000000000Z"))
+		nullID := f.addTransaction(txn{AccountID: accountID})
+		result, err := transactions.Query(context.Background(), conn, transactions.QueryRequest{
+			Timezone: "UTC", GroupBy: money.GroupNone, Page: 1, PageSize: 50,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(result.Items) != 2 {
+			t.Fatalf("items = %d, want 2", len(result.Items))
+		}
+		for _, item := range result.Items {
+			switch item.ID {
+			case id:
+				if item.Amount == nil || *item.Amount != amount || item.AmountInAccountCurrency == nil || *item.AmountInAccountCurrency != amount {
+					t.Fatalf("exact amounts lost: %+v", item)
+				}
+				if item.OccurredAt == nil || !item.OccurredAt.Equal(occurred) || item.OccurredAt.Location() != time.UTC {
+					t.Fatalf("occurred_at = %v, want UTC instant %v", item.OccurredAt, occurred.UTC())
+				}
+				if item.Inclusion.ChangedAt == nil || !item.Inclusion.ChangedAt.Equal(occurred) {
+					t.Fatalf("inclusion changed_at = %v", item.Inclusion.ChangedAt)
+				}
+				if item.InternalCategory == nil || item.InternalCategory.ChangedAt.IsZero() || !item.InternalCategory.IsActive {
+					t.Fatalf("category decision = %+v", item.InternalCategory)
+				}
+			case nullID:
+				if item.Amount != nil || item.AmountInAccountCurrency != nil || item.OccurredAt != nil || item.Inclusion.ChangedAt != nil || item.InternalCategory != nil {
+					t.Fatalf("SQL NULL values lost: %+v", item)
+				}
+			default:
+				t.Fatalf("unexpected transaction %s", item.ID)
+			}
+		}
+		if len(result.Totals) != 1 || result.Totals[0].Inflow != amount || result.Totals[0].Balance != amount {
+			t.Fatalf("exact totals lost: %+v", result.Totals)
+		}
+	})
 }

@@ -172,7 +172,7 @@ func insertBackfillSnapshot(ctx context.Context, q Querier, capturedAt string, b
 			id, captured_at, total_assets, total_liabilities, net_worth,
 			cash_balance, investment_balance, credit_card_balance, payables_debt,
 			is_backfilled, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, TRUE, ?, ?)
 		ON CONFLICT (captured_at) DO NOTHING`,
 		uuid.NewString(), capturedAt,
 		money.CanonicalDecimal(breakdown.TotalAssets), money.CanonicalDecimal(breakdown.TotalLiabilities), money.CanonicalDecimal(breakdown.NetWorth),
@@ -216,7 +216,7 @@ func cashDeltasDescending(ctx context.Context, q Querier) ([]cashTransactionDelt
 		JOIN financial_accounts fa ON fa.id = ft.account_id
 		WHERE (fa.account_type IS NULL OR fa.account_type != 'CREDIT') AND (fa.currency_code IS NULL OR fa.currency_code = 'BRL') AND ft.deleted_at IS NULL AND (ft.origin = 'synced' OR (fa.origin = 'manual' AND ft.provider_status = 'POSTED'))
  UNION ALL SELECT aba.amount, aba.amount, fa.currency_code, fa.currency_code,
- aba.created_at, 'POSTED', CASE WHEN SUBSTR(aba.amount, 1, 1) = '-' THEN 'DEBIT' ELSE 'CREDIT' END
+ aba.created_at, 'POSTED', CASE WHEN SUBSTR(CAST(aba.amount AS TEXT), 1, 1) = '-' THEN 'DEBIT' ELSE 'CREDIT' END
  FROM account_balance_adjustments aba JOIN financial_accounts fa ON fa.id = aba.account_id WHERE fa.currency_code = 'BRL'`)
 	if err != nil {
 		return nil, fmt.Errorf("query cash transactions: %w", err)

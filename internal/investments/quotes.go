@@ -220,7 +220,7 @@ type syncedHoldingRow struct {
 
 func (r *syncedHoldingRow) dests() []any {
 	return []any{dbtypes.ID(&r.externalID), &r.name, &r.code, &r.isin, &r.investmentType, &r.subtype,
-		&r.currency, &r.cnpj, dbtypes.Decimal(&r.rate), &r.rateType, dbtypes.Time(&r.issueDate), dbtypes.Time(&r.purchaseDate), dbtypes.Time(&r.dueDate),
+		&r.currency, &r.cnpj, dbtypes.Decimal(&r.rate), &r.rateType, dbtypes.Date(&r.issueDate), dbtypes.Date(&r.purchaseDate), dbtypes.Date(&r.dueDate),
 		dbtypes.Decimal(&r.quantity), dbtypes.Decimal(&r.value), dbtypes.Decimal(&r.amount), dbtypes.Decimal(&r.amountOriginal), dbtypes.Time(&r.asOfDate)}
 }
 
@@ -260,9 +260,21 @@ func (r *syncedHoldingRow) holding() (SyncedHolding, error) {
 		{r.issueDate, &h.IssueDate}, {r.purchaseDate, &h.PurchaseDate},
 		{r.dueDate, &h.DueDate}, {r.asOfDate, &h.AsOfDate},
 	} {
-		v, err := dbtypes.ParseNullTime(item.raw)
-		if err != nil {
-			return SyncedHolding{}, err
+		var v *time.Time
+		if item.dst == &h.AsOfDate {
+			var err error
+			v, err = dbtypes.ParseNullTime(item.raw)
+			if err != nil {
+				return SyncedHolding{}, err
+			}
+		} else if item.raw.Valid {
+			// Provider terms are calendar days anchored at BRT midnight.
+			day, err := dbtypes.ParseDate(item.raw)
+			if err != nil {
+				return SyncedHolding{}, err
+			}
+			anchored := time.Date(day.Year(), day.Month(), day.Day(), 0, 0, 0, 0, providerZone)
+			v = &anchored
 		}
 		*item.dst = v
 	}
@@ -477,4 +489,12 @@ func PruneUnusedSyncedAssets(ctx context.Context, q Querier) (int, error) {
 		}
 	}
 	return removed, nil
+}
+
+// FormatProviderDatePtr stores the calendar day on the provider's wall clock.
+func FormatProviderDatePtr(t *time.Time) any {
+	if t == nil {
+		return nil
+	}
+	return ProviderDay(*t).Format(dbtypes.DateLayout)
 }

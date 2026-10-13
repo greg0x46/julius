@@ -12,6 +12,8 @@ import ProLayout from "@ant-design/pro-layout";
 import type { ReactNode } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 
+import { BuildFooter } from "./BuildFooter";
+
 import julius from "../assets/julius.png";
 import { SkipLink } from "../components/SkipLink";
 import { useCompactScreen } from "../components/shared/useCompactScreen";
@@ -64,6 +66,7 @@ export function App() {
       <SkipLink />
       <ProLayout
         className="app-layout"
+        style={{ minHeight: "100vh" }}
         title="Julius"
         logo={julius}
         token={{
@@ -148,6 +151,7 @@ export function App() {
         }
         layout="mix"
         splitMenus={false}
+        footerRender={() => <BuildFooter />}
         fixedHeader
         fixSiderbar
       >

@@ -17,6 +17,15 @@ import (
 // arrive while one is pending are the same request.
 var backfillRequests = make(chan struct{}, 1)
 
+var manualBackfillRequests = make(chan struct{}, 1)
+
+func requestManualBackfill() {
+	select {
+	case manualBackfillRequests <- struct{}{}:
+	default:
+	}
+}
+
 // backfillDebounce lets a burst of saves (a position, then its operations)
 // settle before the scan looks at them.
 const backfillDebounce = 2 * time.Second
@@ -41,15 +50,26 @@ func ConfigurationChanged() {
 const configurationPoll = time.Minute
 
 type scheduleState struct {
-	config      settings.QuoteRefreshSettings
-	initialized bool
-	nextDaily   time.Time
-	pending     bool
+	config        settings.QuoteRefreshSettings
+	initialized   bool
+	nextDaily     time.Time
+	pending       bool
+	manualPending bool
 }
 
 // cycle is shared by the timer loop and deterministic scheduler tests.
 func (s *scheduleState) cycle(ctx context.Context, conn *sql.DB, service *marketdata.Service, now time.Time, backfill bool) error {
 	s.pending = s.pending || backfill
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	// Explicit history requests also run with automatic quotations disabled.
+	if s.manualPending {
+		if _, err := RefreshHistory(ctx, conn, service, investments.ProviderDay(now)); err != nil {
+			return err
+		}
+		s.manualPending = false
+	}
 	config, _, err := settings.GetQuoteRefresh(ctx, conn)
 	if err != nil {
 		return err
@@ -74,11 +94,15 @@ func (s *scheduleState) cycle(ctx context.Context, conn *sql.DB, service *market
 	}
 	today := investments.ProviderDay(now)
 	// A disable committed during spot work takes effect before history starts.
+	spotRefresh.Lock()
 	if daily {
-		_, err = RefreshAll(ctx, conn, service, today)
+		var summary Summary
+		summary, err = RefreshAll(ctx, conn, service, today)
+		recordRefresh(ctx, conn, "scheduled", summary, err)
 	} else {
 		_, err = RefreshMissing(ctx, conn, service, today)
 	}
+	spotRefresh.Unlock()
 	if err != nil {
 		return err
 	}
@@ -115,31 +139,34 @@ func RunSchedule(ctx context.Context, conn *sql.DB, service *marketdata.Service)
 				delay = until
 			}
 		}
-		var running bool
-		backfill, running = waitForWork(ctx, delay)
+		var manual, running bool
+		backfill, manual, running = waitForWork(ctx, delay)
+		state.manualPending = state.manualPending || manual
 		if !running {
 			return
 		}
 	}
 }
 
-func waitForWork(ctx context.Context, delay time.Duration) (backfill, running bool) {
+func waitForWork(ctx context.Context, delay time.Duration) (backfill, manual, running bool) {
 	timer := time.NewTimer(delay)
 	defer timer.Stop()
 	select {
 	case <-ctx.Done():
-		return false, false
+		return false, false, false
 	case <-timer.C:
-		return false, true
+		return false, false, true
 	case <-configurationChanges:
-		return false, true
+		return false, false, true
+	case <-manualBackfillRequests:
+		return false, true, ctx.Err() == nil
 	case <-backfillRequests:
 		sleep(ctx, backfillDebounce)
 		select {
 		case <-backfillRequests:
 		default:
 		}
-		return true, ctx.Err() == nil
+		return true, false, ctx.Err() == nil
 	}
 }
 

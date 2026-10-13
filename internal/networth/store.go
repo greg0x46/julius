@@ -127,7 +127,7 @@ func Snapshot(ctx context.Context, q Querier) (SnapshotRow, error) {
 			id, captured_at, total_assets, total_liabilities, net_worth,
 			cash_balance, investment_balance, credit_card_balance, payables_debt,
 			is_backfilled, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, FALSE, ?, ?)
 		ON CONFLICT (captured_at) DO UPDATE SET
 			total_assets = excluded.total_assets,
 			total_liabilities = excluded.total_liabilities,
@@ -136,7 +136,7 @@ func Snapshot(ctx context.Context, q Querier) (SnapshotRow, error) {
 			investment_balance = excluded.investment_balance,
 			credit_card_balance = excluded.credit_card_balance,
 			payables_debt = excluded.payables_debt,
-			is_backfilled = 0,
+			is_backfilled = FALSE,
 			updated_at = excluded.updated_at`,
 		id, capturedAt,
 		money.CanonicalDecimal(breakdown.TotalAssets), money.CanonicalDecimal(breakdown.TotalLiabilities), money.CanonicalDecimal(breakdown.NetWorth),
