@@ -66,12 +66,16 @@ authentication configuration that does not depend on the host:
   is opening balance + posted movements + explicit adjustments. Edit, archive
   and reactivate accounts in **Contas e cartões**; currency and opening balance
   lock after movements. Foreign amounts stay in their original currency and
-  are excluded from BRL aggregates; no exchange-rate conversion is supplied.
+  remain excluded from Net Worth BRL aggregates without rates.
 - **Transactions** — searchable/filterable transaction list, manual
   inclusion/exclusion (e.g. ignoring a chargeback or a duplicate) and
   categorization. Entries can also be created by hand in an existing account —
   same categorization and automation rules as a synced entry, with editing and
   deletion limited to these manual entries.
+- **Multi-currency reporting** — transaction summaries, Home period totals,
+  categories and Timeline consolidate eligible flows to BRL using historical
+  exchange rates, retaining original values and per-currency drill-down.
+  Missing rates show explicit incomplete/unavailable states.
 - **Automation rules** — condition-based rules that categorize new
   transactions automatically and can be applied retroactively to existing ones.
   A single rule can both categorize and reconcile a recurring commitment.

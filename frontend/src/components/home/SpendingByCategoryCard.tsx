@@ -3,6 +3,8 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 
+import { ReportingDetails } from "../shared/ReportingDetails";
+import { reportingLabel } from "../../presentation/reporting";
 import type { CategoryBreakdown, CategoryDirection, CategorySpendingItem } from "../../api/contracts";
 import { useCategoryBreakdown } from "../../hooks/useCategoryBreakdown";
 import type { Period } from "../../hooks/usePeriod";
@@ -118,8 +120,8 @@ function Breakdown({ data, period, direction }: { data: CategoryBreakdown; perio
       <div className="category-donut">
         <div className="category-donut-total">
           <span>Total de {label}</span>
-          <strong title={formatBRL(data.total)} style={{ fontSize: donutFigureSize(formatBRL(data.total)) }}>
-            {formatBRL(data.total)}
+          <strong title={formatBRL(data.total ?? "0")} style={{ fontSize: donutFigureSize(formatBRL(data.total ?? "0")) }}>
+            {formatBRL(data.total ?? "0")}
           </strong>
         </div>
         <ResponsiveContainer width="100%" height={200}>
@@ -215,8 +217,10 @@ export function SpendingByCategoryCard({ period }: { period: Period }) {
           <CategorySkeleton />
         ) : error || !data ? (
           <UnavailableState onRetry={() => void refetch()}>Não foi possível carregar as categorias.</UnavailableState>
+        ) : data.total === null ? (
+          <div role="status"><p>{data.reporting ? reportingLabel(data.reporting) : "Total indisponível"}</p><ReportingDetails report={data.reporting} totals={data.totals} /></div>
         ) : (
-          <Breakdown key={`${period.from}-${period.to}-${direction}`} data={data} period={period} direction={direction} />
+          <><ReportingDetails report={data.reporting} totals={data.totals} /><Breakdown key={`${period.from}-${period.to}-${direction}`} data={data} period={period} direction={direction} /></>
         )}
       </div>
     </Section>
