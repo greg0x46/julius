@@ -13,6 +13,17 @@ describe("transaction currency presentation", () => {
     expect(detailValue(item)).toBe(expected);
   });
 
+  it.each(["USD", "EUR"])("shows %s income with a positive sign and tone", (currency) => {
+    const item = {
+      ...transactionResult.items[0],
+      classification: "inflow" as const,
+      effective_money: { value: "1234.50", currency_code: currency, source: "transaction_currency" as const },
+    };
+    render(<TransactionAmount item={item} />);
+    expect(screen.getByText(`+${currency} 1.234,50`)).toHaveClass("money-positive");
+    expect(detailValue(item)).toBe(`+${currency}\u00a01.234,50`);
+  });
+
   it("uses the selected account amount without replacing the original amount", () => {
     const item = { ...transactionResult.items[0], amount: "10", currency_code: "USD", effective_money: { value: "52", currency_code: "BRL", source: "account_currency" as const } };
     render(<TransactionAmount item={item} />);
