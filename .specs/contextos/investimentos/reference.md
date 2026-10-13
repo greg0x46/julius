@@ -101,7 +101,10 @@ Other for the user to review.
 The API provides the options at `GET /api/investment-asset-classification`,
 used by the form. Known types incompatible with the class are rejected.
 
-The starter catalog is optional and created with:
+The starter catalog is seeded automatically on every application startup, after
+`db.Open` initializes and migrates the database and before workers or HTTP
+serving start. Startup logs the number of new assets inserted (including zero);
+a seed failure stops startup with an error. The manual command remains available:
 
 ```sh
 go run ./cmd/julius seed investment-assets
@@ -110,10 +113,11 @@ go run ./cmd/julius seed investment-assets
 
 The seed inserts 27 well-known assets: Brazilian stocks, a unit, FIIs, equity /
 fixed-income / crypto ETFs, BDRs and BTC, ETH, SOL and USDC. It runs in one
-transaction and is repeatable: it preserves existing assets, their names,
+transaction and is repeatable: restarts and catalog updates insert only missing
+entries. It preserves existing assets, their names,
 classes and quote preferences, including equivalent codes such as `PETR4.SA`.
 The assets become available for selection in new positions even when there is
-no position of them yet. No accounts, balances, operations or prices are
+no position of them yet. No accounts, balances, operations, transactions or prices are
 created, and the seed makes no external calls.
 
 CDBs and government bonds are available types; each issue/maturity must be
