@@ -181,15 +181,14 @@ func fetchBillDueDates(ctx context.Context, q Querier) (map[string]time.Time, er
 
 	dueDates := make(map[string]time.Time)
 	for rows.Next() {
-		var accountID, externalID, dueDate string
-		if err := rows.Scan(dbtypes.ID(&accountID), dbtypes.ID(&externalID), dbtypes.Time(&dueDate)); err != nil {
+		var accountID, externalID string
+		var dueDate *time.Time
+		if err := rows.Scan(dbtypes.ID(&accountID), dbtypes.ID(&externalID), dbtypes.Date(&dueDate)); err != nil {
 			return nil, err
 		}
-		parsed, err := dbtypes.ParseNullTime(sql.NullString{String: dueDate, Valid: true})
-		if err != nil {
-			return nil, err
+		if dueDate != nil {
+			dueDates[accountID+"\x00"+externalID] = *dueDate
 		}
-		dueDates[accountID+"\x00"+externalID] = *parsed
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err

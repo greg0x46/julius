@@ -62,7 +62,8 @@ marking it ignored — see the note on the two paths in
 Database reads (including accounts, cards and investment presentation) use
 `internal/db/types` scan adapters for dates, timestamps, IDs, booleans and
 decimals. The shared boundary is documented in [the doc map](../../README.md);
-ledger rules and persisted formats are unchanged.
+ledger rules and persisted formats are unchanged. Account cycle and bill dates use
+calendar-date adapters, including SQLite date-only text and legacy timestamps.
 
 ## Reporting conversion
 

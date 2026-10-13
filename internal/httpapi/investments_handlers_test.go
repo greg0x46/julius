@@ -523,3 +523,50 @@ func TestListInvestmentTransactionsReturns404WhenInvestmentMissing(t *testing.T)
 		t.Errorf("status = %d, want 404", resp.StatusCode)
 	}
 }
+
+func TestInvestmentCalendarDates(t *testing.T) {
+	srv, conn := newTestServer(t)
+	id := insertInvestment(t, conn)
+	if _, err := conn.Exec(`UPDATE financial_investments SET due_date = ? WHERE id = ?`, "2026-12-15", id); err != nil {
+		t.Fatal(err)
+	}
+	insertInvestmentTransaction(t, conn, id, "BUY", "100")
+	if _, err := conn.Exec(`UPDATE financial_investment_transactions SET trade_date = ? WHERE investment_id = ?`, "2026-04-03", id); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{"/api/investments", "/api/investments/" + id} {
+		resp, err := testGet(t, srv.URL+path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("%s status = %d", path, resp.StatusCode)
+		}
+		var got map[string]any
+		if path == "/api/investments" {
+			var rows []map[string]any
+			decodeJSON(t, resp, &rows)
+			if len(rows) != 1 {
+				t.Fatalf("rows = %+v", rows)
+			}
+			got = rows[0]
+		} else {
+			decodeJSON(t, resp, &got)
+		}
+		if got["due_date"] != "2026-12-15T00:00:00Z" {
+			t.Fatalf("due date = %+v", got)
+		}
+	}
+	resp, err := testGet(t, srv.URL+"/api/investments/"+id+"/transactions")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("transactions status = %d", resp.StatusCode)
+	}
+	var rows []map[string]any
+	decodeJSON(t, resp, &rows)
+	if len(rows) != 1 || rows[0]["trade_date"] != "2026-04-03T00:00:00Z" {
+		t.Fatalf("trade date = %+v", rows)
+	}
+}

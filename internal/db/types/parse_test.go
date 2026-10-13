@@ -16,17 +16,10 @@ func TestParseTime(t *testing.T) {
 			t.Errorf("ParseTime(%#v) = %v, %v", v, got, err)
 		}
 	}
-	for _, v := range []any{nil, sql.NullTime{}, sql.NullString{}, true, 1, "", "2026-02-30T12:00:00Z", "garbage"} {
+	for _, v := range []any{nil, sql.NullTime{}, sql.NullString{}, true, 1, "", "2026-02-30T12:00:00Z", "2026-10-11", "garbage"} {
 		if _, err := ParseTime(v); err == nil {
 			t.Errorf("accepted %#v", v)
 		}
-	}
-}
-func TestParseCalendarDayAsTime(t *testing.T) {
-	got, err := ParseTime("2026-10-11")
-	want := time.Date(2026, 10, 11, 0, 0, 0, 0, time.UTC)
-	if err != nil || got != want {
-		t.Fatalf("calendar day = %v, %v", got, err)
 	}
 }
 func TestParseDate(t *testing.T) {
