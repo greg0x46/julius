@@ -125,6 +125,9 @@ func UpdateManual(ctx context.Context, conn Querier, transactionID string, in Ma
 	if err := requireManual(ctx, conn, transactionID); err != nil {
 		return err
 	}
+	if err := RequireNoTransferLink(ctx, conn, transactionID); err != nil {
+		return err
+	}
 	if err := requireNoInvestmentLinks(ctx, conn, transactionID); err != nil {
 		return err
 	}
@@ -192,6 +195,9 @@ func DeleteManual(ctx context.Context, conn *sql.DB, transactionID string, onIgn
 		return err
 	}
 
+	if err := UnlinkTransferForTransaction(ctx, tx, transactionID); err != nil {
+		return err
+	}
 	if onIgnored != nil {
 		if err := onIgnored(ctx, tx, transactionID); err != nil {
 			return err

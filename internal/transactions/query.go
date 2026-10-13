@@ -57,6 +57,7 @@ type row struct {
 	categoryIsActive *bool
 	categoryIcon     *string
 	categoryColor    *string
+	linkedTransfer   bool
 }
 
 // view is a row with every rule from package money already applied. Query
@@ -96,7 +97,8 @@ const viewSelect = `
 		fa.name, fa.institution, fa.currency_code, fa.account_type,
 		tid.state, tid.changed_at, tid.origin, tid.rule_name,
 		tcd.category_id, tcd.changed_at, tcd.origin,
-		cat.id, cat.name, cat.kind, cat.is_active, cat.icon, cat.color
+		cat.id, cat.name, cat.kind, cat.is_active, cat.icon, cat.color,
+        EXISTS (SELECT 1 FROM transfer_transaction_links tl WHERE tl.transaction_id = ft.id AND tl.role IN ('source', 'destination'))
 	FROM financial_transactions ft
 	JOIN financial_accounts fa ON fa.id = ft.account_id
 	LEFT JOIN data_sources ds ON ds.id = ft.source_id
@@ -228,7 +230,7 @@ func scanRow(rows *sql.Rows) (row, error) {
 		&accountName, &accountInstitution, &accountCurrencyCode, &accountType,
 		&inclusionState, dbtypes.Time(&r.inclusionChangedAt), &inclusionOrigin, &inclusionRuleName,
 		dbtypes.ID(&categoryDecisionCategoryID), dbtypes.Time(&r.categoryDecisionChangedAt), &categoryDecisionOrigin,
-		dbtypes.ID(&categoryID), &categoryName, &categoryKind, dbtypes.Bool(&categoryIsActive), &categoryIcon, &categoryColor,
+		dbtypes.ID(&categoryID), &categoryName, &categoryKind, dbtypes.Bool(&categoryIsActive), &categoryIcon, &categoryColor, dbtypes.Bool(&r.linkedTransfer),
 	)
 	if err != nil {
 		return row{}, err
@@ -285,6 +287,10 @@ func buildView(r row, query QueryRequest, periodBasis string, billDueDates map[s
 	categoryKind := money.CategoryKind(stringOr(r.categoryKind, ""))
 
 	included, reason := money.Eligibility(classification, r.providerStatus, effective, inclusionState, categoryKind)
+	if r.linkedTransfer && (included || (reason != nil && *reason == money.ReasonTransferCategory)) {
+		linkedReason := money.ReasonLinkedTransfer
+		included, reason = false, &linkedReason
+	}
 
 	effectiveAt := effectiveDate(r, periodBasis, billDueDates)
 	period, err := money.PeriodFor(r.occurredAt, query.GroupBy, query.Timezone)

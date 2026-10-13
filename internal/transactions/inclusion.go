@@ -181,6 +181,11 @@ func applyInclusion(
 		return InclusionConfirmation{}, err
 	}
 
+	if target == money.Ignored {
+		if err := UnlinkTransferForTransaction(ctx, q, transactionID); err != nil {
+			return InclusionConfirmation{}, err
+		}
+	}
 	if target == money.Ignored && onIgnored != nil {
 		if err := onIgnored(ctx, q, transactionID); err != nil {
 			return InclusionConfirmation{}, err
