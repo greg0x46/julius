@@ -1,350 +1,388 @@
-# Investimentos
+# Investments
 
-Contas de investimento representam a custódia; posições representam os ativos;
-carteiras por objetivo agrupam posições sem criar um segundo saldo. Cada
-posição pertence a uma única carteira ou fica sem objetivo.
+Investment accounts represent custody; positions represent assets; goal
+portfolios group positions without creating a second balance. Each position
+belongs to a single portfolio or has no goal.
 
-## Domínio e APIs
+## Domain and APIs
 
-`internal/investments` concentra contas, carteiras, posições manuais, operações,
-avaliações e conciliação. As APIs usam `/api/investment-accounts`,
+`internal/investments` holds accounts, portfolios, manual positions, operations,
+valuations and reconciliation. APIs live under `/api/investment-accounts`,
 `/api/investment-portfolios`, `/api/investment-positions`,
-`/api/investment-operations`, `/api/investment-reconciliations` e
-`/api/investment-summary`. As consultas legadas `/api/investments` continuam
-disponíveis para os ativos sincronizados e seu histórico importado.
+`/api/investment-operations`, `/api/investment-reconciliations` and
+`/api/investment-summary`. The legacy `/api/investments` queries remain
+available for synced assets and their imported history.
 
-Investimentos integrados mantêm os identificadores do provedor, agrupados
-inicialmente pela conexão. Objetivos e conciliações são escolhas locais. Um
-caixa de corretora já presente em `financial_accounts` pode ser vinculado,
-sem adicionar novamente seu saldo ao patrimônio.
+Integrated investments keep the provider's identifiers, initially grouped by
+connection. Goals and reconciliations are local choices. A brokerage cash
+balance already present in `financial_accounts` can be linked, without adding
+its balance to net worth again.
 
-Operações manuais usam reais e aritmética decimal. Compras incorporam custos
-ao custo médio ponderado; vendas baixam custo proporcional. Correções
-reprocessam o histórico e rejeitam caixa ou quantidade negativos. Avaliações
-são manuais e datadas; quando indisponíveis, o custo é identificado como custo,
-sem inventar uma cotação ou rentabilidade. O livro guarda o custo total e o
-valor total avaliado; custo médio e cotação unitária são derivados só para
-exibição, de modo que valor e ganho não sofrem deriva decimal. Em ativos com
-cotação automática o valor vem da série de preços (`market_quote`), calculado
-na leitura: o job de cotações não grava operações no livro.
+An integrated account also accepts manual holdings (for example, a crypto
+asset that Open Finance does not expose). They are created, edited and deleted
+as in a manual account and listed next to the provider's positions, which stay
+read-only. The ledger of an integrated account replays only operations that
+carry a position and never computes cash, which remains whatever the
+institution reports. The sync writes only provider data and series quotes, so
+it never changes the quantity, cost, source, goal or valuations of a manual
+holding. In the UI, manual rows of an integrated account carry a "Manual" tag.
 
-## Transferências e relatórios
+Manual operations use reais and decimal arithmetic. Purchases fold costs into
+the weighted average cost; sales write off proportional cost. Corrections
+reprocess history and reject negative cash or quantity. Valuations are manual
+and dated; when unavailable, the cost is labeled as cost, without inventing a
+quote or return. The ledger stores total cost and total valued amount; average
+cost and unit quote are derived for display only, so value and gain suffer no
+decimal drift. For assets with automatic quotes the value comes from the price
+series (`market_quote`), computed on read: the quotes job never writes
+operations to the ledger.
 
-Aporte e resgate transferem patrimônio. Compra e venda trocam caixa de
-investimento por posição ou vice-versa. Rendimento recebido, taxa e imposto
-têm natureza própria. Saldo inicial não é receita; valorização não é aporte.
+## Transfers and reports
 
-Conciliações associam parcelas de lançamentos bancários às operações e,
-quando disponível, ao histórico importado do investimento. A soma das parcelas
-não pode exceder o lançamento. Sugestões exigem confirmação; o rótulo
-`Investments` informado pelo provedor não basta para classificar um aporte.
+Contribution and withdrawal transfer wealth. Purchase and sale swap investment
+cash for a position or vice versa. Income received, fee and tax have their own
+nature. An opening balance is not income; appreciation is not a contribution.
 
-`transactions.Item.EffectiveMoney` mantém o valor integral para extrato e
-caixa. `InvestmentTransferAmount` identifica a parcela conciliada como
-aporte/resgate; `ReportableAmount` identifica o restante elegível nos totais.
-Uma conciliação integral recebe motivo `investment_transfer` apenas se o
-lançamento ainda estava nos totais. Ignorado, categoria de transferência e
-demais motivos já atribuídos têm precedência e são mantidos.
-Gastos por categoria usam o restante; a curva de caixa preserva o movimento
-integral. Os agregados mensais distinguem aportes e resgates.
+Reconciliations associate portions of bank entries with operations and, when
+available, with the investment's imported history. The sum of the portions
+cannot exceed the entry. Suggestions require confirmation; the provider's
+`Investments` label is not enough to classify a contribution.
 
-Editar ou excluir um lançamento bancário manual conciliado exige desfazer
-os vínculos primeiro. Ignorar um lançamento conciliado desfaz seus vínculos
-(a operação volta a ser reportada sozinha), e um lançamento ignorado não pode
-ser conciliado. A conciliação não altera saldos importados. Lançamentos
-bancários manuais mantêm a regra de não modificar o saldo informado pelo banco.
+`transactions.Item.EffectiveMoney` keeps the full amount for the statement and
+cash. `InvestmentTransferAmount` identifies the reconciled portion as a
+contribution/withdrawal; `ReportableAmount` identifies the remainder eligible
+for totals. A full reconciliation gets reason `investment_transfer` only if the
+entry was still in totals. Ignored, transfer category and other reasons already
+assigned take precedence and are kept. Spending by category uses the remainder;
+the cash curve keeps the full movement. Monthly aggregates distinguish
+contributions and withdrawals.
 
-## Patrimônio e limites
+Editing or deleting a reconciled manual bank entry requires undoing the links
+first. Ignoring a reconciled entry undoes its links (the operation is reported
+on its own again), and an ignored entry cannot be reconciled. Reconciliation
+does not change imported balances. Manual bank entries keep the rule of not
+modifying the bank-reported balance.
 
-O patrimônio soma posições sincronizadas uma única vez, posições manuais e
-caixa manual de investimento ainda não representado numa conta financeira
-vinculada. Carteiras por objetivo não entram novamente na soma. Não são
-inventadas valorizações para snapshots históricos sem dados.
+## Net worth and limits
 
-Esta versão registra operações; não executa ordens ou transferências no banco.
-Não inclui apuração fiscal, posições vendidas, câmbio nas operações manuais ou
-agendamento de aportes recorrentes. A cotação automática é opcional e está
-descrita em [Cotação automática](#cotação-automática).
+Net worth sums synced positions once, manual positions, and manual investment
+cash not yet represented in a linked financial account. Manual holdings in an
+integrated account count like any other manual holding (including in
+`ManualNetWorth`), without double-counting the provider's positions. Goal
+portfolios are not summed again. No appreciation is invented for historical
+snapshots without data.
 
-## Classificação e catálogo de ativos
+This version records operations; it does not place orders or move money at the
+bank. It does not include tax computation, short positions, FX on manual
+operations or scheduling of recurring contributions. Automatic quotes are
+optional and described in [Automatic quotes](#automatic-quotes).
 
-O cadastro organiza o ativo por **classe financeira** (`asset_class`) e
-**tipo de instrumento** (`asset_type`), independentemente da instituição ou
-do serviço de cotação:
+## Classification and asset catalog
 
-| Classe | Tipos disponíveis |
+Registration organizes an asset by **financial class** (`asset_class`) and
+**instrument type** (`asset_type`), independent of institution or quote
+service:
+
+| Class | Available types |
 | --- | --- |
-| Renda fixa (`fixed_income`) | Título público, CDB, RDB, LCI, LCA, debênture, CRI, CRA, poupança, fundo e ETF de renda fixa |
-| Renda variável (`variable_income`) | Ação, unit, BDR de ação, FII, Fiagro, fundo e ETF de ações |
-| Multimercado (`multimarket`) | Fundo multimercado |
-| Cambial (`currency`) | Fundo cambial e moeda estrangeira |
-| Criptoativos (`crypto`) | Criptomoeda, stablecoin, token e ETF de criptoativos |
-| Outros (`other`) | COE, derivativo, ouro e ETF de commodities |
+| Fixed income (`fixed_income`) | Government bond, CDB, RDB, LCI, LCA, debenture, CRI, CRA, savings, fixed-income fund and ETF |
+| Variable income (`variable_income`) | Stock, unit, stock BDR, FII, Fiagro, equity fund and ETF |
+| Multimarket (`multimarket`) | Multimarket fund |
+| Currency (`currency`) | Currency fund and foreign currency |
+| Crypto assets (`crypto`) | Cryptocurrency, stablecoin, token and crypto ETF |
+| Other (`other`) | COE, derivative, gold and commodity ETF |
 
-PGBL e VGBL podem ser classificados em renda fixa, renda variável ou
-multimercado conforme a exposição do plano. Todas as classes permitem
-descrever outro tipo. Tipos antigos ou importados são preservados; a migration
-classifica descrições reconhecíveis e deixa fundos e ETFs de exposição
-desconhecida em Outros para o usuário revisar.
+PGBL and VGBL can be classified as fixed income, variable income or
+multimarket depending on the plan's exposure. Every class allows describing
+another type. Old or imported types are preserved; the migration classifies
+recognizable descriptions and leaves funds and ETFs of unknown exposure in
+Other for the user to review.
 
-A API fornece as opções em `GET /api/investment-asset-classification`, usado
-pelo formulário. Tipos conhecidos incompatíveis com a classe são recusados.
+The API provides the options at `GET /api/investment-asset-classification`,
+used by the form. Known types incompatible with the class are rejected.
 
-O catálogo inicial é opcional e pode ser criado com:
+The starter catalog is optional and created with:
 
 ```sh
 go run ./cmd/julius seed investment-assets
-# Usa JULIUS_DB; também aceita -db caminho-ou-DSN depois de investment-assets.
+# Uses JULIUS_DB; also accepts -db path-or-DSN after investment-assets.
 ```
 
-A seed insere 27 ativos conhecidos: ações brasileiras, uma unit, FIIs, ETFs
-de ações/renda fixa/criptoativos, BDRs e BTC, ETH, SOL e USDC. É executada em
-uma transação e pode ser repetida: preserva ativos existentes, seus nomes,
-classes e preferências de cotação, inclusive códigos equivalentes como
-`PETR4.SA`. Os ativos ficam disponíveis para seleção em novas posições mesmo
-quando ainda não há nenhuma posição deles. Não são criados contas, saldos,
-operações ou preços, e a seed não faz chamadas externas.
+The seed inserts 27 well-known assets: Brazilian stocks, a unit, FIIs, equity /
+fixed-income / crypto ETFs, BDRs and BTC, ETH, SOL and USDC. It runs in one
+transaction and is repeatable: it preserves existing assets, their names,
+classes and quote preferences, including equivalent codes such as `PETR4.SA`.
+The assets become available for selection in new positions even when there is
+no position of them yet. No accounts, balances, operations or prices are
+created, and the seed makes no external calls.
 
-CDBs e títulos públicos são tipos disponíveis; cada emissão/vencimento deve
-ser cadastrado como um instrumento próprio. O catálogo é uma conveniência de
-cadastro, sem ranking ou recomendação de investimento.
+CDBs and government bonds are available types; each issue/maturity must be
+registered as its own instrument. The catalog is a registration convenience,
+with no ranking or investment recommendation.
 
-Referências: [características dos investimentos (CVM)](https://www.gov.br/investidor/pt-br/investir/antes-de-investir/entenda-as-caracteristicas-dos-investimentos),
-[classes de fundos (ANBIMA)](https://developers.anbima.com.br/en/documentacao/fundos/apis-de-fundos/),
-[instrumentos negociados (B3, maio de 2026)](https://www.b3.com.br/pt_br/noticias/levantamento-realizado-no-datawise-aponta-acoes-fundos-imobiliarios-etfs-e-bdrs-mais-negociados-em-maio.htm),
-[ETFs de diferentes exposições (B3)](https://b3.com.br/pt_br/noticias/b3-ultrapassa-marca-de-200-etfs-listados-e-estoque-financeiro-dobra-em-um-ano.htm),
+References: [investment characteristics (CVM)](https://www.gov.br/investidor/pt-br/investir/antes-de-investir/entenda-as-caracteristicas-dos-investimentos),
+[fund classes (ANBIMA)](https://developers.anbima.com.br/en/documentacao/fundos/apis-de-fundos/),
+[traded instruments (B3, May 2026)](https://www.b3.com.br/pt_br/noticias/levantamento-realizado-no-datawise-aponta-acoes-fundos-imobiliarios-etfs-e-bdrs-mais-negociados-em-maio.htm),
+[ETFs with different exposures (B3)](https://b3.com.br/pt_br/noticias/b3-ultrapassa-marca-de-200-etfs-listados-e-estoque-financeiro-dobra-em-um-ano.htm),
 [Ether](https://ethereum.org/developers/docs/intro-to-ether),
-[Solana](https://solana.com/learn/introduction-to-solana-tokens) e
+[Solana](https://solana.com/learn/introduction-to-solana-tokens) and
 [USDC](https://www.circle.com/usdc).
 
-## Cotação automática
+## Automatic quotes
 
-Um ativo com **cotação automática** tem o preço das suas posições manuais
-buscado automaticamente. O formulário oferece um botão liga/desliga e deriva
-o **mercado** do tipo de instrumento, guardado em `quote_source`: `b3` (ações, units, FIIs, ETFs,
-BDRs e mercado fracionário) ou `crypto` (criptomoedas, cotadas em reais).
-`quote_symbol` é o símbolo canônico do instrumento naquele mercado, sem
-formato de provedor. Quem cadastra informa só o **código** do ativo (`ticker`)
-e escolhe classe/tipo; com `quote_symbol` vazio, o símbolo é derivado do código
-ao salvar e gravado no ativo. Ele só precisa ser informado quando o código
-cotado difere do código do ativo.
+An asset with **automatic quotes** has the price of its manual positions fetched
+automatically. The form offers an on/off switch and derives the **market** from
+the instrument type, stored in `quote_source`: `b3` (stocks, units, FIIs, ETFs,
+BDRs and the fractional market) or `crypto` (cryptocurrencies, quoted in
+reais). `quote_symbol` is the instrument's canonical symbol in that market,
+with no provider format. The user enters only the asset **code** (`ticker`) and
+picks class/type; with an empty `quote_symbol`, the symbol is derived from the
+code on save and stored on the asset. It only needs to be set when the quoted
+code differs from the asset's code.
 
-Um ETF de renda fixa ou de criptoativos negociado na B3 usa `quote_source=b3`
-e mantém sua classe financeira. Para tipos sem cotação suportada, o formulário
-orienta usar avaliações manuais ou valores da instituição integrada.
+A fixed-income or crypto ETF traded on B3 uses `quote_source=b3` and keeps its
+financial class. For types without supported quotes, the form directs the user to
+manual valuations or the integrated institution's values.
 
-- **B3:** `petr4`, `PETR4.SA` e `BVMF:PETR4` viram `PETR4`.
-- **Cripto:** `btc`, `BTC-USD` e `BTC/BRL` viram `BTC`.
+- **B3:** `petr4`, `PETR4.SA` and `BVMF:PETR4` become `PETR4`.
+- **Crypto:** `btc`, `BTC-USD` and `BTC/BRL` become `BTC`.
 
-Um código que não pode ser lido no formato do mercado é recusado ao salvar
-(`400`), com o motivo.
+A code that cannot be read in the market's format is rejected on save (`400`),
+with the reason.
 
-A busca é opt-in: só roda com `JULIUS_QUOTES_SCHEDULE` definido
-(`HH:MM` ou `HH:MM Zona/IANA`), uma vez por dia e na subida do processo.
+Automatic refresh is enabled by default, daily at `19:00` in
+`America/Sao_Paulo`. `enabled`, `time` and `timezone` are stored together in
+`settings` and read by the scheduler without restarting the process. Changing
+the time or zone reschedules the next run; disabling also suspends history
+backfill. An active spot batch can finish; disabling is checked before the
+history stage and subsequent work cycles.
 
-### Provedores
+At startup and when re-enabled, the scheduler fetches only missing prices for
+today and missing history; a restart does not repeat requests already covered.
+The daily run updates prices for today. Quote dates remain Brazilian calendar
+days regardless of the scheduling timezone. Full scheduled runs and explicit
+manual refreshes record finish time, trigger, status (`success`, `partial`,
+`deferred` or `failed`) and counts in `quotes.last_refresh`; small spot refreshes
+triggered by position saves are not recorded. A shared lock refuses overlapping
+manual refreshes and serializes scheduled spot work. History backfill follows a
+manual spot refresh in the background and is not part of its displayed outcome.
+API changes wake the local scheduler immediately; writes by another process are detected within a minute.
 
-`internal/marketdata` tenta os provedores em ordem de prioridade, com fallback
-automático. A ordem vem de `JULIUS_QUOTES_PROVIDERS` (nomes separados por
-vírgula; a ordem é a prioridade e um provedor omitido fica desligado), por
-padrão `yahoo,brapi,coingecko`. Um nome desconhecido impede a subida do
-processo. Cada provedor atende só os mercados que conhece, então no padrão:
+`JULIUS_QUOTES_SCHEDULE` (`HH:MM` or `HH:MM Zone/IANA`) initializes only a
+configuration that has not yet been saved. With no zone it uses `Local`; an
+empty value uses the default schedule. Once saved, persisted settings take
+precedence in full, including when disabled, and later environment changes are
+ignored.
 
-| Mercado | Principal | Fallback |
+### Providers
+
+`internal/marketdata` tries providers in priority order, with automatic
+fallback. The order comes from `JULIUS_QUOTES_PROVIDERS` (comma-separated
+names; the order is the priority and an omitted provider is off), by default
+`yahoo,brapi,coingecko`. An unknown name prevents startup. Each provider serves
+only the markets it knows, so by default:
+
+| Market | Primary | Fallback |
 | --- | --- | --- |
 | `b3` | Yahoo Finance (`PETR4.SA`) | brapi |
-| `crypto` | Yahoo Finance (`BTC-USD` × câmbio `BRL=X`) | CoinGecko (pares em BRL) |
+| `crypto` | Yahoo Finance (`BTC-USD` × `BRL=X` rate) | CoinGecko (BRL pairs) |
 
-O Yahoo Finance é consultado pelo endpoint público de gráfico
-(`query1.finance.yahoo.com/v8/finance/chart`, o mesmo usado pelo yfinance).
-Ativo não encontrado, provedor indisponível, tempo esgotado ou limite de taxa
-fazem o próximo provedor do mercado ser tentado. Só quando todos os provedores
-do mercado falham por limite de taxa o ativo é adiado: fica para a próxima
-execução e nada é marcado como consultado.
+Yahoo Finance is queried through the public chart endpoint
+(`query1.finance.yahoo.com/v8/finance/chart`, the same one yfinance uses). Asset
+not found, provider unavailable, timeout or rate limit cause the market's next
+provider to be tried. Only when every provider of the market fails by rate limit
+is the asset deferred: it is left for the next run and nothing is marked as
+queried.
 
-Cada preço gravado (`investment_asset_quotes.source`) registra o provedor que o
-serviu (`yahoo`, `brapi` ou `coingecko`). A cotação do dia fica 10 minutos em cache em memória por
-instrumento. Na CoinGecko, o código (`BTC`) é resolvido para o id da moeda
-(`bitcoin`) pela busca dela (vale a moeda de maior market cap com aquele
-código); essa resolução fica em memória durante a vida do processo e não é
-gravada no ativo.
+Each stored price (`investment_asset_quotes.source`) records the provider that
+served it (`yahoo`, `brapi` or `coingecko`). The day's quote is cached in memory
+for 10 minutes per instrument. On CoinGecko, the code (`BTC`) is resolved to the
+coin id (`bitcoin`) by its search (the highest market-cap coin with that code
+wins); this resolution stays in memory for the life of the process and is not
+stored on the asset.
 
-O token da brapi (`PUT /api/settings/quotes`, `brapi_token`) é opcional e só
-importa quando a brapi é usada como fallback da B3.
+The brapi token (`PUT /api/settings/quotes`, `brapi_token`) is optional and only
+matters when brapi is used as the B3 fallback.
 
-Limitações conhecidas do Yahoo Finance:
+Known Yahoo Finance limitations:
 
-- Não há pares de cripto em reais (`BTC-BRL` responde `404`): a cotação é o
-  preço em dólar (`BTC-USD`) × o câmbio USD/BRL (`BRL=X`) do dia. Em dias sem
-  câmbio (fins de semana), vale o último câmbio anterior.
-- Os preços vêm em ponto flutuante e são arredondados às casas indicadas pelo
-  próprio Yahoo (`priceHint`).
-- É um endpoint público não documentado; quando ele falha, o fallback assume.
+- There are no crypto pairs in reais (`BTC-BRL` returns `404`): the quote is the
+  dollar price (`BTC-USD`) × the day's USD/BRL rate (`BRL=X`). On days without a
+  rate (weekends), the previous rate applies.
+- Prices come as floating point and are rounded to the places Yahoo itself
+  indicates (`priceHint`).
+- It is an undocumented public endpoint; when it fails, the fallback takes over.
 
-### Histórico
+### History
 
-Uma posição registrada com data no passado precisa de preço nessas datas. O
-backfill é guiado pelo que falta, não pelo que mudou: para cada ativo com
-cotação automática ele compara o primeiro dia em que alguma posição manual o
-teve com o intervalo já consultado (`investment_asset_quote_coverage`, um
-intervalo por ativo) e pede aos provedores só o trecho que falta, até ontem (o
-preço de hoje é da execução diária). Isso cobre uma posição nova com data
-antiga, uma compra corrigida para uma data anterior, uma troca de mercado ou
-símbolo e os dias de uma execução perdida. Gravar posição, operação ou ativo
-acorda o agendador (com 2 s de espera para juntar uma rajada de gravações) e
-preços de hoje que ainda faltam também são buscados; o que já está coberto não
-gera requisição.
+A position recorded with a past date needs prices on those dates. The backfill is
+driven by what is missing, not by what changed: for each asset with automatic
+quotes it compares the first day any manual position held it with the range
+already queried (`investment_asset_quote_coverage`, one range per asset) and asks
+providers only for the missing stretch, up to yesterday (today's price belongs to
+the daily run). This covers a new position with an old date, a purchase
+corrected to an earlier date, a market or symbol change, and the days of a missed
+run. Saving a position, operation or asset wakes the scheduler (with a 2 s wait
+to batch a burst of writes), and today's prices still missing are also fetched;
+what is already covered triggers no request.
 
-O intervalo é chaveado pelo instrumento (colunas `source` = mercado e `symbol`
-= símbolo canônico), não pelo provedor: trocar a ordem dos provedores ou cair
-no fallback não busca o histórico de novo; mudar o mercado ou o símbolo do
-ativo, sim. O intervalo guardado é o que foi **pedido**, não o que foi obtido:
-dias sem pregão ficam sem preço de propósito, e um trecho que o provedor não
-serve não é pedido de novo a cada execução. A exceção é o histórico vindo de
-um provedor de fallback que serviu menos do que foi pedido (por exemplo,
-Yahoo fora do ar e plano da brapi com só 3 meses): aí só o trecho servido é
-registrado, e os dias mais antigos são pedidos de novo numa próxima execução,
-quando o provedor principal pode ter voltado.
+The range is keyed by the instrument (columns `source` = market and `symbol` =
+canonical symbol), not by the provider: changing the provider order or falling
+back does not refetch history; changing the asset's market or symbol does. The
+stored range is what was **requested**, not what was obtained: non-trading days
+are left without a price on purpose, and a stretch the provider does not serve
+is not requested again on every run. The exception is history from a fallback
+provider that served less than requested (for example, Yahoo down and a brapi
+plan with only 3 months): only the served stretch is recorded, and the older
+days are requested again on a later run, when the primary provider may be back.
 
-| Provedor | Mercados (papel no padrão) | Histórico | Limite de taxa |
+| Provider | Markets (default role) | History | Rate limit |
 | --- | --- | --- | --- |
-| Yahoo Finance | `b3` e `crypto` (principal) | completo, sem limite de período | sem número publicado; o app usa 1 requisição por segundo, serializadas, e respeita `429`/`Retry-After` |
-| brapi sem token | `b3` (fallback) | só tickers PETR4, MGLU3, VALE3, ITUB4 | 20 requisições por minuto por IP (`RateLimit-*`); o app usa 1 a cada 3,2 s |
-| brapi com token | `b3` (fallback) | conforme o plano: 3 meses (Free), 1 ano (Startup), mais de 10 anos (Pro) | cota mensal e concorrência por conta (1 no Free); o app serializa as requisições |
-| CoinGecko (API pública) | `crypto` (fallback) | até 365 dias atrás, 1 ponto por dia (00:00 UTC) | por IP, sem número publicado; o app usa 1 requisição a cada 6 s e respeita `Retry-After` |
+| Yahoo Finance | `b3` and `crypto` (primary) | full, no period limit | no published number; the app uses 1 request per second, serialized, and honors `429`/`Retry-After` |
+| brapi without token | `b3` (fallback) | only tickers PETR4, MGLU3, VALE3, ITUB4 | 20 requests per minute per IP (`RateLimit-*`); the app uses 1 every 3.2 s |
+| brapi with token | `b3` (fallback) | per plan: 3 months (Free), 1 year (Startup), 10+ years (Pro) | monthly quota and per-account concurrency (1 on Free); the app serializes requests |
+| CoinGecko (public API) | `crypto` (fallback) | up to 365 days back, 1 point per day (00:00 UTC) | per IP, no published number; the app uses 1 request every 6 s and honors `Retry-After` |
 
-A brapi só aceita períodos relativos (`range`), então o app pede o menor que
-alcança o primeiro dia; se o plano recusar, tenta períodos menores. O preço de
-um dia passado é o fechamento ajustado por desdobramentos e grupamentos, nunca
-o ajustado por proventos: o `close` do Yahoo e o da brapi seguem o mesmo
-critério.
+brapi only accepts relative periods (`range`), so the app asks for the smallest
+that reaches the first day; if the plan refuses, it tries smaller ones. A past
+day's price is the close adjusted for splits and reverse splits, never the one
+adjusted for dividends: Yahoo's and brapi's `close` follow the same criterion.
 
-Cada provedor tem um limitador compartilhado por todo o processo (execução
-diária, backfill e resolução de código da CoinGecko). Ele espaça as
-requisições, serializa-as e pausa o provedor quando ele pede (`429` com
-`Retry-After`, ou janela `RateLimit-Remaining: 0` até `RateLimit-Reset`). Uma
-pausa longa não é esperada com a requisição aberta: o provedor pausado é pulado
-e o próximo do mercado é tentado.
+Each provider has a limiter shared by the whole process (daily run, backfill and
+CoinGecko code resolution). It spaces requests, serializes them and pauses the
+provider when it asks (`429` with `Retry-After`, or a `RateLimit-Remaining: 0`
+window until `RateLimit-Reset`). A long pause is not awaited with the request
+open: the paused provider is skipped and the market's next one is tried.
 
-### Origem e precedência dos preços
+### Price origin and precedence
 
-Cada linha da série (`investment_asset_quotes`, um preço por ativo por dia) tem
-`source`, quem a gravou (`pluggy`, `issue`, `yahoo`, `brapi`, `coingecko`), só
-para exibição e auditoria, e `origin`, o tipo de afirmação que o preço faz,
-que é o que decide quem pode substituir quem:
+Each row of the series (`investment_asset_quotes`, one price per asset per day)
+has `source`, who wrote it (`pluggy`, `issue`, `yahoo`, `brapi`, `coingecko`),
+for display and audit only, and `origin`, the kind of claim the price makes,
+which decides who may replace whom:
 
-| `origin` | O que é | Quem grava | Quem pode substituí-lo |
+| `origin` | What it is | Written by | Who may replace it |
 | --- | --- | --- | --- |
-| `sync` | preço que o Open Finance informou na sincronização | `UpsertAssetQuote` (snapshot da Pluggy, inclusive o refeito dos `raw_imports`) | outra sincronização |
-| `issue` | PU de emissão de um título de renda fixa, derivado da compra | `insertAssetQuoteIfAbsent` | só uma sincronização; nunca preenche um dia já preenchido |
-| `market` | cotação (spot ou fechamento) de um provedor de mercado | `UpsertConnectorQuotes` (execução diária e backfill) | outro preço `market`, de qualquer provedor, ou uma sincronização |
+| `sync` | price Open Finance reported during sync | `UpsertAssetQuote` (Pluggy snapshot, including the one rebuilt from `raw_imports`) | another sync |
+| `issue` | issue unit price (PU) of a fixed-income bond, derived from the purchase | `insertAssetQuoteIfAbsent` | only a sync; never fills an already filled day |
+| `market` | quote (spot or close) from a market provider | `UpsertConnectorQuotes` (daily run and backfill) | another `market` price, from any provider, or a sync |
 
-A migration classifica as linhas existentes pelo `source` (`pluggy` vira `sync`,
-`issue` vira `issue`, o restante vira `market`). Os escritores recusam `origin`
-vazio ou desconhecido (`ErrInvalidInput`), e `UpsertConnectorQuotes` só aceita
-`market`. O job considera um ativo já cotado no dia (`RefreshMissing`) só quando
-há preço `market` de hoje: o preço que a sincronização informou não evita a
-consulta ao mercado, que por sua vez não o substitui.
+The migration classifies existing rows by `source` (`pluggy` becomes `sync`,
+`issue` becomes `issue`, the rest becomes `market`). Writers reject an empty or
+unknown `origin` (`ErrInvalidInput`), and `UpsertConnectorQuotes` only accepts
+`market`. The job considers an asset already quoted for the day
+(`RefreshMissing`) only when there is a `market` price for today: the price the
+sync reported does not prevent the market query, which in turn does not replace
+it.
 
-### Rendimento
+### Yield
 
-`investment_asset_quotes` (a série de preço diário do ativo) é a **única fonte
-de preço**: o Open Finance grava nela a cada sincronização, a execução diária
-do job de cotações grava o preço do dia dos ativos com cotação automática que
-alguma posição manual mantém com quantidade positiva, e o backfill grava o
-histórico. O job **não grava operações** `valuation` no livro: o preço do dia só
-entra na série.
+`investment_asset_quotes` (the asset's daily price series) is the **only price
+source**: Open Finance writes to it on every sync, the daily run of the quotes
+job writes the day's price for assets with automatic quotes that some manual
+position holds with positive quantity, and the backfill writes history. The job
+**does not write `valuation` operations** to the ledger: the day's price only
+enters the series.
 
-O valor de uma posição manual cujo ativo tem cotação automática é **derivado na
-leitura** (`Position.CurrentValue`, de onde saem totais, metas e patrimônio):
-`quantidade × último preço da série`, arredondado a centavos, com
-`valuation_basis = market_quote`, `current_unit_price` igual ao preço e
-`valued_on` igual ao dia dele. Nada disso é persistido; uma cotação velha
-continua valendo para o valor exibido, e `valued_on` mostra a idade dela.
+The value of a manual position whose asset has automatic quotes is **derived on
+read** (`Position.CurrentValue`, which feeds totals, goals and net worth):
+`quantity × latest series price`, rounded to cents, with
+`valuation_basis = market_quote`, `current_unit_price` equal to the price and
+`valued_on` equal to its day. None of this is persisted; an old quote still
+applies to the displayed value, and `valued_on` shows its age.
 
-A regra é "a afirmação mais recente sobre o preço vence; no empate de dia, a
-avaliação digitada vence": a cotação só vale se a posição tem quantidade
-positiva e não há avaliação digitada, ou a última avaliação é de um dia anterior
-ao da cotação. Do contrário vale a avaliação (`manual_valuation`), que
-continua valendo até chegar uma cotação mais nova. Ativos sem cotação
-automática seguem avaliados só pelas avaliações do livro (ou pelo custo, com
-`cost_basis`).
+The rule is "the most recent claim about the price wins; on a same-day tie, the
+typed valuation wins": the quote only applies if the position has positive
+quantity and there is no typed valuation, or the latest valuation is from a day
+before the quote's. Otherwise the valuation applies (`manual_valuation`), and
+keeps applying until a newer quote arrives. Assets without automatic quotes
+remain valued only by the ledger's valuations (or by cost, with `cost_basis`).
 
-O rendimento usa a mesma regra em qualquer dia: uma posição manual cujo ativo
-tem cotação automática é avaliada por `quantidade mantida no fim do dia × preço
-do dia` (último preço até 10 dias antes, arredondado a centavos como o de uma
-posição sincronizada), a menos que a última avaliação digitada até aquele dia
-seja igual ou mais recente que esse preço. Assim o rendimento de qualquer
-período dentro do histórico não depende de existir uma avaliação datada nas
-pontas. A série não grava nada derivado: o valor histórico é sempre calculado
-na leitura.
+Yield uses the same rule on any day: a manual position whose asset has automatic
+quotes is valued at `quantity held at end of day × day's price` (latest price up
+to 10 days earlier, rounded to cents like a synced position's), unless the last
+typed valuation up to that day is equal to or newer than that price. So the
+yield of any period within the history does not depend on a dated valuation
+existing at the endpoints. The series stores nothing derived: the historical
+value is always computed on read.
 
-O teto de 10 dias vale só para o rendimento. O valor atual da posição usa a
-última cotação de qualquer idade (`valued_on` mostra de que dia ela é), para o
-valor exibido não saltar numa queda de provedor. Quando a última cotação é mais
-velha que 10 dias e mais nova que a última avaliação digitada, o rendimento
-daquele dia fica indisponível (`saldo_indisponivel`): não volta a uma avaliação
-que a cotação já substituiu.
+The 10-day cap applies only to yield. The position's current value uses the
+latest quote of any age (`valued_on` shows its day), so the displayed value does
+not jump on a provider outage. When the latest quote is older than 10 days and
+newer than the last typed valuation, that day's yield is unavailable
+(`saldo_indisponivel`): it does not fall back to a valuation the quote already
+superseded.
 
-## Ações combinadas, revisão e filtros
+## Combined actions, review and filters
 
-`POST /api/investment-operations/batch` recebe `operations` (de 1 a 100 itens)
-com o mesmo formato de uma operação, e `reconciliation` opcional. O vínculo
-refere-se à primeira operação do lote. A gravação inteira é transacional:
-uma compra inválida ou vínculo recusado não deixa aporte ou rendimento órfão.
-A interface oferece aporte com compra e rendimento reinvestido. Quantidade e
-preço calculam o valor bruto em decimal quando `amount` não é informado.
+`POST /api/investment-operations/batch` takes `operations` (1 to 100 items) in
+the same shape as a single operation, and an optional `reconciliation`. The link
+refers to the first operation of the batch. The whole write is transactional: an
+invalid purchase or a rejected link leaves no orphan contribution or income. The
+UI offers contribution with purchase and reinvested income. Quantity and price
+compute the gross amount in decimal when `amount` is not given.
 
-Contas integradas aceitam registros locais de aporte, resgate, rendimento,
-taxa e imposto. Esses registros alimentam relatórios e conciliação; nunca
-recalculam saldos ou posições do provedor. Compra, venda, saldo inicial e
-cotação de posições integradas continuam sendo dados da instituição.
+Integrated accounts accept local records of contribution, withdrawal, income,
+fee and tax, without a position. These records feed reports and reconciliation;
+they never recompute the provider's balances or positions. Buys, sells,
+opening balances with a position and manual quotes apply only to the manual
+holdings of the account itself; buys and sells do not change the institution's
+cash. A cash-only opening balance is rejected, and transfers between
+custodies stay restricted to manual accounts (`ErrIntegratedReadOnly`). Buys,
+sells, balances and quotes of the provider's positions remain institution data.
 
-Um lançamento bancário também pode ser conciliado diretamente com um movimento
-importado de conta integrada, sem registro manual: `POST
-/api/investment-reconciliations` sem `operation_id` deriva uma operação
-`source = synced` na custódia da conexão (aporte para `inflow`, rendimento para
-`INTEREST`, resgate para os demais `outflow`), com valor e data do movimento.
-A operação derivada é somente leitura, é reaproveitada por parcelas seguintes
-do mesmo movimento (inclusive depois de desfeita a parcela que registrou o
-movimento), some ao desfazer o último vínculo e nunca entra nos relatórios
-por conta própria. Movimento sem direção, sem data ou fora de BRL
-é recusado.
+A bank entry can also be reconciled directly with a movement imported from an
+integrated account, with no manual record: `POST /api/investment-reconciliations`
+without `operation_id` derives an operation `source = synced` in the
+connection's custody (contribution for `inflow`, income for `INTEREST`,
+withdrawal for the other `outflow`), with the movement's amount and date. The
+derived operation is read-only, is reused by later portions of the same
+movement (even after the portion that registered the movement is undone),
+disappears when the last link is undone, and never enters reports on its own. A
+movement without direction, without date or outside BRL is rejected.
 
-Uma transferência entre custódias leva o custo médio que a posição de origem
-tinha na data da transferência; esse custo fica gravado na entrada de destino
-e correções posteriores às compras de origem não o propagam.
-Uma posição manual pode começar vazia para receber sua primeira compra.
-A última cotação manual por unidade continua válida após compras e vendas;
-a quantidade remanescente é avaliada por essa cotação, mantendo sua data.
-Correções reprocessam o histórico na ordem de data, criação e identificador.
+A transfer between custodies carries the average cost the source position had on
+the transfer date; that cost is stored on the destination entry and later
+corrections to the source purchases do not propagate it. A manual position may
+start empty to receive its first purchase. The last manual unit quote stays
+valid after purchases and sales; the remaining quantity is valued by it, keeping
+its date. Corrections reprocess history in date, creation and identifier order.
 
-A conciliação confere direção, moeda BRL e capacidade restante de cada
-lançamento, operação e movimento importado. Para contas integradas, o
-movimento importado deve pertencer à mesma conexão. Parcelas concorrentes
-são serializadas durante a validação. Sugestões na interface usam igualdade
-do valor disponível e até cinco dias de diferença; exigem confirmação.
-Taxas, impostos e rendimentos também podem ser vinculados, evitando duplicar
-receitas e despesas. Desvincular restaura a parcela disponível.
+Reconciliation checks direction, BRL currency and the remaining capacity of each
+entry, operation and imported movement. For integrated accounts, the imported
+movement must belong to the same connection. Concurrent portions are serialized
+during validation. UI suggestions use equality of the available amount and up to
+five days of difference; they require confirmation. Fees, taxes and income can
+also be linked, avoiding duplicating revenue and expenses. Unlinking restores
+the available portion.
 
-A tela Investimentos oferece “Revisar lançamentos antigos”, abrindo o extrato
-sem restrição de período. `POST /api/transactions/query` aceita
-`filters.origin` (`manual`, `synced`). Nenhum histórico é reclassificado
-automaticamente.
+The Investimentos screen offers "Revisar lançamentos antigos", opening the
+statement with no period restriction. `POST /api/transactions/query` accepts
+`filters.origin` (`manual`, `synced`). No history is reclassified automatically.
 
-Posições aceitam filtros `account_id`, `portfolio_id`, `source`, `source_id`
-e `include_closed`. Operações aceitam `account_id`, `position_id`,
-`portfolio_id`, `source`, `source_id`, `from`, `to` e `reconciliation_state`
-(`linked`, `unlinked`). As avaliações digitadas são operações `valuation`
-datadas, consultáveis pelo mesmo histórico de operações; o job de cotações
-nunca as cria.
+Positions accept the filters `account_id`, `portfolio_id`, `source`,
+`source_id` and `include_closed`. Operations accept `account_id`, `position_id`,
+`portfolio_id`, `source`, `source_id`, `from`, `to` and `reconciliation_state`
+(`linked`, `unlinked`). Typed valuations are dated `valuation` operations,
+queryable through the same operation history; the quotes job never creates them.
 
-O total da área de investimentos inclui o caixa efetivo das contas vinculadas.
-No patrimônio esse mesmo caixa já está na parcela bancária, portanto não é
-somado uma segunda vez. Na visão por objetivo, compras e vendas são rotuladas
-como tal, sem confundi-las com as transferências de caixa da custódia.
+The investments area's total includes the effective cash of linked accounts. In
+net worth that same cash is already in the bank portion, so it is not summed a
+second time. In the per-goal view, purchases and sales are labeled as such,
+without confusing them with the custody's cash transfers.
 
-Posições importadas em outras moedas mantêm a moeda e o valor originais.
-Sem conversão cambial nesta versão, ficam fora dos totais de investimento,
-metas e parcela de investimentos do patrimônio em reais. A interface sinaliza
-quando existem posições fora desses totais.
+Imported positions in other currencies keep their original currency and value.
+With no FX conversion in this version, they stay out of the investment totals,
+goals and the investments portion of net worth in reais. The UI flags when
+positions exist outside those totals.
+
+## Database representation
+
+Exact amounts, prices and quantities use Postgres `NUMERIC` and SQLite decimal
+text. Issue/purchase/due dates are calendar dates (`DATE` in Postgres, date text
+in SQLite), normalized on the provider's BRT wall clock; quote identity retains
+its existing provider-day semantics. Trade dates retain the existing movement-day
+rule (midnight UTC is already a day, other instants use BRT). Observation/as-of
+values remain instants. Integrated custody IDs remain opaque
+`integrated:<source id>` text; records with UUID identities use native Postgres
+UUIDs. `db.Open` rejects the old schema generation; conversion is separate work.

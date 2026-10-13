@@ -6,8 +6,12 @@ import (
 	"encoding/json"
 
 	"github.com/greg0x46/julius/internal/categories"
+	"github.com/greg0x46/julius/internal/db"
+	dbtypes "github.com/greg0x46/julius/internal/db/types"
 	"github.com/greg0x46/julius/internal/money"
 	"github.com/greg0x46/julius/internal/transactions"
+
+	"github.com/shopspring/decimal"
 )
 
 // extractCardNumber pulls the card number out of a financial_transactions
@@ -26,15 +30,20 @@ func extractCardNumber(metadata string) string {
 
 func candidateFor(ctx context.Context, q transactions.Querier, transactionID string) (MatchCandidate, error) {
 	var description, creditCardMetadata, accountName, accountInstitution sql.NullString
+	var amount, accountAmount, currency, accountCurrency, occurredAt sql.NullString
 	err := q.QueryRowContext(ctx, `
-		SELECT ft.description, ft.credit_card_metadata, fa.name, fa.institution
+		SELECT ft.description, ft.credit_card_metadata, fa.name, fa.institution,
+		       ft.amount, ft.amount_in_account_currency, ft.currency_code, fa.currency_code, ft.occurred_at
 		FROM financial_transactions ft JOIN financial_accounts fa ON fa.id = ft.account_id
 		WHERE ft.id = ?`, transactionID,
-	).Scan(&description, &creditCardMetadata, &accountName, &accountInstitution)
+	).Scan(&description, &creditCardMetadata, &accountName, &accountInstitution, dbtypes.Decimal(&amount), dbtypes.Decimal(&accountAmount), &currency, &accountCurrency, dbtypes.Time(&occurredAt))
 	if err != nil {
 		return MatchCandidate{}, err
 	}
-	candidate := MatchCandidate{}
+	candidate, err := moneyCandidate(amount, accountAmount, currency, accountCurrency, occurredAt)
+	if err != nil {
+		return MatchCandidate{}, err
+	}
 	if description.Valid {
 		candidate.Description = &description.String
 	}
@@ -48,6 +57,45 @@ func candidateFor(ctx context.Context, q transactions.Querier, transactionID str
 		if card := extractCardNumber(creditCardMetadata.String); card != "" {
 			candidate.CardNumber = &card
 		}
+	}
+	return candidate, nil
+}
+
+func moneyCandidate(amount, accountAmount, currency, accountCurrency, occurredAt sql.NullString) (MatchCandidate, error) {
+	candidate := MatchCandidate{}
+	parseAmount := func(raw sql.NullString) (*decimal.Decimal, error) {
+		if !raw.Valid {
+			return nil, nil
+		}
+		value, err := decimal.NewFromString(raw.String)
+		return &value, err
+	}
+	value, err := parseAmount(amount)
+	if err != nil {
+		return candidate, err
+	}
+	accountValue, err := parseAmount(accountAmount)
+	if err != nil {
+		return candidate, err
+	}
+	var currencyCode, accountCurrencyCode *string
+	if currency.Valid {
+		currencyCode = &currency.String
+	}
+	if accountCurrency.Valid {
+		accountCurrencyCode = &accountCurrency.String
+	}
+	if effective := money.SelectEffectiveMoney(accountValue, accountCurrencyCode, value, currencyCode); effective != nil {
+		absolute := effective.Value.Abs()
+		candidate.Amount = &absolute
+	}
+	date, err := db.ParseNullTime(occurredAt)
+	if err != nil {
+		return candidate, err
+	}
+	if date != nil {
+		day := date.Day()
+		candidate.DayOfMonth = &day
 	}
 	return candidate, nil
 }
@@ -175,7 +223,8 @@ func ApplyRetroactively(ctx context.Context, conn *sql.DB, ruleID string, onIgno
 	}
 
 	rows, err := conn.QueryContext(ctx, `
-		SELECT ft.id, ft.description, ft.credit_card_metadata, fa.name, fa.institution
+		SELECT ft.id, ft.description, ft.credit_card_metadata, fa.name, fa.institution,
+		       ft.amount, ft.amount_in_account_currency, ft.currency_code, fa.currency_code, ft.occurred_at
 		FROM financial_transactions ft JOIN financial_accounts fa ON fa.id = ft.account_id
 		WHERE ft.deleted_at IS NULL`)
 	if err != nil {
@@ -189,11 +238,16 @@ func ApplyRetroactively(ctx context.Context, conn *sql.DB, ruleID string, onIgno
 	for rows.Next() {
 		var id string
 		var description, creditCardMetadata, accountName, accountInstitution sql.NullString
-		if err := rows.Scan(&id, &description, &creditCardMetadata, &accountName, &accountInstitution); err != nil {
+		var amount, accountAmount, currency, accountCurrency, occurredAt sql.NullString
+		if err := rows.Scan(dbtypes.ID(&id), &description, &creditCardMetadata, &accountName, &accountInstitution, dbtypes.Decimal(&amount), dbtypes.Decimal(&accountAmount), &currency, &accountCurrency, dbtypes.Time(&occurredAt)); err != nil {
 			rows.Close()
 			return RetroactiveResult{}, err
 		}
-		candidate := MatchCandidate{}
+		candidate, err := moneyCandidate(amount, accountAmount, currency, accountCurrency, occurredAt)
+		if err != nil {
+			rows.Close()
+			return RetroactiveResult{}, err
+		}
 		if description.Valid {
 			candidate.Description = &description.String
 		}

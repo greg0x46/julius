@@ -1,7 +1,9 @@
 package quotes
 
 import (
+	"context"
 	"fmt"
+	"github.com/greg0x46/julius/internal/settings"
 	"strings"
 	"time"
 )
@@ -58,4 +60,33 @@ func (s Schedule) Previous(now time.Time) time.Time {
 // Next is the first occurrence strictly after now.
 func (s Schedule) Next(now time.Time) time.Time {
 	return s.Previous(now).AddDate(0, 0, 1)
+}
+
+// InitializeSchedule consults the legacy environment only before the first save.
+func InitializeSchedule(ctx context.Context, q settings.Querier, legacy string) (settings.QuoteRefreshSettings, error) {
+	config, found, err := settings.GetQuoteRefresh(ctx, q)
+	if err != nil || found {
+		return config, err
+	}
+	if strings.TrimSpace(legacy) != "" {
+		schedule, _, err := ParseSchedule(legacy)
+		if err != nil {
+			return config, err
+		}
+		zone := "Local"
+		if fields := strings.Fields(legacy); len(fields) == 2 {
+			zone = fields[1]
+		}
+		config = settings.QuoteRefreshSettings{Enabled: true, Time: fmt.Sprintf("%02d:%02d", schedule.Hour, schedule.Minute), Timezone: zone}
+	}
+	return settings.InitializeQuoteRefresh(ctx, q, config)
+}
+
+func configuredSchedule(config settings.QuoteRefreshSettings) (Schedule, error) {
+	if err := config.Validate(); err != nil {
+		return Schedule{}, err
+	}
+	clock, _ := time.Parse("15:04", config.Time)
+	zone, _ := time.LoadLocation(config.Timezone)
+	return Schedule{Hour: clock.Hour(), Minute: clock.Minute(), Location: zone}, nil
 }

@@ -12,9 +12,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/greg0x46/julius/internal/db"
 	"github.com/greg0x46/julius/internal/settings"
-	"github.com/google/uuid"
 )
 
 const password = "correct horse battery staple"
@@ -219,7 +219,7 @@ func TestSessionsExpiryResetAndRestart(t *testing.T) {
 			t.Fatal("reset changed encryption", err)
 		}
 		// A session inserted by a login racing a reset carries the obsolete revision.
-		if _, err := conn.Exec(`INSERT INTO auth_sessions(token_hash,owner_id,revision,created_at,last_seen_at,expires_at) VALUES(?,1,1,?,?,?)`, digest(token), now.Unix(), now.Unix(), now.Add(Lifetime).Unix()); err != nil {
+		if _, err := conn.Exec(`INSERT INTO auth_sessions(token_hash,owner_id,revision,created_at,last_seen_at,expires_at) VALUES(?,1,1,?,?,?)`, digest(token), db.FormatTime(now), db.FormatTime(now), db.FormatTime(now.Add(Lifetime))); err != nil {
 			t.Fatal(err)
 		}
 		if _, err := s.Authenticate(ctx, token); !errors.Is(err, ErrSession) {

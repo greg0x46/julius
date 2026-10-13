@@ -167,7 +167,10 @@ export const invalidateAutomationRules = (client: Client) =>
 
 /** A manual transaction create/update/delete. */
 export const invalidateAfterTransactionChange = (client: Client) =>
-  invalidate(client, roots.transactions);
+  invalidateAll(client, [roots.transactions, roots.accounts, roots.timeline, roots.netWorth]);
+
+export const invalidateAfterManualAccountChange = (client: Client) =>
+  invalidateAll(client, [roots.accounts, roots.transactions, roots.timeline, roots.netWorth]);
 
 /** Marks every transactions query stale without refetching it. */
 export const markTransactionsStale = (client: Client) =>

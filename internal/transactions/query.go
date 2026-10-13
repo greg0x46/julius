@@ -12,7 +12,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/greg0x46/julius/internal/categories"
-	"github.com/greg0x46/julius/internal/db"
+	dbtypes "github.com/greg0x46/julius/internal/db/types"
 	"github.com/greg0x46/julius/internal/exchange"
 	"github.com/greg0x46/julius/internal/investments"
 	"github.com/greg0x46/julius/internal/money"
@@ -182,10 +182,10 @@ func fetchBillDueDates(ctx context.Context, q Querier) (map[string]time.Time, er
 	dueDates := make(map[string]time.Time)
 	for rows.Next() {
 		var accountID, externalID, dueDate string
-		if err := rows.Scan(&accountID, &externalID, &dueDate); err != nil {
+		if err := rows.Scan(dbtypes.ID(&accountID), dbtypes.ID(&externalID), dbtypes.Time(&dueDate)); err != nil {
 			return nil, err
 		}
-		parsed, err := db.ParseNullTime(sql.NullString{String: dueDate, Valid: true})
+		parsed, err := dbtypes.ParseNullTime(sql.NullString{String: dueDate, Valid: true})
 		if err != nil {
 			return nil, err
 		}
@@ -202,9 +202,7 @@ func scanRow(rows *sql.Rows) (row, error) {
 		r                          row
 		externalID                 sql.NullString
 		sourceProvider             sql.NullString
-		amount, amountAcct         sql.NullString
 		currencyCode               sql.NullString
-		occurredAt                 sql.NullString
 		providerStatus             sql.NullString
 		movementType               sql.NullString
 		sourceCategory             sql.NullString
@@ -215,11 +213,9 @@ func scanRow(rows *sql.Rows) (row, error) {
 		accountCurrencyCode        sql.NullString
 		accountType                sql.NullString
 		inclusionState             sql.NullString
-		inclusionChangedAt         sql.NullString
 		inclusionOrigin            sql.NullString
 		inclusionRuleName          sql.NullString
 		categoryDecisionCategoryID sql.NullString
-		categoryDecisionChangedAt  sql.NullString
 		categoryDecisionOrigin     sql.NullString
 		categoryID                 sql.NullString
 		categoryName               sql.NullString
@@ -229,13 +225,13 @@ func scanRow(rows *sql.Rows) (row, error) {
 		categoryColor              sql.NullString
 	)
 	err := rows.Scan(
-		&r.id, &r.accountID, &externalID, &r.origin, &sourceProvider, &description, &amount,
-		&amountAcct, &currencyCode, &occurredAt,
+		dbtypes.ID(&r.id), dbtypes.ID(&r.accountID), dbtypes.ID(&externalID), &r.origin, &sourceProvider, &description, dbtypes.Decimal(&r.amount),
+		dbtypes.Decimal(&r.amountInAccountCurrency), &currencyCode, dbtypes.Time(&r.occurredAt),
 		&providerStatus, &movementType, &sourceCategory, &creditCardMetadata,
 		&accountName, &accountInstitution, &accountCurrencyCode, &accountType,
-		&inclusionState, &inclusionChangedAt, &inclusionOrigin, &inclusionRuleName,
-		&categoryDecisionCategoryID, &categoryDecisionChangedAt, &categoryDecisionOrigin,
-		&categoryID, &categoryName, &categoryKind, &categoryIsActive, &categoryIcon, &categoryColor,
+		&inclusionState, dbtypes.Time(&r.inclusionChangedAt), &inclusionOrigin, &inclusionRuleName,
+		dbtypes.ID(&categoryDecisionCategoryID), dbtypes.Time(&r.categoryDecisionChangedAt), &categoryDecisionOrigin,
+		dbtypes.ID(&categoryID), &categoryName, &categoryKind, dbtypes.Bool(&categoryIsActive), &categoryIcon, &categoryColor,
 	)
 	if err != nil {
 		return row{}, err
@@ -267,21 +263,6 @@ func scanRow(rows *sql.Rows) (row, error) {
 	r.categoryIcon = nullString(categoryIcon)
 	r.categoryColor = nullString(categoryColor)
 
-	if r.amount, err = nullDecimal(amount); err != nil {
-		return row{}, err
-	}
-	if r.amountInAccountCurrency, err = nullDecimal(amountAcct); err != nil {
-		return row{}, err
-	}
-	if r.occurredAt, err = db.ParseNullTime(occurredAt); err != nil {
-		return row{}, err
-	}
-	if r.inclusionChangedAt, err = db.ParseNullTime(inclusionChangedAt); err != nil {
-		return row{}, err
-	}
-	if r.categoryDecisionChangedAt, err = db.ParseNullTime(categoryDecisionChangedAt); err != nil {
-		return row{}, err
-	}
 	return r, nil
 }
 
@@ -290,17 +271,6 @@ func nullString(ns sql.NullString) *string {
 		return nil
 	}
 	return &ns.String
-}
-
-func nullDecimal(ns sql.NullString) (*decimal.Decimal, error) {
-	if !ns.Valid {
-		return nil, nil
-	}
-	d, err := decimal.NewFromString(ns.String)
-	if err != nil {
-		return nil, fmt.Errorf("parse decimal %q: %w", ns.String, err)
-	}
-	return &d, nil
 }
 
 func buildView(r row, query QueryRequest, periodBasis string, billDueDates map[string]time.Time) (view, error) {

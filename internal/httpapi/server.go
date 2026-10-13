@@ -12,6 +12,7 @@ import (
 	"github.com/greg0x46/julius/internal/auth"
 	"github.com/greg0x46/julius/internal/investments"
 	"github.com/greg0x46/julius/internal/ledger"
+	"github.com/greg0x46/julius/internal/marketdata"
 	"github.com/greg0x46/julius/internal/payables"
 	"github.com/greg0x46/julius/internal/recurrences"
 	"github.com/greg0x46/julius/internal/settings"
@@ -41,7 +42,7 @@ func onIgnoredHook(ctx context.Context, q transactions.Querier, transactionID st
 
 // NewServer protects API routes with per-browser authentication. The separate
 // secrets holder is used only to encrypt configuration, never to grant access.
-func NewServer(db *sql.DB, frontend fs.FS, secrets *settings.Secrets, config auth.Config) http.Handler {
+func NewServer(db *sql.DB, frontend fs.FS, secrets *settings.Secrets, config auth.Config, market *marketdata.Service) http.Handler {
 	if err := config.Validate(); err != nil {
 		panic(err)
 	}
@@ -56,7 +57,9 @@ func NewServer(db *sql.DB, frontend fs.FS, secrets *settings.Secrets, config aut
 	mux.HandleFunc("PUT /api/auth/password", authentication.password)
 	mux.HandleFunc("PUT /api/auth/config", authentication.updateConfig)
 	mux.HandleFunc("PUT /api/settings/pluggy", handlePluggySettings(db, secrets))
+	mux.HandleFunc("GET /api/settings/quotes", handleGetQuotesSettings(db))
 	mux.HandleFunc("PUT /api/settings/quotes", handleQuotesSettings(db, secrets))
+	mux.HandleFunc("POST /api/settings/quotes/refresh", handleRefreshQuotes(db, market))
 
 	mux.HandleFunc("GET /api/preferences", handleGetPreferences(db))
 	mux.HandleFunc("PUT /api/preferences", handleUpdatePreferences(db))
@@ -91,6 +94,10 @@ func NewServer(db *sql.DB, frontend fs.FS, secrets *settings.Secrets, config aut
 	mux.HandleFunc("GET /api/statement-imports/accounts", handleStatementAccounts(db))
 	mux.HandleFunc("GET /api/statement-imports/template", handleStatementTemplate())
 
+	mux.HandleFunc("GET /api/accounts/currencies", handleAccountCurrencies)
+	mux.HandleFunc("POST /api/accounts", handleWriteManualAccount(db, true))
+	mux.HandleFunc("PUT /api/accounts/{id}", handleWriteManualAccount(db, false))
+	mux.HandleFunc("POST /api/accounts/{id}/adjustments", handleAdjustManualAccount(db))
 	mux.HandleFunc("GET /api/accounts", handleListAccounts(db))
 	mux.HandleFunc("GET /api/accounts/{id}", handleGetAccount(db))
 	mux.HandleFunc("GET /api/accounts/{id}/cards", handleListAccountCards(db))

@@ -17,7 +17,11 @@ export type AccountClosingDaySource = (typeof accountClosingDaySources)[number];
 
 export interface Account {
   id: string;
-  external_id: string;
+  origin: "manual" | "synced";
+  opening_balance: string | null;
+  archived_at: string | null;
+  has_movements: boolean;
+  external_id: string | null;
   source_display_name: string | null;
   institution: string | null;
   /** Display-safe institution: the user's connection label when set,
@@ -45,6 +49,10 @@ export interface Account {
 
 const accountKeys = [
   "id",
+  "origin",
+  "opening_balance",
+  "archived_at",
+  "has_movements",
   "external_id",
   "source_display_name",
   "institution",
@@ -71,8 +79,9 @@ export function parseAccount(value: unknown): Account {
   if (
     typeof item.id !== "string" ||
     !isUuid(item.id) ||
-    typeof item.external_id !== "string" ||
-    item.external_id === "" ||
+    !["manual", "synced"].includes(item.origin as string) ||
+    typeof item.has_movements !== "boolean" ||
+    !(item.origin === "manual" ? item.external_id === null : typeof item.external_id === "string" && item.external_id !== "") ||
     !(item.account_type === null || accountTypes.includes(item.account_type as AccountType)) ||
     !isClosingDay(item.closing_day) ||
     !isClosingDaySource(item.closing_day_source) ||
@@ -82,7 +91,11 @@ export function parseAccount(value: unknown): Account {
   }
   return {
     id: item.id,
-    external_id: item.external_id,
+    origin: item.origin as Account["origin"],
+    opening_balance: nullableDecimal(item.opening_balance),
+    archived_at: nullableDate(item.archived_at),
+    has_movements: item.has_movements as boolean,
+    external_id: nullableText(item.external_id),
     source_display_name: nullableText(item.source_display_name),
     institution: nullableText(item.institution),
     institution_name: nullableText(item.institution_name),

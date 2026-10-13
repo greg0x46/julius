@@ -12,7 +12,7 @@ import (
 
 	"github.com/greg0x46/julius/internal/categories"
 	"github.com/greg0x46/julius/internal/dates"
-	"github.com/greg0x46/julius/internal/db"
+	dbtypes "github.com/greg0x46/julius/internal/db/types"
 	"github.com/greg0x46/julius/internal/money"
 )
 
@@ -59,7 +59,7 @@ func creditCardTransactionTotalAt(ctx context.Context, q Querier, currencyCode s
 	accounts := make([]string, 0)
 	for rows.Next() {
 		var accountID string
-		if err := rows.Scan(&accountID); err != nil {
+		if err := rows.Scan(dbtypes.ID(&accountID)); err != nil {
 			return decimal.Zero, err
 		}
 		accounts = append(accounts, accountID)
@@ -108,13 +108,13 @@ func fetchCardBillClosingDates(ctx context.Context, q Querier, loc *time.Locatio
 	for rows.Next() {
 		var accountID, internalID, externalID string
 		var closingDateRaw sql.NullString
-		if err := rows.Scan(&accountID, &internalID, &externalID, &closingDateRaw); err != nil {
+		if err := rows.Scan(dbtypes.ID(&accountID), dbtypes.ID(&internalID), dbtypes.ID(&externalID), dbtypes.Time(&closingDateRaw)); err != nil {
 			return cardBillClosingDates{}, err
 		}
 
 		var closingDate *time.Time
 		if closingDateRaw.Valid {
-			parsed, err := db.ParseNullTime(closingDateRaw)
+			parsed, err := dbtypes.ParseNullTime(closingDateRaw)
 			if err != nil {
 				return cardBillClosingDates{}, err
 			}
@@ -397,10 +397,10 @@ func fetchCardDebtTransactions(ctx context.Context, q Querier, accountID string)
 		var sourceCategoryRaw, sourceCategoryIDRaw, additionalInfoRaw sql.NullString
 		var metadataRaw, inclusionStateRaw sql.NullString
 		if err := rows.Scan(
-			&transactionID, &amountRaw, &amountInAccountCurrencyRaw, &currencyCodeRaw,
-			&occurredAtRaw,
+			dbtypes.ID(&transactionID), dbtypes.Decimal(&amountRaw), dbtypes.Decimal(&amountInAccountCurrencyRaw), &currencyCodeRaw,
+			dbtypes.Time(&occurredAtRaw),
 			&providerStatusRaw, &movementTypeRaw,
-			&sourceCategoryRaw, &sourceCategoryIDRaw, &additionalInfoRaw,
+			&sourceCategoryRaw, dbtypes.ID(&sourceCategoryIDRaw), &additionalInfoRaw,
 			&metadataRaw, &inclusionStateRaw,
 		); err != nil {
 			return nil, err
@@ -413,7 +413,7 @@ func fetchCardDebtTransactions(ctx context.Context, q Querier, accountID string)
 		if err != nil {
 			return nil, err
 		}
-		occurredAt, err := db.ParseNullTime(occurredAtRaw)
+		occurredAt, err := dbtypes.ParseNullTime(occurredAtRaw)
 		if err != nil {
 			return nil, err
 		}

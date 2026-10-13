@@ -9,6 +9,7 @@ export * from "./payables";
 export * from "./plannedTransactions";
 export * from "./preferences";
 export * from "./problems";
+export * from "./quoteSettings";
 export * from "./recurringCommitments";
 export * from "./scenarios";
 export { isUuid } from "./shared";

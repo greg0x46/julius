@@ -1,6 +1,6 @@
 // Package exchange resolves persisted decimal rates without changing original values.
 // Historical lookups use the last business day on or before the requested day.
-// Rows fetched after that day ended (UTC) are final; others refresh after TTL.
+// Valid rows fetched after that day ended (UTC) are final; others refresh after TTL.
 // Provider failure returns a stored rate marked stale, or ErrUnavailable.
 // Rates more than MaxLag before the requested day are also marked stale.
 package exchange
@@ -94,7 +94,7 @@ type Service struct {
 	// mu serializes provider calls, so concurrent reads of the same missing
 	// rate cost one request.
 	mu       sync.Mutex
-	failedAt time.Time
+	failedAt map[string]time.Time
 }
 
 // New builds a Service. A nil provider uses Frankfurter.
@@ -109,6 +109,7 @@ func New(conn Querier, provider Provider) *Service {
 		TTL:      time.Hour,
 		MaxLag:   7 * 24 * time.Hour,
 		Cooldown: time.Minute,
+		failedAt: make(map[string]time.Time),
 	}
 }
 
@@ -152,17 +153,24 @@ func (s *Service) resolve(ctx context.Context, base, quote string, day time.Time
 	}
 
 	var fetchErr error
-	if !s.failedAt.IsZero() && s.now().Sub(s.failedAt) < s.Cooldown {
+	now := s.now()
+	for key, failedAt := range s.failedAt {
+		if now.Sub(failedAt) >= s.Cooldown {
+			delete(s.failedAt, key)
+		}
+	}
+	key := base + "/" + quote + "/" + formatDate(day)
+	if _, coolingDown := s.failedAt[key]; coolingDown {
 		fetchErr = errors.New("provider cooling down after a failure")
 	} else {
 		var rate Rate
 		rate, fetchErr = s.fetch(ctx, base, quote, day)
 		if fetchErr == nil {
-			s.failedAt = time.Time{}
+			delete(s.failedAt, key)
 			return s.finish(&rate, nil)
 		}
 		if ctx.Err() == nil {
-			s.failedAt = s.now()
+			s.failedAt[key] = s.now()
 		}
 	}
 
@@ -210,7 +218,7 @@ func (s *Service) finish(rate *Rate, err error) (Rate, error) {
 
 // fresh reports whether a cached row can be used without asking the provider.
 func (s *Service) fresh(rate Rate) bool {
-	if !rate.FetchedAt.Before(rate.AsOf.AddDate(0, 0, 1)) {
+	if rate.AsOf.Sub(rate.EffectiveOn) <= s.MaxLag && !rate.FetchedAt.Before(rate.AsOf.AddDate(0, 0, 1)) {
 		return true
 	}
 	return s.now().Sub(rate.FetchedAt) < s.TTL

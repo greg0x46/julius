@@ -146,7 +146,7 @@ describe("invalidation policies", () => {
 
     const tx = spyClient();
     await invalidateAfterTransactionChange(tx.client);
-    expect(keysOf(tx.invalidateQueries)).toEqual([["transactions"]]);
+    expect(keysOf(tx.invalidateQueries)).toEqual([["transactions"], ["accounts"], ["timeline"], ["netWorth"]]);
 
     const rules = spyClient();
     await invalidateAutomationRules(rules.client);

@@ -1,80 +1,129 @@
-# Configurações / Autenticação
+# Settings / Authentication
 
-> Referência viva do comportamento implementado.
+> Living reference of the implemented behavior.
 
-## Modelo
+## Model
 
-Uma conta proprietária, sem cadastro público ou dependência de provedor.
-`internal/auth` persiste a conta e sessões em SQLite/Postgres; Argon2id
-(19 MiB, duas iterações, paralelismo 1, parâmetros versionados) protege a senha.
-E-mail é normalizado; senhas aceitam 15–128 caracteres sem composição obrigatória.
+A single owner account, with no public sign-up or provider dependency.
+`internal/auth` persists the account and sessions in SQLite/Postgres; Argon2id
+(19 MiB, two iterations, parallelism 1, versioned parameters) protects the
+password. The email is normalized; the password has no length or composition
+rules beyond being non-empty.
 
-Sessões usam tokens aleatórios de 32 bytes, somente SHA-256 no banco e cookie
-HttpOnly/SameSite=Lax/Path=/, sem Domain. HTTPS usa Secure e prefixo __Host-;
-HTTP local usa nome sem prefixo. Prazo absoluto de sete dias e inatividade de
-24 horas, atualizada em cada requisição autenticada. Consultas periódicas da
-interface também contam como atividade. Expiração é validada pelo servidor.
-Logout revoga uma sessão; troca/reset revogam todas. A revisão da conta também
-invalida sessões criadas concorrentemente com troca/reset. Login limpa sessões
-expiradas. Sessões sobrevivem a reinícios.
+Sessions use random 32-byte tokens, only the SHA-256 is stored, and the cookie
+is HttpOnly/SameSite=Lax/Path=/ with no Domain. HTTPS uses Secure and the
+`__Host-` prefix; local HTTP uses the unprefixed name. Absolute lifetime of
+seven days and 24 hours of inactivity, refreshed on every authenticated
+request (the UI's periodic polling counts as activity). Expiry is validated by
+the server. Logout revokes one session; password change/reset revoke all. The
+account revision also invalidates sessions created concurrently with a
+change/reset. Login clears expired sessions. Sessions survive restarts.
 
-`internal/settings.Secrets` guarda a chave imutável usada para AES-256-GCM;
-não é uma sessão de usuário. A chave externa é validada contra o verificador
-mestre e todos os valores criptografados antes de iniciar HTTP e worker.
-O worker não depende de login; espera quando a Pluggy ainda não foi configurada.
-As funções de senha antiga em settings existem apenas para migração e testes.
+`internal/settings.Secrets` holds the immutable key used for AES-256-GCM; it is
+not a user session. The external key is validated against the master verifier
+and every encrypted value before HTTP and the worker start. The worker does not
+depend on login; it waits while Pluggy is not configured. The old
+password-derivation functions in settings exist only for migration and tests.
 
-## Configuração e comandos
+## Configuration and commands
 
-- `JULIUS_PUBLIC_URL`: origem exata sem caminho, HTTPS em produção; HTTP
-  somente para localhost/127.0.0.1/::1. Não deriva segurança de headers de proxy.
-- Exatamente uma de `JULIUS_MASTER_KEY` e `JULIUS_MASTER_KEY_FILE`:
-  chave aleatória de 32 bytes em Base64. Não há integração com nuvem.
-- `julius auth init [-db ...]`: cria conta em banco sem configuração legada.
-- `julius auth migrate [-db ...]`: com processo parado, pede senha antiga,
-  e-mail e nova senha; recriptografa todos os segredos, cria conta e remove
-  verificador legado numa transação. Exige backup prévio; recusa repetição.
-- `julius auth reset-password [-db ...]`: redefine senha e revoga sessões;
-  não precisa da chave nem a modifica. Senhas são lidas sem eco em terminal.
+- `JULIUS_PUBLIC_URL`: exact origin without a path, HTTPS in production; HTTP
+  only for localhost/127.0.0.1/::1. Security is not derived from proxy headers.
+- Exactly one of `JULIUS_MASTER_KEY` and `JULIUS_MASTER_KEY_FILE`: a
+  random 32-byte key in Base64. No cloud integration.
+- `julius auth init [-db ...]`: creates the account in a database without
+  legacy configuration.
+- `julius auth migrate [-db ...]`: with the process stopped, asks for the
+  old password, email and new password; re-encrypts every secret, creates the
+  account and removes the legacy verifier in one transaction. Requires a prior
+  backup; refuses to run twice.
+- `julius auth reset-password [-db ...]`: resets the password and revokes
+  sessions; does not need or change the key. Passwords are read without echo
+  from a terminal.
 
-O servidor recusa configuração pendente/chave inválida. Chave perdida não é
-recuperável pela senha; rotação da chave não está implementada. Instruções no README.
+Owner/session timestamps use UTC text in SQLite and native `TIMESTAMPTZ` in
+Postgres, retaining second-level lifetime and idle-timeout semantics. Database
+opening automatically converts final legacy Postgres in one transaction while
+retaining the original tables in a backup schema, including hashes, revisions,
+encrypted settings and session deadlines. Concurrent startups serialize and
+invalid data rolls back the conversion. Legacy SQLite requires a
+`cmd/migrate-legacy` converts a final legacy SQLite backup into a separate fresh
+SQLite/Postgres target. Unix-second owner/session timestamps become UTC instants
+without extending sessions; encrypted settings, hashes and revisions copy
+unchanged with the same external master key. Dry-run rolls back imported data
+and reports row errors; count and native account balance checks gate completion.
+See README "Database schema generations" for cutover and retry steps.
+
+The server refuses pending configuration or an invalid key. A lost key cannot
+be recovered with the password; key rotation is not implemented. Instructions
+are in the README.
 
 ## HTTP
 
-| Método / rota | Comportamento |
+| Method / route | Behavior |
 |---|---|
-| POST /api/auth/login | Recebe email/password, cria cookie e retorna authenticated/email |
-| GET /api/auth/session | Retorna authenticated e email quando autenticado; false sem sessão |
-| POST /api/auth/logout | Revoga cookie atual, retorna authenticated=false |
-| PUT /api/auth/password | Recebe current_password/password, revoga todas, retorna authenticated=false |
-| PUT /api/settings/pluggy | Grava pluggy_client_id/pluggy_client_secret criptografados; pluggy_item_id opcional cria conexão na mesma transação; retorna saved=true |
-| GET/PUT /api/preferences | Preferências existentes, agora autenticadas |
+| POST /api/auth/login | Takes email/password, sets the cookie, returns authenticated/email |
+| GET /api/auth/session | Returns authenticated and email when authenticated; false without a session |
+| POST /api/auth/logout | Revokes the current cookie, returns authenticated=false |
+| PUT /api/auth/password | Takes current_password/password, revokes all sessions, returns authenticated=false |
+| PUT /api/auth/config | Enables/disables authentication (see README "open mode") |
+| PUT /api/settings/pluggy | Stores pluggy_client_id/pluggy_client_secret encrypted; optional pluggy_item_id creates a connection in the same transaction; returns saved=true |
+| GET /api/settings/quotes | Returns enabled, time, timezone and last_refresh (or null); never returns the token |
+| PUT /api/settings/quotes | Partially updates enabled/time/timezone and optional brapi_token atomically; returns saved=true |
+| POST /api/settings/quotes/refresh | Runs a manual full refresh and returns its recorded outcome; 409 if another refresh is running, 503 if market data is unavailable |
+| GET/PUT /api/preferences | Existing preferences, now authenticated |
 
-Todas as rotas /api são privadas por padrão, exceto os dois endpoints de
-login/status. Ausência de sessão: 401; falha de banco: 503. Arquivos estáticos
-e /health são públicos. Setup/unlock antigos não são registrados.
-Escritas, inclusive login, exigem Origin configurada e X-Julius-Request: 1
-(403 se inválidos), sem CORS. Respostas /api recebem Cache-Control: no-store.
-Login e troca de senha compartilham limites de cinco tentativas/minuto por
-e-mail e trinta globais, em memória limitada, e uma operação KDF simultânea.
-Excesso/contenção: 429 e Retry-After. Mensagens de credenciais são genéricas;
-KDF é executado também para e-mail incorreto. Corpo de autenticação limitado a 4 KiB.
+All `/api` routes are private by default, except the login and status
+endpoints. No session: 401; database failure: 503. Static files and `/health`
+are public. The legacy setup/unlock routes are not registered. Writes,
+including login, require the configured Origin and `X-Julius-Request: 1`
+(403 otherwise), with no CORS. `/api` responses get `Cache-Control: no-store`.
+Login and password change share limits of five attempts/minute per email and
+thirty global, in bounded memory, plus one concurrent KDF operation. Excess or
+contention: 429 with `Retry-After`. Credential messages are generic; the KDF
+also runs for a wrong email. Authentication bodies are limited to 4 KiB.
 
 ## Frontend
 
-AuthGate consulta a sessão, inclusive a cada minuto/foco, e mostra LoginPage
-no mesmo caminho quando necessário. Transporte HTTP centralizado injeta cabeçalho
-CSRF, usa cookies same-origin e combina cancelamento de chamada com o da sessão.
-401 privado limpa sessão/cache e desmonta conteúdo; respostas/corpos pendentes
-são descartados após logout. Login e senha incorretos mostram erro no formulário.
-Configurações contém troca de senha, Sair e formulário write-only da Pluggy.
+`AuthGate` checks the session, including every minute and on focus, and shows
+`LoginPage` in place when needed. The centralized HTTP transport injects the
+CSRF header, uses same-origin cookies and combines call cancellation with the
+session's. A private 401 clears session/cache and unmounts content; pending
+responses/bodies are discarded after logout. Wrong login or password shows an
+error in the form. Settings contains password change, Sair (log out) and the
+write-only Pluggy form.
 
-## Validação e limites
+## Validation and limits
 
-Testes cobrem migração/rollback nos dois dialetos, expiração, revogação,
-reinício, cookies, CSRF, rate limiting, falhas de banco e cancelamento/cache.
-Postgres usa JULIUS_TEST_POSTGRES_DSN com schema isolado por teste de auth.
-A reivindicação de syncs pelo worker é coordenada entre instâncias via
-Postgres (ver sincronização open banking); o rate limit continua por
-instância. Sem múltiplos usuários, MFA ou recuperação por e-mail. Hospedagem e provisionamento ficam externos.
+Tests cover migration/rollback on both dialects, expiry, revocation, restart,
+cookies, CSRF, rate limiting, database failures and cancellation/cache.
+Postgres uses `JULIUS_TEST_POSTGRES_DSN` with a schema isolated per auth
+test. Claiming of sync runs by the worker is coordinated across instances via
+Postgres (see Open Banking sync); the rate limit stays per instance. No
+multiple users, MFA or email recovery. Hosting and provisioning are external.
+
+## Quote schedule settings
+
+`enabled` is a boolean, `time` requires canonical `HH:MM` (00:00–23:59), and
+`timezone` must be a loadable zone such as `America/Sao_Paulo`. Omitted fields
+keep their current values; `enabled: false` disables refresh, and
+`brapi_token: ""` clears the token. The token stays encrypted and write-only.
+A time-only update does not require or alter the key/token. Invalid values
+return 422; database or key failures return 503 without a partial write. GET
+and PUT require a session, and PUT keeps the usual CSRF protection. The
+default is enabled at 19:00 America/Sao_Paulo. The running scheduler applies
+changes without restart, including suspending history backfill. Legacy
+environment initialization and precedence are described under Investments.
+The investment settings screen shows the persisted schedule, last refresh trigger
+and result, and provides “Atualizar agora”; the brapi token form is in a collapsed
+advanced provider section. Manual refresh works with the schedule disabled. Only
+full refreshes are recorded; spot refreshes triggered by saved positions are not.
+A shared lock prevents manual and scheduled spot refreshes from overlapping.
+History backfill follows the spot refresh asynchronously and is not included in
+the recorded outcome. Provider failures leave previously stored quotations
+intact.
+
+Schedule initialization stores the unencrypted flag using SQL `FALSE`, which
+works with SQLite integer flags and Postgres native booleans.
+`TestInitializeScheduleBothDialects` covers startup initialization;
+`TestQuoteSettingsPostgresRoundTrip` covers HTTP schedule writes.

@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/greg0x46/julius/internal/db"
+	dbtypes "github.com/greg0x46/julius/internal/db/types"
 	"github.com/greg0x46/julius/internal/money"
 )
 
@@ -116,11 +117,11 @@ func requirePositionOfAccount(ctx context.Context, q Querier, accountID string, 
 		return nil
 	}
 	var owner string
-	err := q.QueryRowContext(ctx, `SELECT account_id FROM investment_positions WHERE id = ?`, *positionID).Scan(&owner)
+	err := q.QueryRowContext(ctx, `SELECT account_id FROM investment_positions WHERE id = ?`, *positionID).Scan(dbtypes.ID(&owner))
 	if errors.Is(err, sql.ErrNoRows) {
 		var synced bool
 		if err := q.QueryRowContext(ctx,
-			`SELECT EXISTS (SELECT 1 FROM financial_investments WHERE id = ?)`, *positionID).Scan(&synced); err != nil {
+			`SELECT EXISTS (SELECT 1 FROM financial_investments WHERE id = ?)`, *positionID).Scan(dbtypes.Bool(&synced)); err != nil {
 			return err
 		}
 		if synced {
@@ -191,12 +192,12 @@ func CreateTransfer(ctx context.Context, conn *sql.DB, in TransferInput) ([]Oper
 	ids := []string{uuid.NewString(), uuid.NewString()}
 	err := mutateLedger(ctx, conn, func(tx *sql.Tx) ([]string, error) {
 		var sourceAccount, destinationAccount, sourceAsset, destinationAsset string
-		if err := tx.QueryRowContext(ctx, `SELECT account_id, asset_id FROM investment_positions WHERE id = ?`, in.SourcePositionID).Scan(&sourceAccount, &sourceAsset); errors.Is(err, sql.ErrNoRows) {
+		if err := tx.QueryRowContext(ctx, `SELECT account_id, asset_id FROM investment_positions WHERE id = ?`, in.SourcePositionID).Scan(dbtypes.ID(&sourceAccount), dbtypes.ID(&sourceAsset)); errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrPositionNotFound
 		} else if err != nil {
 			return nil, err
 		}
-		if err := tx.QueryRowContext(ctx, `SELECT account_id, asset_id FROM investment_positions WHERE id = ?`, in.DestinationPositionID).Scan(&destinationAccount, &destinationAsset); errors.Is(err, sql.ErrNoRows) {
+		if err := tx.QueryRowContext(ctx, `SELECT account_id, asset_id FROM investment_positions WHERE id = ?`, in.DestinationPositionID).Scan(dbtypes.ID(&destinationAccount), dbtypes.ID(&destinationAsset)); errors.Is(err, sql.ErrNoRows) {
 			return nil, ErrPositionNotFound
 		} else if err != nil {
 			return nil, err
@@ -300,13 +301,28 @@ func CreateOperations(ctx context.Context, conn *sql.DB, inputs []OperationInput
 	return result, nil
 }
 
+// positionLedgerKind reports the kinds a manual holding of an integrated
+// custody may record. They only move the holding, never the provider's cash.
+func positionLedgerKind(kind OperationKind) bool {
+	switch kind {
+	case OperationInitialBalance, OperationBuy, OperationSell, OperationValuation:
+		return true
+	default:
+		return false
+	}
+}
+
 func validateOperationAccount(ctx context.Context, q Querier, in OperationInput) error {
 	account, err := getRawAccount(ctx, q, in.AccountID)
 	if err != nil {
 		return err
 	}
-	if account.Kind == AccountKindIntegrated && (!reconcilableKind(in.Kind) || in.PositionID != nil) {
-		return ErrIntegratedReadOnly
+	if account.Kind == AccountKindIntegrated {
+		cashNote := reconcilableKind(in.Kind) && in.PositionID == nil
+		holding := positionLedgerKind(in.Kind) && in.PositionID != nil && *in.PositionID != ""
+		if !cashNote && !holding {
+			return ErrIntegratedReadOnly
+		}
 	}
 	return validateOperationShape(Operation{AccountID: in.AccountID, PositionID: in.PositionID,
 		Kind: in.Kind, OccurredOn: in.OccurredOn, Amount: in.Amount, Quantity: in.Quantity,
@@ -380,7 +396,7 @@ func DeleteOperation(ctx context.Context, conn *sql.DB, id string) error {
 		}
 		var linked bool
 		if err := tx.QueryRowContext(ctx,
-			`SELECT EXISTS (SELECT 1 FROM investment_reconciliations WHERE operation_id = ?)`, id).Scan(&linked); err != nil {
+			`SELECT EXISTS (SELECT 1 FROM investment_reconciliations WHERE operation_id = ?)`, id).Scan(dbtypes.Bool(&linked)); err != nil {
 			return nil, err
 		}
 		if linked {
@@ -405,7 +421,7 @@ func DeleteTransfer(ctx context.Context, conn *sql.DB, transferID string) error 
 		accounts := []string{}
 		for rows.Next() {
 			var account string
-			if err := rows.Scan(&account); err != nil {
+			if err := rows.Scan(dbtypes.ID(&account)); err != nil {
 				rows.Close()
 				return nil, err
 			}

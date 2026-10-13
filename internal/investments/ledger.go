@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	dbtypes "github.com/greg0x46/julius/internal/db/types"
 	"github.com/shopspring/decimal"
 )
 
@@ -102,6 +103,9 @@ type timeValue struct{ value string }
 type accountLedger struct {
 	cash      decimal.Decimal
 	positions map[string]*positionLedger
+	// cashless marks an integrated custody: its cash is the provider's, so
+	// local trades never move or validate it.
+	cashless bool
 }
 
 func newAccountLedger() accountLedger {
@@ -173,12 +177,15 @@ func replayAccountUntil(ctx context.Context, q Querier, accountID string, until 
 	if err != nil {
 		return accountLedger{}, err
 	}
-	// Local annotations never increment or decrement provider balances.
-	if account.Kind == AccountKindIntegrated {
-		return newAccountLedger(), nil
-	}
 	query := `SELECT ` + operationColumns + ` FROM investment_operations WHERE account_id = ?`
 	args := []any{accountID}
+	ledger := newAccountLedger()
+	// An integrated custody only replays its manual holdings: local cash
+	// annotations never increment or decrement provider balances.
+	if account.Kind == AccountKindIntegrated {
+		query += ` AND position_id IS NOT NULL`
+		ledger.cashless = true
+	}
 	if until != nil {
 		query += ` AND occurred_on <= ?`
 		args = append(args, formatDate(*until))
@@ -189,7 +196,6 @@ func replayAccountUntil(ctx context.Context, q Querier, accountID string, until 
 	}
 	defer rows.Close()
 
-	ledger := newAccountLedger()
 	for rows.Next() {
 		op, err := scanOperation(rows)
 		if err != nil {
@@ -201,6 +207,9 @@ func replayAccountUntil(ctx context.Context, q Querier, accountID string, until 
 	}
 	if err := rows.Err(); err != nil {
 		return accountLedger{}, err
+	}
+	if ledger.cashless {
+		ledger.cash = decimal.Zero
 	}
 	return ledger, nil
 }
@@ -284,7 +293,7 @@ func applyOperation(ledger *accountLedger, op Operation) error {
 		p.valuedQuantity = p.quantity
 		p.valuedOn = &timeValue{value: op.OccurredOn.Format(DateLayout)}
 	}
-	if ledger.cash.IsNegative() {
+	if !ledger.cashless && ledger.cash.IsNegative() {
 		return fmt.Errorf("operation %s: %w", op.ID, ErrNegativeCash)
 	}
 	return nil
@@ -300,9 +309,9 @@ func scanOperation(row interface{ Scan(...any) error }) (Operation, error) {
 		occurredOnRaw, amountRaw, feesRaw, taxesRaw                 string
 		createdAtRaw, updatedAtRaw                                  string
 	)
-	if err := row.Scan(&op.ID, &op.AccountID, &positionID, &transferID, &op.Kind, &occurredOnRaw, &amountRaw,
-		&quantityRaw, &unitPriceRaw, &feesRaw, &taxesRaw, &notesRaw, &op.Source,
-		&createdAtRaw, &updatedAtRaw); err != nil {
+	if err := row.Scan(dbtypes.ID(&op.ID), dbtypes.ID(&op.AccountID), dbtypes.ID(&positionID), dbtypes.ID(&transferID), &op.Kind, dbtypes.Date(&occurredOnRaw), dbtypes.Decimal(&amountRaw),
+		dbtypes.Decimal(&quantityRaw), dbtypes.Decimal(&unitPriceRaw), dbtypes.Decimal(&feesRaw), dbtypes.Decimal(&taxesRaw), &notesRaw, &op.Source,
+		dbtypes.Time(&createdAtRaw), dbtypes.Time(&updatedAtRaw)); err != nil {
 		return Operation{}, err
 	}
 	if positionID.Valid {

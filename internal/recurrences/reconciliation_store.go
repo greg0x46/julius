@@ -10,6 +10,7 @@ import (
 
 	"github.com/greg0x46/julius/internal/dates"
 	"github.com/greg0x46/julius/internal/db"
+	dbtypes "github.com/greg0x46/julius/internal/db/types"
 	"github.com/greg0x46/julius/internal/transactions"
 )
 
@@ -41,7 +42,7 @@ func scanOverride(scan func(dest ...any) error) (Override, error) {
 		originRaw         string
 		createdAtRaw      string
 	)
-	if err := scan(&o.ID, &o.ScenarioID, &occurrenceDateRaw, &stateRaw, &transactionID, &originRaw, &createdAtRaw); err != nil {
+	if err := scan(dbtypes.ID(&o.ID), dbtypes.ID(&o.ScenarioID), dbtypes.Date(&occurrenceDateRaw), &stateRaw, dbtypes.ID(&transactionID), &originRaw, dbtypes.Time(&createdAtRaw)); err != nil {
 		return Override{}, err
 	}
 	o.State = OverrideState(stateRaw)
@@ -53,7 +54,7 @@ func scanOverride(scan func(dest ...any) error) (Override, error) {
 	if o.OccurrenceDate, err = parseDate(occurrenceDateRaw); err != nil {
 		return Override{}, err
 	}
-	if o.CreatedAt, err = db.ParseTime(createdAtRaw); err != nil {
+	if o.CreatedAt, err = dbtypes.ParseTime(createdAtRaw); err != nil {
 		return Override{}, err
 	}
 	return o, nil
@@ -137,7 +138,7 @@ func LinkedTransactionIDs(ctx context.Context, q Querier) (map[string]bool, erro
 	linked := map[string]bool{}
 	for rows.Next() {
 		var id string
-		if err := rows.Scan(&id); err != nil {
+		if err := rows.Scan(dbtypes.ID(&id)); err != nil {
 			return nil, err
 		}
 		linked[id] = true

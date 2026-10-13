@@ -92,9 +92,9 @@ export function InvestmentAccountCard({
 
   const menuItems: RecordMenuItem[] = [
     { key: "operation", label: "Registrar movimentação", onClick: () => onNewOperation(account) },
+    { key: "position", label: "Nova posição", onClick: () => onNewPosition(account) },
     ...(editable
       ? [
-          { key: "position", label: "Nova posição", onClick: () => onNewPosition(account) },
           { key: "edit", label: "Editar conta", onClick: () => onRename(account) },
           {
             key: "delete",
@@ -130,8 +130,9 @@ export function InvestmentAccountCard({
       </p>
       {!editable && (
         <p className="investment-note">
-          Saldos e posições vêm da instituição. Registre aportes, resgates e rendimentos para conciliá-los com o
-          extrato, sem alterar o saldo informado.
+          Saldos e posições da instituição vêm dela e não podem ser alterados. Registre aportes, resgates e
+          rendimentos para conciliá-los com o extrato, ou adicione posições manuais, como criptoativos que a
+          instituição não informa.
         </p>
       )}
 
@@ -172,15 +173,12 @@ export function InvestmentAccountCard({
         costs={costs}
         linked={linked}
         onAssignGoal={onAssignGoal}
-        onEdit={editable ? onEditPosition : undefined}
-        onDelete={editable ? onRemovePosition : undefined}
+        onEdit={onEditPosition}
+        onDelete={onRemovePosition}
+        markManual={!editable}
         busy={busy}
         emptyTitle="Nenhuma posição nesta conta"
-        emptyAction={
-          editable ? (
-            <Button onClick={() => onNewPosition(account)}>Nova posição</Button>
-          ) : undefined
-        }
+        emptyAction={<Button onClick={() => onNewPosition(account)}>Nova posição</Button>}
       />
 
       <Collapse
