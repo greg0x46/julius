@@ -8,6 +8,11 @@ describe("parseTransfer", () => {
     expect(parseTransfer(transfer)).toEqual(transfer);
     expect(parseTransfer({ ...transfer, fee: { ...movement, amount: "-10" } }).fee?.amount).toBe("-10");
   });
+  it("preserves unavailable native amounts after provider corrections", () => {
+    const corrected = { ...transfer, destination: { ...transfer.destination, amount: null }, effective_rate: "", fee: { ...movement, amount: null } };
+    expect(parseTransfer(corrected)).toEqual(corrected);
+    expect(() => parseTransfer({ ...transfer, source: { ...movement, amount: "" } })).toThrow();
+  });
   it("rejects numeric money and missing currencies", () => {
     expect(() => parseTransfer({ ...transfer, source: { ...movement, amount: 540 } })).toThrow();
     expect(() => parseTransfer({ ...transfer, destination: { ...movement, currency_code: "" } })).toThrow();

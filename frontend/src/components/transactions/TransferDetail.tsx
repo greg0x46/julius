@@ -4,7 +4,8 @@ import { formatMoney } from "../../presentation/money";
 import { PanelSection } from "../shared/PanelStack";
 
 function movementLabel(movement: TransferMovement) {
-  return `${movement.account_name || "Conta"} · ${formatMoney(movement.amount.replace(/^-/, ""), movement.currency_code)}`;
+  const amount = movement.amount === null ? "Valor indisponível" : formatMoney(movement.amount.replace(/^-/, ""), movement.currency_code);
+  return `${movement.account_name || "Conta"} · ${amount}`;
 }
 export function TransferDetail({ transfer }: { transfer: AccountTransfer }) {
   return (

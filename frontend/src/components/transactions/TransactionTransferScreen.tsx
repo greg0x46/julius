@@ -14,7 +14,7 @@ import { TransactionPicker, type PickerTransaction } from "../shared/Transaction
 import { useConfirm } from "../shared/useConfirm";
 import { TransferDetail } from "./TransferDetail";
 
-function movement(item: TransactionItem): TransferMovement {
+function movement(item: TransactionItem): TransferMovement & { amount: string } {
   return {
     transaction_id: item.id,
     account_id: item.account.id,

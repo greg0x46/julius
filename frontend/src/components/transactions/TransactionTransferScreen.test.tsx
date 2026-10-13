@@ -43,6 +43,20 @@ describe("TransactionTransferScreen", () => {
     expect(screen.queryByRole("button", { name: "Vincular transferência" })).toBeNull();
     expect(screen.getByRole("button", { name: "Tentar novamente" })).toBeVisible();
   });
+  it("shows unavailable corrected amounts and still allows unlinking", async () => {
+    const user = userEvent.setup();
+    let removed = false;
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+    const corrected = { ...linked, destination: { ...linked.destination, amount: null }, effective_rate: "" };
+    vi.mocked(transfers.getTransactionTransfer).mockImplementation(async () => removed ? null : corrected);
+    vi.mocked(transfers.deleteTransfer).mockImplementation(async () => { removed = true; });
+    show(source);
+    expect(await screen.findByText("Conta USD · Valor indisponível")).toBeVisible();
+    expect(screen.getByText("Indisponível após alteração dos valores")).toBeVisible();
+    await user.click(screen.getByRole("button", { name: "Desvincular transferência" }));
+    await waitFor(() => expect(transfers.deleteTransfer).toHaveBeenCalledWith(linked.id));
+    expect(transactions.deleteManualTransaction).not.toHaveBeenCalled();
+  });
   it("unlinks without removing either transaction", async () => {
     const user = userEvent.setup();
     let removed = false;

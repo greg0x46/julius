@@ -209,9 +209,11 @@ currencies. Detail reads these current amounts and computes **absolute source
 amount / absolute destination amount**, rounded to 16 decimal places: BRL 540
 sent and USD 100 received display `1 USD = 5.4 BRL`. This execution rate is not
 a market quote and is not stored as a derived value. Provider corrections are
-reflected on read; an unavailable/zero destination amount makes the rate
-unavailable. The annotation remains until explicitly unlinked or removed by
-ignoring/deleting a participating movement.
+reflected on read; an unavailable principal amount or zero destination amount
+makes the rate unavailable. Missing native amounts are returned as JSON null
+and displayed as **Valor indisponível**, retaining detail and unlink access.
+The annotation remains until explicitly unlinked or removed by ignoring/deleting
+a participating movement.
 
 Linked principal receives `linked_transfer` after ordinary eligibility checks,
 leaves income/expense/category totals and still satisfies `MovesCash()`.
@@ -236,8 +238,8 @@ explicit new pairing and the same validation.
   Returns the transfer detail with 201. Writes use ordinary auth/CSRF protection.
 - `GET /api/transactions/{id}/transfer`: detail for any participant, or JSON
   null when it has no relationship. Source/destination include transaction ID,
-  account ID/name, signed native amount and currency; `effective_rate` includes
-  the source units per destination unit; `fee` is nullable.
+  account ID/name, nullable signed native amount and currency; `effective_rate`
+  includes the source units per destination unit; `fee` is nullable.
 - `DELETE /api/transfers/{id}`: unlink, 204; missing link 404. Duplicate or
   investment-linked participants are 409; invalid pairing is 422; database
   failures are 503 without internals.
@@ -254,6 +256,7 @@ explicit new pairing and the same validation.
 
 Tests: `TestLinkedTransfersPreserveNativeCashAndReporting`,
 `TestSyncedTransferLinkingAndUnlinkDecisions`,
+`TestTransferProviderCorrectionsKeepDetailAndUnlinkAvailable`,
 `TestTransferValidationAndAtomicManualPairs`,
 `TestTransferRejectsInvalidFeesAndKeepsPreviousTransferCategory`,
 `TestTransferHTTPCreateReadUnlinkAndValidation`,

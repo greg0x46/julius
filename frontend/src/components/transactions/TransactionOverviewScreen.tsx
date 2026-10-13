@@ -65,7 +65,7 @@ export function TransactionOverviewScreen({
     ? (transfer.data.source.transaction_id === item.id ? transfer.data.destination : transfer.data.source)
     : null;
   const transferHint = otherMovement
-    ? `${otherMovement.account_name} · ${formatMoney(otherMovement.amount.replace(/^-/, ""), otherMovement.currency_code)}`
+    ? `${otherMovement.account_name} · ${(otherMovement.amount === null ? "Valor indisponível" : formatMoney(otherMovement.amount.replace(/^-/, ""), otherMovement.currency_code))}`
     : transfer.isLoading ? "Carregando…" : transfer.isError ? "Não foi possível consultar" : linked ? "Transferência vinculada" : "Nenhum vínculo";
   const choices = useMemo(() => categoryChoices(categories, item), [categories, item]);
   const suggestion = suggestedCategory(item, choices);

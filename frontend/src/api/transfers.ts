@@ -8,7 +8,7 @@ export interface TransferMovement {
   transaction_id: string;
   account_id: string;
   account_name: string;
-  amount: string;
+  amount: string | null;
   currency_code: string;
 }
 export interface AccountTransfer {
@@ -31,7 +31,7 @@ export type TransferWrite = {
 function parseMovement(value: unknown): TransferMovement {
   const row = requiredRecord(value, ["transaction_id", "account_id", "account_name", "amount", "currency_code"]);
   if (typeof row.transaction_id !== "string" || !isUuid(row.transaction_id) || typeof row.account_id !== "string" || !isUuid(row.account_id) || typeof row.account_name !== "string" || typeof row.currency_code !== "string" || !/^[A-Z]{3}$/.test(row.currency_code)) throw new TypeError("Transferência inválida.");
-  return { transaction_id: row.transaction_id, account_id: row.account_id, account_name: row.account_name, amount: decimal(row.amount), currency_code: row.currency_code };
+  return { transaction_id: row.transaction_id, account_id: row.account_id, account_name: row.account_name, amount: row.amount === null ? null : decimal(row.amount), currency_code: row.currency_code };
 }
 export function parseTransfer(value: unknown): AccountTransfer {
   const row = requiredRecord(value, ["id", "source", "destination", "effective_rate", "fee"]);

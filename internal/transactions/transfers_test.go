@@ -42,7 +42,7 @@ func TestLinkedTransfersPreserveNativeCashAndReporting(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if linked.Source.Amount != "-540" || linked.Destination.Amount != "100" || linked.EffectiveRate != "5.4" || linked.Fee == nil {
+		if linked.Source.Amount == nil || *linked.Source.Amount != "-540" || linked.Destination.Amount == nil || *linked.Destination.Amount != "100" || linked.EffectiveRate != "5.4" || linked.Fee == nil {
 			t.Fatalf("transfer: %+v", linked)
 		}
 		for _, id := range []string{linked.Source.TransactionID, linked.Destination.TransactionID} {

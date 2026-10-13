@@ -25,11 +25,11 @@ type TransferInput struct {
 }
 
 type TransferMovement struct {
-	TransactionID string `json:"transaction_id"`
-	AccountID     string `json:"account_id"`
-	AccountName   string `json:"account_name"`
-	Amount        string `json:"amount"`
-	CurrencyCode  string `json:"currency_code"`
+	TransactionID string  `json:"transaction_id"`
+	AccountID     string  `json:"account_id"`
+	AccountName   string  `json:"account_name"`
+	Amount        *string `json:"amount"`
+	CurrencyCode  string  `json:"currency_code"`
 }
 
 type AccountTransfer struct {
@@ -96,7 +96,8 @@ func transferMovement(ctx context.Context, q Querier, id string) (TransferMoveme
 	if (amount.IsNegative() && movement.String != "DEBIT") || (amount.IsPositive() && movement.String != "CREDIT") {
 		return m, ErrInvalidTransfer
 	}
-	m.AccountName, m.Amount, m.CurrencyCode = name.String, money.CanonicalDecimal(*amount), currency.String
+	nativeAmount := money.CanonicalDecimal(*amount)
+	m.AccountName, m.Amount, m.CurrencyCode = name.String, &nativeAmount, currency.String
 	return m, nil
 }
 
@@ -134,7 +135,7 @@ func CreateTransfer(ctx context.Context, q Querier, in TransferInput) (string, e
 	if err != nil {
 		return "", err
 	}
-	sent, received := decimal.RequireFromString(source.Amount), decimal.RequireFromString(destination.Amount)
+	sent, received := decimal.RequireFromString(*source.Amount), decimal.RequireFromString(*destination.Amount)
 	if source.AccountID == destination.AccountID || !sent.IsNegative() || !received.IsPositive() || (source.CurrencyCode == destination.CurrencyCode && !sent.Abs().Equal(received)) {
 		return "", ErrInvalidTransfer
 	}
@@ -147,7 +148,7 @@ func CreateTransfer(ctx context.Context, q Querier, in TransferInput) (string, e
 		if err != nil {
 			return "", err
 		}
-		if !found || !decimal.RequireFromString(fee.Amount).IsNegative() || !item.TotalsEligibility.Included || (fee.AccountID != source.AccountID && fee.AccountID != destination.AccountID) {
+		if !found || !decimal.RequireFromString(*fee.Amount).IsNegative() || !item.TotalsEligibility.Included || (fee.AccountID != source.AccountID && fee.AccountID != destination.AccountID) {
 			return "", ErrInvalidTransfer
 		}
 	}
@@ -197,11 +198,11 @@ func GetTransfer(ctx context.Context, q Querier, id string) (*AccountTransfer, e
 	for rows.Next() {
 		var m TransferMovement
 		var role string
-		var name, amount, currency sql.NullString
-		if err := rows.Scan(&role, dbtypes.ID(&m.TransactionID), dbtypes.ID(&m.AccountID), &name, dbtypes.Decimal(&amount), &currency); err != nil {
+		var name, currency sql.NullString
+		if err := rows.Scan(&role, dbtypes.ID(&m.TransactionID), dbtypes.ID(&m.AccountID), &name, dbtypes.Decimal(&m.Amount), &currency); err != nil {
 			return nil, err
 		}
-		m.AccountName, m.Amount, m.CurrencyCode = name.String, amount.String, currency.String
+		m.AccountName, m.CurrencyCode = name.String, currency.String
 		switch role {
 		case "source":
 			result.Source = m
@@ -217,8 +218,11 @@ func GetTransfer(ctx context.Context, q Querier, id string) (*AccountTransfer, e
 	if result.Source.TransactionID == "" || result.Destination.TransactionID == "" {
 		return nil, ErrTransferNotFound
 	}
-	sent, e1 := decimal.NewFromString(result.Source.Amount)
-	received, e2 := decimal.NewFromString(result.Destination.Amount)
+	if result.Source.Amount == nil || result.Destination.Amount == nil {
+		return result, nil
+	}
+	sent, e1 := decimal.NewFromString(*result.Source.Amount)
+	received, e2 := decimal.NewFromString(*result.Destination.Amount)
 	if e1 == nil && e2 == nil && !received.IsZero() {
 		result.EffectiveRate = sent.Abs().DivRound(received.Abs(), 16).String()
 	}
