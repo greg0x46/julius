@@ -35,12 +35,22 @@ fields, spaces after commas). The file name never determines the period.
   row is not changed. The account balance does not advance in that ambiguous
   import. The old identity (without balance) is still recognized when
   re-uploading already imported movements whose balance matches.
-- If an identical row (balance included) already came from another file, the
-  preview flags the match as ambiguous. Confirmation requires a per-row choice:
-  ignore as a repeat or import as another purchase. The new identity uses the
-  file and line number, so re-uploading the file after that choice does not
-  create another purchase. If the classification changes between preview and
-  confirmation, a new preview is required.
+- Exact normalized matches (balance and ordinal included) are skipped as
+  duplicates regardless of the CSV hash. Legacy identities and explicit
+  "import as another transaction" identities are recognized by their normalized
+  data too, preserving repeated-row multiplicity across overlapping files.
+- For balance conflicts, the preview supplies `conflicts`, keyed by incoming
+  line number, with the existing transaction's id, timestamp, description,
+  amount, currency, payment method, balance and original filename when available.
+  The UI shows shared details once and highlights both balances, stacked on
+  phones and side by side on wider screens. Each conflict requires an explicit
+  choice: keep existing / ignore incoming, or import as another transaction.
+  Existing entries are never changed. An import choice uses the file hash and
+  line number for its distinct identity; an ignore choice records an unchanged
+  normalization event linked to the existing transaction. Re-uploading after
+  either choice is automatically skipped, without another decision.
+  The preview fingerprint includes the compared existing data; changing that
+  data or the classification before confirmation requires a new preview.
 - Identical rows within the same file are distinct movements (ordinal 1, 2, ...).
   Known limit: a later file with more identical rows than the earlier one
   imports only the excess.
@@ -65,8 +75,8 @@ fields, spaces after commas). The file name never determines the period.
 ## API
 
 - `POST /api/statement-imports/preview` — multipart upload, `file`, optional
-  `account_id`, optional `format`; returns rows, counts, format, version, hash
-  and the preview fingerprint.
+  `account_id`, optional `format`; returns rows, counts, format, version, hash,
+  the preview fingerprint and structured conflict details.
 - `POST /api/statement-imports` — same file, existing account or new account
   name, expected hash/format/version/fingerprint and `allow_partial`; returns
   account, run and the counts written.

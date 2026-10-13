@@ -62,7 +62,8 @@ authentication configuration that does not depend on the host:
   metrics, failures) instead of a black-box import.
 - **Statement import** — upload a Flash CSV, review the per-row preview and
   import it into a file-based account. Re-uploads and overlapping periods are
-  recognized, with an import history and warnings for inconsistent data.
+  automatically deduplicated across files. Balance conflicts show existing and
+  incoming values for an explicit per-row choice, with an import history.
 - **Manual bank accounts** — create standalone accounts in an ISO 4217 currency
   (BRL by default), including USD/EUR, without a bank connection. Native balance
   is opening balance + posted movements + explicit adjustments. Edit, archive
