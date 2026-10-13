@@ -17,6 +17,8 @@ export function useTimeline(params: TimelineParams, enabled = true) {
   });
 
   return {
+    valuation: query.data ?? {},
+    currencyCode: query.data?.currency_code ?? "BRL",
     base: query.data?.base ?? null,
     periodTotals: query.data?.period_totals ?? null,
     simulation: query.data?.simulation ?? null,

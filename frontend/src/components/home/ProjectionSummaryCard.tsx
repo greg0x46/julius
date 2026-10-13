@@ -1,3 +1,4 @@
+import { ReportValuation } from "../shared/ReportValuation";
 import { QuestionCircleOutlined } from "@ant-design/icons";
 import { Popover, Skeleton } from "antd";
 import { useMemo } from "react";
@@ -12,7 +13,7 @@ import { useHomePeriodBounds } from "../../hooks/useHomePeriodBounds";
 import { useTimeline } from "../../hooks/useTimeline";
 import { useToday } from "../../hooks/useToday";
 import { formatDateOnly } from "../../presentation/dates";
-import { formatBRL } from "../../presentation/money";
+import { formatReportMoney } from "../../presentation/money";
 import { EmptyState, Section } from "../layout";
 import { Money } from "../shared/Money";
 
@@ -65,7 +66,11 @@ function BalanceFigure({ label, value, date }: { label: string; value: string; d
 }
 
 /** Nothing to plot: no balance, no day with a different balance, no entry in the window. */
-function hasNoActivity(series: { starting_balance: string; points: TimelineDayPoint[]; entries: unknown[] }): boolean {
+function hasNoActivity(series: {
+  starting_balance: string;
+  points: TimelineDayPoint[];
+  entries: unknown[];
+}): boolean {
   return (
     series.entries.length === 0 &&
     Number(series.starting_balance) === 0 &&
@@ -127,16 +132,19 @@ export function ProjectionSummaryCard({ period }: { period: Period }) {
     ? Math.max(
         ...[base.starting_balance, lowest?.balance, finalPoint?.balance]
           .filter((value): value is string => value !== undefined)
-          .map((value) => formatBRL(value).length),
+          .map((value) => formatReportMoney(value, timeline.currencyCode).length),
       )
     : 0;
 
   return (
-    <Section title="Evolução do saldo" trailing={<ChartHelp />}>
-      {isLoading && <ProjectionSkeleton />}
-      {error && !isLoading && (
-        <UnavailableState onRetry={retry}>Não foi possível carregar o saldo.</UnavailableState>
-      )}
+    <ReportValuation valuation={timeline.valuation}>
+      <Section title="Evolução do saldo" trailing={<ChartHelp />}>
+        {isLoading && <ProjectionSkeleton />}
+        {error && !isLoading && (
+          <UnavailableState onRetry={retry}>
+            {error instanceof Error ? error.message : "Não foi possível carregar o saldo."}
+          </UnavailableState>
+        )}
 
       {!isLoading && !error && base && bounds && hasNoActivity(base) && (
         <EmptyState
@@ -151,24 +159,29 @@ export function ProjectionSummaryCard({ period }: { period: Period }) {
               out again would only repeat it — except under "todo o
               período", where the bounds come from the database and are
               worth showing. */}
-          {wholePeriod && (
-            <p className="projection-summary-period">{periodNavigation(bounds.from, bounds.to)?.label}</p>
-          )}
-          <dl className={`balance-strip ${longestFigure > 13 ? "is-long" : ""}`}>
-            <BalanceFigure label="Saldo hoje" value={base.starting_balance} />
-            {lowest && <BalanceFigure label={lowestTitle} value={lowest.balance} date={lowest.date} />}
-            {finalPoint && (
-              <BalanceFigure label="Saldo no fim do período" value={finalPoint.balance} date={finalPoint.date} />
+            {wholePeriod && (
+              <p className="projection-summary-period">{periodNavigation(bounds.from, bounds.to)?.label}</p>
             )}
-          </dl>
-          <ProjectionTimeline
-            series={base}
-            referenceDate={referenceDate}
-            height={280}
-            onSelectDay={(date) => navigate(`/transacoes?date_from=${date}&date_to=${date}`)}
-          />
-        </div>
-      )}
-    </Section>
+            <dl className={`balance-strip ${longestFigure > 13 ? "is-long" : ""}`}>
+              <BalanceFigure label="Saldo hoje" value={base.starting_balance} />
+              {lowest && <BalanceFigure label={lowestTitle} value={lowest.balance} date={lowest.date} />}
+              {finalPoint && (
+                <BalanceFigure
+                  label="Saldo no fim do período"
+                  value={finalPoint.balance}
+                  date={finalPoint.date}
+                />
+              )}
+            </dl>
+            <ProjectionTimeline
+              series={base}
+              referenceDate={referenceDate}
+              height={280}
+              onSelectDay={(date) => navigate(`/transacoes?date_from=${date}&date_to=${date}`)}
+            />
+          </div>
+        )}
+      </Section>
+    </ReportValuation>
   );
 }

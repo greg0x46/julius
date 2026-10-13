@@ -1,3 +1,4 @@
+import { ReportValuation } from "../shared/ReportValuation";
 import { Skeleton } from "antd";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
@@ -7,7 +8,7 @@ import type { CategoryBreakdown, CategoryDirection, CategorySpendingItem } from 
 import { useCategoryBreakdown } from "../../hooks/useCategoryBreakdown";
 import type { Period } from "../../hooks/usePeriod";
 import { categoryPalette, otherCategoriesColor, uncategorizedColor } from "../../presentation/chartColors";
-import { formatBRL, sumBRL } from "../../presentation/money";
+import { formatReportMoney, sumBRL } from "../../presentation/money";
 import { UnavailableState } from "../AsyncState";
 import { filtersToSearchParams } from "../filters/filterUrl";
 import { PageTabs, Section } from "../layout";
@@ -96,7 +97,16 @@ function CategorySkeleton() {
   );
 }
 
-function Breakdown({ data, period, direction }: { data: CategoryBreakdown; period: Period; direction: CategoryDirection }) {
+function Breakdown({
+  data,
+  period,
+  direction,
+}: {
+  data: CategoryBreakdown;
+  period: Period;
+  direction: CategoryDirection;
+}) {
+  const format = (value: string) => formatReportMoney(value, data.currency_code);
   const [active, setActive] = useState<string | null>(null);
   const navigate = useNavigate();
   const total = Number(data.total);
@@ -107,7 +117,7 @@ function Breakdown({ data, period, direction }: { data: CategoryBreakdown; perio
   if (total <= 0 || slices.length === 0) {
     return (
       <div className="category-empty">
-        <strong>{formatBRL("0.00")}</strong>
+        <strong>{format("0.00")}</strong>
         <p>Nenhuma {direction === "outflow" ? "saída" : "entrada"} neste período.</p>
       </div>
     );
@@ -118,8 +128,8 @@ function Breakdown({ data, period, direction }: { data: CategoryBreakdown; perio
       <div className="category-donut">
         <div className="category-donut-total">
           <span>Total de {label}</span>
-          <strong title={formatBRL(data.total)} style={{ fontSize: donutFigureSize(formatBRL(data.total)) }}>
-            {formatBRL(data.total)}
+          <strong title={format(data.total)} style={{ fontSize: donutFigureSize(format(data.total)) }}>
+            {format(data.total)}
           </strong>
         </div>
         <ResponsiveContainer width="100%" height={200}>
@@ -153,7 +163,7 @@ function Breakdown({ data, period, direction }: { data: CategoryBreakdown; perio
                   <div className="timeline-chart-tooltip">
                     <strong>{slice.name}</strong>
                     <div>
-                      {formatBRL(slice.amount)} · {percent(slice.value, total)}
+                      {format(slice.amount)} · {percent(slice.value, total)}
                     </div>
                   </div>
                 ) : null;
@@ -175,7 +185,7 @@ function Breakdown({ data, period, direction }: { data: CategoryBreakdown; perio
               <span className="category-breakdown-swatch" style={{ background: slice.color }} aria-hidden="true" />
               <span className="category-breakdown-name">{slice.name}</span>
               <span className="category-breakdown-amount">
-                <strong>{formatBRL(slice.amount)}</strong>
+                <strong>{format(slice.amount)}</strong>
                 <span>{percent(slice.value, total)}</span>
               </span>
             </Link>
@@ -214,9 +224,18 @@ export function SpendingByCategoryCard({ period }: { period: Period }) {
         {isLoading ? (
           <CategorySkeleton />
         ) : error || !data ? (
-          <UnavailableState onRetry={() => void refetch()}>Não foi possível carregar as categorias.</UnavailableState>
+          <UnavailableState onRetry={() => void refetch()}>
+            {error instanceof Error ? error.message : "Não foi possível carregar as categorias."}
+          </UnavailableState>
         ) : (
-          <Breakdown key={`${period.from}-${period.to}-${direction}`} data={data} period={period} direction={direction} />
+          <ReportValuation valuation={data}>
+            <Breakdown
+              key={`${period.from}-${period.to}-${direction}`}
+              data={data}
+              period={period}
+              direction={direction}
+            />
+          </ReportValuation>
         )}
       </div>
     </Section>

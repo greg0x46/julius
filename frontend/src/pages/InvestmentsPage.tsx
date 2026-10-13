@@ -315,20 +315,30 @@ export function InvestmentsPage() {
             <Skeleton active paragraph={{ rows: 5 }} />
           </div>
         </div>
-      ) : workspace.error && view !== "synced" ? null : (
+      ) : workspace.error ? null : (
         // A failed load shows only the retry above: zeroed totals and "Nenhuma
         // conta ainda" beside it would claim there is nothing there.
         <>
           {workspace.positions.some((position) => position.currency_code !== "BRL") && (
-            <Alert type="info" showIcon style={{ marginBottom: 16 }} message="Totais em reais"
-              description="Posições em outras moedas são exibidas na moeda original e ficam fora dos totais e metas em reais. Esta versão não faz conversão de câmbio." />
+            <Alert
+              type="info"
+              showIcon
+              style={{ marginBottom: 16 }}
+              message={`Totais em ${workspace.summary?.currency_code ?? "BRL"}`}
+              description="Posições fora da base em BRL são exibidas na moeda original e continuam fora dos totais e metas. A moeda de referência altera a avaliação dos totais consolidados."
+            />
           )}
           {/* Each view's hero is its own scope: the workspace total for the
               account and goal views, the imported investments' total for the
               synced one. Two heroes on one screen would compete. */}
           {view === "synced" ? (
             !syncedInvestments.isLoading &&
-            syncedInvestments.investments.length > 0 && <InvestmentsSummary investments={syncedInvestments.investments} />
+            syncedInvestments.investments.length > 0 && (
+              <InvestmentsSummary
+                valuation={workspace.summary ?? undefined}
+                investments={syncedInvestments.investments}
+              />
+            )
           ) : (
             <InvestmentWorkspaceSummary
               summary={workspace.summary}
@@ -369,6 +379,7 @@ export function InvestmentsPage() {
               <div className="investments-list">
                 {workspace.accounts.map((account) => (
                   <InvestmentAccountCard
+                    valuation={workspace.summary ?? undefined}
                     key={account.id}
                     account={account}
                     summary={summaryAccount(account.id)}
@@ -415,6 +426,7 @@ export function InvestmentsPage() {
                 if (portfolio === null && positions.length === 0) return null;
                 return (
                   <InvestmentGoalCard
+                    valuation={workspace.summary ?? undefined}
                     key={portfolio?.id ?? "sem-objetivo"}
                     portfolio={portfolio}
                     summary={summaryPortfolio(portfolio?.id ?? null)}

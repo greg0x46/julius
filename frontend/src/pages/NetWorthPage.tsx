@@ -1,3 +1,4 @@
+import { ReportValuation } from "../components/shared/ReportValuation";
 import { Skeleton } from "antd";
 
 import { UnavailableState } from "../components/AsyncState";
@@ -33,7 +34,9 @@ export function NetWorthPage() {
       )}
       {netWorth.error && !netWorth.isLoading && (
         <UnavailableState onRetry={() => netWorth.refetch()}>
-          Não foi possível carregar o patrimônio líquido
+          {netWorth.error instanceof Error
+            ? netWorth.error.message
+            : "Não foi possível carregar o patrimônio líquido"}
         </UnavailableState>
       )}
 
@@ -45,19 +48,24 @@ export function NetWorthPage() {
       )}
 
       {!netWorth.isLoading && !netWorth.error && netWorth.latest && (
-        <div className="net-worth-page">
-          <NetWorthBreakdownCard snapshot={netWorth.latest} />
-          {hasSeries ? (
-            <NetWorthChart snapshots={netWorth.series} footnote={footnote} />
-          ) : (
-            <Section title="Evolução do patrimônio líquido">
-              <EmptyState
-                title="Ainda não há histórico para mostrar"
-                hint="O gráfico aparece a partir do segundo dia com dados registrados."
+        <ReportValuation valuation={netWorth.latest}>
+          <div className="net-worth-page">
+            <NetWorthBreakdownCard snapshot={netWorth.latest} />
+            {hasSeries ? (
+              <NetWorthChart
+                snapshots={netWorth.series}
+                footnote={`Valores em ${netWorth.latest.currency_code ?? "BRL"}, com câmbio de cada dia. ${footnote}`}
               />
-            </Section>
-          )}
-        </div>
+            ) : (
+              <Section title="Evolução do patrimônio líquido">
+                <EmptyState
+                  title="Ainda não há histórico para mostrar"
+                  hint="O gráfico aparece a partir do segundo dia com dados registrados."
+                />
+              </Section>
+            )}
+          </div>
+        </ReportValuation>
       )}
     </Page>
   );

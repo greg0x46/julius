@@ -1,3 +1,4 @@
+import { ReportValuation } from "../shared/ReportValuation";
 import { Skeleton } from "antd";
 import { useMemo } from "react";
 
@@ -43,7 +44,9 @@ export function DailyAllowanceCard() {
         )}
         {!timeline.isLoading && (
           <UnavailableState onRetry={() => timeline.refetch()}>
-            Não foi possível calcular o gasto diário disponível.
+            {timeline.error instanceof Error
+              ? timeline.error.message
+              : "Não foi possível calcular o gasto diário disponível."}
           </UnavailableState>
         )}
       </Section>
@@ -51,12 +54,14 @@ export function DailyAllowanceCard() {
   }
 
   return (
-    <Section title={title}>
-      <p className="daily-allowance-value">
-        <Money value={dailyAllowance(base.points)} tone="neutral" size="row" />
-        <span className="daily-allowance-unit"> / dia</span>
-      </p>
-      <p className="daily-allowance-note">Disponível para gastar até o fim do mês</p>
-    </Section>
+    <ReportValuation valuation={timeline.valuation}>
+      <Section title={title}>
+        <p className="daily-allowance-value">
+          <Money value={dailyAllowance(base.points)} tone="neutral" size="row" />
+          <span className="daily-allowance-unit"> / dia</span>
+        </p>
+        <p className="daily-allowance-note">Disponível para gastar até o fim do mês</p>
+      </Section>
+    </ReportValuation>
   );
 }

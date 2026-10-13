@@ -1,3 +1,4 @@
+import { parseValuation, type ReportValuation } from "./valuation";
 import { dateOnlyPattern, decimal, isUuid, requiredRecord, requiredRecordWithOptionalKeys } from "./shared";
 
 export const certaintyTiers = ["realizado", "confirmado", "projetado", "hipotetico"] as const;
@@ -61,7 +62,7 @@ export interface PeriodTotals {
   result: string;
 }
 
-export interface TimelineResponse {
+export interface TimelineResponse extends ReportValuation {
   base: TimelineSeries;
   period_totals: PeriodTotals;
   simulation: TimelineSeries | null;
@@ -204,15 +205,17 @@ function parseScenarioImpact(value: unknown): ScenarioImpact {
 }
 
 export function parseTimelineResponse(value: unknown): TimelineResponse {
-  const response = requiredRecord(
+  const response = requiredRecordWithOptionalKeys(
     value,
     ["base", "period_totals", "simulation", "scenario_impacts"],
+    ["currency_code", "fx"],
     "Resposta da linha do tempo inválida.",
   );
   if (!Array.isArray(response.scenario_impacts)) {
     throw new TypeError("Resposta da linha do tempo inválida.");
   }
   return {
+    ...parseValuation(response),
     base: parseTimelineSeries(response.base),
     period_totals: parsePeriodTotals(response.period_totals),
     simulation: response.simulation === null ? null : parseTimelineSeries(response.simulation),

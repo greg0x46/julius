@@ -5,7 +5,7 @@ import type { NetWorthSnapshot } from "../../api/contracts";
 import { formatAxisMoney } from "../../presentation/chartAxis";
 import { yAxisWidth } from "../../presentation/chartAxisWidth";
 import { balanceChartColor } from "../../presentation/chartColors";
-import { formatBRL } from "../../presentation/money";
+import { useReportFormat } from "../../hooks/useReportCurrency";
 import { Section } from "../layout";
 import { useCompactScreen } from "../shared/useCompactScreen";
 
@@ -21,12 +21,21 @@ function toChartData(snapshots: NetWorthSnapshot[]): ChartPoint[] {
   return snapshots.map((s) => ({ date: dateLabel(s.captured_at), netWorth: Number(s.net_worth) }));
 }
 
-function TooltipContent({ active, payload, label }: { active?: boolean; payload?: { value: number }[]; label?: string }) {
+function TooltipContent({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean;
+  payload?: { value: number }[];
+  label?: string;
+}) {
+  const format = useReportFormat();
   if (!active || !payload || payload.length === 0) return null;
   return (
     <div className="timeline-chart-tooltip">
       <strong>{label}</strong>
-      <div>Patrimônio líquido: {formatBRL(String(payload[0].value))}</div>
+      <div>Patrimônio líquido: {format(String(payload[0].value))}</div>
     </div>
   );
 }
@@ -37,7 +46,13 @@ function TooltipContent({ active, payload, label }: { active?: boolean; payload?
 // not a forecast. The Y axis is there because a bare line with no scale says
 // "it went up" but never by how much; its ticks are rounded like Início's.
 // `footnote` is the one place for what the series does not cover.
-export function NetWorthChart({ snapshots, footnote }: { snapshots: NetWorthSnapshot[]; footnote?: ReactNode }) {
+export function NetWorthChart({
+  snapshots,
+  footnote,
+}: {
+  snapshots: NetWorthSnapshot[];
+  footnote?: ReactNode;
+}) {
   const compact = useCompactScreen();
   const data = toChartData(snapshots);
   const axisWidth = yAxisWidth(data.map((point) => point.netWorth));

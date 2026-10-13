@@ -1,3 +1,5 @@
+import { valueInReferenceCurrency } from "../../presentation/valuation";
+import type { ReportValuation } from "../../api/contracts/valuation";
 import { Progress } from "antd";
 
 import type {
@@ -31,6 +33,7 @@ import {
 export function InvestmentGoalCard({
   portfolio,
   summary,
+  valuation,
   positions,
   operations,
   portfolios,
@@ -43,6 +46,7 @@ export function InvestmentGoalCard({
 }: {
   /** null is the "sem objetivo" bucket: positions nobody has grouped yet. */
   portfolio: InvestmentPortfolio | null;
+  valuation?: ReportValuation;
   summary: InvestmentSummaryPortfolio | undefined;
   positions: InvestmentPosition[];
   operations: InvestmentOperation[];
@@ -57,6 +61,8 @@ export function InvestmentGoalCard({
 }) {
   const confirm = useConfirm();
   const movements = goalMovements(operations);
+  const convert = (value: string) => valueInReferenceCurrency(value, valuation?.fx);
+  const currencyCode = valuation?.currency_code ?? "BRL";
   const currentValue =
     summary?.current_value ?? portfolio?.current_value ?? sumBRL(positions.filter((position) => position.currency_code === "BRL").map((position) => position.current_value));
   const updatedOn = latestDate([
@@ -100,25 +106,36 @@ export function InvestmentGoalCard({
       <p className="investment-note">Atualizado em {formatDate(updatedOn)}</p>
       <InvestmentFigures
         figures={[
-          { label: "Valor atual", value: <Money value={currentValue} tone="balance" /> },
+          {
+            label: "Valor atual",
+            value: <Money currencyCode={currencyCode} value={currentValue} tone="balance" />,
+          },
           {
             label: "Rendimento líquido",
-            value: <InvestmentYieldValue gain={yieldAggregate.gain} percent={yieldAggregate.percent} />,
+            value: (
+              <InvestmentYieldValue
+                currencyCode={currencyCode}
+                gain={convert(yieldAggregate.gain)}
+                percent={yieldAggregate.percent}
+              />
+            ),
             hint: "Já descontados IR, IOF e taxas das posições que têm rendimento conhecido.",
           },
           {
             label: "IR/Taxas",
-            value: <Money value={cost} tone="neutral" />,
+            value: <Money currencyCode={currencyCode} value={convert(cost)} tone="neutral" />,
             hint: "Taxas e impostos das movimentações, mais IR e IOF informados pela instituição.",
           },
           {
             label: "Compras e saldo inicial",
-            value: <Money value={movements.deposits} tone="neutral" />,
+            value: <Money currencyCode={currencyCode} value={convert(movements.deposits)} tone="neutral" />,
             hint: "Compras e saldos iniciais registrados nas posições deste objetivo.",
           },
           {
             label: "Vendas",
-            value: <Money value={movements.withdrawals} tone="neutral" />,
+            value: (
+              <Money currencyCode={currencyCode} value={convert(movements.withdrawals)} tone="neutral" />
+            ),
             hint: "Vendas registradas nas posições deste objetivo.",
           },
         ]}
@@ -127,7 +144,7 @@ export function InvestmentGoalCard({
       {target !== null && (
         <div className="investment-goal">
           <span>
-            Meta de <Money value={target} tone="neutral" />
+            Meta de <Money currencyCode={currencyCode} value={target} tone="neutral" />
           </span>
           {progress !== null && <Progress percent={Math.min(100, Math.round(Number(progress) * 100))} />}
         </div>

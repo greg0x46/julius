@@ -153,3 +153,21 @@ export function formatToneBRL(value: string, kind: MoneyToneKind, direction?: Mo
   if (kind === "flow" || kind === "result") return `${moneyTone(value, kind, direction).sign}${magnitude}`;
   return isZeroDecimal(value) || !value.trim().startsWith("-") ? magnitude : `-${magnitude}`;
 }
+
+/** Consolidated figures keep the same two-decimal presentation in every currency. */
+export function formatReportMoney(value: string, currencyCode: string): string {
+  return currencyCode === "BRL"
+    ? formatBRL(value)
+    : `${value.startsWith("-") ? "-" : ""}${currencyCode}\u00a0${fixedTwo(value).replace("-", "")}`;
+}
+
+export function formatToneMoney(
+  value: string,
+  kind: MoneyToneKind,
+  currencyCode: string,
+  direction?: MoneyDirection,
+): string {
+  const magnitude = formatReportMoney(value.trim().replace(/^-/, ""), currencyCode);
+  if (kind === "flow" || kind === "result") return `${moneyTone(value, kind, direction).sign}${magnitude}`;
+  return isZeroDecimal(value) || !value.trim().startsWith("-") ? magnitude : `-${magnitude}`;
+}

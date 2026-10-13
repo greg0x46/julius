@@ -11,7 +11,7 @@ vi.mock("../../hooks/useTimeline");
 
 const period = { from: "2026-10-01", to: "2026-10-31" };
 
-function mockTotals(totals: { income: string; expense: string; result: string }) {
+function mockTotals(totals: { income: string; expense: string; result: string }, currencyCode = "BRL") {
   vi.mocked(homePeriodBounds.useHomePeriodBounds).mockReturnValue({
     bounds: period,
     wholePeriod: false,
@@ -20,7 +20,9 @@ function mockTotals(totals: { income: string; expense: string; result: string })
     refetch: vi.fn(),
   } as unknown as ReturnType<typeof homePeriodBounds.useHomePeriodBounds>);
   vi.mocked(timelineHook.useTimeline).mockReturnValue({
-    base: null,
+    valuation: { currency_code: currencyCode },
+ currencyCode,
+ base: null,
     periodTotals: totals,
     simulation: null,
     scenarioImpacts: [],
@@ -73,4 +75,12 @@ describe("PeriodBalanceCard", () => {
     expect(screen.queryByText("+R$ 0,00")).toBeNull();
     expect(screen.queryByText("-R$ 0,00")).toBeNull();
   });
+  it("labels converted totals and accessible links in the response currency", () => {
+    mockTotals({ income: "200", expense: "100", result: "100" }, "USD");
+    renderCard();
+    expect(screen.getByRole("link", { name: /Entradas: USD\s200,00/ })).toHaveTextContent("+USD 200,00");
+    expect(screen.getByText("+USD 100,00")).toBeVisible();
+    expect(screen.queryByText(/R\$/)).toBeNull();
+  });
+
 });

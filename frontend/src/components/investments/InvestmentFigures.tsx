@@ -5,7 +5,11 @@ import { moneyTone } from "../../presentation/money";
 import { Money } from "../shared/Money";
 import { formatPercent } from "./investmentMath";
 
-export type InvestmentFigure = { label: string; value: ReactNode; hint?: string };
+export type InvestmentFigure = {
+  label: string;
+  value: ReactNode;
+  hint?: string;
+};
 
 /**
  * The account and the goal views answer the same five questions, so they share
@@ -41,11 +45,19 @@ export function InvestmentFigures({ figures }: { figures: InvestmentFigure[] }) 
  * money rule for a result (explicit +/−, never colour alone), and the % takes
  * the same tone so the two read as one figure.
  */
-export function InvestmentYieldValue({ gain, percent }: { gain: string; percent: number | null }) {
+export function InvestmentYieldValue({
+  gain,
+  percent,
+  currencyCode,
+}: {
+  gain: string;
+  percent: number | null;
+  currencyCode?: string;
+}) {
   const { color } = moneyTone(gain, "result");
   return (
     <span className="investment-yield">
-      <Money value={gain} tone="result" />
+      <Money currencyCode={currencyCode} value={gain} tone="result" />
       {percent !== null && (
         <span className={`investment-yield-percent money-${color}`}>{formatPercent(percent)}</span>
       )}

@@ -1,4 +1,5 @@
-import { decimal, isRecord, requiredRecord } from "./shared";
+import { parseValuation, type ReportValuation } from "./valuation";
+import { decimal, isRecord, requiredRecord, requiredRecordWithOptionalKeys } from "./shared";
 
 export const categorySpendingSources = ["real", "projetado"] as const;
 
@@ -13,7 +14,7 @@ export interface CategorySpendingItem {
   source: CategorySpendingSource;
 }
 
-export interface SpendingByCategory {
+export interface SpendingByCategory extends ReportValuation {
   month: string;
   currency_code: string;
   total: string;
@@ -51,9 +52,10 @@ function parseCategorySpendingItem(value: unknown): CategorySpendingItem {
 }
 
 export function parseSpendingByCategory(value: unknown): SpendingByCategory {
-  const item = requiredRecord(
+  const item = requiredRecordWithOptionalKeys(
     value,
     ["month", "currency_code", "total", "items"],
+    ["fx"],
     "Gastos por categoria inválidos.",
   );
   if (typeof item.month !== "string" || !monthOnlyPattern.test(item.month)) {
@@ -66,6 +68,7 @@ export function parseSpendingByCategory(value: unknown): SpendingByCategory {
     throw new TypeError("Gastos por categoria inválidos.");
   }
   return {
+    ...parseValuation(item),
     month: item.month,
     currency_code: item.currency_code,
     total: decimal(item.total),
@@ -81,11 +84,26 @@ export type CategoryBreakdown = Omit<SpendingByCategory, "month"> & {
 
 export function parseCategoryBreakdown(value: unknown): CategoryBreakdown {
   const periodKeys = isRecord(value) && "month" in value ? ["month"] : ["date_from", "date_to"];
-  const item = requiredRecord(value, [...periodKeys, "currency_code", "total", "items", "classification"], "Distribuição por categoria inválida.");
+  const item = requiredRecordWithOptionalKeys(
+    value,
+    [...periodKeys, "currency_code", "total", "items", "classification"],
+    ["fx"],
+    "Distribuição por categoria inválida.",
+  );
   if (item.classification !== "inflow" && item.classification !== "outflow") {
     throw new TypeError("Distribuição por categoria inválida.");
   }
-  if ("month" in item) return { ...parseSpendingByCategory({ month: item.month, currency_code: item.currency_code, total: item.total, items: item.items }), classification: item.classification };
+  if ("month" in item)
+    return {
+      ...parseSpendingByCategory({
+        month: item.month,
+        currency_code: item.currency_code,
+        total: item.total,
+        items: item.items,
+        ...(item.fx ? { fx: item.fx } : {}),
+      }),
+      classification: item.classification,
+    };
   const validDate = (date: unknown): date is string => {
     if (typeof date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(date) || date < "0001-01-01") return false;
     const parsed = new Date(`${date}T00:00:00Z`);
@@ -99,8 +117,12 @@ export function parseCategoryBreakdown(value: unknown): CategoryBreakdown {
     throw new TypeError("Distribuição por categoria inválida.");
   }
   return {
-    date_from: from as string | null, date_to: to as string | null,
-    classification: item.classification, currency_code: item.currency_code,
-    total: decimal(item.total), items: item.items.map(parseCategorySpendingItem),
+    ...parseValuation(item),
+    date_from: from as string | null,
+    date_to: to as string | null,
+    classification: item.classification,
+    currency_code: item.currency_code,
+    total: decimal(item.total),
+    items: item.items.map(parseCategorySpendingItem),
   };
 }

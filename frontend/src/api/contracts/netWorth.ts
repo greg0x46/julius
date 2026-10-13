@@ -1,4 +1,5 @@
-import { decimal, isValidDate, requiredRecord } from "./shared";
+import { parseValuation, type ReportValuation } from "./valuation";
+import { decimal, isValidDate, requiredRecord, requiredRecordWithOptionalKeys } from "./shared";
 
 // NetWorthBreakdown mirrors internal/httpapi's netWorthBreakdownDTO: the
 // four underlying balances plus the three totals derived from them
@@ -16,8 +17,9 @@ export interface NetWorthBreakdown {
   net_worth: string;
 }
 
-export interface NetWorthSnapshot extends NetWorthBreakdown {
+export interface NetWorthSnapshot extends NetWorthBreakdown, ReportValuation {
   captured_at: string;
+  stored_currency?: string;
   // Mirrors internal/httpapi's netWorthSnapshotDTO.IsBackfilled: true when
   // this row was reconstructed from past transactions rather than captured
   // live, in which case investment_balance is always "0" — investment
@@ -54,9 +56,10 @@ const netWorthBreakdownKeys = [
 ] as const;
 
 export function parseNetWorthSnapshot(value: unknown): NetWorthSnapshot {
-  const snapshot = requiredRecord(
+  const snapshot = requiredRecordWithOptionalKeys(
     value,
     ["captured_at", "is_backfilled", ...netWorthBreakdownKeys],
+    ["currency_code", "fx", "stored_currency"],
     "Patrimônio líquido inválido.",
   );
   if (!isValidDate(snapshot.captured_at)) {
@@ -66,6 +69,8 @@ export function parseNetWorthSnapshot(value: unknown): NetWorthSnapshot {
     throw new TypeError("Patrimônio líquido inválido.");
   }
   return {
+    ...parseValuation(snapshot),
+    ...(typeof snapshot.stored_currency === "string" ? { stored_currency: snapshot.stored_currency } : {}),
     captured_at: snapshot.captured_at,
     is_backfilled: snapshot.is_backfilled,
     ...parseNetWorthBreakdown(snapshot),
@@ -77,8 +82,9 @@ export function parseNetWorthSeries(value: unknown): NetWorthSeries {
   if (!Array.isArray(response.series)) {
     throw new TypeError("Patrimônio líquido inválido.");
   }
-  return {
-    series: response.series.map(parseNetWorthSnapshot),
-    latest: parseNetWorthSnapshot(response.latest),
-  };
+  const latest = parseNetWorthSnapshot(response.latest);
+  const series = response.series.map(parseNetWorthSnapshot);
+  if (series.some((snapshot) => (snapshot.currency_code ?? "BRL") !== (latest.currency_code ?? "BRL")))
+    throw new TypeError("Moedas do histórico incompatíveis.");
+  return { series, latest };
 }
