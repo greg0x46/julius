@@ -15,3 +15,5 @@ internal/webui/dist/
 /node_modules/
 
 deploy.sh
+frontend/playwright-report/
+frontend/test-results/
