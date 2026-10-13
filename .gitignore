@@ -17,3 +17,4 @@ internal/webui/dist/
 deploy.sh
 frontend/playwright-report/
 frontend/test-results/
+frontend/e2e.log

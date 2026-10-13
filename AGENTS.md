@@ -54,8 +54,8 @@ cd frontend && npm run lint && npm run typecheck && npm test -- --run
 ```
 
 CI (`.github/workflows/ci.yml`) runs exactly these, plus `govulncheck`,
-`npm audit`, an embedded-frontend build and `scripts/tests/run.sh` (shell tests
-of the release scripts). Run them before declaring done; run
+`npm audit`, an embedded-frontend build, Playwright financial journeys and
+`scripts/tests/run.sh` (shell tests of the release scripts). Run them before declaring done; run
 `scripts/tests/run.sh` whenever you touch `scripts/`, `CHANGELOG.md` or the
 workflow.
 
@@ -65,7 +65,9 @@ workflow.
   `frontend/TESTING.md`.
 - Postgres tests skip unless `JULIUS_TEST_POSTGRES_DSN` points to a
   **disposable** database (they reset its `public` schema) — hence `-p 1`.
-- `npm run test:e2e` is scaffolded but has no config or tests; ignore it.
+- `npm run test:e2e` builds the app and runs Playwright against disposable SQLite
+  databases. Install Chromium first; see `frontend/TESTING.md`. No live provider
+  credentials or existing dev instance are needed.
 - The server refuses to start without `JULIUS_PUBLIC_URL` and exactly one of
   `JULIUS_MASTER_KEY` / `JULIUS_MASTER_KEY_FILE`, and without an account
   (`go run ./cmd/julius auth init`). See README "Authentication".
