@@ -68,8 +68,8 @@ jobs:
       - run: npm ci
       - run: npm audit --omit=dev --audit-level=high
       - run: npm run lint
-      - run: npm run typecheck
       - run: npm test -- --run
+      # build runs tsc -b (strict app/test and Vite config checks) before Vite.
       - run: npm run build
       # Catches embed breakage on PRs instead of only in the release build.
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
