@@ -107,11 +107,15 @@ describe("StatementImportPage", () => {
     expect(screen.getByRole("button", { name: "Registrar reenvio sem novas transações" })).toBeDisabled();
   });
 
-  it("requires an explicit choice for each same-looking row from another file", async () => {
+  it.each([false, true])("compares conflicting balances and requires a choice (compact=%s)", async (compact) => {
+    const compactSpy = vi.spyOn(compactScreen, "useCompactScreen").mockReturnValue(compact);
     const user = userEvent.setup();
-    const ambiguous = row({ status: "ambiguous", warnings: ["movimentação idêntica em outro arquivo"] });
+    const ambiguous = row({ status: "ambiguous", warnings: ["saldo difere da importação anterior; revisão necessária"] });
     vi.mocked(statementApi.listImportAccounts).mockResolvedValue([{ id: "acc", name: "Flash", currency_code: "BRL" }]);
-    vi.mocked(statementApi.previewStatement).mockResolvedValue(preview([ambiguous]));
+    vi.mocked(statementApi.previewStatement).mockResolvedValue(preview([ambiguous], {
+      conflicts: { 2: { id: "existing", occurred_at: ambiguous.occurred_at!, description: ambiguous.description,
+        amount: ambiguous.amount!, currency: "BRL", payment_method: "Depósito", balance: "60.00", filename: "anterior.csv" } },
+    }));
     vi.mocked(statementApi.confirmStatement).mockResolvedValue({ ...saved, counts: { total: 1, new: 1, duplicate: 0, invalid: 0 } });
     renderPage();
     await user.click(screen.getByRole("radio", { name: "Usar conta existente" }));
@@ -122,13 +126,23 @@ describe("StatementImportPage", () => {
     expect(await screen.findByText("Precisa de decisão")).toBeVisible();
     const confirm = screen.getByRole("button", { name: "Registrar reenvio sem novas transações" });
     expect(confirm).toBeDisabled();
-    await user.click(screen.getByRole("radio", { name: "Importar como outra compra" }));
+    const existing = screen.getByRole("region", { name: "Transação existente da linha 2" });
+    const incoming = screen.getByRole("region", { name: "Linha do arquivo 2" });
+    expect(within(existing).getByText(/60,00/)).toBeVisible();
+    expect(within(incoming).getByText(/50,00/)).toBeVisible();
+    expect(within(existing).getByText("Arquivo: anterior.csv")).toBeVisible();
+    expect(within(incoming).getByText("Arquivo: sample.csv")).toBeVisible();
+    expect(screen.getAllByText("Depósito")).toHaveLength(2); // Shared description and payment method.
+    await user.click(screen.getByRole("radio", { name: "Manter existente / ignorar esta linha" }));
+    expect(confirm).toBeEnabled();
+    await user.click(screen.getByRole("radio", { name: "Importar como outra transação" }));
     const importButton = screen.getByRole("button", { name: "Importar 1 transação" });
     expect(importButton).toBeEnabled();
     await user.click(importButton);
     await waitFor(() => expect(statementApi.confirmStatement).toHaveBeenCalledWith(
       expect.any(File), expect.any(Object), { accountId: "acc" }, false, { 2: "import" },
     ));
+    compactSpy.mockRestore();
   });
 
   describe("layout", () => {

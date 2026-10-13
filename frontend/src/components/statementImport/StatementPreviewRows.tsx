@@ -1,7 +1,7 @@
 import { Button, Radio } from "antd";
 import { useState } from "react";
 
-import type { ImportRow } from "../../api/statementImports";
+import type { ImportConflict, ImportRow } from "../../api/statementImports";
 import { formatDate } from "../../presentation/dates";
 import { formatMoney } from "../../presentation/money";
 import { EmptyState } from "../layout";
@@ -22,8 +22,10 @@ const statusTag = {
  * amount and the running balance on the right, then its status and review
  * notes. Errors keep the error color; warnings stay plain but visible.
  */
-function StatementPreviewRow({ row, decision, onDecision }: {
+function StatementPreviewRow({ row, conflict, filename, decision, onDecision }: {
   row: ImportRow;
+  conflict?: ImportConflict;
+  filename?: string;
   decision?: "import" | "ignore";
   onDecision?: (line: number, decision: "import" | "ignore") => void;
 }) {
@@ -38,11 +40,12 @@ function StatementPreviewRow({ row, decision, onDecision }: {
         <span className="statement-row-meta">
           <span>Linha {row.line_number}</span>
           <span>{row.occurred_at ? formatDate(row.occurred_at) : "—"}</span>
+          {row.payment_method && <span>{row.payment_method}</span>}
         </span>
       </div>
       <div className="statement-row-figures">
         <span className="statement-row-amount">{row.amount ? formatMoney(row.amount, currency) : "—"}</span>
-        <span className="statement-row-balance">Saldo após {row.balance ? formatMoney(row.balance, currency) : "—"}</span>
+        {row.status !== "ambiguous" && <span className="statement-row-balance">Saldo após {row.balance ? formatMoney(row.balance, currency) : "—"}</span>}
       </div>
       {(tag !== null || hasNotes) && (
         <div className="statement-row-review">
@@ -53,11 +56,34 @@ function StatementPreviewRow({ row, decision, onDecision }: {
               {row.warnings.map((value, index) => <li key={`w-${index}`}>{value}</li>)}
             </ul>
           )}
-          {row.status === "ambiguous" && <Radio.Group aria-label={`Decisão da linha ${row.line_number}`} value={decision}
+        </div>
+      )}
+      {row.status === "ambiguous" && (
+        <div className="statement-row-conflict">
+          <span className="statement-row-conflict-label">Saldos diferentes</span>
+          <div className="statement-conflict-comparison">
+            <section aria-label={`Transação existente da linha ${row.line_number}`}>
+              <strong>Transação existente</strong>
+              {conflict ? <>
+                {conflict.description !== row.description && <span>{conflict.description}</span>}
+                {conflict.occurred_at !== row.occurred_at && <span>{formatDate(conflict.occurred_at)}</span>}
+                {formatMoney(conflict.amount, conflict.currency) !== formatMoney(row.amount ?? "0", currency) && <span>{formatMoney(conflict.amount, conflict.currency)}</span>}
+                {conflict.payment_method !== row.payment_method && <span>{conflict.payment_method}</span>}
+                <dl><dt>Saldo após</dt><dd>{conflict.balance === null ? "Não informado" : formatMoney(conflict.balance, conflict.currency)}</dd></dl>
+                {conflict.filename && <span className="statement-row-meta">Arquivo: {conflict.filename}</span>}
+              </> : <span>Dados da transação existente indisponíveis</span>}
+            </section>
+            <section aria-label={`Linha do arquivo ${row.line_number}`}>
+              <strong>Linha do arquivo</strong>
+              <dl><dt>Saldo após</dt><dd>{row.balance === null ? "Não informado" : formatMoney(row.balance, currency)}</dd></dl>
+              {filename && <span className="statement-row-meta">Arquivo: {filename}</span>}
+            </section>
+          </div>
+          <Radio.Group aria-label={`Decisão da linha ${row.line_number}`} value={decision}
             onChange={(event) => onDecision?.(row.line_number, event.target.value)}>
-            <Radio value="import">Importar como outra compra</Radio>
-            <Radio value="ignore">Ignorar como repetição</Radio>
-          </Radio.Group>}
+            <Radio value="ignore">Manter existente / ignorar esta linha</Radio>
+            <Radio value="import">Importar como outra transação</Radio>
+          </Radio.Group>
         </div>
       )}
     </li>
@@ -69,8 +95,10 @@ function StatementPreviewRow({ row, decision, onDecision }: {
  * a phone), 20 to a page: a file can carry thousands of lines. The footer is
  * the same Exibindo/Anterior/Próxima one the transactions list uses.
  */
-export function StatementPreviewRows({ rows, ambiguousDecisions, onAmbiguousDecision }: {
+export function StatementPreviewRows({ rows, conflicts, filename, ambiguousDecisions, onAmbiguousDecision }: {
   rows: ImportRow[];
+  conflicts?: Record<number, ImportConflict>;
+  filename?: string;
   ambiguousDecisions?: Record<number, "import" | "ignore">;
   onAmbiguousDecision?: (line: number, decision: "import" | "ignore") => void;
 }) {
@@ -86,7 +114,7 @@ export function StatementPreviewRows({ rows, ambiguousDecisions, onAmbiguousDeci
   return (
     <>
       <ul className="statement-row-list" aria-label="Linhas do arquivo">
-        {visible.map((row) => <StatementPreviewRow key={row.line_number} row={row}
+        {visible.map((row) => <StatementPreviewRow key={row.line_number} row={row} conflict={conflicts?.[row.line_number]} filename={filename}
           decision={ambiguousDecisions?.[row.line_number]} onDecision={onAmbiguousDecision} />)}
       </ul>
       {totalPages > 1 && (
