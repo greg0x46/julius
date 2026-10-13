@@ -14,6 +14,7 @@ export default defineConfig({
     ...devices["Desktop Chrome"],
     timezoneId: "America/Sao_Paulo",
     locale: "pt-BR",
+    actionTimeout: 10_000,
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
   },
