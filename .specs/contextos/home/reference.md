@@ -97,6 +97,15 @@ transaction to the last planned installment), used by the "whole period" option.
 
 ## Frontend
 
+The authenticated shell (`frontend/src/app/App.tsx`) renders `BuildFooter` once
+through `ProLayout.footerRender` on every page. Its right-aligned, muted caption
+shows `Julius <build label> · <7-character SHA>` with a link to the full commit
+in GitHub. Missing/invalid SHA omits the separator and link; missing label falls
+back to `dev`. Vite supplies Git/default metadata at build time; CI supplies
+`stage` or the selected release tag and exact SHA. There is no metadata API or
+GitHub lookup. The footer stays in document flow, includes bottom safe-area
+padding, and reserves room on mobile pages with a fixed bottom action bar.
+
 Home (`/`):
 - `PeriodBalanceCard` — balance, inflows and outflows of the period
   (`period_totals`), with historical BRL consolidation, explicit missing-rate
