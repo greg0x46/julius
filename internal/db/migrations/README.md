@@ -24,12 +24,29 @@ instants now use the same timestamp representation as other stores.
 ## Existing databases
 
 `julius_schema_version` distinguishes this schema generation from legacy Goose
-version 1. `db.Open` and `db.Migrate` reject application databases without that
-marker before applying migrations. This binary initializes empty databases and
-reopens generation 1 databases; it does **not** convert existing installations.
-Keep the old binary and a backup until a separate legacy conversion tool is
-available. Never delete the old database or rewrite its Goose version to bypass
-the guard. The SQLite-to-Postgres copier also cannot convert legacy generations.
+version 1. `db.Open` automatically converts final legacy Postgres (version 46)
+before running the new migration sequence. It locks the source tables, creates
+the baseline in a temporary schema, copies in FK order and checks counts and
+complete converted row equality. Activation, fresh Goose history and conversion
+commit together; all failures roll back. Original tables, old history and the
+append-only trigger function remain in a `julius_legacy_<id>` schema recorded in
+startup logs. An advisory transaction lock serializes concurrent conversions.
+The same DSN and master key continue to work. Stop old instances before upgrade;
+retain an external backup and grant the application role schema creation rights.
+Incomplete legacy Postgres and legacy SQLite are rejected without mutation.
+Empty databases initialize normally and generation 1 databases reopen normally.
+Use `cmd/migrate-legacy` with a read-only final legacy SQLite backup and a
+separate fresh SQLite/Postgres target; see README "Database schema generations".
+Keep the old binary, database and master key until cutover is validated. Never
+delete the old database or rewrite its Goose version to bypass the guard. The
+generic SQLite-to-Postgres copier has been replaced by this temporary tool.
+It converts the inventory allowlist, checks native types, fills new columns from
+baseline defaults, and explicitly skips obsolete tables and Goose metadata.
+Real copies use one transaction per table; dry-run uses row savepoints in one
+rollback transaction so it can check FKs and report all row errors. Validation
+compares every surviving table count, native account balance and account movement
+sum with exact decimal arithmetic. Targets with application data or edited seeds
+are refused; a failed real copy requires a fresh target for retry.
 
 `archive/sqlite` and `archive/postgres` retain the original migrations unchanged.
 They are embedded only in tests that pin historical data migrations and rollbacks,
@@ -43,7 +60,7 @@ nullability, index definitions, checks and foreign keys. It normalizes equivalen
 dialect syntax and native type-domain checks; `TestBaselineNativeTypes` separately
 pins every money/decimal/date/instant/boolean column against the inventory.
 Postgres tests require a disposable `JULIUS_TEST_POSTGRES_DSN`. Guard tests cover
-both the first and final legacy versions, unchanged migration history, and an
+legacy SQLite and incomplete Postgres versions, unchanged migration history, and an
 unsupported generation. Shared constraint tests also pin currency/enum domains,
 boolean flags, and exact decimal round trips beyond floating-point range. The
 financial invariant matrix links this precision rule to its tests.
@@ -51,3 +68,7 @@ financial invariant matrix links this precision rule to its tests.
 SQLite table rebuilds should remain transactional where possible. Turning off
 foreign keys requires `-- +goose NO TRANSACTION`; prefer ordering inserts and
 using a transaction over leaving a half-applied schema after a failure.
+
+`legacy_postgres_test.go` pins automatic Postgres conversion, exact balances,
+encrypted values, retained backup, unchanged session deadlines, restart, atomic
+rollback/retry, concurrent startups and calendar conventions.

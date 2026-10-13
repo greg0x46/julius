@@ -25,13 +25,15 @@ export function formatBRL(value: string): string {
   return `${rounded.startsWith("-") ? "-" : ""}R$\u00a0${fixedTwo(rounded)}`;
 }
 
-export function formatSignedBRL(
+export function formatSignedMoney(
   value: string,
   classification: "inflow" | "outflow" | "unclassified",
+  currencyCode: string,
 ): string {
   const unsigned = value.startsWith("-") ? value.slice(1) : value;
-  const sign = roundDecimal(unsigned, 2) === "0.00" ? "" : classification === "inflow" ? "+" : classification === "outflow" ? "-" : "";
-  return `${sign}R$\u00a0${fixedTwo(unsigned)}`;
+  const zero = currencyCode === "BRL" ? roundDecimal(unsigned, 2) === "0.00" : isZeroDecimal(unsigned);
+  const sign = zero ? "" : classification === "inflow" ? "+" : classification === "outflow" ? "-" : "";
+  return `${sign}${formatMoney(unsigned, currencyCode)}`;
 }
 
 export const moneySourceLabel = (source: "account_currency" | "transaction_currency") =>
@@ -81,8 +83,8 @@ function isZeroDecimal(value: string): boolean {
  * - neutral: default colour, no sign logic.
  * Zero is never signed or tinted.
  */
-export function moneyTone(value: string, kind: MoneyToneKind, direction?: MoneyDirection): MoneyTone {
-  const zero = isZeroDecimal(roundDecimal(value, 2));
+export function moneyTone(value: string, kind: MoneyToneKind, direction?: MoneyDirection, currencyCode = "BRL"): MoneyTone {
+  const zero = currencyCode === "BRL" ? isZeroDecimal(roundDecimal(value, 2)) : isZeroDecimal(value);
   if (zero) return { sign: "", color: "neutral" };
   const negative = !zero && value.trim().startsWith("-");
   switch (kind) {
@@ -102,13 +104,17 @@ export function moneyTone(value: string, kind: MoneyToneKind, direction?: MoneyD
   }
 }
 
-/**
- * The BRL text for a figure under the tone rule above: flow and result carry
- * the explicit "+"/"-" from `moneyTone`; balance and neutral show only the
- * natural minus of a negative value.
- */
+export function formatToneMoney(value: string, currencyCode: string, kind: MoneyToneKind, direction?: MoneyDirection): string {
+  const magnitude = formatMoney(value.trim().replace(/^-/, ""), currencyCode);
+  if (kind === "flow" || kind === "result") return `${moneyTone(value, kind, direction, currencyCode).sign}${magnitude}`;
+  const zero = currencyCode === "BRL" ? isZeroDecimal(roundDecimal(value, 2)) : isZeroDecimal(value);
+  return zero || !value.trim().startsWith("-") ? magnitude : `-${magnitude}`;
+}
+
 export function formatToneBRL(value: string, kind: MoneyToneKind, direction?: MoneyDirection): string {
-  const magnitude = formatBRL(value.trim().replace(/^-/, ""));
-  if (kind === "flow" || kind === "result") return `${moneyTone(value, kind, direction).sign}${magnitude}`;
-  return isZeroDecimal(roundDecimal(value, 2)) || !value.trim().startsWith("-") ? magnitude : `-${magnitude}`;
+  return formatToneMoney(value, "BRL", kind, direction);
+}
+
+export function formatSignedBRL(value: string, classification: MoneyDirection): string {
+  return formatSignedMoney(value, classification, "BRL");
 }

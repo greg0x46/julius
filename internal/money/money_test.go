@@ -120,6 +120,7 @@ func TestEligibility(t *testing.T) {
 		{"missing money excluded", money.Outflow, strp("POSTED"), nil, money.Considered, "", false, money.ReasonMissingMoneyPair},
 		{"zero value excluded", money.Outflow, strp("POSTED"), zero, money.Considered, "", false, money.ReasonZeroValue},
 		{"eligible", money.Outflow, strp("POSTED"), brl, money.Considered, "", true, ""},
+		{"pending expense is eligible", money.Outflow, strp("PENDING"), brl, money.Considered, money.Expense, true, ""},
 		{"pending status is eligible", money.Inflow, strp("PENDING"), brl, money.Considered, "", true, ""},
 
 		// The transfer category excludes on its own, in both directions —
