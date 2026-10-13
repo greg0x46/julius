@@ -40,7 +40,7 @@ var (
 		"financial_investment_transaction_id", "amount", "created_at",
 	}
 	investmentSummaryResponseKeys = []string{
-		"currency_code", "total_value", "manual_value", "synced_value", "cash_balance",
+		"currency_code", "fx", "total_value", "manual_value", "synced_value", "cash_balance",
 		"unrealized_gain", "portfolios", "accounts",
 	}
 	investmentSummaryPortfolioKeys = []string{"portfolio_id", "name", "current_value", "target_amount", "progress"}

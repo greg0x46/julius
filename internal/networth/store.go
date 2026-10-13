@@ -161,7 +161,7 @@ func scanSnapshotRow(scan func(...any) error) (SnapshotRow, error) {
 	)
 	if err := scan(dbtypes.ID(&s.ID), dbtypes.Date(&capturedAtRaw), dbtypes.Decimal(&totalAssetsRaw), dbtypes.Decimal(&totalLiabilitiesRaw), dbtypes.Decimal(&netWorthRaw),
 		dbtypes.Decimal(&cashRaw), dbtypes.Decimal(&investmentRaw), dbtypes.Decimal(&creditCardRaw), dbtypes.Decimal(&payablesDebtRaw), dbtypes.Bool(&isBackfilledRaw),
-		dbtypes.Time(&createdAtRaw), dbtypes.Time(&updatedAtRaw)); err != nil {
+		dbtypes.Time(&createdAtRaw), dbtypes.Time(&updatedAtRaw), &s.CurrencyCode); err != nil {
 		return SnapshotRow{}, err
 	}
 	s.IsBackfilled = isBackfilledRaw != 0
@@ -198,7 +198,7 @@ func scanSnapshotRow(scan func(...any) error) (SnapshotRow, error) {
 
 const snapshotColumns = `id, captured_at, total_assets, total_liabilities, net_worth,
 	cash_balance, investment_balance, credit_card_balance, payables_debt, is_backfilled,
-	created_at, updated_at`
+	created_at, updated_at, valuation_currency`
 
 func getByCapturedAt(ctx context.Context, q Querier, capturedAt string) (SnapshotRow, error) {
 	row := q.QueryRowContext(ctx, `SELECT `+snapshotColumns+` FROM net_worth_snapshots WHERE captured_at = ?`, capturedAt)

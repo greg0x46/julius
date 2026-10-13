@@ -13,6 +13,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/greg0x46/julius/internal/categories"
+	"github.com/greg0x46/julius/internal/exchange"
 	"github.com/greg0x46/julius/internal/ledger"
 	"github.com/greg0x46/julius/internal/money"
 	"github.com/greg0x46/julius/internal/scenarios"
@@ -463,6 +464,7 @@ type categorySpendingItemDTO struct {
 }
 
 type spendingByCategoryDTO struct {
+	FX           *exchange.Rate            `json:"fx,omitempty"`
 	Month        string                    `json:"month"`
 	CurrencyCode string                    `json:"currency_code"`
 	Total        string                    `json:"total"`
@@ -592,9 +594,18 @@ func handleSpendingByCategory(db *sql.DB) http.HandlerFunc {
 			return ai.GreaterThan(aj)
 		})
 
+		valuation, ok := reportValuation(w, r, db, time.Now())
+		if !ok {
+			return
+		}
+		for i := range dtoItems {
+			valuation.fields(&dtoItems[i].Amount)
+		}
+		total = valuation.amount(total)
 		writeJSON(w, http.StatusOK, spendingByCategoryDTO{
+			FX:           &valuation.FX,
 			Month:        fmt.Sprintf("%04d-%02d", year, int(month)),
-			CurrencyCode: "BRL",
+			CurrencyCode: valuation.CurrencyCode,
 			Total:        money.CanonicalDecimal(total),
 			Items:        dtoItems,
 		})
@@ -916,11 +927,19 @@ func handleCategoryBreakdown(db *sql.DB) http.HandlerFunc {
 			total = total.Add(amount)
 			result = append(result, categorySpendingItemDTO{CategoryID: item.CategoryID, CategoryName: item.CategoryName, CategoryIcon: item.CategoryIcon, CategoryColor: item.CategoryColor, Amount: item.Amount, Source: "real"})
 		}
+		valuation, ok := reportValuation(w, r, db, time.Now())
+		if !ok {
+			return
+		}
+		for i := range result {
+			valuation.fields(&result[i].Amount)
+		}
+		total = valuation.amount(total)
 		if monthLabel != "" {
 			writeJSON(w, http.StatusOK, struct {
 				spendingByCategoryDTO
 				Classification money.Classification `json:"classification"`
-			}{spendingByCategoryDTO{Month: monthLabel, CurrencyCode: "BRL", Total: money.CanonicalDecimal(total), Items: result}, classification})
+			}{spendingByCategoryDTO{FX: &valuation.FX, Month: monthLabel, CurrencyCode: valuation.CurrencyCode, Total: money.CanonicalDecimal(total), Items: result}, classification})
 			return
 		}
 		writeJSON(w, http.StatusOK, struct {
@@ -930,6 +949,7 @@ func handleCategoryBreakdown(db *sql.DB) http.HandlerFunc {
 			Total          string                    `json:"total"`
 			Items          []categorySpendingItemDTO `json:"items"`
 			Classification money.Classification      `json:"classification"`
-		}{dateFrom, dateTo, "BRL", money.CanonicalDecimal(total), result, classification})
+			FX             *exchange.Rate            `json:"fx"`
+		}{dateFrom, dateTo, valuation.CurrencyCode, money.CanonicalDecimal(total), result, classification, &valuation.FX})
 	}
 }
