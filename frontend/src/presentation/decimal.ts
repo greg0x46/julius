@@ -7,8 +7,9 @@ function scaled(value: string): { digits: bigint; scale: number } {
   const digits = BigInt(`${whole || "0"}${fraction}`);
   return { digits: negative ? -digits : digits, scale: fraction.length };
 }
-function text(digits: bigint, scale: number): string {
-  if (scale < 2) { digits *= 10n ** BigInt(2 - scale); scale = 2; }
+function text(digits: bigint, scale: number, minimumScale = 2): string {
+  if (scale < minimumScale) { digits *= 10n ** BigInt(minimumScale - scale); scale = minimumScale; }
+  if (scale === 0) return digits.toString();
   const negative = digits < 0n;
   const raw = (negative ? -digits : digits).toString().padStart(scale + 1, "0");
   return `${negative ? "-" : ""}${raw.slice(0, -scale)}.${raw.slice(-scale)}`;
@@ -27,3 +28,27 @@ export function multiplyDecimals(left: string, right: string): string {
 }
 export function isPositiveDecimal(value: string): boolean { return scaled(value).digits > 0n; }
 export function isZeroDecimal(value: string): boolean { return scaled(value).digits === 0n; }
+
+/** Nearest decimal, with ties away from zero; only for explicit boundaries. */
+export function roundDecimal(value: string, places: number): string {
+  if (!Number.isInteger(places) || places < 0) throw new RangeError("places must be a non-negative integer");
+  const part = scaled(value.trim());
+  if (part.scale <= places) return text(part.digits, part.scale, places);
+  const factor = 10n ** BigInt(part.scale - places);
+  const magnitude = part.digits < 0n ? -part.digits : part.digits;
+  const rounded = magnitude / factor + (magnitude % factor * 2n >= factor ? 1n : 0n);
+  return text(part.digits < 0n ? -rounded : rounded, places, 0);
+}
+
+export function compareDecimals(left: string, right: string): number {
+  const difference = scaled(subtractDecimals(left, right)).digits;
+  return difference < 0n ? -1 : difference > 0n ? 1 : 0;
+}
+
+/** Non-negative shares floored to cents without a rounded intermediate. */
+export function divideDecimalFloor(value: string, divisor: number): string {
+  if (!Number.isInteger(divisor) || divisor <= 0) throw new RangeError("divisor must be a positive integer");
+  const part = scaled(value);
+  if (part.digits < 0n) throw new RangeError("value must not be negative");
+  return text(part.digits * 100n / (10n ** BigInt(part.scale) * BigInt(divisor)), 2);
+}

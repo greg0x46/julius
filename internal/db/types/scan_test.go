@@ -94,3 +94,29 @@ func TestScannerErrors(t *testing.T) {
 		}
 	}
 }
+
+func TestDateScannerStoredRepresentations(t *testing.T) {
+	want := time.Date(2026, 10, 11, 0, 0, 0, 0, time.UTC)
+	for _, input := range []any{"2026-10-11", []byte("2026-10-11"), "2026-10-11T12:34:56.000000000Z", []byte("2026-10-11T12:34:56Z"), sql.NullString{String: "2026-10-11T12:34:56Z", Valid: true}, "2026-10-11T23:30:00-03:00", time.Date(2026, 10, 11, 12, 0, 0, 0, time.UTC)} {
+		var got time.Time
+		if err := Date(&got).Scan(input); err != nil {
+			t.Fatalf("%T %v: %v", input, input, err)
+		}
+		expected := want
+		if raw, ok := input.(string); ok && raw == "2026-10-11T23:30:00-03:00" {
+			expected = want.AddDate(0, 0, 1)
+		}
+		if !got.Equal(expected) {
+			t.Fatalf("%v date = %v, want %v", input, got, expected)
+		}
+		var text string
+		if err := Date(&text).Scan(input); err != nil || text != expected.Format(DateLayout) {
+			t.Fatalf("%v text = %q, error %v", input, text, err)
+		}
+	}
+	for _, input := range []any{"", "2026-02-30", []byte("invalid"), 1} {
+		if err := Date(new(time.Time)).Scan(input); err == nil {
+			t.Fatalf("accepted invalid date %v", input)
+		}
+	}
+}

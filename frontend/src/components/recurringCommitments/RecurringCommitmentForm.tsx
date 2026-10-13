@@ -1,3 +1,4 @@
+import { isPositiveDecimal, sumDecimals } from "../../presentation/decimal";
 import { Alert, DatePicker, Flex, Input, InputNumber, Select, Switch } from "antd";
 import dayjs, { type Dayjs } from "dayjs";
 import { useEffect, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
@@ -34,7 +35,7 @@ const monthOptions = Array.from({ length: 12 }, (_, index) => ({
 export type RecurringCommitmentDraft = {
   name: string;
   kind: RecurringCommitmentKind;
-  amount: number | null;
+  amount: string | null;
   categoryId: string | null;
   accountId: string;
   cadence: RecurringCommitmentCadence;
@@ -69,7 +70,7 @@ function draftFrom(
   return {
     name: commitment.name,
     kind: commitment.kind,
-    amount: Number(commitment.amount),
+    amount: commitment.amount,
     categoryId: commitment.category_id,
     accountId: commitment.account_id ?? "",
     cadence: commitment.cadence,
@@ -86,7 +87,7 @@ function buildWrite(
   draft: RecurringCommitmentDraft,
 ): { error: string } | { write: RecurringCommitmentWrite } {
   if (draft.name.trim() === "") return { error: "Informe um nome para a recorrência." };
-  if (draft.amount === null || draft.amount <= 0) return { error: "Informe um valor maior que zero." };
+  if (draft.amount === null || !isPositiveDecimal(draft.amount)) return { error: "Informe um valor maior que zero." };
   if (draft.categoryId === null) return { error: "Selecione uma categoria." };
   if (draft.cadence === "annual" && draft.monthOfYear === null) {
     return { error: "Informe o mês do ano para uma recorrência anual." };
@@ -98,7 +99,7 @@ function buildWrite(
     write: {
       name: draft.name.trim(),
       kind: draft.kind,
-      amount: draft.amount.toFixed(2),
+      amount: sumDecimals([draft.amount]),
       category_id: draft.categoryId,
       account_id: draft.accountId.trim() === "" ? null : draft.accountId.trim(),
       cadence: draft.cadence,
@@ -152,7 +153,7 @@ function RecurringCommitmentFieldset({
       <FormField label="Valor" htmlFor="recurring-commitment-amount">
         <MoneyInput
           id="recurring-commitment-amount"
-          min={0.01}
+          min="0"
           value={draft.amount}
           onChange={(value) => setDraft((current) => ({ ...current, amount: value }))}
         />

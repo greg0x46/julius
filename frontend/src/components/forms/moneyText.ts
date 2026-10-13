@@ -16,7 +16,7 @@ export function formatMoney(value: string | number | undefined, { userTyping }: 
   const sign = integer.startsWith("-") ? "-" : "";
   const whole = integer.replace(/\D/g, "").replace(/\B(?=(\d{3})+(?!\d))/g, ".");
   if (userTyping) return decimals === undefined ? `${sign}${whole}` : `${sign}${whole},${decimals}`;
-  return `${sign}${whole === "" ? "0" : whole},${decimals?.padEnd(2, "0").slice(0, 2) ?? "00"}`;
+  return `${sign}${whole === "" ? "0" : whole},${decimals?.padEnd(2, "0") ?? "00"}`;
 }
 
 function isSingleDeletion(previous: string, next: string): boolean {
@@ -33,7 +33,7 @@ function isSingleDeletion(previous: string, next: string): boolean {
  *
  * - With a comma, the comma is the decimal mark and every "." is a thousands
  *   separator: "1.234,56" is 1234.56.
- * - Without a comma, ONE "." followed by one or two digits at the very end is
+ * - Without a comma, ONE "." followed by one, two or more than three digits at the very end is
  *   a decimal point ("1234.56", "12.5" — what a US keyboard, a calculator or a
  *   copied figure gives); any other "." is a thousands separator ("12.850" is
  *   12850, "1.234" is 1234, "1.234.567" is 1234567).
@@ -48,14 +48,15 @@ export function parseMoney(text: string | undefined, previousShown = ""): string
   const clean = (text ?? "").replace(/[^\d.,-]/g, "");
   if (clean.includes(",")) return clean.replace(/\./g, "").replace(",", ".");
   if (!clean.includes(".")) return clean;
+  if (/^-?\d{1,3}(\.\d{3})+$/.test(previousShown) && clean.startsWith(previousShown) && /^\d+$/.test(clean.slice(previousShown.length))) return clean.replace(/\./g, "");
   if (previousShown.includes(".") && isSingleDeletion(previousShown, clean)) return clean.replace(/\./g, "");
   // A point typed after the grouped whole part ("1.234" + "." stays on screen
   // as "1.234." until a digit follows) and then the decimals: "1.234.56".
   if (previousShown !== "" && clean.startsWith(`${previousShown}.`)) {
     const decimals = clean.slice(previousShown.length + 1);
-    if (/^\d{1,2}$/.test(decimals)) return `${previousShown.replace(/\./g, "")}.${decimals}`;
+    if (/^\d+$/.test(decimals)) return `${previousShown.replace(/\./g, "")}.${decimals}`;
   }
   if (/^-?\d{1,3}(\.\d{3})*\.$/.test(clean) || /^-?\d+\.$/.test(clean)) return clean.replace(/\.(?=.)/g, "");
-  if (/^-?\d+\.\d{1,2}$/.test(clean)) return clean;
+  if (/^-?\d+\.(\d{1,2}|\d{4,})$/.test(clean)) return clean;
   return clean.replace(/\./g, "");
 }

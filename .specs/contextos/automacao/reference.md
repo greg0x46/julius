@@ -23,6 +23,8 @@ apply categorization on new entries, changed sync entries and retroactive
 passes, without overriding manual category decisions. Apply candidates include
 absolute effective money (account currency first) and occurrence day, so
 amount/day conditions work in both apply paths as well as reconciliation.
+Both apply paths decode occurrence timestamps and exact amounts through
+`internal/db/types` before matching, including native driver timestamps.
 Reconciliation candidates also carry the same description, account name and
 institution, and card number, so both actions evaluate the complete shared
 conditions.
@@ -62,3 +64,9 @@ from the same form. The list displays both action descriptions.
 Automatic reconciliation retains its existing eligibility checks, including
 the commitment's category; selecting a different action category does not
 relax those checks.
+
+## Monetary precision
+
+Amount references and percentage tolerances are parsed and compared as exact
+decimals, without floating-point conversion. Comparison is inclusive and does
+not round either side ([policy](../../precisao-monetaria.md)).

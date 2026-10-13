@@ -6,12 +6,9 @@ import (
 	"encoding/json"
 
 	"github.com/greg0x46/julius/internal/categories"
-	"github.com/greg0x46/julius/internal/db"
 	dbtypes "github.com/greg0x46/julius/internal/db/types"
 	"github.com/greg0x46/julius/internal/money"
 	"github.com/greg0x46/julius/internal/transactions"
-
-	"github.com/shopspring/decimal"
 )
 
 // extractCardNumber pulls the card number out of a financial_transactions
@@ -63,18 +60,11 @@ func candidateFor(ctx context.Context, q transactions.Querier, transactionID str
 
 func moneyCandidate(amount, accountAmount, currency, accountCurrency, occurredAt sql.NullString) (MatchCandidate, error) {
 	candidate := MatchCandidate{}
-	parseAmount := func(raw sql.NullString) (*decimal.Decimal, error) {
-		if !raw.Valid {
-			return nil, nil
-		}
-		value, err := decimal.NewFromString(raw.String)
-		return &value, err
-	}
-	value, err := parseAmount(amount)
+	value, err := dbtypes.ParseNullDecimal(amount)
 	if err != nil {
 		return candidate, err
 	}
-	accountValue, err := parseAmount(accountAmount)
+	accountValue, err := dbtypes.ParseNullDecimal(accountAmount)
 	if err != nil {
 		return candidate, err
 	}
@@ -89,7 +79,7 @@ func moneyCandidate(amount, accountAmount, currency, accountCurrency, occurredAt
 		absolute := effective.Value.Abs()
 		candidate.Amount = &absolute
 	}
-	date, err := db.ParseNullTime(occurredAt)
+	date, err := dbtypes.ParseNullTime(occurredAt)
 	if err != nil {
 		return candidate, err
 	}

@@ -74,6 +74,7 @@ export const queryKeys = {
   syncRunsList: [...roots.syncRuns, "list"] as const,
   syncRunDetail: (runId: string) => [...roots.syncRuns, "detail", runId] as const,
 
+  timelineDataRangeFor: (timezone: string) => [...roots.timelineDataRange, timezone] as const,
   timelineFor: (params: TimelineParams) => [...roots.timeline, params] as const,
   transactionTransfer: (id: string) => [...roots.transactionTransfers, id] as const,
   transactionsFor: (query: TransactionQuery) => [...roots.transactions, query] as const,

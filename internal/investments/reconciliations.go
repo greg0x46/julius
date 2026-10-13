@@ -488,12 +488,13 @@ func ensureSyncedPivot(ctx context.Context, q Querier, movementID string) (id st
 		return "", false, err
 	}
 
-	var amountRaw, currency, direction, movementType, tradeDate, occurredAt, name sql.NullString
+	var amountRaw, currency, direction, movementType, name sql.NullString
+	var tradeDate, occurredAt sql.NullTime
 	var sourceID string
 	err = q.QueryRowContext(ctx, `
 		SELECT t.amount, i.currency_code, t.direction, t.movement_type, t.trade_date, t.occurred_at, i.name, t.source_id
 		FROM financial_investment_transactions t JOIN financial_investments i ON i.id = t.investment_id
-		WHERE t.id = ?`, movementID).Scan(dbtypes.Decimal(&amountRaw), &currency, &direction, &movementType, dbtypes.Time(&tradeDate), dbtypes.Time(&occurredAt), &name, dbtypes.ID(&sourceID))
+		WHERE t.id = ?`, movementID).Scan(dbtypes.Decimal(&amountRaw), &currency, &direction, &movementType, dbtypes.Date(&tradeDate), dbtypes.Time(&occurredAt), &name, dbtypes.ID(&sourceID))
 	if errors.Is(err, sql.ErrNoRows) {
 		return "", false, ErrInvalidReconciliationLink
 	}
@@ -520,16 +521,13 @@ func ensureSyncedPivot(ctx context.Context, q Querier, movementID string) (id st
 		return "", false, ErrInvalidReconciliationLink
 	}
 	dateRaw := tradeDate
-	if !dateRaw.Valid || dateRaw.String == "" {
+	if !dateRaw.Valid {
 		dateRaw = occurredAt
 	}
-	if !dateRaw.Valid || dateRaw.String == "" {
+	if !dateRaw.Valid {
 		return "", false, ErrInvalidReconciliationLink
 	}
-	occurredOn, err := parseTimestamp(dateRaw.String)
-	if err != nil {
-		return "", false, fmt.Errorf("parse provider movement date: %w", err)
-	}
+	occurredOn := dateRaw.Time
 	if err := EnsureIntegratedAccounts(ctx, q); err != nil {
 		return "", false, err
 	}

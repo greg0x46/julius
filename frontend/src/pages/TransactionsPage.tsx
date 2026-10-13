@@ -280,6 +280,7 @@ export function TransactionsPage() {
         summary={
           data ? (
             <TransactionSummaryBar
+              reporting={data.reporting}
               totalItems={data.page.total_items}
               totals={data.page.total_items === 0 ? [] : data.totals}
               busy={query.isFetching}
