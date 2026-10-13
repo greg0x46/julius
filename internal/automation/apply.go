@@ -5,9 +5,6 @@ import (
 	"database/sql"
 	"encoding/json"
 
-	"github.com/greg0x46/julius/internal/db"
-	"github.com/shopspring/decimal"
-
 	"github.com/greg0x46/julius/internal/categories"
 	dbtypes "github.com/greg0x46/julius/internal/db/types"
 	"github.com/greg0x46/julius/internal/money"
@@ -36,7 +33,7 @@ func candidateFor(ctx context.Context, q transactions.Querier, transactionID str
 		       ft.amount, ft.amount_in_account_currency, ft.currency_code, fa.currency_code, ft.occurred_at
 		FROM financial_transactions ft JOIN financial_accounts fa ON fa.id = ft.account_id
 		WHERE ft.id = ?`, transactionID,
-	).Scan(&description, &creditCardMetadata, &accountName, &accountInstitution, &amount, &accountAmount, &currency, &accountCurrency, &occurredAt)
+	).Scan(&description, &creditCardMetadata, &accountName, &accountInstitution, dbtypes.Decimal(&amount), dbtypes.Decimal(&accountAmount), &currency, &accountCurrency, dbtypes.Time(&occurredAt))
 	if err != nil {
 		return MatchCandidate{}, err
 	}
@@ -63,18 +60,11 @@ func candidateFor(ctx context.Context, q transactions.Querier, transactionID str
 
 func moneyCandidate(amount, accountAmount, currency, accountCurrency, occurredAt sql.NullString) (MatchCandidate, error) {
 	candidate := MatchCandidate{}
-	parseAmount := func(raw sql.NullString) (*decimal.Decimal, error) {
-		if !raw.Valid {
-			return nil, nil
-		}
-		value, err := decimal.NewFromString(raw.String)
-		return &value, err
-	}
-	value, err := parseAmount(amount)
+	value, err := dbtypes.ParseNullDecimal(amount)
 	if err != nil {
 		return candidate, err
 	}
-	accountValue, err := parseAmount(accountAmount)
+	accountValue, err := dbtypes.ParseNullDecimal(accountAmount)
 	if err != nil {
 		return candidate, err
 	}
@@ -89,7 +79,7 @@ func moneyCandidate(amount, accountAmount, currency, accountCurrency, occurredAt
 		absolute := effective.Value.Abs()
 		candidate.Amount = &absolute
 	}
-	date, err := db.ParseNullTime(occurredAt)
+	date, err := dbtypes.ParseNullTime(occurredAt)
 	if err != nil {
 		return candidate, err
 	}
@@ -239,7 +229,7 @@ func ApplyRetroactively(ctx context.Context, conn *sql.DB, ruleID string, onIgno
 		var id string
 		var description, creditCardMetadata, accountName, accountInstitution sql.NullString
 		var amount, accountAmount, currency, accountCurrency, occurredAt sql.NullString
-		if err := rows.Scan(dbtypes.ID(&id), &description, &creditCardMetadata, &accountName, &accountInstitution, &amount, &accountAmount, &currency, &accountCurrency, &occurredAt); err != nil {
+		if err := rows.Scan(dbtypes.ID(&id), &description, &creditCardMetadata, &accountName, &accountInstitution, dbtypes.Decimal(&amount), dbtypes.Decimal(&accountAmount), &currency, &accountCurrency, dbtypes.Time(&occurredAt)); err != nil {
 			rows.Close()
 			return RetroactiveResult{}, err
 		}
