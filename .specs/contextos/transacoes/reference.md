@@ -310,8 +310,9 @@ explicit new pairing and the same validation.
   amount inputs, exact decimal-string arithmetic, execution-rate preview and
   optional separate fee in the source currency. The existing transaction panel
   adds **Transferência entre contas** for pairing, reading both native amounts,
-  rate and fee, and confirming unlink. Counterpart and fee pickers support
-  search/pagination and native currency labels. Principal inclusion is disabled
+  rate and fee, and confirming unlink. Existing relationships remain accessible
+  even when a provider correction leaves a movement unclassified. Counterpart
+  and fee pickers support search/pagination and native currency labels. Principal inclusion is disabled
   while linked, with an explanation; errors retain selections and offer retries.
   Inclusion changes and retroactive automation refresh transfer details for all
   participants, so ignoring a fee also clears the counterpart relationship in

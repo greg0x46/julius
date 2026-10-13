@@ -168,7 +168,7 @@ export function TransactionOverviewScreen({
       </PanelSection>
 
       <PanelSection title="Ações" className="panel-section-rows">
-        <PanelNavRow icon={<SwapOutlined />} label="Transferência entre contas" hint={transferHint} disabled={ignored || item.classification === "unclassified"} onClick={() => navigate({ kind: "transfer" })} />
+        <PanelNavRow icon={<SwapOutlined />} label="Transferência entre contas" hint={transferHint} disabled={!linked && (ignored || item.classification === "unclassified")} onClick={() => navigate({ kind: "transfer" })} />
         {prefill && (
           <PanelNavRow
             icon={<RedoOutlined />}
