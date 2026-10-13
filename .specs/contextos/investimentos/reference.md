@@ -349,7 +349,10 @@ valid after purchases and sales; the remaining quantity is valued by it, keeping
 its date. Corrections reprocess history in date, creation and identifier order.
 
 Reconciliation checks direction, BRL currency and the remaining capacity of each
-entry, operation and imported movement. For integrated accounts, the imported
+entry, operation and imported movement. A bank movement linked to an account
+transfer (source, destination or fee) cannot be reconciled until that transfer
+is unlinked. Both workflows lock the bank movement before checking links.
+For integrated accounts, the imported
 movement must belong to the same connection. Concurrent portions are serialized
 during validation. UI suggestions use equality of the available amount and up to
 five days of difference; they require confirmation. Fees, taxes and income can

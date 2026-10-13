@@ -197,8 +197,11 @@ Both legs require a known native account-currency amount, a known account
 currency, opposite signed DEBIT/CREDIT directions, distinct accounts, considered
 inclusion and POSTED/PENDING status. Same-currency principal must have equal
 absolute amounts. Unknown/deleted movements, duplicate links, and existing
-investment reconciliations are rejected. A fee must be a separate included
-outflow on either participating account; it cannot be an ignored or
+investment reconciliations are rejected. The reverse order is rejected too:
+investment reconciliation cannot reuse any transfer participant, including its
+fee. Pairing locks participant bank rows in identifier order before validation
+to serialize concurrent investment reconciliation and participant edits,
+deletions or inclusion changes. A fee must be a separate included outflow on either participating account; it cannot be an ignored or
 transfer-categorized movement. Pairing never infers a fee from market rates.
 
 Source/destination amounts stay in `financial_transactions`, in their account

@@ -122,6 +122,20 @@ func requireManual(ctx context.Context, q Querier, transactionID string) error {
 // through their own existing endpoints (categories.AssignManual,
 // SetInclusion), which are already agnostic of origin and need no change.
 func UpdateManual(ctx context.Context, conn Querier, transactionID string, in ManualInput) error {
+	if dbConn, ok := conn.(*sql.DB); ok {
+		tx, err := dbConn.BeginTx(ctx, nil)
+		if err != nil {
+			return err
+		}
+		defer tx.Rollback()
+		if err := UpdateManual(ctx, tx, transactionID, in); err != nil {
+			return err
+		}
+		return tx.Commit()
+	}
+	if _, err := conn.ExecContext(ctx, `UPDATE financial_transactions SET id = id WHERE id = ?`, transactionID); err != nil {
+		return err
+	}
 	if err := requireManual(ctx, conn, transactionID); err != nil {
 		return err
 	}
@@ -191,6 +205,9 @@ func DeleteManual(ctx context.Context, conn *sql.DB, transactionID string, onIgn
 		return err
 	}
 	defer tx.Rollback()
+	if _, err := tx.ExecContext(ctx, `UPDATE financial_transactions SET id = id WHERE id = ?`, transactionID); err != nil {
+		return err
+	}
 	if err := requireNoInvestmentLinks(ctx, tx, transactionID); err != nil {
 		return err
 	}

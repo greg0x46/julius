@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/greg0x46/julius/internal/db"
 	"github.com/greg0x46/julius/internal/db/dbtest"
+	"github.com/greg0x46/julius/internal/investments"
 	"github.com/greg0x46/julius/internal/ledger"
 	"github.com/greg0x46/julius/internal/money"
 	"github.com/greg0x46/julius/internal/transactions"
@@ -243,4 +244,136 @@ func TestTransferRejectsInvalidFeesAndKeepsPreviousTransferCategory(t *testing.T
 			t.Fatalf("previous transfer category: %+v %v", item, err)
 		}
 	})
+}
+
+func TestTransferParticipantsCannotReconcileInvestments(t *testing.T) {
+	dbtest.Each(t, func(t *testing.T, conn *sql.DB) {
+		ctx := context.Background()
+		svc := ledger.Service{DB: conn}
+		source, destination := manualTransferAccount(t, conn, "BRL"), manualTransferAccount(t, conn, "BRL")
+		at := time.Date(2026, 3, 1, 12, 0, 0, 0, time.UTC)
+		input := func(account, amount string) transactions.ManualInput {
+			return transactions.ManualInput{AccountID: account, Description: "Synthetic transfer", Amount: decimal.RequireFromString(amount), OccurredAt: at}
+		}
+		fee := input(source, "-10")
+		transfer, err := svc.CreateManualTransfer(ctx, input(source, "-540"), input(destination, "540"), &fee)
+		if err != nil {
+			t.Fatal(err)
+		}
+		account, err := investments.CreateAccount(ctx, conn, investments.AccountInput{Name: "Synthetic custody"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, participant := range []struct {
+			name, id string
+			kind     investments.OperationKind
+			amount   string
+		}{
+			{"source", transfer.Source.TransactionID, investments.OperationDeposit, "540"},
+			{"destination", transfer.Destination.TransactionID, investments.OperationIncome, "540"},
+			{"fee", transfer.Fee.TransactionID, investments.OperationDeposit, "10"},
+		} {
+			t.Run(participant.name, func(t *testing.T) {
+				op, err := investments.CreateOperation(ctx, conn, investments.OperationInput{AccountID: account.ID, Kind: participant.kind, OccurredOn: at, Amount: decimal.RequireFromString(participant.amount)})
+				if err != nil {
+					t.Fatal(err)
+				}
+				in := investments.ReconciliationInput{OperationID: op.ID, FinancialTransactionID: &participant.id, Amount: decimal.RequireFromString(participant.amount)}
+				if _, err := investments.CreateReconciliation(ctx, conn, in); !errors.Is(err, investments.ErrInvalidReconciliationLink) {
+					t.Fatalf("linked participant reconciliation: %v", err)
+				}
+				links, err := investments.ListReconciliations(ctx, conn, investments.ReconciliationFilter{FinancialTransactionID: &participant.id})
+				if err != nil || len(links) != 0 {
+					t.Fatalf("rejected reconciliation persisted: %+v %v", links, err)
+				}
+				feeItem, found, err := transactions.GetItem(ctx, conn, transfer.Fee.TransactionID)
+				if err != nil || !found || !feeItem.TotalsEligibility.Included || *feeItem.ReportableAmount != "10" {
+					t.Fatalf("fee reporting changed: %+v %v", feeItem, err)
+				}
+				if err := transactions.DeleteTransfer(ctx, conn, transfer.ID); err != nil {
+					t.Fatal(err)
+				}
+				reconciliation, err := investments.CreateReconciliation(ctx, conn, in)
+				if err != nil {
+					t.Fatalf("unlinked participant reconciliation: %v", err)
+				}
+				pair := transactions.TransferInput{SourceID: transfer.Source.TransactionID, DestinationID: transfer.Destination.TransactionID, FeeID: transfer.Fee.TransactionID}
+				if _, err := svc.LinkTransfer(ctx, pair); !errors.Is(err, transactions.ErrInvestmentLinked) {
+					t.Fatalf("investment-linked participant transfer: %v", err)
+				}
+				if err := investments.DeleteReconciliation(ctx, conn, reconciliation.ID); err != nil {
+					t.Fatal(err)
+				}
+				transfer, err = svc.LinkTransfer(ctx, pair)
+				if err != nil {
+					t.Fatalf("relink after reconciliation removal: %v", err)
+				}
+			})
+		}
+	})
+}
+
+func TestTransferWaitsForConcurrentParticipantDeletion(t *testing.T) {
+	conn := dbtest.OpenPostgres(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	svc := ledger.Service{DB: conn}
+	source, destination := manualTransferAccount(t, conn, "BRL"), manualTransferAccount(t, conn, "BRL")
+	at := time.Now()
+	input := func(account, amount string) transactions.ManualInput {
+		return transactions.ManualInput{AccountID: account, Description: "Synthetic transfer", Amount: decimal.RequireFromString(amount), OccurredAt: at}
+	}
+	out, err := svc.CreateManual(ctx, input(source, "-540"), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	in, err := svc.CreateManual(ctx, input(destination, "540"), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	deleting, err := conn.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer deleting.Rollback()
+	if _, err := deleting.ExecContext(ctx, `UPDATE financial_transactions SET id = id WHERE id = ?`, out.ID); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() {
+		_, err := svc.LinkTransfer(ctx, transactions.TransferInput{SourceID: out.ID, DestinationID: in.ID})
+		done <- err
+	}()
+	ticker := time.NewTicker(10 * time.Millisecond)
+	defer ticker.Stop()
+	waiting := false
+	for !waiting {
+		select {
+		case err := <-done:
+			t.Fatalf("pairing did not wait for the participant lock: %v", err)
+		case <-ctx.Done():
+			t.Fatal("pairing did not acquire the participant lock")
+		case <-ticker.C:
+			err := conn.QueryRowContext(ctx, `SELECT EXISTS (
+    SELECT 1 FROM pg_stat_activity WHERE datname = current_database()
+     AND wait_event_type = 'Lock' AND query LIKE 'UPDATE financial_transactions SET id = id WHERE id = %'
+   )`).Scan(&waiting)
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	if _, err := deleting.ExecContext(ctx, `UPDATE financial_transactions SET deleted_at = ? WHERE id = ?`, db.FormatTime(at), out.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := deleting.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-done; !errors.Is(err, transactions.ErrTransactionNotFound) {
+		t.Fatalf("pairing deleted participant: %v", err)
+	}
+	var count int
+	if err := conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM transfer_links`).Scan(&count); err != nil || count != 0 {
+		t.Fatalf("stale transfer persisted: %d %v", count, err)
+	}
 }

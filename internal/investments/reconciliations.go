@@ -138,13 +138,15 @@ func bankOutflowKind(kind OperationKind) bool {
 func financialTransactionValue(ctx context.Context, q Querier, id string) (decimal.Decimal, error) {
 	var raw, currency sql.NullString
 	var inclusion string
+	var transferLinked bool
 	err := q.QueryRowContext(ctx, `
   SELECT COALESCE(t.amount_in_account_currency, t.amount),
    CASE WHEN t.amount_in_account_currency IS NOT NULL THEN a.currency_code ELSE COALESCE(t.currency_code, a.currency_code) END,
-   COALESCE(tid.state, 'considered')
+   COALESCE(tid.state, 'considered'),
+   EXISTS (SELECT 1 FROM transfer_transaction_links tl WHERE tl.transaction_id = t.id)
   FROM financial_transactions t JOIN financial_accounts a ON a.id = t.account_id
   LEFT JOIN transaction_inclusion_decisions tid ON tid.transaction_id = t.id
-  WHERE t.id = ? AND t.deleted_at IS NULL`, id).Scan(dbtypes.Decimal(&raw), &currency, &inclusion)
+  WHERE t.id = ? AND t.deleted_at IS NULL`, id).Scan(dbtypes.Decimal(&raw), &currency, &inclusion, dbtypes.Bool(&transferLinked))
 	if errors.Is(err, sql.ErrNoRows) {
 		return decimal.Zero, ErrInvalidReconciliationLink
 	}
@@ -154,7 +156,7 @@ func financialTransactionValue(ctx context.Context, q Querier, id string) (decim
 	if !raw.Valid || !currency.Valid || currency.String != "BRL" {
 		return decimal.Zero, ErrInvalidReconciliationLink
 	}
-	if money.InclusionState(inclusion) == money.Ignored {
+	if money.InclusionState(inclusion) == money.Ignored || transferLinked {
 		return decimal.Zero, ErrInvalidReconciliationLink
 	}
 	value, err := decimal.NewFromString(raw.String)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"sort"
 	"time"
 
 	"github.com/google/uuid"
@@ -108,6 +109,14 @@ func CreateTransfer(ctx context.Context, q Querier, in TransferInput) (string, e
 	ids := []string{in.SourceID, in.DestinationID}
 	if in.FeeID != "" {
 		ids = append(ids, in.FeeID)
+	}
+	lockIDs := append([]string(nil), ids...)
+	sort.Strings(lockIDs)
+	// Share the bank-row lock with investment reconciliation before checking links.
+	for _, id := range lockIDs {
+		if _, err := q.ExecContext(ctx, `UPDATE financial_transactions SET id = id WHERE id = ?`, id); err != nil {
+			return "", err
+		}
 	}
 	for _, id := range ids {
 		if err := RequireNoTransferLink(ctx, q, id); err != nil {
