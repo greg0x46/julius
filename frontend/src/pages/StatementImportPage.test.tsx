@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "../api/problems";
 import * as statementApi from "../api/statementImports";
 import type { ImportHistoryItem, ImportPreview, ImportRow } from "../api/statementImports";
+import { StatementPreviewRows } from "../components/statementImport/StatementPreviewRows";
 import * as compactScreen from "../components/shared/useCompactScreen";
 import { QueryTestProvider } from "../test/QueryTestProvider";
 import { StatementImportPage } from "./StatementImportPage";
@@ -74,7 +75,8 @@ describe("StatementImportPage", () => {
     expect(screen.queryByText("Nova")).toBeNull();
     expect(screen.getByText("Inválida")).toBeVisible();
     expect(screen.getByText("08/09/2026 a 25/09/2026")).toBeVisible();
-    await user.type(screen.getByLabelText("Nome da nova conta"), "Flash");
+    await user.click(screen.getByLabelText("Nome da nova conta"));
+    await user.paste("Flash");
     const confirm = screen.getByRole("button", { name: "Importar 1 transação" });
     expect(confirm).toBeDisabled();
     await user.click(screen.getByRole("checkbox", { name: /Importar somente as linhas válidas/ }));
@@ -93,7 +95,8 @@ describe("StatementImportPage", () => {
     await user.upload(screen.getByLabelText("Arquivo CSV"), csv());
     expect(await screen.findByText("Informe a conta para confirmar.")).toBeVisible();
     expect(screen.getByRole("button", { name: "Importar 1 transação" })).toBeDisabled();
-    await user.type(screen.getByLabelText("Nome da nova conta"), "Flash");
+    await user.click(screen.getByLabelText("Nome da nova conta"));
+    await user.paste("Flash");
     expect(screen.queryByText("Informe a conta para confirmar.")).toBeNull();
     expect(screen.getByRole("button", { name: "Importar 1 transação" })).toBeEnabled();
   });
@@ -171,7 +174,8 @@ describe("StatementImportPage", () => {
         expect(container.querySelector(".app-page-has-bottom-bar")).not.toBeNull();
         expect(screen.getByRole("button", { name: /Baixar modelo/ })).toBeVisible();
 
-        await user.type(screen.getByLabelText("Nome da nova conta"), "Flash");
+        await user.click(screen.getByLabelText("Nome da nova conta"));
+        await user.paste("Flash");
         await user.click(confirm);
         expect(await screen.findByText("Extrato importado")).toBeVisible();
         expect(container.querySelector(".bottom-action-bar")).toBeNull();
@@ -199,9 +203,7 @@ describe("StatementImportPage", () => {
     it("pages through the rows, 20 at a time", async () => {
       const user = userEvent.setup();
       const rows = Array.from({ length: 45 }, (_, index) => row({ line_number: index + 2, description: `Movimento ${index + 1}` }));
-      vi.mocked(statementApi.previewStatement).mockResolvedValue(preview(rows));
-      renderPage();
-      await user.upload(screen.getByLabelText("Arquivo CSV"), csv());
+      render(<StatementPreviewRows rows={rows} />);
 
       const list = await screen.findByRole("list", { name: "Linhas do arquivo" });
       expect(within(list).getAllByRole("listitem")).toHaveLength(20);
@@ -220,10 +222,7 @@ describe("StatementImportPage", () => {
     });
 
     it("keeps warnings visible and does not paginate a short file", async () => {
-      const user = userEvent.setup();
-      vi.mocked(statementApi.previewStatement).mockResolvedValue(preview([row({ warnings: ["saldo divergente"] })]));
-      renderPage();
-      await user.upload(screen.getByLabelText("Arquivo CSV"), csv());
+      render(<StatementPreviewRows rows={[row({ warnings: ["saldo divergente"] })]} />);
 
       const warning = await screen.findByText("saldo divergente");
       expect(warning).toBeVisible();
@@ -239,7 +238,8 @@ describe("StatementImportPage", () => {
       vi.mocked(statementApi.confirmStatement).mockRejectedValue(new ApiError("conflict", "O extrato mudou desde a prévia."));
       renderPage();
       await user.upload(screen.getByLabelText("Arquivo CSV"), csv());
-      await user.type(screen.getByLabelText("Nome da nova conta"), "Flash");
+      await user.click(screen.getByLabelText("Nome da nova conta"));
+      await user.paste("Flash");
       await user.click(await screen.findByRole("button", { name: "Importar 1 transação" }));
 
       expect(await screen.findByText("O extrato mudou desde a prévia.")).toBeVisible();
@@ -259,7 +259,8 @@ describe("StatementImportPage", () => {
       vi.mocked(statementApi.confirmStatement).mockRejectedValue(new ApiError("transport", "Não foi possível comunicar com o servidor."));
       renderPage();
       await user.upload(screen.getByLabelText("Arquivo CSV"), csv());
-      await user.type(screen.getByLabelText("Nome da nova conta"), "Flash");
+      await user.click(screen.getByLabelText("Nome da nova conta"));
+      await user.paste("Flash");
       await user.click(await screen.findByRole("button", { name: "Importar 1 transação" }));
 
       expect(await screen.findByText("Não foi possível comunicar com o servidor.")).toBeVisible();
@@ -358,7 +359,8 @@ describe("StatementImportPage", () => {
       vi.mocked(statementApi.confirmStatement).mockResolvedValue(saved);
       renderPage();
       await user.upload(screen.getByLabelText("Arquivo CSV"), csv());
-      await user.type(screen.getByLabelText("Nome da nova conta"), "Flash");
+      await user.click(screen.getByLabelText("Nome da nova conta"));
+      await user.paste("Flash");
       await user.click(await screen.findByRole("button", { name: "Importar 1 transação" }));
 
       expect(await screen.findByText("Extrato importado")).toBeVisible();
@@ -445,7 +447,8 @@ describe("StatementImportPage", () => {
       vi.mocked(statementApi.confirmStatement).mockReturnValue(pending.promise);
       renderPage();
       await user.upload(screen.getByLabelText("Arquivo CSV"), csv());
-      await user.type(screen.getByLabelText("Nome da nova conta"), "Flash");
+      await user.click(screen.getByLabelText("Nome da nova conta"));
+      await user.paste("Flash");
       const confirm = await screen.findByRole("button", { name: "Importar 1 transação" });
 
       // Two clicks before React can re-render: only the lock can stop the second.
