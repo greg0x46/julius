@@ -51,16 +51,21 @@ sources**: Ledger entries and the unified scenario projection flow
 
 The package **does not know Payables**: a plan's link to a `Payable` is
 encapsulated in `internal/scenarios` (`Scenario.PayableID`/`Kind`, via
-`ListPlanInstallments`/`SignedAmount`). The anchor balance comes from
-`transactions.CashOnHand`, including derived BRL manual-account balances.
-Foreign account amounts are excluded from both the anchor and real entries;
-there is no implicit FX conversion. Balance adjustments enter the current
+`ListPlanInstallments`/`SignedAmount`). The anchor reads native balances through `transactions.AccountBalance`, preserving
+provider ownership and derived manual balances, then converts them to BRL at the
+reference date. Real flows use the shared `internal/reporting` boundary and
+historical rates for their reporting dates; `Series.Reporting`,
+`BalanceReporting` and native `Totals` disclose coverage separately. Missing
+flow or anchor rates return `reporting.IncompleteError`, never a complete
+partial balance or period total. Legacy NULL account currency remains BRL.
+`Entry.Amount` and reportable values are BRL; original effective currency and
+reportable amounts remain on the entry for native drill-down. Balance adjustments enter the current
 anchor and the dated balance walk, never transaction income/expense totals or
 reporting entries. The walk also reverses adjustments after a historical
 window before reconstructing its days. Posted manual movements are already in
 the anchor even when future-dated; the walk reverses them before applying them
 on their dates, so they affect the curve once. These cash-only inputs respect
-account selection and exclude foreign currencies.
+account selection and currently handle BRL manual accounts only.
 
 The reference-day point is the balance at the **end** of that day, not the
 anchor balance: a real transaction from today is already in cash and enters the
@@ -92,9 +97,19 @@ transaction to the last planned installment), used by the "whole period" option.
 
 ## Frontend
 
+The authenticated shell (`frontend/src/app/App.tsx`) renders `BuildFooter` once
+through `ProLayout.footerRender` on every page. Its right-aligned, muted caption
+shows `Julius <build label> · <7-character SHA>` with a link to the full commit
+in GitHub. Missing/invalid SHA omits the separator and link; missing label falls
+back to `dev`. Vite supplies Git/default metadata at build time; CI supplies
+`stage` or the selected release tag and exact SHA. There is no metadata API or
+GitHub lookup. The footer stays in document flow, includes bottom safe-area
+padding, and reserves room on mobile pages with a fixed bottom action bar.
+
 Home (`/`):
 - `PeriodBalanceCard` — balance, inflows and outflows of the period
-  (`period_totals`).
+  (`period_totals`), with historical BRL consolidation, explicit missing-rate
+  states and expandable native currency totals for mixed-currency periods.
 - `ProjectionSummaryCard` — balance today, balance at end of horizon, lowest
   balance, plus `ProjectionTimeline`. Selectable horizon (end of month, 3, 6,
   12 months; 3 by default).

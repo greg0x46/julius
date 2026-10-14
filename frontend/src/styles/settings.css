@@ -167,3 +167,23 @@
 .login-form .ant-btn-lg {
   height: 48px;
 }
+
+/* ---- Cotações automáticas --------------------------------------------- */
+
+.quotes-last-refresh {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.quotes-schedule-form,
+.quotes-advanced {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.quotes-advanced > summary {
+  cursor: pointer;
+  margin-bottom: 1rem;
+}

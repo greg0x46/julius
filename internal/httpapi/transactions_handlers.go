@@ -15,6 +15,7 @@ import (
 	"github.com/greg0x46/julius/internal/categories"
 	"github.com/greg0x46/julius/internal/ledger"
 	"github.com/greg0x46/julius/internal/money"
+	"github.com/greg0x46/julius/internal/reporting"
 	"github.com/greg0x46/julius/internal/scenarios"
 	"github.com/greg0x46/julius/internal/transactions"
 )
@@ -307,6 +308,7 @@ func toCurrencyTotalsDTO(t transactions.CurrencyTotals) currencyTotalsDTO {
 }
 
 type groupDTO struct {
+	Reporting      reporting.Summary   `json:"reporting"`
 	Key            string              `json:"key"`
 	Kind           string              `json:"kind"`
 	StartDate      *string             `json:"start_date"`
@@ -332,6 +334,7 @@ func toGroupDTO(g transactions.Group) groupDTO {
 		totals[i] = toCurrencyTotalsDTO(t)
 	}
 	return groupDTO{
+		Reporting:      g.Reporting,
 		Key:            g.Key,
 		Kind:           string(g.Kind),
 		StartDate:      dateStringPtr(g.StartDate),
@@ -373,6 +376,7 @@ type availableFiltersDTO struct {
 }
 
 type transactionQueryResultDTO struct {
+	Reporting        reporting.Summary    `json:"reporting"`
 	ConfirmedAt      time.Time            `json:"confirmed_at"`
 	StoredTotal      int                  `json:"stored_total"`
 	Page             pageDTO              `json:"page"`
@@ -404,6 +408,7 @@ func toResultDTO(result transactions.Result) transactionQueryResultDTO {
 		categoryOptions[i] = categoryOptionDTO{ID: c.ID, Name: c.Name, Kind: string(c.Kind), IsActive: c.IsActive, Icon: c.Icon, Color: c.Color}
 	}
 	return transactionQueryResultDTO{
+		Reporting:   result.Reporting,
 		ConfirmedAt: result.ConfirmedAt,
 		StoredTotal: result.StoredTotal,
 		Page: pageDTO{
@@ -463,10 +468,12 @@ type categorySpendingItemDTO struct {
 }
 
 type spendingByCategoryDTO struct {
-	Month        string                    `json:"month"`
-	CurrencyCode string                    `json:"currency_code"`
-	Total        string                    `json:"total"`
-	Items        []categorySpendingItemDTO `json:"items"`
+	Month        string                        `json:"month"`
+	CurrencyCode string                        `json:"currency_code"`
+	Total        string                        `json:"total"`
+	Items        []categorySpendingItemDTO     `json:"items"`
+	Reporting    reporting.Summary             `json:"reporting"`
+	Totals       []transactions.CurrencyTotals `json:"totals"`
 }
 
 func spendingByCategoryUnavailableProblem(w http.ResponseWriter) {
@@ -491,11 +498,12 @@ func dateWithinBounds(t time.Time, from, to money.Date) bool {
 // same convention as the real side) — never merged into a real category's
 // total, always its own row tagged source="projetado", so the response can
 // never conflate a hypothetical amount with a real one.
-func projectedSpendingByCategory(ctx context.Context, db *sql.DB, scenarioID string, from, to money.Date) ([]categorySpendingItemDTO, error) {
+func projectedSpendingByCategory(ctx context.Context, db *sql.DB, scenarioID string, from, to money.Date) ([]categorySpendingItemDTO, int, error) {
 	list, err := scenarios.ListScenarioTransactions(ctx, db, scenarioID)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
+	count := 0
 	type accum struct {
 		name   string
 		amount decimal.Decimal
@@ -506,6 +514,7 @@ func projectedSpendingByCategory(ctx context.Context, db *sql.DB, scenarioID str
 		if !dateWithinBounds(st.ProjectedAt, from, to) {
 			continue
 		}
+		count++
 		key, name := "", "Sem categoria"
 		if st.Category != nil && *st.Category != "" {
 			key, name = *st.Category, *st.Category
@@ -523,7 +532,7 @@ func projectedSpendingByCategory(ctx context.Context, db *sql.DB, scenarioID str
 		a := byCategory[key]
 		items[i] = categorySpendingItemDTO{CategoryName: a.name, Amount: money.CanonicalDecimal(a.amount), Source: "projetado"}
 	}
-	return items, nil
+	return items, count, nil
 }
 
 // handleSpendingByCategory sums the requesting client's current calendar
@@ -548,16 +557,24 @@ func handleSpendingByCategory(db *sql.DB) http.HandlerFunc {
 		lastDay := time.Date(year, month, 1, 0, 0, 0, 0, loc).AddDate(0, 1, -1)
 		to := money.Date{Year: lastDay.Year(), Month: lastDay.Month(), Day: lastDay.Day()}
 
-		items, err := transactions.SpendingByCategory(r.Context(), db, transactions.Filters{
+		report, err := transactions.CategoryReporting(r.Context(), db, transactions.Filters{
 			DateFrom: &from, DateTo: &to,
-		}, timezone)
+		}, timezone, money.Outflow)
 		if err != nil {
+			if writeReportingProblem(w, err) {
+				return
+			}
 			spendingByCategoryUnavailableProblem(w)
 			return
 		}
 
-		dtoItems := make([]categorySpendingItemDTO, len(items))
-		for i, it := range items {
+		if report.Reporting.Totals == nil {
+			writeReportingProblem(w, &reporting.IncompleteError{Coverage: report.Reporting, Totals: report.Totals})
+			return
+		}
+
+		dtoItems := make([]categorySpendingItemDTO, len(report.Items))
+		for i, it := range report.Items {
 			dtoItems[i] = categorySpendingItemDTO{CategoryID: it.CategoryID, CategoryName: it.CategoryName, CategoryIcon: it.CategoryIcon, CategoryColor: it.CategoryColor, Amount: it.Amount, Source: "real"}
 		}
 
@@ -569,12 +586,35 @@ func handleSpendingByCategory(db *sql.DB) http.HandlerFunc {
 				spendingByCategoryUnavailableProblem(w)
 				return
 			}
-			projected, err := projectedSpendingByCategory(r.Context(), db, scenarioID, from, to)
+			projected, count, err := projectedSpendingByCategory(r.Context(), db, scenarioID, from, to)
 			if err != nil {
 				spendingByCategoryUnavailableProblem(w)
 				return
 			}
 			dtoItems = append(dtoItems, projected...)
+			report.Reporting.Eligible += count
+			report.Reporting.Converted += count
+			projectedTotal := decimal.Zero
+			for _, item := range projected {
+				projectedTotal = projectedTotal.Add(decimal.RequireFromString(item.Amount))
+			}
+			if count > 0 {
+				brlIndex := -1
+				for i, totals := range report.Totals {
+					if totals.CurrencyCode == reporting.ReferenceCurrency {
+						brlIndex = i
+						break
+					}
+				}
+				if brlIndex < 0 {
+					report.Totals = append(report.Totals, transactions.CurrencyTotals{CurrencyCode: reporting.ReferenceCurrency, Inflow: "0", Outflow: "0", Balance: "0"})
+					brlIndex = len(report.Totals) - 1
+				}
+				brl := &report.Totals[brlIndex]
+				brl.Outflow = money.CanonicalDecimal(decimal.RequireFromString(brl.Outflow).Add(projectedTotal))
+				brl.Balance = money.CanonicalDecimal(decimal.RequireFromString(brl.Balance).Sub(projectedTotal))
+				sort.Slice(report.Totals, func(i, j int) bool { return report.Totals[i].CurrencyCode < report.Totals[j].CurrencyCode })
+			}
 		}
 
 		total := decimal.Zero
@@ -592,11 +632,16 @@ func handleSpendingByCategory(db *sql.DB) http.HandlerFunc {
 			return ai.GreaterThan(aj)
 		})
 
+		report.Reporting.Totals.Outflow = money.CanonicalDecimal(total)
+		report.Reporting.Totals.Balance = money.CanonicalDecimal(total.Neg())
+
 		writeJSON(w, http.StatusOK, spendingByCategoryDTO{
 			Month:        fmt.Sprintf("%04d-%02d", year, int(month)),
 			CurrencyCode: "BRL",
 			Total:        money.CanonicalDecimal(total),
 			Items:        dtoItems,
+			Reporting:    report.Reporting,
+			Totals:       report.Totals,
 		})
 	}
 }
@@ -900,14 +945,14 @@ func handleCategoryBreakdown(db *sql.DB) http.HandlerFunc {
 			writeProblem(w, 400, "invalid-classification", "Classificação inválida", "Informe inflow ou outflow.")
 			return
 		}
-		items, err := transactions.CategoryBreakdown(r.Context(), db, filters, timezone, classification)
+		report, err := transactions.CategoryReporting(r.Context(), db, filters, timezone, classification)
 		if err != nil {
 			writeProblem(w, 503, "category-breakdown-unavailable", "Categorias temporariamente indisponíveis", "Tente novamente em instantes.")
 			return
 		}
 		total := decimal.Zero
-		result := make([]categorySpendingItemDTO, 0, len(items))
-		for _, item := range items {
+		result := make([]categorySpendingItemDTO, 0, len(report.Items))
+		for _, item := range report.Items {
 			amount, err := decimal.NewFromString(item.Amount)
 			if err != nil {
 				writeProblem(w, 503, "category-breakdown-unavailable", "Categorias temporariamente indisponíveis", "Tente novamente em instantes.")
@@ -916,20 +961,17 @@ func handleCategoryBreakdown(db *sql.DB) http.HandlerFunc {
 			total = total.Add(amount)
 			result = append(result, categorySpendingItemDTO{CategoryID: item.CategoryID, CategoryName: item.CategoryName, CategoryIcon: item.CategoryIcon, CategoryColor: item.CategoryColor, Amount: item.Amount, Source: "real"})
 		}
-		if monthLabel != "" {
-			writeJSON(w, http.StatusOK, struct {
-				spendingByCategoryDTO
-				Classification money.Classification `json:"classification"`
-			}{spendingByCategoryDTO{Month: monthLabel, CurrencyCode: "BRL", Total: money.CanonicalDecimal(total), Items: result}, classification})
-			return
+		var totalValue *string
+		if report.Reporting.Totals != nil {
+			value := money.CanonicalDecimal(total)
+			totalValue = &value
 		}
-		writeJSON(w, http.StatusOK, struct {
-			DateFrom       *string                   `json:"date_from"`
-			DateTo         *string                   `json:"date_to"`
-			CurrencyCode   string                    `json:"currency_code"`
-			Total          string                    `json:"total"`
-			Items          []categorySpendingItemDTO `json:"items"`
-			Classification money.Classification      `json:"classification"`
-		}{dateFrom, dateTo, "BRL", money.CanonicalDecimal(total), result, classification})
+		payload := map[string]any{"currency_code": "BRL", "total": totalValue, "items": result, "classification": classification, "reporting": report.Reporting, "totals": report.Totals}
+		if monthLabel != "" {
+			payload["month"] = monthLabel
+		} else {
+			payload["date_from"], payload["date_to"] = dateFrom, dateTo
+		}
+		writeJSON(w, http.StatusOK, payload)
 	}
 }

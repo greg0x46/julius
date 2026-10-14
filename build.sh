@@ -5,6 +5,8 @@ set -eu
 
 cd "$(dirname "$0")"
 
+# Vite bakes VITE_APP_VERSION/VITE_APP_COMMIT overrides into the embedded UI.
+# Without overrides, builds on stage say stage; other local builds say dev.
 (cd frontend && npm install && npm run build)
 
 rm -rf internal/webui/dist
