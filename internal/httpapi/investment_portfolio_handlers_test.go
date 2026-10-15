@@ -708,6 +708,10 @@ func TestInvestmentMonthlyMovementsOverHTTP(t *testing.T) {
 	assertMoney(t, "withdrawals", feb["withdrawals"], "200.00")
 	assertMoney(t, "fees", feb["fees"], "3.50")
 	assertMoney(t, "realized_gain", feb["realized_gain"], "0")
+	// The rows cover local operations only, whatever their amount.
+	if out["source"] != "manual" {
+		t.Errorf("source = %v, want manual", out["source"])
+	}
 }
 
 func TestInvestmentMonthlyMovementsReportRealizedGainOverHTTP(t *testing.T) {

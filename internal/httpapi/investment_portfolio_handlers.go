@@ -461,6 +461,10 @@ func writeInvestmentProblem(w http.ResponseWriter, err error) {
 			"Registro de investimento não encontrado", "O registro informado não existe.")
 	case errors.Is(err, investments.ErrInvalidInput):
 		writeInvestmentInvalid(w, "Revise os campos enviados.")
+	case errors.Is(err, investments.ErrUnsupportedCurrency):
+		writeProblem(w, http.StatusBadRequest, "investment-unsupported-currency",
+			"Moeda não suportada",
+			"Posições e movimentações manuais são em reais: este ativo está cadastrado em outra moeda.")
 	case errors.Is(err, investments.ErrIntegratedReadOnly):
 		writeProblem(w, http.StatusConflict, "investment-integrated-read-only",
 			"Registro integrado é somente leitura",
@@ -1331,7 +1335,9 @@ func handleListInvestmentMonthlyMovements(conn *sql.DB) http.HandlerFunc {
 				RealizedGain:  money.CanonicalDecimal(m.RealizedGain),
 			})
 		}
-		writeInvestmentItems(w, items)
+		// source says what the rows cover: only local operations. A synced
+		// holding has no cost basis here, so its sales are not a zero gain.
+		writeJSON(w, http.StatusOK, map[string]any{"items": items, "source": "manual"})
 	}
 }
 

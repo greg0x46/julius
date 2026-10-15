@@ -70,7 +70,8 @@ change local totals. Appreciation, purchase/sale principal and transfers
 between custodians are excluded from the flows above. `GET
 /api/investment-monthly-movements` (`?account_id=` optional) returns `items`
 with `month`, `contributions`, `withdrawals`, `income`, `fees`, `taxes` and
-`realized_gain`; `GET /api/investment-operations` continues to return raw
+`realized_gain`, plus `source: "manual"`, which says every row covers local
+operations only; `GET /api/investment-operations` continues to return raw
 operations.
 
 `RealizedGain` (`realized_gain`; negative for a loss) is informative. For each
@@ -90,11 +91,28 @@ the timeline totals.
 
 It exists only for local operations (`source = manual`): they are the only ones
 whose cost basis the ledger knows. Synced holdings have none and are not
-covered, so a zero or a missing month there does not mean "no gain". Manual
-operations carry no currency and are in reais by construction (manual custody
-accounts are BRL by constraint, manual holdings are reported in BRL and there
-is no FX on manual operations), so every amount in `MonthlyMovements`, the
-gain included, sums a single currency.
+covered (the response says `source: "manual"`), so a zero or a missing month
+does not mean "no gain" for them.
+
+For a manual position, the yield since inception (the Rendimento formula: value
+at the end minus the net money put in, purchases at all-in cost and sales at net
+value) is exactly its cumulative `RealizedGain` plus its unrealized gain
+(`CurrentValue − TotalCost`), also for a holding that arrived by custody
+transfer, whose frozen cost is both the money counted in and the basis a sale
+writes off. Income operations belong to the account, not to a position, so they
+are in neither the yield nor `RealizedGain`: they are `Income`.
+
+Manual operations carry no currency and are in reais, so `MonthlyMovements`,
+the gain included, sums a single currency. Manual custody accounts are BRL by
+constraint, and the API refuses (400, `investment-unsupported-currency`) a
+manual position whose asset is catalogued in another currency, in a manual or an
+integrated custody, and a currency change on an asset held by manual positions.
+Operations and transfers on a holding that predates the rule are refused the
+same way; existing rows and reads are untouched. An integrated account stores no
+currency (it is NULL), so its local cash records, which name no asset, cannot be
+checked and are taken as reais. Multi-currency support for manual operations is
+left to #63; until then `MonthlyMovements` and `RealizedGain` assume one
+currency.
 
 Appreciation and unrealized gain (`Summary.UnrealizedGain`) are never realized
 income or realized gain: they are excluded from `ManualReportingEntries`,

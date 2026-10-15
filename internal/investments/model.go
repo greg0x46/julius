@@ -335,6 +335,7 @@ var (
 	ErrOperationNotFound         = errors.New("investment operation not found")
 	ErrReconciliationNotFound    = errors.New("investment reconciliation not found")
 	ErrInvalidInput              = errors.New("invalid investment input")
+	ErrUnsupportedCurrency       = errors.New("manual investment records are in reais")
 	ErrIntegratedReadOnly        = errors.New("integrated investment data is read-only")
 	ErrNotManual                 = errors.New("investment record is not manual")
 	ErrNegativeCash              = errors.New("investment operation would make cash negative")
