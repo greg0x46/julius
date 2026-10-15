@@ -186,3 +186,77 @@ func TestMonthlyRealizedGainOfAManualHoldingInAnIntegratedAccount(t *testing.T) 
 		t.Fatalf("months = %+v", months)
 	}
 }
+
+// A position's Rendimento since inception (V(end) − net money put in) splits
+// into what its sales realized and what it still holds unrealized, to the
+// cent. Income operations belong to the account, not to the position, so they
+// are in neither the yield nor the realized gain.
+func TestPositionYieldIsRealizedGainPlusUnrealizedGain(t *testing.T) {
+	eachLedger(t, func(t *testing.T, f *ledgerFixture) {
+		positionID := f.addPosition(f.custodyID, "Ações")
+		f.deposit("3000", day(1))
+		f.buyWithCosts(f.custodyID, positionID, day(2), "600", "6", "12", "6") // basis 618
+		f.valuation(positionID, day(3), "900")
+		f.sellWithCosts(f.custodyID, positionID, day(7), "260", "2", "3", "1") // writes off 206
+		f.buyWithCosts(f.custodyID, positionID, day(8), "330", "3", "5", "0")  // basis 412 + 335 = 747 over 7 units
+		f.create(investments.OperationInput{AccountID: f.custodyID, Kind: investments.OperationIncome, OccurredOn: day(9), Amount: dec("40")})
+		f.sellWithCosts(f.custodyID, positionID, day(10), "120", "1", "2", "0") // writes off 747 / 7, which does not terminate
+		f.valuation(positionID, day(12), "1000")
+
+		realized := dec("0")
+		for _, month := range f.monthlyMovements(nil) {
+			realized = realized.Add(month.RealizedGain)
+		}
+		position, err := investments.GetPosition(f.ctx, f.conn, positionID)
+		if err != nil || position.TotalCost == nil {
+			t.Fatalf("GetPosition = %+v, %v", position, err)
+		}
+		unrealized := position.CurrentValue.Sub(*position.TotalCost)
+		yield := f.yield(positionID, nil, "2026-09-15")
+		if got := realized.Add(unrealized); !got.Equal(yield.Value) {
+			t.Fatalf("yield %s != realized %s + unrealized %s", yield.Value, realized, unrealized)
+		}
+		if f.monthlyMovements(nil)["2026-09"].Income.String() != "40" {
+			t.Fatalf("income operation is not reported as income")
+		}
+	})
+}
+
+// The split also holds for a holding that arrived by custody transfer, whose
+// frozen cost is both what the yield counts as money in and the basis a sale
+// writes off.
+func TestTransferredPositionYieldIsRealizedGainPlusUnrealizedGain(t *testing.T) {
+	eachLedger(t, func(t *testing.T, f *ledgerFixture) {
+		destination, err := investments.CreateAccount(f.ctx, f.conn, investments.AccountInput{Name: "Carteira"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		ticker := "ABCD3"
+		source, err := investments.CreatePosition(f.ctx, f.conn, investments.PositionInput{AccountID: f.custodyID, Name: "Ações", Ticker: &ticker, AssetType: "Ação"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		target, err := investments.CreatePosition(f.ctx, f.conn, investments.PositionInput{AccountID: destination.ID, AssetID: source.AssetID, Name: "Ações", AssetType: "Ação"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		f.deposit("2000", day(1))
+		f.buyWithCosts(f.custodyID, source.ID, day(1), "1000", "10", "20", "0") // basis 1020
+		if _, err := investments.CreateTransfer(f.ctx, f.conn, investments.TransferInput{SourcePositionID: source.ID, DestinationPositionID: target.ID, Quantity: dec("10"), OccurredOn: day(5)}); err != nil {
+			t.Fatalf("CreateTransfer: %v", err)
+		}
+		f.sellWithCosts(destination.ID, target.ID, day(10), "500", "4", "2", "0")
+		f.create(investments.OperationInput{AccountID: destination.ID, PositionID: &target.ID, Kind: investments.OperationValuation, OccurredOn: day(11), Amount: dec("700")})
+
+		realized := f.monthlyMovements(&destination.ID)["2026-09"].RealizedGain
+		position, err := investments.GetPosition(f.ctx, f.conn, target.ID)
+		if err != nil || position.TotalCost == nil {
+			t.Fatalf("GetPosition = %+v, %v", position, err)
+		}
+		unrealized := position.CurrentValue.Sub(*position.TotalCost)
+		yield := f.yield(target.ID, nil, "2026-09-15")
+		if got := realized.Add(unrealized); !got.Equal(yield.Value) {
+			t.Fatalf("yield %s != realized %s + unrealized %s", yield.Value, realized, unrealized)
+		}
+	})
+}
