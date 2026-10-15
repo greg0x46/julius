@@ -26,8 +26,21 @@ type manualAccountRequest struct {
 
 func handleAccountCurrencies(provider exchange.CoverageProvider) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, 200, provider.Currencies(r.Context()))
+		coverage := provider.Currencies(r.Context())
+		currencies := make([]exchange.Currency, 0, len(coverage.Currencies))
+		for _, c := range coverage.Currencies {
+			if validManualAccountCurrency(c.Code) {
+				currencies = append(currencies, c)
+			}
+		}
+		coverage.Currencies = currencies
+		writeJSON(w, 200, coverage)
 	}
+}
+
+func validManualAccountCurrency(code string) bool {
+	_, err := currency.ParseISO(code)
+	return err == nil && code == strings.ToUpper(code) && code != "XXX"
 }
 
 func invalidManualAccount(w http.ResponseWriter, detail string) {
@@ -48,9 +61,8 @@ func handleWriteManualAccount(conn *sql.DB, create bool) http.HandlerFunc {
 		if req.OpeningBalance == "" {
 			req.OpeningBalance = "0"
 		}
-		_, currencyErr := currency.ParseISO(req.CurrencyCode)
 		opening, err := decimal.NewFromString(req.OpeningBalance)
-		if req.Name == "" || len(req.Name) > 200 || currencyErr != nil || req.CurrencyCode != strings.ToUpper(req.CurrencyCode) || req.CurrencyCode == "XXX" || err != nil {
+		if req.Name == "" || len(req.Name) > 200 || !validManualAccountCurrency(req.CurrencyCode) || err != nil {
 			invalidManualAccount(w, "Informe um nome, uma moeda ISO 4217 e um saldo inicial decimal válido.")
 			return
 		}

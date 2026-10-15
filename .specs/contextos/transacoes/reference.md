@@ -107,6 +107,8 @@ with a one-minute failure cooldown and stale-list fallback. A restart clears
 only this list cache; if coverage cannot be loaded, BRL remains available and
 other currencies have unverified support. The form also reuses coverage for
 24 hours and offers retry. Its searchable selector lists provider currencies
+accepted by the account API's ISO validation (excluding non-ISO provider codes
+such as CMD), without filtering the provider's raw conversion coverage,
 and preserves an existing account's selection. “Usar outra moeda” explicitly
 allows an ISO currency outside coverage, with a warning before saving; native
 balances and transactions remain usable. Known unsupported currencies explain
