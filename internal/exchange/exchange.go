@@ -1,5 +1,5 @@
 // Package exchange resolves persisted decimal rates without changing original values.
-// Historical lookups use the last business day on or before the requested day.
+// Historical lookups use the last observation on or before the requested day.
 // Valid rows fetched after that day ended (UTC) are final; others refresh after TTL.
 // Provider failure returns a stored rate marked stale, or ErrUnavailable.
 // Rates more than MaxLag before the requested day are also marked stale.
@@ -21,6 +21,11 @@ import (
 
 // ErrUnavailable means no rate could be resolved for the pair and day.
 var ErrUnavailable = errors.New("exchange rate unavailable")
+var ErrUnsupported = errors.New("currency unsupported by rate provider")
+var ErrHistorical = errors.New("historical rate unavailable")
+var ErrProviderFailure = errors.New("rate provider temporarily unavailable")
+
+var defaultFrankfurter = NewFrankfurter()
 
 // ErrInvalidCurrency means a currency is not a three-letter ISO 4217 code.
 var ErrInvalidCurrency = errors.New("invalid currency code")
@@ -68,7 +73,7 @@ type ProviderRate struct {
 // Provider fetches rates from an external source.
 type Provider interface {
 	Name() string
-	// Rate is the rate of the last business day on or before day.
+	// Rate is the rate of the last observation on or before day.
 	Rate(ctx context.Context, base, quote string, day time.Time) (ProviderRate, error)
 }
 
@@ -93,23 +98,25 @@ type Service struct {
 
 	// mu serializes provider calls, so concurrent reads of the same missing
 	// rate cost one request.
-	mu       sync.Mutex
-	failedAt map[string]time.Time
+	mu           sync.Mutex
+	failedAt     map[string]time.Time
+	failedErrors map[string]error
 }
 
 // New builds a Service. A nil provider uses Frankfurter.
 func New(conn Querier, provider Provider) *Service {
 	if provider == nil {
-		provider = NewFrankfurter()
+		provider = defaultFrankfurter
 	}
 	return &Service{
-		conn:     conn,
-		provider: provider,
-		now:      time.Now,
-		TTL:      time.Hour,
-		MaxLag:   7 * 24 * time.Hour,
-		Cooldown: time.Minute,
-		failedAt: make(map[string]time.Time),
+		conn:         conn,
+		provider:     provider,
+		now:          time.Now,
+		TTL:          time.Hour,
+		MaxLag:       7 * 24 * time.Hour,
+		Cooldown:     time.Minute,
+		failedAt:     make(map[string]time.Time),
+		failedErrors: make(map[string]error),
 	}
 }
 
@@ -157,11 +164,12 @@ func (s *Service) resolve(ctx context.Context, base, quote string, day time.Time
 	for key, failedAt := range s.failedAt {
 		if now.Sub(failedAt) >= s.Cooldown {
 			delete(s.failedAt, key)
+			delete(s.failedErrors, key)
 		}
 	}
 	key := base + "/" + quote + "/" + formatDate(day)
 	if _, coolingDown := s.failedAt[key]; coolingDown {
-		fetchErr = errors.New("provider cooling down after a failure")
+		fetchErr = s.failedErrors[key]
 	} else {
 		var rate Rate
 		rate, fetchErr = s.fetch(ctx, base, quote, day)
@@ -171,6 +179,7 @@ func (s *Service) resolve(ctx context.Context, base, quote string, day time.Time
 		}
 		if ctx.Err() == nil {
 			s.failedAt[key] = s.now()
+			s.failedErrors[key] = fetchErr
 		}
 	}
 
