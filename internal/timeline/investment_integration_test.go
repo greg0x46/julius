@@ -89,3 +89,27 @@ func TestUnrealizedValuationDoesNotEnterTimelineTotals(t *testing.T) {
 		t.Fatalf("valuation reported as income/expense: %+v", totals)
 	}
 }
+
+func TestRealizedSaleGainDoesNotEnterTimelineTotals(t *testing.T) {
+	f := newFixture(t)
+	f.addAccount("0")
+	now := db.FormatTime(time.Now())
+	f.exec(`INSERT INTO investment_accounts (id,name,kind,currency_code,created_at,updated_at) VALUES ('manual','Manual','manual','BRL',?,?)`, now, now)
+	f.exec(`INSERT INTO investment_assets (id,canonical_key,name,asset_type,created_at,updated_at) VALUES ('asset','ticker:ACOES','Ações','EQUITY',?,?)`, now, now)
+	f.exec(`INSERT INTO investment_positions (id,account_id,asset_id,created_at,updated_at) VALUES ('position','manual','asset',?,?)`, now, now)
+	f.exec(`INSERT INTO investment_operations (id,account_id,kind,occurred_on,amount,created_at,updated_at) VALUES ('opening','manual','initial_balance','2026-09-01','1000',?,?)`, now, now)
+	f.exec(`INSERT INTO investment_operations (id,account_id,position_id,kind,occurred_on,amount,quantity,unit_price,created_at,updated_at) VALUES ('buy','manual','position','buy','2026-09-02','600','6','100',?,?)`, now, now)
+	f.exec(`INSERT INTO investment_operations (id,account_id,position_id,kind,occurred_on,amount,quantity,unit_price,created_at,updated_at) VALUES ('sell','manual','position','sell','2026-09-10','150','1','150',?,?)`, now, now)
+
+	series, err := timeline.BuildSeries(context.Background(), f.conn, timeline.BuildParams{
+		From: date(t, "2026-09-01"), To: date(t, "2026-09-30"), ReferenceDate: date(t, "2026-09-30"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The 50 gained on the sale is the monthly report's realized_gain, not income.
+	totals := timeline.TotalsForPeriod(series)
+	if !totals.Income.IsZero() || !totals.Expense.IsZero() {
+		t.Fatalf("sale gain reported as income/expense: %+v", totals)
+	}
+}

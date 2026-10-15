@@ -302,6 +302,10 @@ type ManualReportingEntry struct {
 
 // MonthlyMovement is one calendar month (YYYY-MM) of gross local investment flows.
 // Contributions and Withdrawals are principal, never income or expense.
+// RealizedGain (negative for a loss) is the net proceeds of local sales minus
+// the all-in cost basis written off, so it is net of purchase and sale fees
+// and taxes and is not part of Income. Synced holdings have no cost basis:
+// their sales are not covered and a zero is not "no gain".
 type MonthlyMovement struct {
 	Month         string
 	Contributions decimal.Decimal
@@ -309,6 +313,7 @@ type MonthlyMovement struct {
 	Income        decimal.Decimal
 	Fees          decimal.Decimal
 	Taxes         decimal.Decimal
+	RealizedGain  decimal.Decimal
 }
 
 type ManualReporting struct {

@@ -1309,6 +1309,7 @@ type investmentMonthlyMovementDTO struct {
 	Income        string `json:"income"`
 	Fees          string `json:"fees"`
 	Taxes         string `json:"taxes"`
+	RealizedGain  string `json:"realized_gain"`
 }
 
 func handleListInvestmentMonthlyMovements(conn *sql.DB) http.HandlerFunc {
@@ -1327,6 +1328,7 @@ func handleListInvestmentMonthlyMovements(conn *sql.DB) http.HandlerFunc {
 				Income:        money.CanonicalDecimal(m.Income),
 				Fees:          money.CanonicalDecimal(m.Fees),
 				Taxes:         money.CanonicalDecimal(m.Taxes),
+				RealizedGain:  money.CanonicalDecimal(m.RealizedGain),
 			})
 		}
 		writeInvestmentItems(w, items)

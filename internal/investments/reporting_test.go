@@ -50,7 +50,7 @@ func TestUnrealizedValuationIsNotRealizedIncome(t *testing.T) {
 	if reporting := f.manualReporting(); !reporting.Income.IsZero() {
 		t.Fatalf("valuation became realized income: %+v", reporting)
 	}
-	if got := f.monthlyMovements(nil)["2026-09"]; !got.Income.IsZero() || got.Contributions.String() != "1000" {
+	if got := f.monthlyMovements(nil)["2026-09"]; !got.Income.IsZero() || !got.RealizedGain.IsZero() || got.Contributions.String() != "1000" {
 		t.Fatalf("valuation leaked into monthly flows: %+v", got)
 	}
 
@@ -83,8 +83,10 @@ func TestUnrealizedValuationIsNotRealizedIncome(t *testing.T) {
 		t.Fatalf("manual reporting = %+v", reporting)
 	}
 	month := f.monthlyMovements(nil)["2026-09"]
-	if month.Income.String() != "50" || month.Fees.String() != "9" || month.Taxes.String() != "4" ||
-		month.Contributions.String() != "1000" || !month.Withdrawals.IsZero() {
+	// The unit sold for 150 cost 100; net of the sale's 2 and 1 that is 47, a
+	// realized gain of its own, not income.
+	if month.Income.String() != "50" || month.RealizedGain.String() != "47" || month.Fees.String() != "9" ||
+		month.Taxes.String() != "4" || month.Contributions.String() != "1000" || !month.Withdrawals.IsZero() {
 		t.Fatalf("monthly flows = %+v", month)
 	}
 }

@@ -59,23 +59,48 @@ contributions and withdrawals.
 
 `investments.MonthlyMovements` derives monthly (`YYYY-MM` from `occurred_on`)
 gross contributions (`Contributions`), withdrawals (`Withdrawals`), realized
-income (`Income`), fees (`Fees`) and taxes (`Taxes`) from local operations
-(`source = manual`), including in integrated accounts, optionally filtered by
-custody account. Fees and taxes include costs from purchases and sales. These
-amounts do not subtract reconciliations: linking a bank entry never reduces the
-month's gross contribution or withdrawal. Imported movements and their
-reconciliation pivots (`source = synced`) are excluded; creating or undoing
-those links does not change local totals. Appreciation, purchase/sale principal
-and transfers between custodians are excluded. `GET
+income (`Income`, only income operations), fees (`Fees`), taxes (`Taxes`) and
+realized gain (`RealizedGain`) from local operations (`source = manual`),
+including in integrated accounts, optionally filtered by custody account. Fees
+and taxes include costs from purchases and sales. These amounts do not subtract
+reconciliations: linking a bank entry never reduces the month's gross
+contribution or withdrawal. Imported movements and their reconciliation pivots
+(`source = synced`) are excluded; creating or undoing those links does not
+change local totals. Appreciation, purchase/sale principal and transfers
+between custodians are excluded from the flows above. `GET
 /api/investment-monthly-movements` (`?account_id=` optional) returns `items`
-with `month`, `contributions`, `withdrawals`, `income`, `fees` and `taxes`;
-`GET /api/investment-operations` continues to return raw operations.
+with `month`, `contributions`, `withdrawals`, `income`, `fees`, `taxes` and
+`realized_gain`; `GET /api/investment-operations` continues to return raw
+operations.
+
+`RealizedGain` (`realized_gain`; negative for a loss) is informative. For each
+local sale it is the net proceeds, `amount − fees − taxes` (what the ledger
+credits to the cash), minus the cost basis that sale wrote off, summed in the
+month of the sale. The basis is the ledger's all-in one, read from the account
+replay as the drop in the position's total cost: purchase and opening-balance
+fees and taxes are capitalized in it, the cost frozen by a custody transfer is
+carried to the destination, and a partial sale writes off a proportional share,
+so selling a holding in pieces adds up exactly. This is the convention of the
+position's yield (purchase at all-in cost, sale at its net value), and makes
+`RealizedGain` already net of the purchase and sale fees and taxes. `Fees` and
+`Taxes` keep itemizing those costs (the timeline books them as expenses, the
+purchase ones on the purchase date) and must not be subtracted from it again.
+It is not part of `Income`, is not in `ManualReportingEntries` and does not feed
+the timeline totals.
+
+It exists only for local operations (`source = manual`): they are the only ones
+whose cost basis the ledger knows. Synced holdings have none and are not
+covered, so a zero or a missing month there does not mean "no gain". Manual
+operations carry no currency and are in reais by construction (manual custody
+accounts are BRL by constraint, manual holdings are reported in BRL and there
+is no FX on manual operations), so every amount in `MonthlyMovements`, the
+gain included, sums a single currency.
 
 Appreciation and unrealized gain (`Summary.UnrealizedGain`) are never realized
-income: they are excluded from `ManualReportingEntries`,
-`MonthlyMovements.Income` and timeline income totals, although they change net
-worth. Reconciled contributions and withdrawals preserve net worth; a fee
-reduces net worth by exactly its amount.
+income or realized gain: they are excluded from `ManualReportingEntries`,
+`MonthlyMovements.Income`, `MonthlyMovements.RealizedGain` and timeline income
+totals, although they change net worth. Reconciled contributions and
+withdrawals preserve net worth; a fee reduces net worth by exactly its amount.
 
 Editing or deleting a reconciled manual bank entry requires undoing the links
 first. Ignoring a reconciled entry undoes its links (the operation is reported

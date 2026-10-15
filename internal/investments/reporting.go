@@ -218,12 +218,66 @@ func ManualOperationReporting(ctx context.Context, q Querier) (ManualReporting, 
 	return result, nil
 }
 
+// realizedSaleGains maps every local sale to its net proceeds (principal minus
+// the sale's fees and taxes, as the ledger credits the cash) minus the cost
+// basis it wrote off in the ledger replay (purchase fees and taxes included, a
+// transfer's frozen cost carried).
+func realizedSaleGains(ctx context.Context, q Querier, accountID *string) (map[string]decimal.Decimal, error) {
+	query := `SELECT DISTINCT account_id FROM investment_operations WHERE source = 'manual' AND kind = 'sell'`
+	args := []any{}
+	if accountID != nil {
+		query += ` AND account_id = ?`
+		args = append(args, *accountID)
+	}
+	rows, err := q.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	accounts := []string{}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(dbtypes.ID(&id)); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		accounts = append(accounts, id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	gains := map[string]decimal.Decimal{}
+	for _, id := range accounts {
+		_, err := replayAccountObserving(ctx, q, id, nil, func(op Operation, writtenOff decimal.Decimal) {
+			if op.Source == "manual" {
+				gains[op.ID] = op.Amount.Sub(op.Fees).Sub(op.Taxes).Sub(writtenOff)
+			}
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
+	return gains, nil
+}
+
 // MonthlyMovements sums gross local principal flows, realized income and costs
 // per month, including local entries in integrated accounts. Reconciliation
 // never changes these totals; derived provider pivots are excluded.
+// RealizedGain stays out of Income and is already net of every purchase and
+// sale fee and tax, which Fees and Taxes keep itemizing (the timeline books
+// them as costs): it must not be reduced by them again. It exists only for
+// local sales, where the ledger knows the cost basis; synced holdings have
+// none, so a zero there means "not computed", not "no gain".
 func MonthlyMovements(ctx context.Context, q Querier, accountID *string) ([]MonthlyMovement, error) {
+	gains, err := realizedSaleGains(ctx, q, accountID)
+	if err != nil {
+		return nil, err
+	}
 	query := `
-		SELECT kind, occurred_on, amount, fees, taxes
+		SELECT id, kind, occurred_on, amount, fees, taxes
 		FROM investment_operations
 		WHERE source = 'manual'
 		  AND kind IN ('deposit', 'withdrawal', 'income', 'fee', 'tax', 'buy', 'sell')`
@@ -240,8 +294,8 @@ func MonthlyMovements(ctx context.Context, q Querier, accountID *string) ([]Mont
 
 	byMonth := map[string]*MonthlyMovement{}
 	for rows.Next() {
-		var kindRaw, occurredRaw, amountRaw, feesRaw, taxesRaw string
-		if err := rows.Scan(&kindRaw, dbtypes.Date(&occurredRaw), dbtypes.Decimal(&amountRaw),
+		var idRaw, kindRaw, occurredRaw, amountRaw, feesRaw, taxesRaw string
+		if err := rows.Scan(dbtypes.ID(&idRaw), &kindRaw, dbtypes.Date(&occurredRaw), dbtypes.Decimal(&amountRaw),
 			dbtypes.Decimal(&feesRaw), dbtypes.Decimal(&taxesRaw)); err != nil {
 			return nil, err
 		}
@@ -281,6 +335,7 @@ func MonthlyMovements(ctx context.Context, q Querier, accountID *string) ([]Mont
 		case OperationBuy, OperationSell:
 			movement.Fees = movement.Fees.Add(fees)
 			movement.Taxes = movement.Taxes.Add(taxes)
+			movement.RealizedGain = movement.RealizedGain.Add(gains[idRaw]) // sales only
 		}
 	}
 	if err := rows.Err(); err != nil {
@@ -289,9 +344,9 @@ func MonthlyMovements(ctx context.Context, q Querier, accountID *string) ([]Mont
 
 	result := make([]MonthlyMovement, 0, len(byMonth))
 	for _, movement := range byMonth {
-		// A month with only cost-free trades has nothing to report.
+		// A month with only cost-free trades that realized nothing has nothing to report.
 		if movement.Contributions.IsZero() && movement.Withdrawals.IsZero() && movement.Income.IsZero() &&
-			movement.Fees.IsZero() && movement.Taxes.IsZero() {
+			movement.Fees.IsZero() && movement.Taxes.IsZero() && movement.RealizedGain.IsZero() {
 			continue
 		}
 		result = append(result, *movement)
