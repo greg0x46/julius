@@ -5,6 +5,7 @@ import { adjustManualAccount, listAccountCurrencies, writeManualAccount } from "
 import { parseAccount } from "./contracts";
 
 const manual = { ...bankAccount, origin: "manual" as const, external_id: null, opening_balance: "100.001", balance: "100.001", currency_code: "USD" };
+const coverage = { currencies: [{ code: "BRL" }, { code: "ARS", start_date: "1998-07-07", end_date: "2026-10-14" }], status: "complete", source: "frankfurter-v2-blended" };
 const response = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status, headers: { "Content-Type": "application/json" } });
 
 describe("manual account API", () => {
@@ -24,10 +25,10 @@ describe("manual account API", () => {
   });
 
   it("sends signed adjustments and exposes supported currencies", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(response(manual)).mockResolvedValueOnce(response(["BRL", "EUR", "USD"]));
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(response(manual)).mockResolvedValueOnce(response(coverage));
     await adjustManualAccount(manual.id, "-5.50", "Correção");
     expect(fetchMock).toHaveBeenNthCalledWith(1, `/api/accounts/${manual.id}/adjustments`, expect.objectContaining({ body: JSON.stringify({ amount: "-5.50", description: "Correção" }) }));
-    await expect(listAccountCurrencies()).resolves.toEqual(["BRL", "EUR", "USD"]);
+    await expect(listAccountCurrencies()).resolves.toEqual(coverage);
   });
 
   it("keeps currency validation feedback", async () => {

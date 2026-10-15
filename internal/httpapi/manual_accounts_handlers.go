@@ -3,7 +3,6 @@ package httpapi
 import (
 	"database/sql"
 	"net/http"
-	"sort"
 	"strings"
 	"time"
 
@@ -13,6 +12,7 @@ import (
 
 	"github.com/greg0x46/julius/internal/db"
 	dbtypes "github.com/greg0x46/julius/internal/db/types"
+	"github.com/greg0x46/julius/internal/exchange"
 	"github.com/greg0x46/julius/internal/money"
 	"github.com/greg0x46/julius/internal/transactions"
 )
@@ -24,18 +24,10 @@ type manualAccountRequest struct {
 	Archived       bool   `json:"archived"`
 }
 
-func handleAccountCurrencies(w http.ResponseWriter, r *http.Request) {
-	codes := map[string]bool{}
-	iter := currency.Query()
-	for iter.Next() {
-		codes[iter.Unit().String()] = true
+func handleAccountCurrencies(provider exchange.CoverageProvider) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, 200, provider.Currencies(r.Context()))
 	}
-	result := []string{}
-	for code := range codes {
-		result = append(result, code)
-	}
-	sort.Strings(result)
-	writeJSON(w, 200, result)
 }
 
 func invalidManualAccount(w http.ResponseWriter, detail string) {

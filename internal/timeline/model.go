@@ -58,6 +58,7 @@ type Entry struct {
 	OriginalCurrency         string
 	OriginalReportableAmount *decimal.Decimal
 	ReportingStatus          string
+	ReportingIssue           *reporting.Issue
 	Date                     time.Time
 	Description              string
 	Amount                   decimal.Decimal  // signed: positive = inflow, negative = outflow

@@ -165,6 +165,9 @@ func realEntries(ctx context.Context, q Querier, items []transactions.Item, refe
 				reportingDate = &local
 			}
 			cash = reporting.Convert(ctx, rates, amount, item.EffectiveMoney.CurrencyCode, reportingDate)
+			if cash.Issue != nil && item.Account.Name != nil {
+				cash.Issue.Account = *item.Account.Name
+			}
 		}
 		amount = decimal.Zero
 		if cash.Amount != nil {
@@ -227,6 +230,7 @@ func realEntries(ctx context.Context, q Querier, items []transactions.Item, refe
 			OriginalCurrency:         item.EffectiveMoney.CurrencyCode,
 			OriginalReportableAmount: &originalReportable,
 			ReportingStatus:          cash.Status,
+			ReportingIssue:           cash.Issue,
 			Date:                     date,
 			Description:              description,
 			Amount:                   amount,
@@ -396,7 +400,7 @@ func BuildSeries(ctx context.Context, q Querier, params BuildParams) (Series, er
 			raw[currency].Add(reporting.Conversion{Amount: &original, Status: "complete"}, direction)
 		}
 		if e.ReportingStatus == "unavailable" {
-			coverage.Add(reporting.Conversion{Status: "unavailable"}, money.Unclassified)
+			coverage.Add(reporting.Conversion{Status: "unavailable", Issue: e.ReportingIssue}, money.Unclassified)
 			continue
 		}
 		amount := reportingAmount(e)

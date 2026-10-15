@@ -3,6 +3,7 @@ package exchange
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -33,6 +34,7 @@ func (f *Frankfurter) Name() string { return "frankfurter-v2-blended" }
 
 func (f *Frankfurter) Rate(ctx context.Context, base, quote string, day time.Time) (ProviderRate, error) {
 	coverage := f.Currencies(ctx)
+	knownPair := coverage.Status != "unavailable"
 	if coverage.Status != "unavailable" {
 		for _, code := range []string{base, quote} {
 			found := false
@@ -46,6 +48,9 @@ func (f *Frankfurter) Rate(ctx context.Context, base, quote string, day time.Tim
 				}
 			}
 			if !found {
+				knownPair = false
+			}
+			if !found && coverage.Status == "complete" {
 				return ProviderRate{}, fmt.Errorf("%w: %s", ErrUnsupported, code)
 			}
 		}
@@ -53,6 +58,9 @@ func (f *Frankfurter) Rate(ctx context.Context, base, quote string, day time.Tim
 	endpoint := f.baseURL + "/rate/" + base + "/" + quote + "?" + url.Values{"date": {formatDate(day)}}.Encode()
 	body, err := f.get(ctx, endpoint)
 	if err != nil {
+		if errors.Is(err, ErrHistorical) && !knownPair {
+			return ProviderRate{}, ErrProviderFailure
+		}
 		return ProviderRate{}, err
 	}
 

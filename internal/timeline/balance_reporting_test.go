@@ -50,7 +50,7 @@ func TestReportingBalanceMissingFXCannotReturnSeries(t *testing.T) {
 	if !errors.As(err, &incomplete) || incomplete.Coverage.Missing != 1 || len(s.Points) != 0 {
 		t.Fatalf("missing = %+v, %v", s, err)
 	}
-	if incomplete.Error() != "Faltam cotações históricas para converter o saldo das contas." {
+	if len(incomplete.Coverage.Issues) != 1 || incomplete.Coverage.Issues[0].Reason != "historical_unavailable" || incomplete.Coverage.Issues[0].Currency != "USD" || incomplete.Coverage.Issues[0].Account == "" {
 		t.Fatal(incomplete.Error())
 	}
 }

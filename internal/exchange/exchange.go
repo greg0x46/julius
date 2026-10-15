@@ -130,7 +130,7 @@ func (s *Service) Latest(ctx context.Context, base, quote string) (Rate, error) 
 func (s *Service) On(ctx context.Context, base, quote string, t time.Time) (Rate, error) {
 	day := dates.Day(t)
 	if day.After(s.today()) {
-		return Rate{}, fmt.Errorf("%w: %s is in the future", ErrUnavailable, formatDate(day))
+		return Rate{}, fmt.Errorf("%w: %w: %s is in the future", ErrUnavailable, ErrHistorical, formatDate(day))
 	}
 	return s.resolve(ctx, base, quote, day)
 }

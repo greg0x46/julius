@@ -58,3 +58,35 @@ func TestStaleReportingIsDisclosed(t *testing.T) {
 		t.Fatalf("stale inverse = %+v", summary)
 	}
 }
+
+func TestReportingFailureReasons(t *testing.T) {
+	day := time.Date(2024, 5, 18, 0, 0, 0, 0, time.UTC)
+	for _, tc := range []struct {
+		err    error
+		reason string
+	}{
+		{exchange.ErrUnsupported, "unsupported"},
+		{exchange.ErrHistorical, "historical_unavailable"},
+		{exchange.ErrProviderFailure, "provider_failure"},
+	} {
+		t.Run(tc.reason, func(t *testing.T) {
+			r := &resolver{err: tc.err}
+			converted := reporting.Convert(context.Background(), r, decimal.NewFromInt(100), "ARS", &day)
+			if converted.Amount != nil || converted.Issue.Reason != tc.reason || converted.Issue.Currency != "ARS" || converted.Issue.Date != "2024-05-18" {
+				t.Fatalf("%+v", converted)
+			}
+			converted.Issue.Account = "Conta sintética"
+			var a reporting.Accumulator
+			a.Add(converted, money.Inflow)
+			a.Add(converted, money.Inflow)
+			summary := a.Summary()
+			if summary.Totals != nil || summary.Missing != 2 || len(summary.Issues) != 1 {
+				t.Fatalf("%+v", summary)
+			}
+			err := &reporting.IncompleteError{Coverage: summary}
+			if err.Error() == "Faltam cotações históricas para o relatório." {
+				t.Fatal(err)
+			}
+		})
+	}
+}
