@@ -241,7 +241,8 @@ func MonthlyMovements(ctx context.Context, q Querier, accountID *string) ([]Mont
 	byMonth := map[string]*MonthlyMovement{}
 	for rows.Next() {
 		var kindRaw, occurredRaw, amountRaw, feesRaw, taxesRaw string
-		if err := rows.Scan(&kindRaw, &occurredRaw, &amountRaw, &feesRaw, &taxesRaw); err != nil {
+		if err := rows.Scan(&kindRaw, dbtypes.Date(&occurredRaw), dbtypes.Decimal(&amountRaw),
+			dbtypes.Decimal(&feesRaw), dbtypes.Decimal(&taxesRaw)); err != nil {
 			return nil, err
 		}
 		occurredOn, err := parseDate(occurredRaw)

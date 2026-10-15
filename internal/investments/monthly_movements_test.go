@@ -125,3 +125,30 @@ func TestMonthlyMovementsExcludeImportedReconciliationPivots(t *testing.T) {
 		t.Fatalf("orphan pivot survived: %d", got)
 	}
 }
+
+// eachLedger runs a scenario on SQLite and, when JULIUS_TEST_POSTGRES_DSN is
+// set, on Postgres, whose typed columns reach the reports as native values.
+func eachLedger(t *testing.T, scenario func(t *testing.T, f *ledgerFixture)) {
+	t.Helper()
+	t.Run("sqlite", func(t *testing.T) { scenario(t, newLedgerFixture(t)) })
+	t.Run("postgres", func(t *testing.T) { scenario(t, newPostgresLedgerFixture(t)) })
+}
+
+func TestMonthlyMovementsReadTheTypedColumnsOfBothDialects(t *testing.T) {
+	eachLedger(t, func(t *testing.T, f *ledgerFixture) {
+		positionID := f.addPosition(f.custodyID, "Ações")
+		f.deposit("1000", day(2))
+		f.create(investments.OperationInput{
+			AccountID: f.custodyID, PositionID: &positionID, Kind: investments.OperationBuy, OccurredOn: day(3),
+			Amount: dec("600"), Quantity: decRef("6"), Fees: dec("12"), Taxes: dec("3"),
+		})
+		f.withdraw("300", time.Date(2026, 10, 15, 0, 0, 0, 0, time.UTC))
+
+		months := f.monthlyMovements(nil)
+		sep, oct := months["2026-09"], months["2026-10"]
+		if len(months) != 2 || sep.Contributions.String() != "1000" || sep.Fees.String() != "12" || sep.Taxes.String() != "3" ||
+			oct.Withdrawals.String() != "300" {
+			t.Fatalf("months = %+v", months)
+		}
+	})
+}
