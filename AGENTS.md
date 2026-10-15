@@ -26,7 +26,7 @@ change.
 
 ```
 cmd/julius/                entry point + subcommands (auth, seed)
-cmd/migrate-to-postgres/   one-shot SQLite → Postgres copier
+cmd/migrate-legacy/        one-shot legacy SQLite → SQLite/Postgres converter
 internal/
   db/                      connections/pool, goose migrations (sqlite/ and postgres/), dbtest/
   httpapi/                 handlers, routing (server.go), DTOs, Problem errors
@@ -101,9 +101,10 @@ workflow.
 - Totals eligibility lives in `money.Eligibility`; its check order is
   load-bearing (see engines doc §1). Don't reorder it.
 
-**Migrations** (`internal/db/migrations/`): two independent goose sequences.
-Numbers differ per dialect; match by name suffix, create both files when the
-change applies to both. See that folder's README. SQLite uses a single
+**Migrations** (`internal/db/migrations/`): one numbered goose sequence with
+a file per dialect. Both start at `0001_initial.sql`; use the same number and
+name suffix in SQLite and Postgres. Legacy migrations are preserved in `archive/`
+and never run by the application. See that folder's README. SQLite uses a single
 connection; Postgres pool is configurable via `JULIUS_DB_*`.
 
 Because every merge into `stage` is applied to the persistent dev database

@@ -60,7 +60,7 @@ jobs:
         working-directory: frontend
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "24"
           cache: npm
@@ -68,9 +68,12 @@ jobs:
       - run: npm ci
       - run: npm audit --omit=dev --audit-level=high
       - run: npm run lint
-      - run: npm run typecheck
       - run: npm test -- --run
+      # build runs tsc -b (strict app/test and Vite config checks) before Vite.
       - run: npm run build
+        env:
+          VITE_APP_VERSION: ${{ github.ref == 'refs/heads/stage' && 'stage' || 'dev' }}
+          VITE_APP_COMMIT: ${{ github.sha }}
       # Catches embed breakage on PRs instead of only in the release build.
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
@@ -129,7 +132,7 @@ jobs:
         if: steps.version.outputs.tag != ''
         with:
           go-version-file: go.mod
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         if: steps.version.outputs.tag != ''
         with:
           node-version: "24"
@@ -138,6 +141,9 @@ jobs:
 
       - name: Build
         if: steps.version.outputs.tag != ''
+        env:
+          VITE_APP_VERSION: ${{ steps.version.outputs.tag }}
+          VITE_APP_COMMIT: ${{ github.sha }}
         run: |
           ./build.sh
           mv julius julius-linux-amd64

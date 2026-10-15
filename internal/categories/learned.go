@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	dbtypes "github.com/greg0x46/julius/internal/db/types"
 	"regexp"
 	"strings"
 )
@@ -58,7 +59,7 @@ func learnedCategoryFor(ctx context.Context, q Querier, transactionID string) (c
 		FROM transaction_category_decisions d
 		JOIN financial_transactions ft ON ft.id = d.transaction_id
 		JOIN categories c ON c.id = d.category_id
-		WHERE d.origin = ? AND ft.id <> ? AND ft.deleted_at IS NULL AND c.is_active = 1
+		WHERE d.origin = ? AND ft.id <> ? AND ft.deleted_at IS NULL AND c.is_active = TRUE
 		ORDER BY d.changed_at DESC, d.transaction_id`,
 		string(OriginManual), transactionID,
 	)
@@ -69,7 +70,7 @@ func learnedCategoryFor(ctx context.Context, q Querier, transactionID string) (c
 	for rows.Next() {
 		var refDescription, refMovementType sql.NullString
 		var refCategoryID string
-		if err := rows.Scan(&refDescription, &refMovementType, &refCategoryID); err != nil {
+		if err := rows.Scan(&refDescription, &refMovementType, dbtypes.ID(&refCategoryID)); err != nil {
 			return "", false, err
 		}
 		if refMovementType != movementType || !refDescription.Valid {

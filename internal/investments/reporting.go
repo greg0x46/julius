@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sort"
 
+	dbtypes "github.com/greg0x46/julius/internal/db/types"
 	"github.com/shopspring/decimal"
 )
 
@@ -28,7 +29,7 @@ func ReconciledTransactionAmounts(ctx context.Context, q Querier) (map[string]de
 	result := map[string]decimal.Decimal{}
 	for rows.Next() {
 		var id, raw string
-		if err := rows.Scan(&id, &raw); err != nil {
+		if err := rows.Scan(dbtypes.ID(&id), dbtypes.Decimal(&raw)); err != nil {
 			return nil, err
 		}
 		amount, err := decimal.NewFromString(raw)
@@ -57,7 +58,7 @@ func ReconciledTransactionAmount(ctx context.Context, q Querier, financialTransa
 	total := decimal.Zero
 	for rows.Next() {
 		var raw string
-		if err := rows.Scan(&raw); err != nil {
+		if err := rows.Scan(dbtypes.Decimal(&raw)); err != nil {
 			return decimal.Zero, err
 		}
 		amount, err := decimal.NewFromString(raw)
@@ -125,8 +126,8 @@ func ManualReportingEntries(ctx context.Context, q Querier) ([]ManualReportingEn
 	for rows.Next() {
 		var op reportOperation
 		var financialTransactionID, linkedRaw sql.NullString
-		if err := rows.Scan(&op.id, &op.accountID, &op.kindRaw, &op.occurredRaw, &op.amountRaw, &op.feesRaw, &op.taxesRaw,
-			&financialTransactionID, &linkedRaw); err != nil {
+		if err := rows.Scan(dbtypes.ID(&op.id), dbtypes.ID(&op.accountID), &op.kindRaw, dbtypes.Date(&op.occurredRaw), dbtypes.Decimal(&op.amountRaw), dbtypes.Decimal(&op.feesRaw), dbtypes.Decimal(&op.taxesRaw),
+			dbtypes.ID(&financialTransactionID), dbtypes.Decimal(&linkedRaw)); err != nil {
 			return nil, err
 		}
 		if !seen[op.id] {

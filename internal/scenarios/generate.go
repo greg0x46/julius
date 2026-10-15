@@ -60,7 +60,8 @@ func (c Cadence) step(t time.Time, n int) time.Time {
 // readjustment strategies (Readjust), which both need this "last absorbs
 // the remainder" rule.
 func splitEvenly(totalAmount decimal.Decimal, n int) []decimal.Decimal {
-	share := totalAmount.Div(decimal.NewFromInt(int64(n))).Truncate(2)
+	wholeCents, _ := totalAmount.Shift(2).QuoRem(decimal.NewFromInt(int64(n)), 0)
+	share := wholeCents.Shift(-2)
 	shares := make([]decimal.Decimal, n)
 	runningTotal := decimal.Zero
 	for i := 0; i < n; i++ {

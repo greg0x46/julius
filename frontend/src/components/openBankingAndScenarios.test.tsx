@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -37,11 +37,13 @@ describe("DataSourceConnections: new connection sheet", () => {
     );
 
     await user.click(await screen.findByRole("button", { name: "Adicionar conexão" }));
-    await user.type(await screen.findByLabelText("Item ID (Pluggy)"), "item-123");
-    await user.click(screen.getByRole("button", { name: "Adicionar" }));
+    const sheet = within(await screen.findByRole("dialog"));
+    await user.click(sheet.getByLabelText("Item ID (Pluggy)"));
+    await user.paste("item-123");
+    await user.click(sheet.getByRole("button", { name: "Adicionar" }));
     expect(await screen.findByText("Não foi possível adicionar a conexão.")).toBeVisible();
 
-    await user.click(screen.getByRole("button", { name: "Cancelar" }));
+    await user.click(sheet.getByRole("button", { name: "Cancelar" }));
     await waitFor(() => expect(screen.queryByLabelText("Item ID (Pluggy)")).toBeNull());
 
     await user.click(screen.getByRole("button", { name: "Adicionar conexão" }));
@@ -84,12 +86,14 @@ describe("StandaloneScenarioList: adding a hypothetical transaction", () => {
 
     // A tap on the row expands it.
     await user.click(screen.getByText("Viagem"));
-    await user.type(await screen.findByLabelText("Descrição"), "Hotel");
-    await user.type(screen.getByLabelText("Valor"), "100");
-    await user.click(screen.getByRole("button", { name: "Adicionar transação" }));
+    const form = within(await screen.findByRole("form", { name: "Nova transação hipotética" }));
+    await user.click(form.getByLabelText("Descrição"));
+    await user.paste("Hotel");
+    await user.type(form.getByLabelText("Valor"), "100");
+    await user.click(form.getByRole("button", { name: "Adicionar transação" }));
 
-    expect(await screen.findByText("Servidor indisponível.")).toBeVisible();
-    expect(screen.getByLabelText("Descrição")).toHaveValue("Hotel");
+    expect(await form.findByText("Servidor indisponível.")).toBeVisible();
+    expect(form.getByLabelText("Descrição")).toHaveValue("Hotel");
     expect(onAdd).toHaveBeenCalledTimes(1);
   });
 });

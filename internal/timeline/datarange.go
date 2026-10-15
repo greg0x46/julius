@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/greg0x46/julius/internal/dates"
-	"github.com/greg0x46/julius/internal/db"
+	dbtypes "github.com/greg0x46/julius/internal/db/types"
 )
 
 const dateOnlyLayout = "2006-01-02"
@@ -32,34 +32,41 @@ type DataRange struct {
 // debt's or a plan's — so To is the last of those, and the current month's
 // end when there is none, which is also the floor: a plan that finished last
 // year must not shrink the window to the past.
-func LoadDataRange(ctx context.Context, q Querier, today time.Time) (DataRange, error) {
-	day := dates.Day(today)
+func LoadDataRange(ctx context.Context, q Querier, today time.Time, timezone string) (DataRange, error) {
+	if timezone == "" {
+		timezone = "UTC"
+	}
+	loc, err := time.LoadLocation(timezone)
+	if err != nil {
+		return DataRange{}, fmt.Errorf("data range timezone: %w", err)
+	}
+	day := dates.Day(today.In(loc))
 	monthEnd := time.Date(day.Year(), day.Month(), dates.DaysInMonth(day.Year(), day.Month()), 0, 0, 0, 0, time.UTC)
 
 	from := time.Date(day.Year(), day.Month(), 1, 0, 0, 0, 0, time.UTC)
 	var earliest sql.NullString
 	if err := q.QueryRowContext(ctx, `
-		SELECT MIN(occurred_at) FROM financial_transactions WHERE occurred_at IS NOT NULL`).Scan(&earliest); err != nil {
+		SELECT MIN(occurred_at) FROM financial_transactions WHERE occurred_at IS NOT NULL`).Scan(dbtypes.Time(&earliest)); err != nil {
 		return DataRange{}, fmt.Errorf("earliest transaction: %w", err)
 	}
 	if earliest.Valid {
-		parsed, err := db.ParseTime(earliest.String)
+		parsed, err := dbtypes.ParseTime(earliest.String)
 		if err != nil {
 			return DataRange{}, fmt.Errorf("parse earliest transaction %q: %w", earliest.String, err)
 		}
-		from = dates.Day(parsed)
+		from = dates.Day(parsed.In(loc))
 	}
 
 	to := monthEnd
 	var latest sql.NullString
 	if err := q.QueryRowContext(ctx, `
-		SELECT MAX(projected_at) FROM scenario_transactions`).Scan(&latest); err != nil {
+		SELECT MAX(projected_at) FROM scenario_transactions`).Scan(dbtypes.Date(&latest)); err != nil {
 		return DataRange{}, fmt.Errorf("latest planned installment: %w", err)
 	}
 	if latest.Valid {
 		// projected_at is a date-only column (see scenarios.dateLayout), not
-		// the timestamp format db.ParseTime reads.
-		parsed, err := time.Parse(dateOnlyLayout, latest.String)
+		// the timestamp format dbtypes.ParseTime reads.
+		parsed, err := dbtypes.ParseDate(latest.String)
 		if err != nil {
 			return DataRange{}, fmt.Errorf("parse latest planned installment %q: %w", latest.String, err)
 		}

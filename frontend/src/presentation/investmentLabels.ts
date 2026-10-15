@@ -1,3 +1,4 @@
+import { subtractDecimals, sumDecimals } from "./decimal";
 import type { Investment, InvestmentTransaction, YieldUnavailableReason } from "../api/contracts";
 
 // Pluggy's investment "type"/"subtype"/movement "type" fields are free text
@@ -122,9 +123,5 @@ export function yieldUnavailable(investment: Investment): { label: string; hint:
 export function netContributed(transactions: InvestmentTransaction[]): string | null {
   if (transactions.some((t) => t.direction === null || t.amount === null)) return null;
   if (!transactions.some((t) => t.direction === "inflow")) return null;
-  const total = transactions.reduce((sum, t) => {
-    const amount = Number(t.amount);
-    return sum + (t.direction === "inflow" ? amount : -amount);
-  }, 0);
-  return total.toFixed(2);
+  return sumDecimals(transactions.map((t) => t.direction === "inflow" ? t.amount! : subtractDecimals("0", t.amount!)));
 }

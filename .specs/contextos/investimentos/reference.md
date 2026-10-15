@@ -121,7 +121,10 @@ Other for the user to review.
 The API provides the options at `GET /api/investment-asset-classification`,
 used by the form. Known types incompatible with the class are rejected.
 
-The starter catalog is optional and created with:
+The starter catalog is seeded automatically on every application startup, after
+`db.Open` initializes and migrates the database and before workers or HTTP
+serving start. Startup logs the number of new assets inserted (including zero);
+a seed failure stops startup with an error. The manual command remains available:
 
 ```sh
 go run ./cmd/julius seed investment-assets
@@ -130,10 +133,11 @@ go run ./cmd/julius seed investment-assets
 
 The seed inserts 27 well-known assets: Brazilian stocks, a unit, FIIs, equity /
 fixed-income / crypto ETFs, BDRs and BTC, ETH, SOL and USDC. It runs in one
-transaction and is repeatable: it preserves existing assets, their names,
+transaction and is repeatable: restarts and catalog updates insert only missing
+entries. It preserves existing assets, their names,
 classes and quote preferences, including equivalent codes such as `PETR4.SA`.
 The assets become available for selection in new positions even when there is
-no position of them yet. No accounts, balances, operations or prices are
+no position of them yet. No accounts, balances, operations, transactions or prices are
 created, and the seed makes no external calls.
 
 CDBs and government bonds are available types; each issue/maturity must be
@@ -180,8 +184,13 @@ history stage and subsequent work cycles.
 At startup and when re-enabled, the scheduler fetches only missing prices for
 today and missing history; a restart does not repeat requests already covered.
 The daily run updates prices for today. Quote dates remain Brazilian calendar
-days regardless of the scheduling timezone. API changes wake the local
-scheduler immediately; writes by another process are detected within a minute.
+days regardless of the scheduling timezone. Full scheduled runs and explicit
+manual refreshes record finish time, trigger, status (`success`, `partial`,
+`deferred` or `failed`) and counts in `quotes.last_refresh`; small spot refreshes
+triggered by position saves are not recorded. A shared lock refuses overlapping
+manual refreshes and serializes scheduled spot work. History backfill follows a
+manual spot refresh in the background and is not part of its displayed outcome.
+API changes wake the local scheduler immediately; writes by another process are detected within a minute.
 
 `JULIUS_QUOTES_SCHEDULE` (`HH:MM` or `HH:MM Zone/IANA`) initializes only a
 configuration that has not yet been saved. With no zone it uses `Local`; an
@@ -364,7 +373,10 @@ valid after purchases and sales; the remaining quantity is valued by it, keeping
 its date. Corrections reprocess history in date, creation and identifier order.
 
 Reconciliation checks direction, BRL currency and the remaining capacity of each
-entry, operation and imported movement. For integrated accounts, the imported
+entry, operation and imported movement. A bank movement linked to an account
+transfer (source, destination or fee) cannot be reconciled until that transfer
+is unlinked. Both workflows lock the bank movement before checking links.
+For integrated accounts, the imported
 movement must belong to the same connection. Concurrent portions are serialized
 during validation. UI suggestions use equality of the available amount and up to
 five days of difference; they require confirmation. Fees, taxes and income can
@@ -390,3 +402,22 @@ Imported positions in other currencies keep their original currency and value.
 With no FX conversion in this version, they stay out of the investment totals,
 goals and the investments portion of net worth in reais. The UI flags when
 positions exist outside those totals.
+
+## Database representation
+
+Exact amounts, prices and quantities use Postgres `NUMERIC` and SQLite decimal
+text. Issue/purchase/due dates are calendar dates (`DATE` in Postgres, date text
+in SQLite), normalized on the provider's BRT wall clock; quote identity retains
+its existing provider-day semantics. Trade dates retain the existing movement-day
+rule (midnight UTC is already a day, other instants use BRT). Observation/as-of
+values remain instants. Investment due dates and imported trade dates use
+calendar-date adapters in presentation and reconciliation reads, accepting SQLite
+date-only text as well as legacy timestamps. Integrated custody IDs remain opaque
+`integrated:<source id>` text; records with UUID identities use native Postgres
+UUIDs. `db.Open` rejects the old schema generation; conversion is separate work.
+
+## Monetary precision
+
+Investment cash fields and portfolio targets keep decimal strings through editing
+and submission. Contribution totals and quantity × average-cost gain calculations
+use exact arithmetic; BRL rounding happens only at display ([policy](../../precisao-monetaria.md)).

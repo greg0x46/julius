@@ -2,15 +2,35 @@ package quotes
 
 import (
 	"context"
+	"database/sql"
 	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/greg0x46/julius/internal/db"
+	"github.com/greg0x46/julius/internal/db/dbtest"
 	"github.com/greg0x46/julius/internal/marketdata"
 	"github.com/greg0x46/julius/internal/settings"
 	"github.com/shopspring/decimal"
 )
+
+func TestInitializeScheduleBothDialects(t *testing.T) {
+	dbtest.Each(t, func(t *testing.T, conn *sql.DB) {
+		ctx := context.Background()
+		config, err := InitializeSchedule(ctx, conn, "")
+		if err != nil || config != settings.DefaultQuoteRefreshSettings() {
+			t.Fatalf("default: %+v %v", config, err)
+		}
+		saved := settings.QuoteRefreshSettings{Enabled: false, Time: "09:30", Timezone: "Asia/Tokyo"}
+		if err := settings.SetQuoteRefresh(ctx, conn, saved); err != nil {
+			t.Fatal(err)
+		}
+		config, err = InitializeSchedule(ctx, conn, "malformed ignored environment")
+		if err != nil || config != saved {
+			t.Fatalf("saved: %+v %v", config, err)
+		}
+	})
+}
 
 func TestInitializeSchedulePersistenceAndLegacy(t *testing.T) {
 	ctx := context.Background()
@@ -123,6 +143,9 @@ func TestScheduleLiveTransitionsAndRestartDedupe(t *testing.T) {
 	if len(fake.asked) != 2 {
 		t.Fatalf("daily did not refresh: %d", len(fake.asked))
 	}
+	if last, err := GetLastRefresh(ctx, conn); err != nil || last == nil || last.Trigger != "scheduled" || last.Status != RefreshSucceeded {
+		t.Fatalf("daily run not recorded: %+v %v", last, err)
+	}
 	config.Enabled = false
 	save()
 	cycle(now.AddDate(0, 0, 1), true)
@@ -210,17 +233,77 @@ func TestScheduleNoEligibleHoldingsAndWakeCancellation(t *testing.T) {
 		select {
 		case <-configurationChanges:
 			continue
+		case <-manualBackfillRequests:
+			continue
 		default:
 		}
 		break
 	}
 	ConfigurationChanged()
-	if backfill, running := waitForWork(context.Background(), time.Hour); backfill || !running {
+	if backfill, manual, running := waitForWork(context.Background(), time.Hour); backfill || manual || !running {
 		t.Fatal("configuration wake treated as backfill")
+	}
+	requestManualBackfill()
+	if backfill, manual, running := waitForWork(context.Background(), time.Hour); backfill || !manual || !running {
+		t.Fatal("manual history request did not wake scheduler")
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	if _, running := waitForWork(ctx, time.Hour); running {
+	if _, _, running := waitForWork(ctx, time.Hour); running {
 		t.Fatal("cancelled wait continued")
+	}
+}
+
+func TestManualBackfillRunsWithScheduleDisabled(t *testing.T) {
+	select {
+	case <-manualBackfillRequests:
+	default:
+	}
+	ctx := context.Background()
+	conn := newJobTestConn(t)
+	config := settings.DefaultQuoteRefreshSettings()
+	config.Enabled = false
+	if err := settings.SetQuoteRefresh(ctx, conn, config); err != nil {
+		t.Fatal(err)
+	}
+	asset := mustCreateQuotedAsset(t, ctx, conn, "Bitcoin", "crypto", "crypto", "BTC")
+	mustCreateManualPosition(t, ctx, conn, "wallet", asset, 1)
+	provider := &loopConnector{
+		fakeConnector: &fakeConnector{prices: map[string]decimal.Decimal{"BTC": decimal.NewFromInt(100)}},
+		history:       &fakeHistoryConnector{},
+	}
+	service := marketdata.New(provider)
+	state := scheduleState{}
+	now := time.Now()
+	if err := state.cycle(ctx, conn, service, now, true); err != nil {
+		t.Fatal(err)
+	}
+	if len(provider.asked) != 0 || len(provider.history.calls) != 0 {
+		t.Fatal("automatic backfill ran while disabled")
+	}
+	if _, err := RefreshNow(ctx, conn, service); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-manualBackfillRequests:
+		state.manualPending = true
+	default:
+		t.Fatal("manual refresh did not request history")
+	}
+	if err := state.cycle(ctx, conn, service, now, false); err != nil {
+		t.Fatal(err)
+	}
+	if len(provider.asked) != 1 || len(provider.history.calls) != 1 {
+		t.Fatalf("manual refresh: spot=%d history=%d", len(provider.asked), len(provider.history.calls))
+	}
+	if err := state.cycle(ctx, conn, service, now.AddDate(0, 0, 1), true); err != nil {
+		t.Fatal(err)
+	}
+	if len(provider.asked) != 1 || len(provider.history.calls) != 1 {
+		t.Fatal("manual history enabled subsequent automatic work")
+	}
+	stored, _, err := settings.GetQuoteRefresh(ctx, conn)
+	if err != nil || stored.Enabled {
+		t.Fatalf("manual refresh changed schedule: %+v %v", stored, err)
 	}
 }

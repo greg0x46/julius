@@ -140,7 +140,7 @@ export function ManualTransactionFields({
           aria-invalid={invalid("amount")}
           aria-describedby={invalid("amount") ? `${manualFieldId("amount")}-error` : undefined}
           status={invalid("amount") ? "error" : undefined}
-          min={0.01}
+          min="0"
           value={draft.amount}
           onChange={(value) => set("amount", value)}
         />

@@ -13,6 +13,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/greg0x46/julius/internal/db"
+	dbtypes "github.com/greg0x46/julius/internal/db/types"
 	"github.com/greg0x46/julius/internal/money"
 	"github.com/greg0x46/julius/internal/transactions"
 )
@@ -88,17 +89,15 @@ func accountNotFoundProblem(w http.ResponseWriter) {
 func scanAccount(row interface{ Scan(...any) error }) (accountDTO, error) {
 	var (
 		d              accountDTO
-		closeRaw       sql.NullString
-		dueRaw         sql.NullString
 		manualClosing  sql.NullInt64
 		providerUpdRaw sql.NullString
 		updatedRaw     sql.NullString
 		connectionLbl  sql.NullString
 	)
-	if err := row.Scan(&d.ID, &d.ExternalID, &d.SourceDisplayName, &d.Institution, &d.Name, &d.Number,
-		&d.AccountType, &d.AccountSubtype, &d.Balance, &d.CreditLimit,
-		&d.AvailableCreditLimit, &d.CurrencyCode, &closeRaw,
-		&dueRaw, &manualClosing, &providerUpdRaw, &updatedRaw, &connectionLbl, &d.Origin, &d.OpeningBalance, &d.ArchivedAt, &d.HasMovements); err != nil {
+	if err := row.Scan(dbtypes.ID(&d.ID), dbtypes.ID(&d.ExternalID), &d.SourceDisplayName, &d.Institution, &d.Name, &d.Number,
+		&d.AccountType, &d.AccountSubtype, dbtypes.Decimal(&d.Balance), dbtypes.Decimal(&d.CreditLimit),
+		dbtypes.Decimal(&d.AvailableCreditLimit), &d.CurrencyCode, dbtypes.Date(&d.BalanceCloseDate),
+		dbtypes.Date(&d.BalanceDueDate), &manualClosing, dbtypes.Time(&providerUpdRaw), dbtypes.Time(&updatedRaw), &connectionLbl, &d.Origin, dbtypes.Decimal(&d.OpeningBalance), dbtypes.Time(&d.ArchivedAt), dbtypes.Bool(&d.HasMovements)); err != nil {
 		return accountDTO{}, err
 	}
 	if manualClosing.Valid {
@@ -110,16 +109,10 @@ func scanAccount(row interface{ Scan(...any) error }) (accountDTO, error) {
 	}
 	applyInstitutionName(&d)
 	var err error
-	if d.BalanceCloseDate, err = db.ParseNullTime(closeRaw); err != nil {
+	if d.ProviderUpdatedAt, err = dbtypes.ParseNullTime(providerUpdRaw); err != nil {
 		return accountDTO{}, err
 	}
-	if d.BalanceDueDate, err = db.ParseNullTime(dueRaw); err != nil {
-		return accountDTO{}, err
-	}
-	if d.ProviderUpdatedAt, err = db.ParseNullTime(providerUpdRaw); err != nil {
-		return accountDTO{}, err
-	}
-	if d.UpdatedAt, err = db.ParseNullTime(updatedRaw); err != nil {
+	if d.UpdatedAt, err = dbtypes.ParseNullTime(updatedRaw); err != nil {
 		return accountDTO{}, err
 	}
 	applyCreditUsage(&d)
@@ -207,12 +200,11 @@ func latestBillClosingDay(ctx context.Context, conn *sql.DB, accountIDs []string
 	newest := map[string]time.Time{}
 	for rows.Next() {
 		var accountID string
-		var closingRaw sql.NullString
-		if err := rows.Scan(&accountID, &closingRaw); err != nil {
+		var closing *time.Time
+		if err := rows.Scan(dbtypes.ID(&accountID), dbtypes.Date(&closing)); err != nil {
 			return nil, err
 		}
-		closing, err := db.ParseNullTime(closingRaw)
-		if err != nil || closing == nil {
+		if closing == nil {
 			continue
 		}
 		if seen, ok := newest[accountID]; !ok || closing.After(seen) {
@@ -415,7 +407,7 @@ func handleSetAccountClosingDay(conn *sql.DB) http.HandlerFunc {
 func accountExists(ctx context.Context, conn *sql.DB, id string) (bool, error) {
 	var exists bool
 	err := conn.QueryRowContext(ctx,
-		`SELECT EXISTS(SELECT 1 FROM financial_accounts WHERE id = ?)`, id).Scan(&exists)
+		`SELECT EXISTS(SELECT 1 FROM financial_accounts WHERE id = ?)`, id).Scan(dbtypes.Bool(&exists))
 	return exists, err
 }
 
@@ -471,7 +463,7 @@ func handleListAccountCards(conn *sql.DB) http.HandlerFunc {
 		for rows.Next() {
 			var metadata string
 			var occurredRaw sql.NullString
-			if err := rows.Scan(&metadata, &occurredRaw); err != nil {
+			if err := rows.Scan(&metadata, dbtypes.Time(&occurredRaw)); err != nil {
 				accountsUnavailableProblem(w)
 				return
 			}
@@ -484,7 +476,7 @@ func handleListAccountCards(conn *sql.DB) http.HandlerFunc {
 			if parsed.CardNumber == nil || *parsed.CardNumber == "" {
 				continue
 			}
-			occurredAt, err := db.ParseNullTime(occurredRaw)
+			occurredAt, err := dbtypes.ParseNullTime(occurredRaw)
 			if err != nil {
 				occurredAt = nil
 			}
@@ -562,21 +554,9 @@ func handleListAccountBills(conn *sql.DB) http.HandlerFunc {
 
 		result := []accountBillDTO{}
 		for rows.Next() {
-			var (
-				d          accountBillDTO
-				dueRaw     sql.NullString
-				closingRaw sql.NullString
-			)
-			if err := rows.Scan(&d.ID, &d.ExternalID, &dueRaw, &closingRaw,
-				&d.TotalAmount, &d.CurrencyCode, &d.MinimumPaymentAmount); err != nil {
-				accountsUnavailableProblem(w)
-				return
-			}
-			if d.DueDate, err = db.ParseNullTime(dueRaw); err != nil {
-				accountsUnavailableProblem(w)
-				return
-			}
-			if d.ClosingDate, err = db.ParseNullTime(closingRaw); err != nil {
+			var d accountBillDTO
+			if err := rows.Scan(dbtypes.ID(&d.ID), dbtypes.ID(&d.ExternalID), dbtypes.Date(&d.DueDate), dbtypes.Date(&d.ClosingDate),
+				dbtypes.Decimal(&d.TotalAmount), &d.CurrencyCode, dbtypes.Decimal(&d.MinimumPaymentAmount)); err != nil {
 				accountsUnavailableProblem(w)
 				return
 			}

@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/greg0x46/julius/internal/db"
+	dbtypes "github.com/greg0x46/julius/internal/db/types"
 )
 
 const (
@@ -90,7 +91,7 @@ func RecoverStaleRuns(ctx context.Context, conn *sql.DB, now time.Time, lease ti
 	var candidates []staleRun
 	for rows.Next() {
 		var run staleRun
-		if err := rows.Scan(&run.id, &run.workerID, &run.seenAt); err != nil {
+		if err := rows.Scan(dbtypes.ID(&run.id), dbtypes.ID(&run.workerID), dbtypes.Time(&run.seenAt)); err != nil {
 			rows.Close()
 			return nil, err
 		}

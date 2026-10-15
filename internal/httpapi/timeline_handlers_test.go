@@ -229,3 +229,57 @@ func TestTimelineDataRangeSpansOldestTransactionToLastPlannedInstallment(t *test
 		t.Errorf("from = %v, want 2024-03-07", body["from"])
 	}
 }
+
+func TestTimelineTimezoneControlsDayAndRejectsInvalidZone(t *testing.T) {
+	srv, conn := newTestServer(t)
+	id := insertTransaction(t, conn)
+	setCardDebtTransaction(t, conn, id, time.Date(2026, 3, 16, 1, 0, 0, 0, time.UTC), "10", "DEBIT", nil)
+	resp := doJSON(t, http.MethodPut, srv.URL+"/api/transactions/"+id+"/category", map[string]any{"category_id": categorySupermercadoID})
+	resp.Body.Close()
+	for _, tc := range []struct {
+		zone  string
+		count int
+	}{{"America%2FSao_Paulo", 1}, {"UTC", 0}} {
+		resp = doJSON(t, http.MethodGet, srv.URL+"/api/timeline?reference_date=2026-03-16&from=2026-03-15&to=2026-03-15&timezone="+tc.zone, nil)
+		if resp.StatusCode != 200 {
+			t.Fatalf("zone %s status = %d", tc.zone, resp.StatusCode)
+		}
+		var body map[string]any
+		decodeJSON(t, resp, &body)
+		entries := body["base"].(map[string]any)["entries"].([]any)
+		if len(entries) != tc.count {
+			t.Fatalf("zone %s entries = %v", tc.zone, entries)
+		}
+	}
+	resp = doJSON(t, http.MethodGet, srv.URL+"/api/timeline?reference_date=2026-03-16&from=2026-03-15&to=2026-03-15&timezone=invalid", nil)
+	defer resp.Body.Close()
+	if resp.StatusCode != 422 {
+		t.Fatalf("invalid timezone status = %d", resp.StatusCode)
+	}
+}
+
+func TestTimelineDataRangeUsesReportingTimezone(t *testing.T) {
+	srv, conn := newTestServer(t)
+	id := insertTransaction(t, conn)
+	setCardDebtTransaction(t, conn, id, time.Date(2026, 3, 16, 1, 0, 0, 0, time.UTC), "10", "DEBIT", nil)
+	for _, tc := range []struct{ zone, from string }{
+		{"America%2FSao_Paulo", "2026-03-15"},
+		{"UTC", "2026-03-16"},
+		{"", "2026-03-16"},
+	} {
+		resp := doJSON(t, http.MethodGet, srv.URL+"/api/timeline/range?timezone="+tc.zone, nil)
+		if resp.StatusCode != 200 {
+			t.Fatalf("zone %s status = %d", tc.zone, resp.StatusCode)
+		}
+		var body map[string]any
+		decodeJSON(t, resp, &body)
+		if body["from"] != tc.from {
+			t.Errorf("zone %s from = %v, want %s", tc.zone, body["from"], tc.from)
+		}
+	}
+	resp := doJSON(t, http.MethodGet, srv.URL+"/api/timeline/range?timezone=invalid", nil)
+	defer resp.Body.Close()
+	if resp.StatusCode != 422 {
+		t.Fatalf("invalid timezone status = %d", resp.StatusCode)
+	}
+}

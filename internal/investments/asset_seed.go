@@ -59,8 +59,7 @@ func assetQuoteMarket(class AssetClass, kind string) string {
 }
 
 // SeedInvestmentAssets inserts missing catalog entries atomically. Existing
-// names, classification and quote preferences are never overwritten. Explicit
-// invocation lets users decide whether they want this catalog in their install.
+// names, classification and quote preferences are never overwritten.
 func SeedInvestmentAssets(ctx context.Context, conn *sql.DB) (int, error) {
 	tx, err := conn.BeginTx(ctx, nil)
 	if err != nil {

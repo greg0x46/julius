@@ -41,6 +41,11 @@ Candidates expose description, card number, account name/institution, absolute
 effective amount and day of month, matching the fields used during transaction
 automation application.
 
+The commitment store supports both SQLite and native Postgres UUID/boolean
+columns. Nullable schedule categories read as an empty `CategoryID`; writes
+still require a category. `TestCommitmentLifecycleBothDialects` covers creation,
+reads, updates, activation and uncategorized schedule reads on both dialects.
+
 ### Manual reconciliation
 
 On top of that automatic resolution sits a layer of **user decision**, and only
@@ -112,3 +117,9 @@ Desconciliar / Voltar ao automático.
 `/automacoes` — a reconcile automation can also apply a category using the same
 conditions. New rules default that optional action to the commitment's
 category; it is editable and clearable. Reconciliation eligibility is unchanged.
+
+## Monetary precision
+
+Commitment and occurrence amounts, including transaction reconciliation options,
+use exact decimal strings in HTTP responses. Fractional cents are preserved;
+the UI rounds only read-only BRL display ([policy](../../precisao-monetaria.md)).

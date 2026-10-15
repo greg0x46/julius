@@ -12,7 +12,7 @@ import (
 
 	"github.com/greg0x46/julius/internal/categories"
 	"github.com/greg0x46/julius/internal/dates"
-	"github.com/greg0x46/julius/internal/db"
+	dbtypes "github.com/greg0x46/julius/internal/db/types"
 	"github.com/greg0x46/julius/internal/money"
 )
 
@@ -59,7 +59,7 @@ func creditCardTransactionTotalAt(ctx context.Context, q Querier, currencyCode s
 	accounts := make([]string, 0)
 	for rows.Next() {
 		var accountID string
-		if err := rows.Scan(&accountID); err != nil {
+		if err := rows.Scan(dbtypes.ID(&accountID)); err != nil {
 			return decimal.Zero, err
 		}
 		accounts = append(accounts, accountID)
@@ -107,23 +107,15 @@ func fetchCardBillClosingDates(ctx context.Context, q Querier, loc *time.Locatio
 
 	for rows.Next() {
 		var accountID, internalID, externalID string
-		var closingDateRaw sql.NullString
-		if err := rows.Scan(&accountID, &internalID, &externalID, &closingDateRaw); err != nil {
+		var closingDate *time.Time
+		if err := rows.Scan(dbtypes.ID(&accountID), dbtypes.ID(&internalID), dbtypes.ID(&externalID), dbtypes.Date(&closingDate)); err != nil {
 			return cardBillClosingDates{}, err
 		}
 
-		var closingDate *time.Time
-		if closingDateRaw.Valid {
-			parsed, err := db.ParseNullTime(closingDateRaw)
-			if err != nil {
-				return cardBillClosingDates{}, err
-			}
-			// closing_date is a provider calendar date stored in the
-			// canonical UTC timestamp format. Preserve that date before
-			// creating the boundary in the application's location; converting
-			// midnight UTC directly to a negative-offset local date would move
-			// the closing day backward.
-			utcDate := parsed.UTC()
+		if closingDate != nil {
+			// Preserve the provider calendar day before creating the boundary
+			// in the application's location.
+			utcDate := closingDate.UTC()
 			boundary := time.Date(utcDate.Year(), utcDate.Month(), utcDate.Day(), 0, 0, 0, 0, loc)
 			closingDate = &boundary
 			result.byAccount[accountID] = append(result.byAccount[accountID], boundary)
@@ -397,10 +389,10 @@ func fetchCardDebtTransactions(ctx context.Context, q Querier, accountID string)
 		var sourceCategoryRaw, sourceCategoryIDRaw, additionalInfoRaw sql.NullString
 		var metadataRaw, inclusionStateRaw sql.NullString
 		if err := rows.Scan(
-			&transactionID, &amountRaw, &amountInAccountCurrencyRaw, &currencyCodeRaw,
-			&occurredAtRaw,
+			dbtypes.ID(&transactionID), dbtypes.Decimal(&amountRaw), dbtypes.Decimal(&amountInAccountCurrencyRaw), &currencyCodeRaw,
+			dbtypes.Time(&occurredAtRaw),
 			&providerStatusRaw, &movementTypeRaw,
-			&sourceCategoryRaw, &sourceCategoryIDRaw, &additionalInfoRaw,
+			&sourceCategoryRaw, dbtypes.ID(&sourceCategoryIDRaw), &additionalInfoRaw,
 			&metadataRaw, &inclusionStateRaw,
 		); err != nil {
 			return nil, err
@@ -413,7 +405,7 @@ func fetchCardDebtTransactions(ctx context.Context, q Querier, accountID string)
 		if err != nil {
 			return nil, err
 		}
-		occurredAt, err := db.ParseNullTime(occurredAtRaw)
+		occurredAt, err := dbtypes.ParseNullTime(occurredAtRaw)
 		if err != nil {
 			return nil, err
 		}

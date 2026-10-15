@@ -163,7 +163,7 @@ func TestAuthenticationFeatureFlagCannotBypassEnabledMode(t *testing.T) {
 }
 func TestProductionCookieAndServerRestart(t *testing.T) {
 	_, conn, keys := newTestServerWithSession(t)
-	handler := httpapi.NewServer(conn, fstest.MapFS{"index.html": {Data: []byte("spa")}}, keys, auth.Config{PublicURL: "https://finance.example"})
+	handler := httpapi.NewServer(conn, fstest.MapFS{"index.html": {Data: []byte("spa")}}, keys, auth.Config{PublicURL: "https://finance.example"}, nil)
 	req := httptest.NewRequest("POST", "https://finance.example/api/auth/login", strings.NewReader(`{"email":"owner@example.com","password":"`+testPassword+`"}`))
 	req.Header.Set("Origin", "https://finance.example")
 	req.Header.Set("X-Julius-Request", "1")
@@ -178,7 +178,7 @@ func TestProductionCookieAndServerRestart(t *testing.T) {
 	}
 	// Recreate both encryption holder and HTTP server: browser auth is in the DB.
 	keys = settings.NewSecrets(bytes.Repeat([]byte{42}, 32))
-	handler = httpapi.NewServer(conn, fstest.MapFS{}, keys, auth.Config{PublicURL: "https://finance.example"})
+	handler = httpapi.NewServer(conn, fstest.MapFS{}, keys, auth.Config{PublicURL: "https://finance.example"}, nil)
 	req = httptest.NewRequest("GET", "https://finance.example/api/auth/session", nil)
 	req.AddCookie(cookie)
 	response = httptest.NewRecorder()
