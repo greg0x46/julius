@@ -89,7 +89,10 @@ authentication configuration that does not depend on the host:
 - **Multi-currency reporting** — transaction summaries, Home period totals,
   categories and Timeline consolidate eligible flows to BRL using historical
   exchange rates, retaining original values and per-currency drill-down.
-  Missing rates show explicit incomplete/unavailable states.
+  Frankfurter v2 supplies historical blended rates and the account currency list;
+  BRL stays available offline. Native-only currencies are allowed with a warning.
+  Unsupported currencies, missing history and provider outages show distinct
+  feedback without changing native amounts or displaying complete BRL totals.
 - **Automation rules** — condition-based rules that categorize new
   transactions automatically and can be applied retroactively to existing ones.
   A single rule can both categorize and reconcile a recurring commitment.

@@ -57,7 +57,13 @@ reference date. Real flows use the shared `internal/reporting` boundary and
 historical rates for their reporting dates; `Series.Reporting`,
 `BalanceReporting` and native `Totals` disclose coverage separately. Missing
 flow or anchor rates return `reporting.IncompleteError`, never a complete
-partial balance or period total. Legacy NULL account currency remains BRL.
+partial balance or period total. Coverage issues identify the currency, account
+and reporting date, distinguishing unsupported coverage, missing history and
+provider failure. Unsupported feedback does not recommend synchronization;
+native account balances remain accessible in Contas e cartões. Frankfurter v2
+blend/cache semantics are documented in the
+[Transactions reference](../transacoes/reference.md#fx-provider-and-cache).
+Legacy NULL account currency remains BRL.
 `Entry.Amount` and reportable values are BRL; original effective currency and
 reportable amounts remain on the entry for native drill-down. Balance adjustments enter the current
 anchor and the dated balance walk, never transaction income/expense totals or

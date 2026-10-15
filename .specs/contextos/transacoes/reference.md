@@ -81,6 +81,60 @@ the existing controls. Shared `Money` and decimal-string formatting accept an
 explicit ISO currency code. Transaction rows/details use effective currency
 with the same flow sign/tone across BRL/USD/EUR.
 
+### FX provider and cache
+
+The default adapter uses [Frankfurter v2](https://frankfurter.dev/),
+`/v2/rate/{base}/{quote}?date=YYYY-MM-DD`, with the default blended feed
+from official sources, not an ECB-only feed. The numeric JSON `rate` is parsed
+as exact decimal text; `date` is the blend observation day and is retained as
+`EffectiveOn`. Constituent observations can have different dates. Weekends and
+holidays may return an earlier date or the requested date when a contributing
+source publishes then; Julius does not impose an ECB/business-day calendar.
+Future observations, invalid dates and nonpositive rates are rejected. Direct
+multiplication stays exact and inverse conversion retains the existing
+12-place division policy. Requested days use `dates.Day`; freshness uses UTC.
+
+Currency coverage comes from `/v2/currencies?scope=all`, including historical
+currencies. Observation bounds are informative; they do not guarantee any
+particular BRL pair or date. Known currencies before their observation start,
+and pair lookups returning 404, are historical-unavailable. Absence from a
+fresh coverage list is unsupported. Failed/invalid provider responses are
+provider failures; absent currencies in stale/unavailable lists remain
+unverified rather than being declared unsupported.
+
+Coverage is cached in memory on the shared default provider for 24 hours,
+with a one-minute failure cooldown and stale-list fallback. A restart clears
+only this list cache; if coverage cannot be loaded, BRL remains available and
+other currencies have unverified support. The form also reuses coverage for
+24 hours and offers retry. Its searchable selector lists provider currencies
+and preserves an existing account's selection. “Usar outra moeda” explicitly
+allows an ISO currency outside coverage, with a warning before saving; native
+balances and transactions remain usable. Known unsupported currencies explain
+that synchronization cannot add provider coverage. Historical range text warns
+that dates/pairs may be unavailable even inside the bounds.
+
+The persisted `exchange_rates` cache is unchanged. Fresh v1 `frankfurter` rows
+continue to work, including inverse conversion, with their original attribution;
+new or refreshed rows use `frankfurter-v2-blended`. Reports can therefore mix v1
+ECB and v2 blended observations. No cache reset, account migration or native
+amount rewrite occurs. Existing one-hour TTL, one-minute rate cooldown,
+historical final-row reuse and seven-day maximum lag remain. Failed lookups
+may reuse stored observations effective on/before the requested day, disclosed
+as stale; unsupported currencies without a stored rate are never converted.
+
+Reporting summaries add deduplicated `issues` identifying currency, date and
+account where available, with reasons `unsupported`, `historical_unavailable`
+and `provider_failure`. Missing conversions still suppress consolidated totals;
+native totals remain available. Shared feedback and Timeline Problem details
+distinguish those reasons. Stale totals keep their existing disclosure.
+
+Implementation validation checked the public v2 ARS/BRL pair for 2024-05-18,
+which returned that observation date, and an unavailable 1950-01-01 date (404).
+The expanded response showed contributing observations on different days.
+A provider-filtered USD/BRL holiday lookup (BCB, 2024-12-25) returned 2024-12-24;
+BCB-only coverage is too narrow for this feature, so the adapter uses the blend.
+Automated tests use synthetic fixtures, not live requests or owner data.
+
 ## Status, periods and settlement
 
 `money.Eligibility` accepts `PENDING` and `POSTED` identically. Valid Pluggy/
@@ -152,8 +206,10 @@ the previous amount, and replay adds no expense
   string, default zero), `archived` (default false). PUT replaces these fields
   and only accepts manual accounts (409 for synced). GET list/detail includes
   `origin`, nullable `external_id`, `opening_balance`, `archived_at`, and
-  `has_movements`. `GET /api/accounts/currencies` lists ISO currency codes
-  from the existing `golang.org/x/text/currency` catalog.
+  `has_movements`. `GET /api/accounts/currencies` returns provider-derived
+  `currencies` (`code`, optional `start_date`/`end_date`), coverage `status`
+  (`complete`, `stale`, `unavailable`) and `source`. BRL is always available.
+  Account writes retain ISO validation and allow native-only currencies.
 - `POST /api/accounts/{id}/adjustments`: signed decimal-string `amount` plus
   `description`. Only active manual accounts accept adjustments; they are
   balance deltas, separate from income/expense transactions. The adjustment
