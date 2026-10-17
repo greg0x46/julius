@@ -47,11 +47,12 @@ func newStatementTestDB(t *testing.T) *sql.DB {
 }
 
 type statementPreviewBody struct {
-	Format             string       `json:"format"`
-	FormatVersion      string       `json:"format_version"`
-	SHA256             string       `json:"sha256"`
-	PreviewFingerprint string       `json:"preview_fingerprint"`
-	Counts             importCounts `json:"counts"`
+	Conflicts          map[int]statementConflict `json:"conflicts"`
+	Format             string                    `json:"format"`
+	FormatVersion      string                    `json:"format_version"`
+	SHA256             string                    `json:"sha256"`
+	PreviewFingerprint string                    `json:"preview_fingerprint"`
+	Counts             importCounts              `json:"counts"`
 	Rows               []struct {
 		Status   string   `json:"status"`
 		Warnings []string `json:"warnings"`
@@ -558,16 +559,16 @@ func TestStatementRowOrderDoesNotChangeIdentity(t *testing.T) {
 				t.Fatalf("balance %v", balance)
 			}
 			p := previewStatementFile(t, conn, tc.again, map[string]string{"account_id": accountID})
-			if p.Counts.Ambiguous != 2 || p.Counts.New != 0 {
+			if p.Counts.Duplicate != 2 || p.Counts.New != 0 {
 				t.Fatalf("counts %+v", p.Counts)
 			}
 			for _, row := range p.Rows {
-				if row.Status != "ambiguous" || !p.hasWarning(warnOtherFileMatch) {
+				if row.Status != "duplicate" {
 					t.Fatalf("row %+v", row)
 				}
 			}
 			_, counts = importStatementFile(t, conn, tc.again, map[string]string{
-				"account_id": accountID, "ambiguous_line_2": "ignore", "ambiguous_line_3": "ignore",
+				"account_id": accountID,
 			})
 			if counts.New != 0 || counts.Duplicate != 2 {
 				t.Fatalf("second import %+v", counts)
@@ -672,6 +673,7 @@ func TestLatestStatementBalance(t *testing.T) {
 			"2026-09-03T10:00:00.000000000Z", "70.00"},
 		{"several rows at the newest instant", []statementimport.Row{row("new", "2026-09-03T10:00:00.000000000Z", "70.00"), row("new", "2026-09-03T10:00:00.000000000Z", "60.00")}, "", ""},
 		{"newest duplicate with a differing balance", []statementimport.Row{row("duplicate", "2026-09-03T10:00:00.000000000Z", "70.00", warnBalanceDiffers), row("new", "2026-09-01T10:00:00.000000000Z", "50.00")}, "", ""},
+		{"newest exact duplicate preserves the anchor", []statementimport.Row{row("duplicate", "2026-09-03T10:00:00.000000000Z", "70.00"), row("new", "2026-09-01T10:00:00.000000000Z", "50.00")}, "", ""},
 		{"older duplicate with a differing balance does not matter", []statementimport.Row{row("new", "2026-09-03T10:00:00.000000000Z", "70.00"), row("duplicate", "2026-09-01T10:00:00.000000000Z", "50.00", warnBalanceDiffers)},
 			"2026-09-03T10:00:00.000000000Z", "70.00"},
 		{"invalid row without a date", []statementimport.Row{row("new", "2026-09-03T10:00:00.000000000Z", "70.00"), row("invalid", "", "")}, "", ""},

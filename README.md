@@ -68,7 +68,8 @@ authentication configuration that does not depend on the host:
   metrics, failures) instead of a black-box import.
 - **Statement import** — upload a Flash CSV, review the per-row preview and
   import it into a file-based account. Re-uploads and overlapping periods are
-  recognized, with an import history and warnings for inconsistent data.
+  automatically deduplicated across files. Balance conflicts show existing and
+  incoming values for an explicit per-row choice, with an import history.
 - **Transfers between own accounts** — link existing synced/manual outflows and
   inflows, including different currencies, or create both movements together
   in manual accounts. Native amounts and balances stay intact; principal stays
