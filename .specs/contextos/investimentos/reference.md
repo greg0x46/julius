@@ -180,7 +180,16 @@ transaction and is repeatable: restarts and catalog updates insert only missing
 entries. It preserves existing assets, their names,
 classes and quote preferences, including equivalent codes such as `PETR4.SA`.
 The assets become available for selection in new positions even when there is
-no position of them yet. No accounts, balances, operations, transactions or prices are
+no position of them yet.
+
+**New position** requires picking a catalog asset: the search matches ticker or
+name ignoring case and accents, and the chosen asset is reused as-is (class,
+type, currency and quote settings). A missing asset is registered in the same
+drawer ("Novo ativo"), using the same fields as asset settings; choosing a
+quotable type switches automatic quotes on with the matching market (for
+example Crypto assets → Cryptocurrency uses `crypto`). If the typed code (or
+name plus type, without a code) matches a catalog asset, that asset is selected
+instead of creating a duplicate. Editing a position keeps the free-text fields. No accounts, balances, operations, transactions or prices are
 created, and the seed makes no external calls.
 
 CDBs and government bonds are available types; each issue/maturity must be
