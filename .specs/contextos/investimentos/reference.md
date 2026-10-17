@@ -111,8 +111,7 @@ Operations and transfers on a holding that predates the rule are refused the
 same way; existing rows and reads are untouched. An integrated account stores no
 currency (it is NULL), so its local cash records, which name no asset, cannot be
 checked and are taken as reais. Multi-currency support for manual operations is
-left to #63; until then `MonthlyMovements` and `RealizedGain` assume one
-currency.
+not provided: `MonthlyMovements` and `RealizedGain` assume one currency.
 
 Appreciation and unrealized gain (`Summary.UnrealizedGain`) are never realized
 income or realized gain: they are excluded from `ManualReportingEntries`,
@@ -485,8 +484,11 @@ showing zero or an identity conversion. Stale stored rates are disclosed.
 
 The workspace uses the same exact rate for client-computed BRL yield,
 contribution, withdrawal and cost aggregates. Positions and operations, including
-their currencies and amounts, stay native; foreign positions remain explicitly
-excluded from the BRL base. No positions, targets or provider balances are
+their currencies and amounts, stay native. Synced foreign positions and
+foreign custody cash are valued in BRL with the day's `internal/exchange` rate
+(`investments.BuildSummary`, `ManualNetWorth`, goal values); a currency without a
+rate fails the summary rather than being omitted. Yield, contribution and cost
+aggregates computed in the browser still sum reais positions only. No positions, targets or provider balances are
 rewritten when switching reference currency.
 
 Account cards add converted position value and cash with full decimal precision;

@@ -5,8 +5,11 @@ import (
 	"database/sql"
 	"fmt"
 	"sort"
+	"time"
 
 	dbtypes "github.com/greg0x46/julius/internal/db/types"
+	"github.com/greg0x46/julius/internal/exchange"
+	"github.com/greg0x46/julius/internal/valuation"
 	"github.com/shopspring/decimal"
 )
 
@@ -76,6 +79,11 @@ func ReconciledTransactionAmount(ctx context.Context, q Querier, financialTransa
 // book cash only when that cash is not already represented by a linked
 // provider account. It intentionally does not include provider holdings.
 func ManualNetWorth(ctx context.Context, q Querier) (decimal.Decimal, error) {
+	return ManualNetWorthValued(ctx, q, valuation.New(exchange.New(q, nil), time.Now()))
+}
+
+// ManualNetWorthValued values each holding and book cash in the BRL base.
+func ManualNetWorthValued(ctx context.Context, q Querier, valued *valuation.Valuation) (decimal.Decimal, error) {
 	accounts, err := ListAccounts(ctx, q)
 	if err != nil {
 		return decimal.Zero, err
@@ -87,12 +95,20 @@ func ManualNetWorth(ctx context.Context, q Querier) (decimal.Decimal, error) {
 	total := decimal.Zero
 	for _, position := range positions {
 		if position.Source == PositionSourceManual {
-			total = total.Add(position.CurrentValue)
+			value, err := valued.Convert(ctx, position.CurrentValue, valuation.Currency(position.CurrencyCode))
+			if err != nil {
+				return decimal.Zero, err
+			}
+			total = total.Add(value)
 		}
 	}
 	for _, account := range accounts {
 		if account.Kind == AccountKindManual && account.FinancialAccountID == nil {
-			total = total.Add(account.CashBalance)
+			value, err := valued.Convert(ctx, account.CashBalance, valuation.Currency(account.CurrencyCode))
+			if err != nil {
+				return decimal.Zero, err
+			}
+			total = total.Add(value)
 		}
 	}
 	return total, nil

@@ -12,6 +12,8 @@ vi.mock("../api/netWorth");
 const snapshot: NetWorthSnapshot = {
   captured_at: "2026-08-18T00:00:00Z",
   is_backfilled: false,
+  valuation_version: 0,
+  valuation_status: "legacy",
   cash_balance: "1000.00",
   investment_balance: "500.00",
   credit_card_balance: "300.00",
