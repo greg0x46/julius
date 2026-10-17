@@ -12,6 +12,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/greg0x46/julius/internal/exchange"
+	"github.com/greg0x46/julius/internal/goals"
 	"github.com/greg0x46/julius/internal/investments"
 	"github.com/greg0x46/julius/internal/money"
 	"github.com/greg0x46/julius/internal/networth"
@@ -160,11 +161,13 @@ func financialContractPayloads() map[string]any {
 		"investment_summary": investmentSummaryToDTO(investments.Summary{
 			CurrencyCode: brl, TotalValue: amount, ManualValue: amount, UnrealizedGain: small,
 			Accounts: []investments.SummaryAccount{{AccountID: id, Name: "Synthetic custody", Kind: investments.AccountKindManual, CurrentValue: amount, CashBalance: small}},
-			Portfolios: []investments.SummaryPortfolio{
-				{PortfolioID: text(id), Name: "Synthetic goal", CurrentValue: amount, TargetAmount: &amount, Progress: &small},
-				{Name: "Sem objetivo", CurrentValue: small},
-			},
 		}),
+		"goals": map[string]any{"items": []goalDTO{goalToDTO(goals.Goal{
+			ID: id, Name: "Synthetic goal", Metric: goals.MetricInvestedValue, TargetAmount: amount, TargetDate: &day, Notes: text("Synthetic note"),
+			CurrentValue: small, Progress: decimal.RequireFromString("0.25"), CreatedAt: instant, UpdatedAt: instant,
+		}), goalToDTO(goals.Goal{
+			ID: id, Name: "Goal without date", Metric: goals.MetricInvestedValue, TargetAmount: amount, CreatedAt: instant, UpdatedAt: instant,
+		})}},
 		"timeline":            timelineResponseDTO{valuationDTO: reference, Base: series, PeriodTotals: periodTotalsToDTO(timeline.PeriodTotals{Income: small, Expense: amount, Result: small.Sub(amount)}), ScenarioImpacts: []scenarioImpactDTO{}},
 		"timeline_simulation": timelineResponseDTO{valuationDTO: reference, Base: series, PeriodTotals: periodTotalsDTO{Income: "0", Expense: "0", Result: "0"}, Simulation: &simulation, ScenarioImpacts: []scenarioImpactDTO{{ScenarioID: id, ScenarioName: "Synthetic scenario", Delta: moneyText}}},
 		"net_worth":           netWorthResponseDTO{Latest: snapshot, Series: []netWorthSnapshotDTO{unavailable, snapshot}},

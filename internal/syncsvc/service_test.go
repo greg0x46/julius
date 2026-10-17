@@ -691,13 +691,6 @@ func TestExecuteSecondRunDetectsUnchangedInvestment(t *testing.T) {
 		t.Fatalf("positions: %v %v", positions, err)
 	}
 	original := positions[0]
-	goal, err := investments.CreatePortfolio(ctx, conn, investments.PortfolioInput{Name: "Reserva"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err = investments.UpdatePosition(ctx, conn, original.ID, investments.PositionUpdate{Name: original.Name, Ticker: original.Ticker, AssetType: original.AssetType, PortfolioID: &goal.ID}); err != nil {
-		t.Fatal(err)
-	}
 	op, err := investments.CreateOperation(ctx, conn, investments.OperationInput{AccountID: original.AccountID, Kind: investments.OperationDeposit, OccurredOn: time.Now(), Amount: decimal.NewFromInt(1000)})
 	if err != nil {
 		t.Fatal(err)
@@ -730,10 +723,6 @@ func TestExecuteSecondRunDetectsUnchangedInvestment(t *testing.T) {
 	conn.QueryRow(`SELECT COUNT(*) FROM financial_investments`).Scan(&investmentCount)
 	if investmentCount != 1 {
 		t.Errorf("investmentCount = %d, want 1 (no duplicate insert)", investmentCount)
-	}
-	updated, err := investments.GetPosition(ctx, conn, original.ID)
-	if err != nil || updated.PortfolioID == nil || *updated.PortfolioID != goal.ID {
-		t.Fatalf("sync lost goal: %+v %v", updated, err)
 	}
 	links, err := investments.ListReconciliations(ctx, conn, investments.ReconciliationFilter{OperationID: &op.ID})
 	if err != nil || len(links) != 1 || links[0].ID != link.ID {

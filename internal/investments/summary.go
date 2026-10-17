@@ -10,12 +10,9 @@ import (
 	"github.com/greg0x46/julius/internal/valuation"
 )
 
-const unassignedPortfolioName = "Sem objetivo"
-
 // BuildSummary is the single reading of the investment book. TotalValue
 // includes provider holdings and the effective custody cash once. Net worth
 // uses ManualNetWorth instead because linked cash is already bank cash there.
-// Goals only regroup value that positions already carry.
 //
 // Holdings and cash in other currencies are valued in BRL at today's rate and
 // stay native in their own records; a currency without a rate fails the
@@ -33,16 +30,9 @@ func BuildSummaryValued(ctx context.Context, q Querier, valued *valuation.Valuat
 	if err != nil {
 		return Summary{}, err
 	}
-	portfolios, err := listRawPortfolios(ctx, q)
-	if err != nil {
-		return Summary{}, err
-	}
 
-	summary := Summary{Valuation: valued.Metadata, CurrencyCode: valuation.BaseCurrency, Portfolios: []SummaryPortfolio{}, Accounts: []SummaryAccount{}}
+	summary := Summary{Valuation: valued.Metadata, CurrencyCode: valuation.BaseCurrency, Accounts: []SummaryAccount{}}
 	valueByAccount := map[string]decimal.Decimal{}
-	unassigned := decimal.Zero
-	hasUnassigned := false
-	valuedPositions := make([]Position, 0, len(positions))
 	for _, position := range positions {
 		currency := valuation.Currency(position.CurrencyCode)
 		value, err := valued.Convert(ctx, position.CurrentValue, currency)
@@ -57,7 +47,6 @@ func BuildSummaryValued(ctx context.Context, q Querier, valued *valuation.Valuat
 			position.TotalCost = &cost
 		}
 		position.CurrentValue = value
-		valuedPositions = append(valuedPositions, position)
 		valueByAccount[position.AccountID] = valueByAccount[position.AccountID].Add(position.CurrentValue)
 		if position.Source == PositionSourceManual {
 			summary.ManualValue = summary.ManualValue.Add(position.CurrentValue)
@@ -68,10 +57,6 @@ func BuildSummaryValued(ctx context.Context, q Querier, valued *valuation.Valuat
 		// treating its whole value as profit.
 		if position.TotalCost != nil {
 			summary.UnrealizedGain = summary.UnrealizedGain.Add(position.CurrentValue.Sub(*position.TotalCost))
-		}
-		if position.PortfolioID == nil {
-			unassigned = unassigned.Add(position.CurrentValue)
-			hasUnassigned = true
 		}
 	}
 
@@ -92,22 +77,5 @@ func BuildSummaryValued(ctx context.Context, q Querier, valued *valuation.Valuat
 		})
 	}
 
-	values := portfolioValues(valuedPositions)
-	for _, portfolio := range portfolios {
-		id := portfolio.ID
-		summary.Portfolios = append(summary.Portfolios, SummaryPortfolio{
-			PortfolioID:  &id,
-			Name:         portfolio.Name,
-			CurrentValue: values[id],
-			TargetAmount: portfolio.TargetAmount,
-			Progress:     progress(values[id], portfolio.TargetAmount),
-		})
-	}
-	if hasUnassigned {
-		summary.Portfolios = append(summary.Portfolios, SummaryPortfolio{
-			Name:         unassignedPortfolioName,
-			CurrentValue: unassigned,
-		})
-	}
 	return summary, nil
 }

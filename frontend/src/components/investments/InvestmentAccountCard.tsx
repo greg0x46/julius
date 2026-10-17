@@ -5,7 +5,6 @@ import { Button, Collapse } from "antd";
 import type {
   InvestmentAccount,
   InvestmentOperation,
-  InvestmentPortfolio,
   InvestmentPosition,
   InvestmentSummaryAccount,
 } from "../../api/contracts";
@@ -42,7 +41,6 @@ export function InvestmentAccountCard({
   positions,
   allPositions,
   operations,
-  portfolios,
   linked,
   onRename,
   onRemove,
@@ -52,7 +50,6 @@ export function InvestmentAccountCard({
   onRemovePosition,
   onEditOperation,
   onRemoveOperation,
-  onAssignGoal,
   busy,
 }: {
   account: InvestmentAccount;
@@ -63,7 +60,6 @@ export function InvestmentAccountCard({
   /** Every position of the account, so operations of a closed one keep its name. */
   allPositions: InvestmentPosition[];
   operations: InvestmentOperation[];
-  portfolios: InvestmentPortfolio[];
   /** Provider holdings by id: a synced position reads its rendimento and IR/IOF from here. */
   linked: LinkedInvestments;
   onRename: (account: InvestmentAccount) => void;
@@ -74,7 +70,6 @@ export function InvestmentAccountCard({
   onRemovePosition: (position: InvestmentPosition) => void;
   onEditOperation: (operation: InvestmentOperation) => void;
   onRemoveOperation: (operation: InvestmentOperation) => void;
-  onAssignGoal: (position: InvestmentPosition, portfolioId: string | null) => void;
   busy: boolean;
 }) {
   const confirm = useConfirm();
@@ -202,14 +197,11 @@ export function InvestmentAccountCard({
 
       <InvestmentPositionsTable
         positions={positions}
-        portfolios={portfolios}
         costs={costs}
         linked={linked}
-        onAssignGoal={onAssignGoal}
         onEdit={onEditPosition}
         onDelete={onRemovePosition}
         markManual={!editable}
-        busy={busy}
         emptyTitle="Nenhuma posição nesta conta"
         emptyAction={<Button onClick={() => onNewPosition(account)}>Nova posição</Button>}
       />

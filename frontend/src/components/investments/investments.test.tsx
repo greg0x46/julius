@@ -36,7 +36,6 @@ const position: InvestmentPosition = {
   source: "manual",
   account_id: "a1",
   asset_id: null,
-  portfolio_id: null,
   name: "Tesouro Selic 2029",
   ticker: null,
   asset_type: "Tesouro",
@@ -60,13 +59,10 @@ function renderTable(compact: boolean, onDelete = vi.fn()) {
     <MemoryRouter>
       <InvestmentPositionsTable
         positions={[position]}
-        portfolios={[]}
         costs={{}}
         linked={new Map()}
-        onAssignGoal={vi.fn()}
         onEdit={vi.fn()}
         onDelete={onDelete}
-        busy={false}
         emptyTitle="Nenhuma posição"
       />
     </MemoryRouter>,
@@ -113,41 +109,14 @@ describe("InvestmentPositionsTable", () => {
     expect(screen.getByRole("table", { name: "Posições" })).toBeVisible();
   });
 
-  it("shows the goal as plain text and changes it from the record menu, not from a select on every row", async () => {
-    vi.spyOn(compactScreen, "useCompactScreen").mockReturnValue(false);
-    const onAssignGoal = vi.fn();
-    render(
-      <MemoryRouter>
-        <InvestmentPositionsTable
-          positions={[{ ...position, portfolio_id: "g1" }]}
-          portfolios={[{ id: "g1", name: "Aposentadoria" } as never, { id: "g2", name: "Viagem" } as never]}
-          costs={{}}
-          linked={new Map()}
-          onAssignGoal={onAssignGoal}
-          busy={false}
-          emptyTitle="Nenhuma posição"
-        />
-      </MemoryRouter>,
-    );
-    expect(screen.getByText("Aposentadoria")).toBeVisible();
-    expect(screen.queryByRole("combobox")).toBeNull();
-    // Quantities are written the pt-BR way.
-    expect(screen.getByText("3,2")).toBeVisible();
-    await userEvent.click(screen.getByRole("button", { name: "Ações de Tesouro Selic 2029" }));
-    expect(await screen.findByText("Mudar objetivo")).toBeInTheDocument();
-  });
-
   it("names a value derived from the market quote and states its gain like any valued position", () => {
     vi.spyOn(compactScreen, "useCompactScreen").mockReturnValue(false);
     render(
       <MemoryRouter>
         <InvestmentPositionsTable
           positions={[{ ...position, valuation_basis: "market_quote", current_unit_price: "13806.32" }]}
-          portfolios={[]}
           costs={{}}
           linked={new Map()}
-          onAssignGoal={vi.fn()}
-          busy={false}
           emptyTitle="Nenhuma posição"
         />
       </MemoryRouter>,

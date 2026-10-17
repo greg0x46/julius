@@ -8,12 +8,10 @@ import type {
   Investment,
   InvestmentAccount,
   InvestmentOperation,
-  InvestmentPortfolio,
   InvestmentPosition,
   InvestmentSummary,
 } from "../../api/contracts";
 import { InvestmentAccountCard } from "./InvestmentAccountCard";
-import { InvestmentGoalCard } from "./InvestmentGoalCard";
 import { InvestmentWorkspaceSummary } from "./InvestmentWorkspaceSummary";
 
 const account = {
@@ -40,7 +38,6 @@ const syncedPosition = {
   source: "synced",
   account_id: "a1",
   asset_id: null,
-  portfolio_id: "g1",
   name: "LCA Nubank",
   ticker: null,
   asset_type: "LCA",
@@ -85,7 +82,6 @@ const fee = {
   notes: null,
 } as unknown as InvestmentOperation;
 
-const goal = { id: "g1", name: "Reserva", target_amount: null, progress: null, current_value: "2320.50" } as unknown as InvestmentPortfolio;
 const linked = new Map([[lca.id, lca]]);
 
 function renderAccountCard(overrides: Partial<ComponentProps<typeof InvestmentAccountCard>> = {}) {
@@ -97,7 +93,6 @@ function renderAccountCard(overrides: Partial<ComponentProps<typeof InvestmentAc
         positions={[syncedPosition, manualPosition]}
         allPositions={[syncedPosition, manualPosition]}
         operations={[fee]}
-        portfolios={[goal]}
         linked={linked}
         onRename={vi.fn()}
         onRemove={vi.fn()}
@@ -107,7 +102,6 @@ function renderAccountCard(overrides: Partial<ComponentProps<typeof InvestmentAc
         onRemovePosition={vi.fn()}
         onEditOperation={vi.fn()}
         onRemoveOperation={vi.fn()}
-        onAssignGoal={vi.fn()}
         busy={false}
         {...overrides}
       />
@@ -190,30 +184,6 @@ describe("investment cards", () => {
     expect(await screen.findByRole("menuitem", { name: "Ver detalhes" })).toBeInTheDocument();
     expect(screen.queryByRole("menuitem", { name: "Editar" })).toBeNull();
     expect(screen.queryByRole("menuitem", { name: "Excluir" })).toBeNull();
-  });
-
-  it("gives the goal the same figures but no cash balance, which a goal does not hold", () => {
-    render(
-      <MemoryRouter>
-        <InvestmentGoalCard
-          portfolio={goal}
-          summary={undefined}
-          positions={[syncedPosition, manualPosition]}
-          operations={[fee]}
-          portfolios={[goal]}
-          linked={linked}
-          accountNameOf={() => "Nubank"}
-          onEdit={vi.fn()}
-          onRemove={vi.fn()}
-          onAssignGoal={vi.fn()}
-          busy={false}
-        />
-      </MemoryRouter>,
-    );
-    const section = screen.getByRole("region", { name: "Reserva" });
-    expect(within(section).getByRole("button", { name: "Rendimento líquido" })).toBeInTheDocument();
-    expect(within(section).getByRole("button", { name: "IR/Taxas" })).toBeInTheDocument();
-    expect(within(section).queryByText(/Saldo para investir|Caixa disponível/)).toBeNull();
   });
 
   it("puts the rendimento and the IR/Taxas beside the workspace total", () => {

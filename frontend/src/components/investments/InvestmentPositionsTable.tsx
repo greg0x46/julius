@@ -3,7 +3,7 @@ import type { ColumnsType } from "antd/es/table";
 import type { ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
-import type { InvestmentPortfolio, InvestmentPosition } from "../../api/contracts";
+import type { InvestmentPosition } from "../../api/contracts";
 import {
   investmentPositionSourceLabel,
   investmentValuationBasisLabel,
@@ -51,56 +51,39 @@ function YieldCell({
 
 export function InvestmentPositionsTable({
   positions,
-  portfolios,
   costs,
   linked,
   accountNameOf,
   showAccount = false,
-  showGoal = true,
-  onAssignGoal,
   onEdit,
   onDelete,
   markManual = false,
-  busy,
   emptyTitle,
   emptyHint,
   emptyAction,
 }: {
   positions: InvestmentPosition[];
-  portfolios: InvestmentPortfolio[];
   /** position_id -> taxas e impostos lançados nas movimentações dessa posição. */
   costs: Record<string, string>;
   linked: LinkedInvestments;
   accountNameOf?: (accountId: string) => string;
   showAccount?: boolean;
-  /** The goal column: off inside a goal's own section, where every row has that goal. */
-  showGoal?: boolean;
-  onAssignGoal: (position: InvestmentPosition, portfolioId: string | null) => void;
   onEdit?: (position: InvestmentPosition) => void;
   onDelete?: (position: InvestmentPosition) => void;
   /** Tags manual rows of an integrated account, where they sit next to the provider's. */
   markManual?: boolean;
-  busy: boolean;
   emptyTitle: string;
   emptyHint?: ReactNode;
   emptyAction?: ReactNode;
 }) {
   const navigate = useNavigate();
   const confirm = useConfirm();
-  const goalName = (position: InvestmentPosition) =>
-    portfolios.find((portfolio) => portfolio.id === position.portfolio_id)?.name ?? null;
   const subtitle = (position: InvestmentPosition) =>
     [position.ticker, position.asset_type].filter(Boolean).join(" · ");
   const costOf = (position: InvestmentPosition) => costs[position.id] ?? null;
   const manualTag = (position: InvestmentPosition) =>
     markManual && position.source === "manual" ? investmentPositionSourceLabel.manual : null;
 
-  /**
-   * An imported position is the institution's record: only the goal, which is
-   * a local grouping, is ours to change. The goal is plain text in the row at
-   * every width and is changed here, from "Mudar objetivo" — a bordered
-   * select on every row made the table read as a form.
-   */
   const menuItems = (position: InvestmentPosition): RecordMenuItem[] => {
     const items: RecordMenuItem[] = [];
     if (position.linked_investment_id) {
@@ -108,27 +91,6 @@ export function InvestmentPositionsTable({
         key: "details",
         label: "Ver detalhes",
         onClick: () => navigate(`/investimentos/${position.linked_investment_id}`),
-      });
-    }
-    if (portfolios.length > 0) {
-      items.push({
-        key: "goal",
-        label: "Mudar objetivo",
-        disabled: busy,
-        children: [
-          {
-            key: "goal-none",
-            label: "Sem objetivo",
-            disabled: position.portfolio_id === null,
-            onClick: () => onAssignGoal(position, null),
-          },
-          ...portfolios.map((portfolio) => ({
-            key: `goal-${portfolio.id}`,
-            label: portfolio.name,
-            disabled: position.portfolio_id === portfolio.id,
-            onClick: () => onAssignGoal(position, portfolio.id),
-          })),
-        ],
       });
     }
     if (position.source !== "synced") {
@@ -184,18 +146,6 @@ export function InvestmentPositionsTable({
             key: "account",
             render: (_: unknown, position: InvestmentPosition) =>
               accountNameOf?.(position.account_id) ?? "Conta não encontrada",
-          },
-        ]
-      : []),
-    ...(showGoal
-      ? [
-          {
-            title: "Objetivo",
-            key: "portfolio",
-            render: (_: unknown, position: InvestmentPosition) => {
-              const name = goalName(position);
-              return name !== null ? name : <span className="investment-quiet">Sem objetivo</span>;
-            },
           },
         ]
       : []),
@@ -258,7 +208,7 @@ export function InvestmentPositionsTable({
       empty={<EmptyState title={emptyTitle} hint={emptyHint} action={emptyAction} />}
       row={(position) => ({
         title: position.name,
-        meta: [manualTag(position), subtitle(position), showAccount ? accountNameOf?.(position.account_id) : goalName(position)]
+        meta: [manualTag(position), subtitle(position), showAccount ? accountNameOf?.(position.account_id) : null]
           .filter(Boolean)
           .join(" · "),
         trailing: (

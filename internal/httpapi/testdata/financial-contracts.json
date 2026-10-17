@@ -137,6 +137,36 @@
       "last_transaction_at": null
     }
   ],
+  "goals": {
+    "items": [
+      {
+        "id": "11111111-1111-4111-8111-111111111111",
+        "name": "Synthetic goal",
+        "metric": "invested_value",
+        "target_amount": "9007199254740993.123456789012345678",
+        "target_date": "2026-07-30",
+        "notes": "Synthetic note",
+        "current_value": "0.000000000000000001",
+        "progress": "0.25",
+        "currency_code": "BRL",
+        "created_at": "2026-07-30T12:34:56.123456789Z",
+        "updated_at": "2026-07-30T12:34:56.123456789Z"
+      },
+      {
+        "id": "11111111-1111-4111-8111-111111111111",
+        "name": "Goal without date",
+        "metric": "invested_value",
+        "target_amount": "9007199254740993.123456789012345678",
+        "target_date": null,
+        "notes": null,
+        "current_value": "0",
+        "progress": "0",
+        "currency_code": "BRL",
+        "created_at": "2026-07-30T12:34:56.123456789Z",
+        "updated_at": "2026-07-30T12:34:56.123456789Z"
+      }
+    ]
+  },
   "investment_accounts": {
     "items": [
       {
@@ -174,22 +204,6 @@
     "synced_value": "0",
     "cash_balance": "0",
     "unrealized_gain": "0.000000000000000001",
-    "portfolios": [
-      {
-        "portfolio_id": "11111111-1111-4111-8111-111111111111",
-        "name": "Synthetic goal",
-        "current_value": "9007199254740993.123456789012345678",
-        "target_amount": "9007199254740993.123456789012345678",
-        "progress": "0.000000000000000001"
-      },
-      {
-        "portfolio_id": null,
-        "name": "Sem objetivo",
-        "current_value": "0.000000000000000001",
-        "target_amount": null,
-        "progress": null
-      }
-    ],
     "accounts": [
       {
         "account_id": "11111111-1111-4111-8111-111111111111",
@@ -588,7 +602,6 @@
         "source": "manual",
         "account_id": "11111111-1111-4111-8111-111111111111",
         "asset_id": null,
-        "portfolio_id": null,
         "name": "Synthetic position",
         "ticker": null,
         "asset_type": "EQUITY",
@@ -609,7 +622,6 @@
         "source": "manual",
         "account_id": "11111111-1111-4111-8111-111111111111",
         "asset_id": null,
-        "portfolio_id": null,
         "name": "Synthetic position",
         "ticker": null,
         "asset_type": "EQUITY",
@@ -630,7 +642,6 @@
         "source": "manual",
         "account_id": "11111111-1111-4111-8111-111111111111",
         "asset_id": null,
-        "portfolio_id": null,
         "name": "Synthetic position",
         "ticker": null,
         "asset_type": "EQUITY",
@@ -651,7 +662,6 @@
         "source": "synced",
         "account_id": "11111111-1111-4111-8111-111111111111",
         "asset_id": null,
-        "portfolio_id": null,
         "name": "Synthetic position",
         "ticker": null,
         "asset_type": "EQUITY",
@@ -672,7 +682,6 @@
         "source": "manual",
         "account_id": "11111111-1111-4111-8111-111111111111",
         "asset_id": null,
-        "portfolio_id": null,
         "name": "Empty position",
         "ticker": null,
         "asset_type": "other",

@@ -7,8 +7,6 @@ import {
   parseInvestmentAssetClassification,
   parseInvestmentOperation,
   parseInvestmentOperationList,
-  parseInvestmentPortfolio,
-  parseInvestmentPortfolioList,
   parseInvestmentPosition,
   parseInvestmentPositionList,
   parseInvestmentReconciliation,
@@ -23,8 +21,6 @@ import {
   type InvestmentAssetClassDefinition,
   type InvestmentOperation,
   type InvestmentOperationWrite,
-  type InvestmentPortfolio,
-  type InvestmentPortfolioWrite,
   type InvestmentPosition,
   type InvestmentPositionUpdate,
   type InvestmentPositionWrite,
@@ -152,43 +148,8 @@ export function deleteInvestmentAsset(assetId: string): Promise<void> {
   );
 }
 
-export function listInvestmentPortfolios(signal?: AbortSignal): Promise<InvestmentPortfolio[]> {
-  return send("/api/investment-portfolios", { ...get, signal }, 200, parseInvestmentPortfolioList);
-}
-
-export function createInvestmentPortfolio(write: InvestmentPortfolioWrite): Promise<InvestmentPortfolio> {
-  return send(
-    "/api/investment-portfolios",
-    { method: "POST", headers: json, body: JSON.stringify(write) },
-    201,
-    parseInvestmentPortfolio,
-  );
-}
-
-export function updateInvestmentPortfolio(
-  portfolioId: string,
-  write: InvestmentPortfolioWrite,
-): Promise<InvestmentPortfolio> {
-  return send(
-    `/api/investment-portfolios/${encodeURIComponent(portfolioId)}`,
-    { method: "PUT", headers: json, body: JSON.stringify(write) },
-    200,
-    parseInvestmentPortfolio,
-  );
-}
-
-export function deleteInvestmentPortfolio(portfolioId: string): Promise<void> {
-  return send(
-    `/api/investment-portfolios/${encodeURIComponent(portfolioId)}`,
-    { method: "DELETE", headers: { Accept: "application/json" } },
-    204,
-    null,
-  );
-}
-
 export type InvestmentPositionFilters = {
   accountId?: string | null;
-  portfolioId?: string | null;
   includeClosed?: boolean;
   source?: "manual" | "synced" | null;
   sourceId?: string | null;
@@ -200,7 +161,6 @@ export function listInvestmentPositions(
 ): Promise<InvestmentPosition[]> {
   const params = new URLSearchParams();
   if (filters.accountId) params.set("account_id", filters.accountId);
-  if (filters.portfolioId) params.set("portfolio_id", filters.portfolioId);
   if (filters.includeClosed) params.set("include_closed", "true");
   if (filters.source) params.set("source", filters.source);
   if (filters.sourceId) params.set("source_id", filters.sourceId);
@@ -255,7 +215,6 @@ export function deleteInvestmentPosition(positionId: string): Promise<void> {
 export type InvestmentOperationFilters = {
   accountId?: string | null;
   positionId?: string | null;
-  portfolioId?: string | null;
   source?: "manual" | "synced" | null;
   sourceId?: string | null;
   reconciliationState?: "linked" | "unlinked" | null;
@@ -270,7 +229,6 @@ export function listInvestmentOperations(
   const params = new URLSearchParams();
   if (filters.accountId) params.set("account_id", filters.accountId);
   if (filters.positionId) params.set("position_id", filters.positionId);
-  if (filters.portfolioId) params.set("portfolio_id", filters.portfolioId);
   if (filters.source) params.set("source", filters.source);
   if (filters.sourceId) params.set("source_id", filters.sourceId);
   if (filters.reconciliationState) params.set("reconciliation_state", filters.reconciliationState);

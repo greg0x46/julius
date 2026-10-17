@@ -15,7 +15,7 @@ import {
 //
 // These are deliberately separate from Investment above. Investment is the
 // preserved, provider-imported detail API; the workspace below is the ledger
-// used for custody accounts, goals, cash and manually recorded positions.
+// used for custody accounts, cash and manually recorded positions.
 
 export const investmentAccountKinds = ["manual", "integrated", "synced"] as const;
 
@@ -68,7 +68,7 @@ const investmentAccountKeys = [
  * with the deterministic id `integrated:<data-source uuid>` (see
  * EnsureIntegratedAccounts and migration 00036/00037). The prefix exists so a
  * local grouping id can never be confused with an imported one — every other
- * investment id (positions, operations, portfolios, reconciliations) stays a
+ * investment id (positions, operations, reconciliations) stays a
  * plain uuid.
  */
 const integratedAccountIdPrefix = "integrated:";
@@ -232,68 +232,6 @@ export function parseInvestmentAssetList(value: unknown): InvestmentAsset[] {
   return parseInvestmentListEnvelope(value, parseInvestmentAsset, "Lista de ativos de investimento inválida.");
 }
 
-export interface InvestmentPortfolio {
-  id: string;
-  name: string;
-  target_amount: string | null;
-  target_date: string | null;
-  notes: string | null;
-  current_value: string;
-  progress: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface InvestmentPortfolioWrite {
-  name: string;
-  target_amount: string | null;
-  target_date: string | null;
-  notes: string | null;
-}
-
-const investmentPortfolioKeys = [
-  "id",
-  "name",
-  "target_amount",
-  "target_date",
-  "notes",
-  "current_value",
-  "progress",
-  "created_at",
-  "updated_at",
-] as const;
-
-export function parseInvestmentPortfolio(value: unknown): InvestmentPortfolio {
-  const item = requiredRecord(value, investmentPortfolioKeys, "Objetivo de investimento inválido.");
-  if (
-    typeof item.id !== "string" ||
-    !isUuid(item.id) ||
-    typeof item.name !== "string" ||
-    item.name.trim() === "" ||
-    !(item.target_date === null || (typeof item.target_date === "string" && dateOnlyPattern.test(item.target_date))) ||
-    !isNullableString(item.notes) ||
-    !isValidDate(item.created_at) ||
-    !isValidDate(item.updated_at)
-  ) {
-    throw new TypeError("Objetivo de investimento inválido.");
-  }
-  return {
-    id: item.id,
-    name: item.name,
-    target_amount: nullableDecimal(item.target_amount),
-    target_date: item.target_date as string | null,
-    notes: item.notes as string | null,
-    current_value: decimal(item.current_value),
-    progress: nullableDecimal(item.progress),
-    created_at: item.created_at as string,
-    updated_at: item.updated_at as string,
-  };
-}
-
-export function parseInvestmentPortfolioList(value: unknown): InvestmentPortfolio[] {
-  return parseInvestmentListEnvelope(value, parseInvestmentPortfolio, "Lista de objetivos inválida.");
-}
-
 export const investmentPositionSources = ["manual", "synced"] as const;
 
 export type InvestmentPositionSource = (typeof investmentPositionSources)[number];
@@ -307,7 +245,6 @@ export interface InvestmentPosition {
   source: InvestmentPositionSource;
   account_id: string;
   asset_id: string | null;
-  portfolio_id: string | null;
   name: string;
   ticker: string | null;
   asset_type: string;
@@ -331,7 +268,6 @@ export interface InvestmentPositionWrite {
   name: string;
   ticker?: string | null;
   asset_type?: string;
-  portfolio_id?: string | null;
   initial_quantity?: string;
   initial_unit_cost?: string;
   initial_value?: string;
@@ -343,7 +279,6 @@ export interface InvestmentPositionUpdate {
   name: string;
   ticker: string | null;
   asset_type: string;
-  portfolio_id: string | null;
   notes: string | null;
 }
 
@@ -352,7 +287,6 @@ const investmentPositionKeys = [
   "source",
   "account_id",
   "asset_id",
-  "portfolio_id",
   "name",
   "ticker",
   "asset_type",
@@ -376,7 +310,6 @@ export function parseInvestmentPosition(value: unknown): InvestmentPosition {
     !investmentPositionSources.includes(item.source as InvestmentPositionSource) ||
     !isInvestmentAccountId(item.account_id) ||
     !isNullableUuid(item.asset_id) ||
-    !isNullableUuid(item.portfolio_id) ||
     typeof item.name !== "string" ||
     item.name.trim() === "" ||
     !isNullableString(item.ticker) ||
@@ -396,7 +329,6 @@ export function parseInvestmentPosition(value: unknown): InvestmentPosition {
     source: item.source as InvestmentPositionSource,
     account_id: item.account_id,
     asset_id: item.asset_id as string | null,
-    portfolio_id: item.portfolio_id as string | null,
     name: item.name,
     ticker: item.ticker as string | null,
     asset_type: item.asset_type,
@@ -585,14 +517,6 @@ export function parseInvestmentReconciliationList(value: unknown): InvestmentRec
   return parseInvestmentListEnvelope(value, parseInvestmentReconciliation, "Lista de vínculos inválida.");
 }
 
-export interface InvestmentSummaryPortfolio {
-  portfolio_id: string | null;
-  name: string;
-  current_value: string;
-  target_amount: string | null;
-  progress: string | null;
-}
-
 export interface InvestmentSummaryAccount {
   account_id: string;
   name: string;
@@ -608,26 +532,7 @@ export interface InvestmentSummary extends ReportValuation {
   synced_value: string;
   cash_balance: string;
   unrealized_gain: string;
-  portfolios: InvestmentSummaryPortfolio[];
   accounts: InvestmentSummaryAccount[];
-}
-
-function parseInvestmentSummaryPortfolio(value: unknown): InvestmentSummaryPortfolio {
-  const item = requiredRecord(
-    value,
-    ["portfolio_id", "name", "current_value", "target_amount", "progress"],
-    "Resumo de objetivo inválido.",
-  );
-  if (!isNullableUuid(item.portfolio_id) || typeof item.name !== "string" || item.name.trim() === "") {
-    throw new TypeError("Resumo de objetivo inválido.");
-  }
-  return {
-    portfolio_id: item.portfolio_id as string | null,
-    name: item.name,
-    current_value: decimal(item.current_value),
-    target_amount: nullableDecimal(item.target_amount),
-    progress: nullableDecimal(item.progress),
-  };
 }
 
 function parseInvestmentSummaryAccount(value: unknown): InvestmentSummaryAccount {
@@ -663,7 +568,6 @@ export function parseInvestmentSummary(value: unknown): InvestmentSummary {
       "synced_value",
       "cash_balance",
       "unrealized_gain",
-      "portfolios",
       "accounts",
     ],
     ["fx"],
@@ -671,7 +575,6 @@ export function parseInvestmentSummary(value: unknown): InvestmentSummary {
   );
   if (
     typeof item.currency_code !== "string" ||
-    !Array.isArray(item.portfolios) ||
     !Array.isArray(item.accounts)
   ) {
     throw new TypeError("Resumo de investimentos inválido.");
@@ -684,7 +587,6 @@ export function parseInvestmentSummary(value: unknown): InvestmentSummary {
     synced_value: decimal(item.synced_value),
     cash_balance: decimal(item.cash_balance),
     unrealized_gain: decimal(item.unrealized_gain),
-    portfolios: item.portfolios.map(parseInvestmentSummaryPortfolio),
     accounts: item.accounts.map(parseInvestmentSummaryAccount),
   };
 }

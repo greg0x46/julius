@@ -93,7 +93,7 @@ export type YieldAggregate = { gain: string; percent: number | null };
 
 /**
  * The same R$-gain-over-principal math as positionYield, summed across a
- * group of positions (an account, a goal, the whole workspace). Positions
+ * group of positions (an account, the whole workspace). Positions
  * with unknown rentabilidade — or in a foreign currency — sit out of both
  * sides of the ratio rather than being counted as zero gain.
  */
@@ -175,17 +175,6 @@ export function costsByPosition(
   const result: Record<string, string> = {};
   for (const [positionId, values] of byPosition) result[positionId] = sumBRL(values);
   return result;
-}
-
-/**
- * A goal holds no cash, so its aportes are what was put into its positions
- * (compras e saldo inicial) and its resgates are what was sold out of them.
- */
-export function goalMovements(operations: InvestmentOperation[]): MovementTotals {
-  return {
-    deposits: totalOf(operations, ["buy", "initial_balance"]),
-    withdrawals: totalOf(operations, ["sell"]),
-  };
 }
 
 /** The most recent date among the values that make a card's figures. */

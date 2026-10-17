@@ -7,31 +7,26 @@ import {
   createInvestmentTransfer,
   type InvestmentTransferWrite,
   type InvestmentCompoundWrite,
-  createInvestmentPortfolio,
   createInvestmentPosition,
   createInvestmentReconciliation,
   deleteInvestmentAccount,
   deleteInvestmentOperation,
-  deleteInvestmentPortfolio,
   deleteInvestmentPosition,
   deleteInvestmentReconciliation,
   deleteInvestmentTransfer,
   getInvestmentSummary,
   listInvestmentAccounts,
   listInvestmentOperations,
-  listInvestmentPortfolios,
   listInvestmentPositions,
   listInvestmentReconciliations,
   updateInvestmentAccount,
   updateInvestmentOperation,
-  updateInvestmentPortfolio,
   updateInvestmentPosition,
 } from "../api/investmentPortfolio";
 import type {
   InvestmentAccountUpdate,
   InvestmentAccountWrite,
   InvestmentOperationWrite,
-  InvestmentPortfolioWrite,
   InvestmentPositionUpdate,
   InvestmentPositionWrite,
   InvestmentReconciliationWrite,
@@ -42,8 +37,8 @@ export const investmentWorkspaceQueryKey = queryKeys.investmentWorkspace;
 
 /**
  * The investment ledger has a deliberately small, connected set of views.
- * One workspace cache keeps a new operation, its cash balance, the goal and
- * the summary moving together instead of leaving stale figures in another
+ * One workspace cache keeps a new operation, its cash balance and the
+ * summary moving together instead of leaving stale figures in another
  * tab of the same page.
  */
 export function useInvestmentWorkspace({ enabled = true }: { enabled?: boolean } = {}) {
@@ -54,11 +49,6 @@ export function useInvestmentWorkspace({ enabled = true }: { enabled?: boolean }
   const accountsQuery = useQuery({
     queryKey: queryKeys.investmentWorkspacePart("accounts"),
     queryFn: ({ signal }) => listInvestmentAccounts(signal),
-    enabled,
-  });
-  const portfoliosQuery = useQuery({
-    queryKey: queryKeys.investmentWorkspacePart("portfolios"),
-    queryFn: ({ signal }) => listInvestmentPortfolios(signal),
     enabled,
   });
   const positionsQuery = useQuery({
@@ -98,20 +88,6 @@ export function useInvestmentWorkspace({ enabled = true }: { enabled?: boolean }
   });
   const deleteAccountMutation = useMutation({
     mutationFn: (accountId: string) => deleteInvestmentAccount(accountId),
-    onSuccess: refreshLedger,
-  });
-
-  const createPortfolioMutation = useMutation({
-    mutationFn: (write: InvestmentPortfolioWrite) => createInvestmentPortfolio(write),
-    onSuccess: refreshLedger,
-  });
-  const updatePortfolioMutation = useMutation({
-    mutationFn: ({ portfolioId, write }: { portfolioId: string; write: InvestmentPortfolioWrite }) =>
-      updateInvestmentPortfolio(portfolioId, write),
-    onSuccess: refreshLedger,
-  });
-  const deletePortfolioMutation = useMutation({
-    mutationFn: (portfolioId: string) => deleteInvestmentPortfolio(portfolioId),
     onSuccess: refreshLedger,
   });
 
@@ -167,7 +143,6 @@ export function useInvestmentWorkspace({ enabled = true }: { enabled?: boolean }
   const refetch = async () => {
     await Promise.all([
       accountsQuery.refetch(),
-      portfoliosQuery.refetch(),
       positionsQuery.refetch(),
       operationsQuery.refetch(),
       reconciliationsQuery.refetch(),
@@ -177,28 +152,24 @@ export function useInvestmentWorkspace({ enabled = true }: { enabled?: boolean }
 
   return {
     accounts: accountsQuery.data ?? [],
-    portfolios: portfoliosQuery.data ?? [],
     positions: positionsQuery.data ?? [],
     operations: operationsQuery.data ?? [],
     reconciliations: reconciliationsQuery.data ?? [],
     summary: summaryQuery.data ?? null,
     isLoading:
       accountsQuery.isLoading ||
-      portfoliosQuery.isLoading ||
       positionsQuery.isLoading ||
       operationsQuery.isLoading ||
       reconciliationsQuery.isLoading ||
       summaryQuery.isLoading,
     isFetching:
       accountsQuery.isFetching ||
-      portfoliosQuery.isFetching ||
       positionsQuery.isFetching ||
       operationsQuery.isFetching ||
       reconciliationsQuery.isFetching ||
       summaryQuery.isFetching,
     error:
       accountsQuery.error ??
-      portfoliosQuery.error ??
       positionsQuery.error ??
       operationsQuery.error ??
       reconciliationsQuery.error ??
@@ -207,9 +178,6 @@ export function useInvestmentWorkspace({ enabled = true }: { enabled?: boolean }
     createAccount: createAccountMutation.mutateAsync,
     updateAccount: updateAccountMutation.mutateAsync,
     deleteAccount: deleteAccountMutation.mutateAsync,
-    createPortfolio: createPortfolioMutation.mutateAsync,
-    updatePortfolio: updatePortfolioMutation.mutateAsync,
-    deletePortfolio: deletePortfolioMutation.mutateAsync,
     createPosition: createPositionMutation.mutateAsync,
     updatePosition: updatePositionMutation.mutateAsync,
     deletePosition: deletePositionMutation.mutateAsync,
@@ -224,8 +192,6 @@ export function useInvestmentWorkspace({ enabled = true }: { enabled?: boolean }
     isSaving:
       createAccountMutation.isPending ||
       updateAccountMutation.isPending ||
-      createPortfolioMutation.isPending ||
-      updatePortfolioMutation.isPending ||
       createPositionMutation.isPending ||
       updatePositionMutation.isPending ||
       createOperationMutation.isPending ||
@@ -235,7 +201,6 @@ export function useInvestmentWorkspace({ enabled = true }: { enabled?: boolean }
       createReconciliationMutation.isPending,
     isDeleting:
       deleteAccountMutation.isPending ||
-      deletePortfolioMutation.isPending ||
       deletePositionMutation.isPending ||
       deleteOperationMutation.isPending ||
       deleteTransferMutation.isPending ||

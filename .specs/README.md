@@ -55,6 +55,7 @@ renamed. Frontend routes and UI labels are also Portuguese.
 | `recorrencias` | Recurring commitments + reconciliation | `recurrences` |
 | `home` | Home dashboard, projection | `timeline` |
 | `patrimonio-liquido` | Net worth | `networth` |
+| `metas` | Goals (target vs. a global metric) | `goals` |
 | `investimentos` | Investments, quotes, reconciliation | `investments`, `quotes`, `marketdata` |
 | `configuracoes-autenticacao` | Settings, authentication | `auth`, `settings` |
 
