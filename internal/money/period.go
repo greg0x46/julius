@@ -3,6 +3,8 @@ package money
 import (
 	"fmt"
 	"time"
+
+	"github.com/greg0x46/julius/internal/dates"
 )
 
 // Date is a timezone-less calendar date, used for period boundaries where a
@@ -77,7 +79,7 @@ func PeriodFor(occurredAt *time.Time, groupBy GroupBy, timezone string) (Period,
 		}, nil
 	case GroupMonth:
 		start := localDate.firstOfMonth()
-		nextMonth := start.addDays(monthLength(start))
+		nextMonth := start.addDays(dates.DaysInMonth(start.Year, start.Month))
 		end := nextMonth.addDays(-1)
 		return Period{
 			Key:       fmt.Sprintf("month:%04d-%02d", start.Year, int(start.Month)),
@@ -97,11 +99,4 @@ func PeriodFor(occurredAt *time.Time, groupBy GroupBy, timezone string) (Period,
 	default:
 		return Period{}, fmt.Errorf("unknown group_by %q", groupBy)
 	}
-}
-
-func monthLength(firstOfMonth Date) int {
-	// The day before next month's 1st, minus this month's 1st, gives the
-	// number of days to add to reach next month's 1st directly.
-	next := firstOfMonth.asTime().AddDate(0, 1, 0)
-	return int(next.Sub(firstOfMonth.asTime()).Hours() / 24)
 }

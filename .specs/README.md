@@ -19,6 +19,9 @@ before changing code. Agent rules and commands: [`/AGENTS.md`](../AGENTS.md).
 
 ## Doc types
 
+- [`auditoria-decisoes-financeiras.md`](auditoria-decisoes-financeiras.md) —
+  ARCH-03 audit evidence, shared decision owners and intentionally distinct rules.
+
 - **`motores-de-dominio.md`** — architecture, not features. Describes the domain
   at the ideal level; where code diverges, the divergence is stated explicitly.
 - **`invariantes-financeiros.md`** — cross-cutting, living matrix: balance,

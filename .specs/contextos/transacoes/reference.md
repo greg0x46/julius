@@ -71,6 +71,10 @@ calendar-date adapters, including SQLite date-only text and legacy timestamps.
 
 ## Reporting conversion
 
+Monthly period boundaries use `dates.DaysInMonth`, the same calendar rule as
+recurring schedules and card-cycle clamping. `money.PeriodFor` still chooses
+the reporting calendar date in the request's timezone.
+
 `internal/reporting` consolidates eligible effective account-currency money to
 BRL using `internal/exchange` historical rates for the reporting calendar date.
 Queries, groups and category reports return conversion coverage and native
