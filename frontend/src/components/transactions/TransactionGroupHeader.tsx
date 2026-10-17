@@ -40,7 +40,7 @@ export function TransactionGroupHeader({ group }: { group: Group }) {
         <div>
           <dt>Resultado</dt>
           <dd>
-            {total ? <Money value={total.balance} currencyCode={total.currency_code} tone="result" /> : <span>{group.reporting ? reportingLabel(group.reporting) : "Total indisponível"}</span>}
+            {total ? <Money value={total.balance} currencyCode={total.currency_code} report tone="result" /> : <span>{group.reporting ? reportingLabel(group.reporting) : "Total indisponível"}</span>}
           </dd>
         </div>
       </dl>

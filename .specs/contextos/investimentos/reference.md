@@ -473,3 +473,21 @@ UUIDs. `db.Open` rejects the old schema generation; conversion is separate work.
 Investment cash fields and portfolio targets keep decimal strings through editing
 and submission. Contribution totals and quantity × average-cost gain calculations
 use exact arithmetic; BRL rounding happens only at display ([policy](../../precisao-monetaria.md)).
+
+## Reference valuation
+
+`GET /api/investment-summary` converts its existing BRL base into
+`finance.reference_currency` using current `internal/exchange` FX. Totals,
+per-account value/cash, per-goal value and goal targets share that rate and
+carry the chosen `currency_code` plus full `fx` provenance. Goal progress
+ratios do not change. Missing rates make the summary unavailable rather than
+showing zero or an identity conversion. Stale stored rates are disclosed.
+
+The workspace uses the same exact rate for client-computed BRL yield,
+contribution, withdrawal and cost aggregates. Positions and operations, including
+their currencies and amounts, stay native; foreign positions remain explicitly
+excluded from the BRL base. No positions, targets or provider balances are
+rewritten when switching reference currency.
+
+Account cards add converted position value and cash with full decimal precision;
+only the displayed total is rounded to cents, consistently with the workspace.

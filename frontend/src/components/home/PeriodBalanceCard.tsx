@@ -1,13 +1,14 @@
+import { ReportValuation } from "../shared/ReportValuation";
 import dayjs from "dayjs";
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
 
 import { ReportingDetails } from "../shared/ReportingDetails";
-import { reportingError } from "../../presentation/reporting";
+import { problemMessage, reportingError } from "../../presentation/reporting";
 import type { Period } from "../../hooks/usePeriod";
 import { useHomePeriodBounds } from "../../hooks/useHomePeriodBounds";
 import { useTimeline } from "../../hooks/useTimeline";
-import { formatBRL } from "../../presentation/money";
+import { formatReportMoney } from "../../presentation/money";
 import { Skeleton } from "antd";
 
 import { UnavailableState } from "../AsyncState";
@@ -80,7 +81,7 @@ export function PeriodBalanceCard({ period }: { period: Period }) {
               if (timeline.error) timeline.refetch();
             }}
           >
-            {reportingError(timeline.error)?.message ?? "Não foi possível carregar o resultado do período."}
+            {problemMessage(timeline.error) ?? "Não foi possível carregar o resultado do período."}
             <ReportingDetails report={reportingError(timeline.error)?.problem?.reporting} totals={reportingError(timeline.error)?.problem?.totals} />
           </UnavailableState>
         )}
@@ -92,7 +93,7 @@ export function PeriodBalanceCard({ period }: { period: Period }) {
     `/transacoes?date_from=${bounds.from}&date_to=${bounds.to}&classification=${classification}`;
 
   return (
-    <>
+    <ReportValuation valuation={timeline.valuation}>
       <SummaryStrip
         className="period-balance"
         label="Resultado do período"
@@ -104,7 +105,7 @@ export function PeriodBalanceCard({ period }: { period: Period }) {
             value: (
               <Link
                 to={transactionsLink("inflow")}
-                aria-label={`Entradas: ${formatBRL(inflow)}. Ver transações`}
+                aria-label={`Entradas: ${formatReportMoney(inflow, timeline.currencyCode)}. Ver transações`}
               >
                 <FlowFigure value={inflow} direction="inflow" />
               </Link>
@@ -115,7 +116,7 @@ export function PeriodBalanceCard({ period }: { period: Period }) {
             value: (
               <Link
                 to={transactionsLink("outflow")}
-                aria-label={`Saídas: ${formatBRL(outflow)}. Ver transações`}
+                aria-label={`Saídas: ${formatReportMoney(outflow, timeline.currencyCode)}. Ver transações`}
               >
                 <FlowFigure value={outflow} direction="outflow" />
               </Link>
@@ -123,7 +124,7 @@ export function PeriodBalanceCard({ period }: { period: Period }) {
           },
         ]}
       />
-    <ReportingDetails report={totals?.reporting} totals={totals?.totals} />
-    </>
+      <ReportingDetails report={totals?.reporting} totals={totals?.totals} />
+    </ReportValuation>
   );
 }

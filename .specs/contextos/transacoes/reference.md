@@ -331,3 +331,20 @@ Tests: `TestLinkedTransfersPreserveNativeCashAndReporting`,
 `TestTransferMigrationPreservesExistingMovements`; frontend
 `TransactionTransferScreen.test.tsx`, `ManualTransferForm.test.tsx`,
 `transferRate.test.ts` and `transfers.test.ts`.
+
+## Consolidated report valuation
+
+Transaction-query `reporting.totals` (overall and per group), spending-by-category
+and category-breakdown responses convert their existing
+BRL aggregates with current `internal/exchange` rates to
+`finance.reference_currency` (default BRL), including projected items only
+when requested. Responses include the valuation `currency_code` and `fx`
+provenance; missing FX is 503 `exchange-unavailable`. The transaction summary
+and group headings use these converted totals and their explicit currency, with a warning for stale FX. Ledger query items and
+account balances retain their native amounts and currencies. Their original
+per-currency totals and the consolidated BRL eligibility exclusions are
+unchanged; the reference preference changes valuation/display only. The
+consolidated BRL figures already use each entry's reporting-day rate (see
+`internal/reporting`); the reference currency then applies one current
+BRL→reference rate on top, so a non-BRL reference is a presentation valuation
+of that BRL base, not a per-day reconstruction.

@@ -55,9 +55,10 @@ func (b Breakdown) TotalsFor() Breakdown {
 // Snapshot mirrors one net_worth_snapshots row: a Breakdown captured on a
 // given calendar day.
 type SnapshotRow struct {
-	ID         string
-	CapturedAt time.Time
-	Breakdown  Breakdown
+	CurrencyCode string
+	ID           string
+	CapturedAt   time.Time
+	Breakdown    Breakdown
 	// IsBackfilled marks a row written by Backfill (reconstructed from past
 	// transactions) rather than Snapshot (a live read of today's
 	// provider-synced balances). Breakdown.InvestmentBalance is always zero

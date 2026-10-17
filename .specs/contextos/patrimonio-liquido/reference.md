@@ -45,3 +45,25 @@ since they did not change the provider balance. See Transactions, Notes.
 
 `/patrimonio-liquido` — composition card + `NetWorthChart` (Recharts) with the
 evolution over time.
+
+## Snapshot valuation and revaluation policy
+
+Migration `0003_snapshot_currency` tags every existing snapshot with explicit
+`valuation_currency = BRL` in both dialects, without changing its amounts.
+Snapshots and backfill continue to write BRL valuations, enforced by a database
+constraint. Changing the reference preference never rebuilds or rewrites a
+historical snapshot. Today's upsert retains its existing refresh behavior.
+
+On read, `/api/net-worth` converts each stored BRL breakdown using
+`internal/exchange.On` for `captured_at`, returning the chosen `currency_code`,
+`stored_currency = BRL` and that day's full `fx` provenance alongside the figures.
+The chosen reference currency is read once for the whole response. Today's
+snapshot uses today's FX. Historical revaluation can therefore change when
+cached FX is refreshed, but the stored BRL observation is preserved. There is
+no automatic history rebuild: old observations retain their original coverage,
+and reconstructed days still omit historical investment balances.
+
+Any missing historical rate makes the report unavailable (503); there is no
+mixed-currency curve, silently omitted day, or 1:1 fallback. The chart labels
+its valuation currency and explains that historical FX uses each day. Native
+foreign balances/holdings remain outside the existing BRL base.

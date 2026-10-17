@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/greg0x46/julius/internal/exchange"
 	"github.com/greg0x46/julius/internal/money"
 	"github.com/greg0x46/julius/internal/networth"
 )
@@ -32,7 +33,9 @@ func toNetWorthBreakdownDTO(b networth.Breakdown) netWorthBreakdownDTO {
 }
 
 type netWorthSnapshotDTO struct {
-	CapturedAt time.Time `json:"captured_at"`
+	valuationDTO
+	StoredCurrency string    `json:"stored_currency"`
+	CapturedAt     time.Time `json:"captured_at"`
 	netWorthBreakdownDTO
 	// IsBackfilled mirrors SnapshotRow.IsBackfilled: true when this row was
 	// reconstructed by networth.Backfill rather than captured live, in
@@ -78,13 +81,26 @@ func handleGetNetWorth(conn *sql.DB) http.HandlerFunc {
 			return
 		}
 
+		valuation, ok := reportValuation(w, r, conn, latest.CapturedAt)
+		if !ok {
+			return
+		}
+		fx := exchange.New(conn, nil)
 		series := make([]netWorthSnapshotDTO, len(rows))
 		for i, row := range rows {
-			series[i] = netWorthSnapshotDTO{CapturedAt: row.CapturedAt, netWorthBreakdownDTO: toNetWorthBreakdownDTO(row.Breakdown), IsBackfilled: row.IsBackfilled}
+			valuation, ok := valuationForCurrency(w, r, fx, valuation.CurrencyCode, row.CapturedAt)
+			if !ok {
+				return
+			}
+			breakdown := toNetWorthBreakdownDTO(row.Breakdown)
+			valuation.breakdown(&breakdown)
+			series[i] = netWorthSnapshotDTO{valuationDTO: valuation, StoredCurrency: row.CurrencyCode, CapturedAt: row.CapturedAt, netWorthBreakdownDTO: breakdown, IsBackfilled: row.IsBackfilled}
 		}
+		breakdown := toNetWorthBreakdownDTO(latest.Breakdown)
+		valuation.breakdown(&breakdown)
 		writeJSON(w, http.StatusOK, netWorthResponseDTO{
 			Series: series,
-			Latest: netWorthSnapshotDTO{CapturedAt: latest.CapturedAt, netWorthBreakdownDTO: toNetWorthBreakdownDTO(latest.Breakdown), IsBackfilled: latest.IsBackfilled},
+			Latest: netWorthSnapshotDTO{valuationDTO: valuation, StoredCurrency: latest.CurrencyCode, CapturedAt: latest.CapturedAt, netWorthBreakdownDTO: breakdown, IsBackfilled: latest.IsBackfilled},
 		})
 	}
 }

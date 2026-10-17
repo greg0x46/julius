@@ -25,6 +25,13 @@ export function formatBRL(value: string): string {
   return `${rounded.startsWith("-") ? "-" : ""}R$\u00a0${fixedTwo(rounded)}`;
 }
 
+/** `formatToneMoney` for a consolidated (reference-currency) figure. */
+export function formatToneReportMoney(value: string, currencyCode: string, kind: MoneyToneKind, direction?: MoneyDirection): string {
+  const magnitude = formatReportMoney(value.trim().replace(/^-/, ""), currencyCode);
+  if (kind === "flow" || kind === "result") return `${moneyTone(value, kind, direction, currencyCode).sign}${magnitude}`;
+  return isZeroDecimal(roundDecimal(value, 2)) || !value.trim().startsWith("-") ? magnitude : `-${magnitude}`;
+}
+
 export function formatSignedMoney(
   value: string,
   classification: "inflow" | "outflow" | "unclassified",
@@ -117,4 +124,11 @@ export function formatToneBRL(value: string, kind: MoneyToneKind, direction?: Mo
 
 export function formatSignedBRL(value: string, classification: MoneyDirection): string {
   return formatSignedMoney(value, classification, "BRL");
+}
+
+/** Consolidated figures keep the same two-decimal presentation in every currency. */
+export function formatReportMoney(value: string, currencyCode: string): string {
+  return currencyCode === "BRL"
+    ? formatBRL(value)
+    : `${value.startsWith("-") ? "-" : ""}${currencyCode}\u00a0${fixedTwo(value).replace("-", "")}`;
 }
