@@ -2,8 +2,7 @@
 // minus liabilities) over time. There is no background worker: a snapshot
 // for "today" is written on every read (Snapshot, called from the HTTP
 // handler before List), which is enough for a self-hosted app used
-// sporadically. The cash figure comes from transactions.CashOnHand, the
-// same implementation internal/timeline anchors its series on.
+// sporadically. The cash figure comes from transactions.CashOnHandIn (BRL).
 package networth
 
 import (

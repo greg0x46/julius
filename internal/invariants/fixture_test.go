@@ -157,9 +157,9 @@ func (f *fixture) item(id string) transactions.Item {
 
 func (f *fixture) cash() decimal.Decimal {
 	f.t.Helper()
-	cash, err := transactions.CashOnHand(f.ctx, f.conn, nil)
+	cash, err := transactions.CashOnHandIn(f.ctx, f.conn, nil, money.BRL)
 	if err != nil {
-		f.t.Fatalf("CashOnHand: %v", err)
+		f.t.Fatalf("CashOnHandIn: %v", err)
 	}
 	return cash
 }

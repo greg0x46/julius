@@ -19,4 +19,5 @@ export * from "./syncRuns";
 export * from "./timeline";
 export * from "./transactions";
 
+export type { ReportingSummary } from "./reporting";
 export * from "./valuation";

@@ -155,7 +155,7 @@ export function InvestmentAccountCard({
         figures={[
           {
             label: "Valor atual",
-            value: <Money currencyCode={currencyCode} value={currentValue} tone="balance" />,
+            value: <Money report currencyCode={currencyCode} value={currentValue} tone="balance" />,
           },
           {
             label: "Rendimento líquido",
@@ -170,18 +170,18 @@ export function InvestmentAccountCard({
           },
           {
             label: "IR/Taxas",
-            value: <Money currencyCode={currencyCode} value={convert(cost)} tone="neutral" />,
+            value: <Money report currencyCode={currencyCode} value={convert(cost)} tone="neutral" />,
             hint: "Taxas e impostos das movimentações, mais IR e IOF informados pela instituição.",
           },
           {
             label: "Aportes",
-            value: <Money currencyCode={currencyCode} value={convert(movements.deposits)} tone="neutral" />,
+            value: <Money report currencyCode={currencyCode} value={convert(movements.deposits)} tone="neutral" />,
             hint: "Dinheiro que entrou nesta conta de investimento, vindo do seu caixa, desde o início.",
           },
           {
             label: "Resgates",
             value: (
-              <Money currencyCode={currencyCode} value={convert(movements.withdrawals)} tone="neutral" />
+              <Money report currencyCode={currencyCode} value={convert(movements.withdrawals)} tone="neutral" />
             ),
             hint: "Dinheiro que saiu desta conta de investimento de volta para o seu caixa, desde o início.",
           },
@@ -189,6 +189,7 @@ export function InvestmentAccountCard({
             label: "Saldo para investir",
             value: (
               <Money
+                report
                 currencyCode={currencyCode}
                 value={summary?.cash_balance ?? account.cash_balance}
                 tone="neutral"

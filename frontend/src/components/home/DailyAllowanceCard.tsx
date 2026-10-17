@@ -1,8 +1,8 @@
-import { ApiError } from "../../api/problems";
 import { ReportValuation } from "../shared/ReportValuation";
 import { Skeleton } from "antd";
 import { useMemo } from "react";
 
+import { problemMessage, reportingError } from "../../presentation/reporting";
 import { useTimeline } from "../../hooks/useTimeline";
 import { useToday } from "../../hooks/useToday";
 import { dailyAllowance } from "../../presentation/dailyAllowance";
@@ -35,7 +35,7 @@ export function DailyAllowanceCard() {
   const base = timeline.base;
 
   // Not `timeline.error`: a failed background refetch keeps the last data, which is still the best answer.
-  if (!base) {
+  if (!base || reportingError(timeline.error)) {
     return (
       <Section title={title}>
         {timeline.isLoading && (
@@ -45,9 +45,7 @@ export function DailyAllowanceCard() {
         )}
         {!timeline.isLoading && (
           <UnavailableState onRetry={() => timeline.refetch()}>
-            {timeline.error instanceof ApiError
-              ? timeline.error.message
-              : "Não foi possível calcular o gasto diário disponível."}
+            {problemMessage(timeline.error) ?? "Não foi possível calcular o gasto diário disponível."}
           </UnavailableState>
         )}
       </Section>
@@ -56,13 +54,14 @@ export function DailyAllowanceCard() {
 
   return (
     <ReportValuation valuation={timeline.valuation}>
-      <Section title={title}>
-        <p className="daily-allowance-value">
-          <Money value={dailyAllowance(base.points)} tone="neutral" size="row" />
-          <span className="daily-allowance-unit"> / dia</span>
-        </p>
-        <p className="daily-allowance-note">Disponível para gastar até o fim do mês</p>
-      </Section>
+    <Section title={title}>
+      {base.balance_reporting?.status === "stale" && <p role="status">Saldo convertido com cotações desatualizadas.</p>}
+      <p className="daily-allowance-value">
+        <Money value={dailyAllowance(base.points)} tone="neutral" size="row" />
+        <span className="daily-allowance-unit"> / dia</span>
+      </p>
+      <p className="daily-allowance-note">Disponível para gastar até o fim do mês</p>
+    </Section>
     </ReportValuation>
   );
 }

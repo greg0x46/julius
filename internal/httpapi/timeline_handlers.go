@@ -7,10 +7,14 @@ import (
 	"time"
 
 	"github.com/greg0x46/julius/internal/money"
+	"github.com/greg0x46/julius/internal/reporting"
 	"github.com/greg0x46/julius/internal/timeline"
 )
 
-func timelineUnavailableProblem(w http.ResponseWriter) {
+func timelineUnavailableProblem(w http.ResponseWriter, err error) {
+	if writeReportingProblem(w, err) {
+		return
+	}
 	writeProblem(w, 503, "timeline-unavailable", "Linha do tempo temporariamente indisponível", "Tente novamente em instantes.")
 }
 
@@ -69,11 +73,14 @@ func timelineDayPointToDTO(p timeline.DayPoint) timelineDayPointDTO {
 }
 
 type timelineSeriesDTO struct {
-	Points          []timelineDayPointDTO `json:"points"`
-	Entries         []timelineEntryDTO    `json:"entries"`
-	StartingBalance string                `json:"starting_balance"`
-	LowestBalance   timelineDayPointDTO   `json:"lowest_balance"`
-	FirstNegative   *string               `json:"first_negative"`
+	Totals           []reporting.Totals    `json:"totals"`
+	Reporting        reporting.Summary     `json:"reporting"`
+	BalanceReporting reporting.Summary     `json:"balance_reporting"`
+	Points           []timelineDayPointDTO `json:"points"`
+	Entries          []timelineEntryDTO    `json:"entries"`
+	StartingBalance  string                `json:"starting_balance"`
+	LowestBalance    timelineDayPointDTO   `json:"lowest_balance"`
+	FirstNegative    *string               `json:"first_negative"`
 }
 
 func timelineSeriesToDTO(s timeline.Series) timelineSeriesDTO {
@@ -91,18 +98,23 @@ func timelineSeriesToDTO(s timeline.Series) timelineSeriesDTO {
 		firstNegative = &formatted
 	}
 	return timelineSeriesDTO{
-		Points:          points,
-		Entries:         entries,
-		StartingBalance: money.CanonicalDecimal(s.StartingBalance),
-		LowestBalance:   timelineDayPointToDTO(s.LowestBalance),
-		FirstNegative:   firstNegative,
+		Totals:           s.Totals,
+		Reporting:        s.Reporting,
+		BalanceReporting: s.BalanceReporting,
+		Points:           points,
+		Entries:          entries,
+		StartingBalance:  money.CanonicalDecimal(s.StartingBalance),
+		LowestBalance:    timelineDayPointToDTO(s.LowestBalance),
+		FirstNegative:    firstNegative,
 	}
 }
 
 type periodTotalsDTO struct {
-	Income  string `json:"income"`
-	Expense string `json:"expense"`
-	Result  string `json:"result"`
+	Totals    []reporting.Totals `json:"totals,omitempty"`
+	Reporting *reporting.Summary `json:"reporting,omitempty"`
+	Income    string             `json:"income"`
+	Expense   string             `json:"expense"`
+	Result    string             `json:"result"`
 }
 
 func periodTotalsToDTO(t timeline.PeriodTotals) periodTotalsDTO {
@@ -188,8 +200,16 @@ func handleGetTimeline(conn *sql.DB) http.HandlerFunc {
 			invalidTimelineProblem(w, "to não pode ser anterior a from.")
 			return
 		}
+		timezone := query.Get("timezone")
+		if timezone != "" {
+			if _, err := time.LoadLocation(timezone); err != nil {
+				invalidTimelineProblem(w, "timezone inválida.")
+				return
+			}
+		}
 		baseParams := timeline.BuildParams{
-			From: from, To: to, ReferenceDate: reference,
+			Timezone: timezone,
+			From:     from, To: to, ReferenceDate: reference,
 			AccountIDs:  splitCSV(query.Get("account_ids")),
 			CategoryIDs: splitCSV(query.Get("category_ids")),
 			CardNumbers: splitCSV(query.Get("card_numbers")),
@@ -198,7 +218,7 @@ func handleGetTimeline(conn *sql.DB) http.HandlerFunc {
 
 		series, err := timeline.BuildSeries(r.Context(), conn, baseParams)
 		if err != nil {
-			timelineUnavailableProblem(w)
+			timelineUnavailableProblem(w, err)
 			return
 		}
 
@@ -208,12 +228,14 @@ func handleGetTimeline(conn *sql.DB) http.HandlerFunc {
 			ScenarioImpacts: []scenarioImpactDTO{},
 		}
 
+		response.PeriodTotals.Reporting = &series.Reporting
+		response.PeriodTotals.Totals = series.Totals
 		if len(scenarioIDs) > 0 {
 			simulationParams := baseParams
 			simulationParams.ScenarioIDs = scenarioIDs
 			simulationSeries, err := timeline.BuildSeries(r.Context(), conn, simulationParams)
 			if err != nil {
-				timelineUnavailableProblem(w)
+				timelineUnavailableProblem(w, err)
 				return
 			}
 			simulationDTO := timelineSeriesToDTO(simulationSeries)
@@ -226,7 +248,7 @@ func handleGetTimeline(conn *sql.DB) http.HandlerFunc {
 			for _, scenarioID := range scenarioIDs {
 				impact, err := timeline.ScenarioImpact(r.Context(), conn, baseParams, series, scenarioID)
 				if err != nil {
-					timelineUnavailableProblem(w)
+					timelineUnavailableProblem(w, err)
 					return
 				}
 				response.ScenarioImpacts = append(response.ScenarioImpacts, scenarioImpactToDTO(impact))
@@ -240,6 +262,9 @@ func handleGetTimeline(conn *sql.DB) http.HandlerFunc {
 		response.valuationDTO = valuation
 		valuation.series(&response.Base)
 		valuation.fields(&response.PeriodTotals.Income, &response.PeriodTotals.Expense, &response.PeriodTotals.Result)
+		if response.PeriodTotals.Reporting != nil {
+			valuation.summary(response.PeriodTotals.Reporting)
+		}
 		if response.Simulation != nil {
 			valuation.series(response.Simulation)
 		}
@@ -261,9 +286,16 @@ type timelineRangeDTO struct {
 // ask for a decade of days to be safe.
 func handleGetTimelineDataRange(conn *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		dataRange, err := timeline.LoadDataRange(r.Context(), conn, time.Now().UTC())
+		timezone := r.URL.Query().Get("timezone")
+		if timezone != "" {
+			if _, err := time.LoadLocation(timezone); err != nil {
+				invalidTimelineProblem(w, "timezone inválida.")
+				return
+			}
+		}
+		dataRange, err := timeline.LoadDataRange(r.Context(), conn, time.Now().UTC(), timezone)
 		if err != nil {
-			timelineUnavailableProblem(w)
+			timelineUnavailableProblem(w, err)
 			return
 		}
 		writeJSON(w, http.StatusOK, timelineRangeDTO{

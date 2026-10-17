@@ -7,6 +7,7 @@ import (
 
 	"github.com/greg0x46/julius/internal/exchange"
 	"github.com/greg0x46/julius/internal/money"
+	"github.com/greg0x46/julius/internal/reporting"
 	"github.com/greg0x46/julius/internal/settings"
 	"github.com/shopspring/decimal"
 )
@@ -44,6 +45,8 @@ func (v valuationDTO) fields(fields ...*string) {
 }
 
 func (v valuationDTO) series(s *timelineSeriesDTO) {
+	v.summary(&s.Reporting)
+	v.summary(&s.BalanceReporting)
 	v.fields(&s.StartingBalance)
 	point := func(p *timelineDayPointDTO) { v.fields(&p.Balance, &p.Inflow, &p.Outflow) }
 	point(&s.LowestBalance)
@@ -59,14 +62,12 @@ func (v valuationDTO) breakdown(b *netWorthBreakdownDTO) {
 	v.fields(&b.CashBalance, &b.InvestmentBalance, &b.CreditCardBalance, &b.PayablesDebt, &b.TotalAssets, &b.TotalLiabilities, &b.NetWorth)
 }
 
-func (v valuationDTO) transactionTotals(totals []currencyTotalsDTO) currencyTotalsDTO {
-	result := currencyTotalsDTO{CurrencyCode: v.CurrencyCode, Inflow: "0", Outflow: "0", Balance: "0"}
-	for _, total := range totals {
-		if total.CurrencyCode == "BRL" {
-			result.Inflow, result.Outflow, result.Balance = total.Inflow, total.Outflow, total.Balance
-			break
-		}
+// summary re-expresses a BRL consolidated report summary in the reference currency.
+func (v valuationDTO) summary(s *reporting.Summary) {
+	s.CurrencyCode = v.CurrencyCode
+	if s.Totals == nil {
+		return
 	}
-	v.fields(&result.Inflow, &result.Outflow, &result.Balance)
-	return result
+	v.fields(&s.Totals.Inflow, &s.Totals.Outflow, &s.Totals.Balance)
+	s.Totals.CurrencyCode = v.CurrencyCode
 }

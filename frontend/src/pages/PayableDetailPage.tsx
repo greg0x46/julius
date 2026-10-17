@@ -38,7 +38,7 @@ function ValidPayableDetail({ id, kind }: { id: string; kind: PayableKind }) {
   const confirm = useConfirm();
   const vocab = payableVocabulary[kind];
 
-  const submitEdit = async (write: { name: string; total_amount: number }) => {
+  const submitEdit = async (write: { name: string; total_amount: string }) => {
     setSaveError(null);
     try {
       await payables.updatePayable({

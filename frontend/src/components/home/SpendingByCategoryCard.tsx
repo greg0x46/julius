@@ -1,10 +1,11 @@
-import { ApiError } from "../../api/problems";
-import { ReportValuation } from "../shared/ReportValuation";
 import { Skeleton } from "antd";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 
+import { ReportValuation } from "../shared/ReportValuation";
+import { ReportingDetails } from "../shared/ReportingDetails";
+import { reportingLabel } from "../../presentation/reporting";
 import type { CategoryBreakdown, CategoryDirection, CategorySpendingItem } from "../../api/contracts";
 import { useCategoryBreakdown } from "../../hooks/useCategoryBreakdown";
 import type { Period } from "../../hooks/usePeriod";
@@ -98,20 +99,12 @@ function CategorySkeleton() {
   );
 }
 
-function Breakdown({
-  data,
-  period,
-  direction,
-}: {
-  data: CategoryBreakdown;
-  period: Period;
-  direction: CategoryDirection;
-}) {
-  const format = (value: string) => formatReportMoney(value, data.currency_code);
+function Breakdown({ data, period, direction }: { data: CategoryBreakdown; period: Period; direction: CategoryDirection }) {
   const [active, setActive] = useState<string | null>(null);
   const navigate = useNavigate();
   const total = Number(data.total);
   const label = direction === "outflow" ? "saídas" : "entradas";
+  const format = (value: string) => formatReportMoney(value, data.currency_code);
   const slices = toSlices(data.items);
   const linkFor = (slice: Slice) => transactionLink(period, direction, slice.item);
 
@@ -129,8 +122,8 @@ function Breakdown({
       <div className="category-donut">
         <div className="category-donut-total">
           <span>Total de {label}</span>
-          <strong title={format(data.total)} style={{ fontSize: donutFigureSize(format(data.total)) }}>
-            {format(data.total)}
+          <strong title={format(data.total ?? "0")} style={{ fontSize: donutFigureSize(format(data.total ?? "0")) }}>
+            {format(data.total ?? "0")}
           </strong>
         </div>
         <ResponsiveContainer width="100%" height={200}>
@@ -225,18 +218,11 @@ export function SpendingByCategoryCard({ period }: { period: Period }) {
         {isLoading ? (
           <CategorySkeleton />
         ) : error || !data ? (
-          <UnavailableState onRetry={() => void refetch()}>
-            {error instanceof ApiError ? error.message : "Não foi possível carregar as categorias."}
-          </UnavailableState>
+          <UnavailableState onRetry={() => void refetch()}>Não foi possível carregar as categorias.</UnavailableState>
+        ) : data.total === null ? (
+          <div role="status"><p>{data.reporting ? reportingLabel(data.reporting) : "Total indisponível"}</p><ReportingDetails report={data.reporting} totals={data.totals} /></div>
         ) : (
-          <ReportValuation valuation={data}>
-            <Breakdown
-              key={`${period.from}-${period.to}-${direction}`}
-              data={data}
-              period={period}
-              direction={direction}
-            />
-          </ReportValuation>
+          <ReportValuation valuation={data}><ReportingDetails report={data.reporting} totals={data.totals} /><Breakdown key={`${period.from}-${period.to}-${direction}`} data={data} period={period} direction={direction} /></ReportValuation>
         )}
       </div>
     </Section>

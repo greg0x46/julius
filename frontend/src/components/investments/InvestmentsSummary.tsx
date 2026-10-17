@@ -29,11 +29,11 @@ export function InvestmentsSummary({
     <ReportValuation valuation={valuation ?? {}}>
       <SummaryStrip
         label="Aplicado nos sincronizados"
-        value={<Money currencyCode={currencyCode} value={convert(balanceTotal)} tone="balance" size="hero" />}
+        value={<Money report currencyCode={currencyCode} value={convert(balanceTotal)} tone="balance" size="hero" />}
         items={[
           {
             label: "Rendimento acumulado",
-            value: <Money currencyCode={currencyCode} value={convert(yieldTotal)} tone="result" />,
+            value: <Money report currencyCode={currencyCode} value={convert(yieldTotal)} tone="result" />,
           },
           ...(missing > 0 ? [{ label: "Sem dado de rendimento", value: String(missing) }] : []),
         ]}

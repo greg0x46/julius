@@ -1,3 +1,4 @@
+import { reportingLabel, reportingTotals } from "../../presentation/reporting";
 import type { TransactionGroup as Group } from "../../api/contracts";
 import { Money } from "../shared/Money";
 
@@ -27,8 +28,7 @@ function groupLabel(group: Group): string {
  * but still the first thing to find when skimming down a long list.
  */
 export function TransactionGroupHeader({ group }: { group: Group }) {
-  const total = group.report_totals ?? group.totals.find((total) => total.currency_code === "BRL");
-  const balance = total?.balance ?? "0";
+  const total = reportingTotals(group.reporting, group.totals);
   const split = group.has_items_before || group.has_items_after;
   return (
     <header className="transaction-group-header">
@@ -40,7 +40,7 @@ export function TransactionGroupHeader({ group }: { group: Group }) {
         <div>
           <dt>Resultado</dt>
           <dd>
-            <Money value={balance} currencyCode={total?.currency_code ?? "BRL"} tone="result" />
+            {total ? <Money value={total.balance} currencyCode={total.currency_code} report tone="result" /> : <span>{group.reporting ? reportingLabel(group.reporting) : "Total indisponível"}</span>}
           </dd>
         </div>
       </dl>

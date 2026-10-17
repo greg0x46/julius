@@ -2233,5 +2233,3 @@ ALTER TABLE ONLY public.transaction_inclusion_events
 --
 -- PostgreSQL database dump complete
 --
-
-

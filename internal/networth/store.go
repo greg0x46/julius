@@ -29,12 +29,12 @@ const dateLayout = "2006-01-02"
 
 func formatDate(t time.Time) string { return t.UTC().Format(dateLayout) }
 
-// cashBalance is the asset side's cash figure: the same
-// transactions.CashOnHand the timeline anchors on, so the two views can
-// never disagree. Credit card accounts are excluded there — their balance
-// is owed debt, handled by creditCardBalance below.
+// cashBalance is the asset side's cash figure: BRL cash from
+// transactions.CashOnHandIn; other currencies are not converted into it.
+// Credit card accounts are excluded there — their balance is owed debt,
+// handled by creditCardBalance below.
 func cashBalance(ctx context.Context, q Querier) (decimal.Decimal, error) {
-	return transactions.CashOnHand(ctx, q, nil)
+	return transactions.CashOnHandIn(ctx, q, nil, money.BRL)
 }
 
 // creditCardBalance is what's currently owed across every credit card,

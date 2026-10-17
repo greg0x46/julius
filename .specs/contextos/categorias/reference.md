@@ -60,3 +60,7 @@ follows the same order (learned → rules).
 Category report values use the financial reference currency (default BRL),
 with current FX and its provenance. Catalog and transaction category decisions
 are unchanged; see [Transactions — Consolidated report valuation](../transacoes/reference.md#consolidated-report-valuation).
+
+Category report values use the financial reference currency (default BRL),
+with current FX and its provenance. Catalog and transaction category decisions
+are unchanged; see [Transactions — Consolidated report valuation](../transacoes/reference.md#consolidated-report-valuation).

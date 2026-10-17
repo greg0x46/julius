@@ -108,7 +108,7 @@ export function InvestmentGoalCard({
         figures={[
           {
             label: "Valor atual",
-            value: <Money currencyCode={currencyCode} value={currentValue} tone="balance" />,
+            value: <Money report currencyCode={currencyCode} value={currentValue} tone="balance" />,
           },
           {
             label: "Rendimento líquido",
@@ -123,18 +123,18 @@ export function InvestmentGoalCard({
           },
           {
             label: "IR/Taxas",
-            value: <Money currencyCode={currencyCode} value={convert(cost)} tone="neutral" />,
+            value: <Money report currencyCode={currencyCode} value={convert(cost)} tone="neutral" />,
             hint: "Taxas e impostos das movimentações, mais IR e IOF informados pela instituição.",
           },
           {
             label: "Compras e saldo inicial",
-            value: <Money currencyCode={currencyCode} value={convert(movements.deposits)} tone="neutral" />,
+            value: <Money report currencyCode={currencyCode} value={convert(movements.deposits)} tone="neutral" />,
             hint: "Compras e saldos iniciais registrados nas posições deste objetivo.",
           },
           {
             label: "Vendas",
             value: (
-              <Money currencyCode={currencyCode} value={convert(movements.withdrawals)} tone="neutral" />
+              <Money report currencyCode={currencyCode} value={convert(movements.withdrawals)} tone="neutral" />
             ),
             hint: "Vendas registradas nas posições deste objetivo.",
           },
@@ -144,7 +144,7 @@ export function InvestmentGoalCard({
       {target !== null && (
         <div className="investment-goal">
           <span>
-            Meta de <Money currencyCode={currencyCode} value={target} tone="neutral" />
+            Meta de <Money report currencyCode={currencyCode} value={target} tone="neutral" />
           </span>
           {progress !== null && <Progress percent={Math.min(100, Math.round(Number(progress) * 100))} />}
         </div>

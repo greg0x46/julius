@@ -37,7 +37,12 @@ function response(balances: string | string[], startingBalance = "5000.00"): Tim
   } as unknown as TimelineResponse;
 }
 
-const params = { referenceDate: "2026-10-22", from: "2026-10-22", to: "2026-10-31" };
+const params = {
+  referenceDate: "2026-10-22",
+  from: "2026-10-22",
+  to: "2026-10-31",
+  timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+};
 
 function renderCard() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });

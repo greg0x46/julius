@@ -37,7 +37,7 @@ export function InvestmentWorkspaceSummary({
       <SummaryStrip
         label="Valor atual"
         value={
-          <Money currencyCode={currencyCode} value={summary?.total_value ?? "0"} tone="balance" size="hero" />
+          <Money report currencyCode={currencyCode} value={summary?.total_value ?? "0"} tone="balance" size="hero" />
         }
         items={[
           {
@@ -52,25 +52,25 @@ export function InvestmentWorkspaceSummary({
           },
           {
             label: "Aportes desde o início",
-            value: <Money currencyCode={currencyCode} value={convert(movements.deposits)} tone="neutral" />,
+            value: <Money report currencyCode={currencyCode} value={convert(movements.deposits)} tone="neutral" />,
           },
           {
             label: "Resgates desde o início",
             value: (
-              <Money currencyCode={currencyCode} value={convert(movements.withdrawals)} tone="neutral" />
+              <Money report currencyCode={currencyCode} value={convert(movements.withdrawals)} tone="neutral" />
             ),
           },
           {
             label: "IR/Taxas",
-            value: <Money currencyCode={currencyCode} value={convert(cost)} tone="neutral" />,
+            value: <Money report currencyCode={currencyCode} value={convert(cost)} tone="neutral" />,
           },
           {
             label: "Saldo para investir",
-            value: <Money currencyCode={currencyCode} value={summary?.cash_balance ?? "0"} tone="neutral" />,
+            value: <Money report currencyCode={currencyCode} value={summary?.cash_balance ?? "0"} tone="neutral" />,
           },
           {
             label: "Informado pela instituição",
-            value: <Money currencyCode={currencyCode} value={summary?.synced_value ?? "0"} tone="neutral" />,
+            value: <Money report currencyCode={currencyCode} value={summary?.synced_value ?? "0"} tone="neutral" />,
           },
         ]}
         note="Rendimento líquido: soma das posições com rendimento conhecido, já descontados IR, IOF e taxas. IR/Taxas: taxas e impostos das movimentações, mais o IR e o IOF informados pela instituição. Saldo para investir: já saiu da conta corrente e ainda não virou posição. Informado pela instituição: parte do total que vem da integração."

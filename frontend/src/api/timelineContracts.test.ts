@@ -67,3 +67,24 @@ describe("timeline contracts", () => {
     expect(() => parseTimelineResponse(payload)).toThrow();
   });
 });
+
+it("preserves balance conversion coverage separately from period reporting", () => {
+  const balanceReporting = { currency_code: "BRL", status: "stale", eligible: 1, converted: 1, missing: 0, stale: 1, totals: { currency_code: "BRL", inflow: "500", outflow: "0", balance: "500" } };
+  const parsed = parseTimelineResponse({ ...validResponse, base: { ...validResponse.base, balance_reporting: balanceReporting } });
+  expect(parsed.base.balance_reporting).toEqual(balanceReporting);
+  expect(parsed.period_totals.reporting).toBeUndefined();
+});
+
+it("sends the reporting timezone to the timeline API", async () => {
+  const { getTimeline } = await import("./timeline");
+  const { vi } = await import("vitest");
+  const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(validResponse), { headers: { "Content-Type": "application/json" } }));
+  vi.stubGlobal("fetch", fetchMock);
+  try {
+    await getTimeline({ referenceDate: "2026-08-15", from: "2026-08-01", to: "2026-08-31", timezone: "America/Sao_Paulo" });
+    const query = new URL(fetchMock.mock.calls[0][0], "http://localhost").searchParams;
+    expect(query.get("timezone")).toBe("America/Sao_Paulo");
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});

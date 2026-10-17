@@ -57,7 +57,7 @@ export function InvestmentYieldValue({
   const { color } = moneyTone(gain, "result");
   return (
     <span className="investment-yield">
-      <Money currencyCode={currencyCode} value={gain} tone="result" />
+      <Money report={currencyCode !== undefined} currencyCode={currencyCode} value={gain} tone="result" />
       {percent !== null && (
         <span className={`investment-yield-percent money-${color}`}>{formatPercent(percent)}</span>
       )}

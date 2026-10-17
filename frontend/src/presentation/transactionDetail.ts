@@ -1,16 +1,17 @@
+import { isPositiveDecimal } from "./decimal";
 import type { Category, TransactionItem } from "../api/contracts";
 import type { RecurringCommitmentDraft } from "../components/recurringCommitments/RecurringCommitmentForm";
 import { isZeroDecimal } from "./decimal";
 import { categoryKindLabel } from "./categoryLabels";
-import { formatBRL, formatSignedBRL } from "./money";
+import { formatBRL, formatSignedMoney } from "./money";
 
 /** Pure derivations the transaction panel's screens share. */
 
 export function detailValue(item: TransactionItem): string {
-  if (!item.effective_money || item.effective_money.currency_code !== "BRL") {
-    return "Valor indisponível em reais";
+  if (!item.effective_money) {
+    return "Valor indisponível";
   }
-  return formatSignedBRL(item.effective_money.value, item.classification);
+  return formatSignedMoney(item.effective_money.value, item.classification, item.effective_money.currency_code);
 }
 
 /**
@@ -67,8 +68,8 @@ export function recurringCommitmentPrefill(item: TransactionItem): Partial<Recur
   if (!item.effective_money || item.effective_money.currency_code !== "BRL" || !item.occurred_at) {
     return null;
   }
-  const amount = Math.abs(Number(item.effective_money.value));
-  if (!Number.isFinite(amount) || amount <= 0) return null;
+  const amount = item.effective_money.value.replace(/^-/, "");
+  if (!isPositiveDecimal(amount)) return null;
   return {
     name: item.description ?? "",
     kind: item.classification === "inflow" ? "income" : "expense",

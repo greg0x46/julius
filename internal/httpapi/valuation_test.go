@@ -11,6 +11,7 @@ import (
 
 	"github.com/greg0x46/julius/internal/db"
 	"github.com/greg0x46/julius/internal/exchange"
+	"github.com/greg0x46/julius/internal/reporting"
 	"github.com/shopspring/decimal"
 )
 
@@ -40,20 +41,17 @@ func TestReferenceValuationRequiresFX(t *testing.T) {
 	}
 }
 
-func TestTransactionReferenceTotalsPreserveNativeAndExcludeForeign(t *testing.T) {
-	native := []currencyTotalsDTO{
-		{CurrencyCode: "USD", Inflow: "100", Outflow: "5", Balance: "95"},
-		{CurrencyCode: "BRL", Inflow: "150", Outflow: "50", Balance: "100"},
-	}
+func TestReferenceSummaryConvertsConsolidatedTotalsOnly(t *testing.T) {
+	summary := reporting.Summary{CurrencyCode: "BRL", Status: "complete", Totals: &reporting.Totals{CurrencyCode: "BRL", Inflow: "150", Outflow: "50", Balance: "100"}}
 	valuation := valuationDTO{CurrencyCode: "USD", FX: exchange.Rate{Value: decimal.RequireFromString("0.2")}}
-	got := valuation.transactionTotals(native)
-	if got.CurrencyCode != "USD" || !decimal.RequireFromString(got.Inflow).Equal(decimal.NewFromInt(30)) || !decimal.RequireFromString(got.Outflow).Equal(decimal.NewFromInt(10)) || !decimal.RequireFromString(got.Balance).Equal(decimal.NewFromInt(20)) {
-		t.Fatalf("reference totals = %+v", got)
+	valuation.summary(&summary)
+	totals := summary.Totals
+	if summary.CurrencyCode != "USD" || totals.CurrencyCode != "USD" || !decimal.RequireFromString(totals.Inflow).Equal(decimal.NewFromInt(30)) || !decimal.RequireFromString(totals.Outflow).Equal(decimal.NewFromInt(10)) || !decimal.RequireFromString(totals.Balance).Equal(decimal.NewFromInt(20)) {
+		t.Fatalf("reference summary = %+v %+v", summary, totals)
 	}
-	if native[0].Balance != "95" || native[1].Balance != "100" {
-		t.Fatalf("native totals changed: %+v", native)
-	}
-	if got := valuation.transactionTotals(native[:1]); !decimal.RequireFromString(got.Balance).IsZero() || !decimal.RequireFromString(got.Inflow).IsZero() || !decimal.RequireFromString(got.Outflow).IsZero() {
-		t.Fatalf("foreign totals entered BRL-base report: %+v", got)
+	unavailable := reporting.Summary{CurrencyCode: "BRL", Status: "unavailable"}
+	valuation.summary(&unavailable)
+	if unavailable.Totals != nil || unavailable.CurrencyCode != "USD" {
+		t.Fatalf("unavailable summary gained totals: %+v", unavailable)
 	}
 }

@@ -16,6 +16,7 @@ import { periodPresets } from "../components/filters/periodPresets";
 import { DataCard, EmptyState, GroupBySelect, Page, PageAction } from "../components/layout";
 import { useFeedback } from "../components/shared/useFeedback";
 import { useRowLayout } from "../components/transactions/rowLayout";
+import { ManualTransferForm } from "../components/transactions/ManualTransferForm";
 import { ManualTransactionForm } from "../components/transactions/ManualTransactionForm";
 import { TransactionPanel } from "../components/transactions/TransactionPanel";
 import { TransactionFilters as TransactionFilterBar } from "../components/transactions/TransactionFilters";
@@ -134,6 +135,7 @@ export function TransactionsPage() {
   });
   const { manualTransaction } = writes;
   const [manualFormOpen, setManualFormOpen] = useState(false);
+  const [transferFormOpen, setTransferFormOpen] = useState(false);
   const [manualSaveError, setManualSaveError] = useState<string | null>(null);
 
   const openManualCreate = () => {
@@ -215,7 +217,7 @@ export function TransactionsPage() {
     ? Math.min(data.page.number * data.page.size, data.page.total_items)
     : 0;
 
-  const createAction = <PageAction label="Nova transação" shortLabel="Nova" onClick={openManualCreate} />;
+  const createAction = <><PageAction label="Nova transação" shortLabel="Nova" onClick={openManualCreate} /><Button onClick={() => setTransferFormOpen(true)}>Nova transferência</Button></>;
 
   return (
     <Page
@@ -279,9 +281,9 @@ export function TransactionsPage() {
         summary={
           data ? (
             <TransactionSummaryBar
+              reporting={data.reporting}
               totalItems={data.page.total_items}
               totals={data.page.total_items === 0 ? [] : data.totals}
-              reportTotals={data.report_totals}
               busy={query.isFetching}
             />
           ) : query.isPending && query.timezoneValid ? (
@@ -407,6 +409,7 @@ export function TransactionsPage() {
         onClose={dismissPanel}
         {...writes.panelProps(selected)}
       />
+      {transferFormOpen && <ManualTransferForm onClose={() => setTransferFormOpen(false)} onCreated={() => { setTransferFormOpen(false); feedback.success("Transferência criada"); }} />}
       <ManualTransactionForm
         open={manualFormOpen}
         accounts={accounts.accounts}

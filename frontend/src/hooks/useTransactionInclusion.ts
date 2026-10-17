@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import type { TransactionInclusionResult, TransactionInclusionState } from "../api/contracts";
 import { setTransactionInclusion } from "../api/transactions";
 import type { TransactionWriteCallbacks } from "./useTransactionCategory";
-import { markTransactionsStale, queryKeys } from "../api/queryKeys";
+import { markTransactionInclusionViewsStale, queryKeys } from "../api/queryKeys";
 
 export interface InclusionTarget {
   transactionId: string;
@@ -27,12 +27,13 @@ export function useTransactionInclusion({ onSaved, onFailed }: TransactionWriteC
   const refresh = async (state?: TransactionInclusionState) => {
     setRefreshError(null);
     try {
-      await queryClient.refetchQueries(
-        {
-          queryKey: queryKeys.transactions,
-          type: "active",
-        },
-        { throwOnError: true },
+      await Promise.all(
+        [queryKeys.transactions, queryKeys.transactionTransfers].map((queryKey) =>
+          queryClient.refetchQueries(
+            { queryKey, type: "active" },
+            { throwOnError: true },
+          ),
+        ),
       );
       setAnnouncement(
         state === "ignored"
@@ -60,7 +61,7 @@ export function useTransactionInclusion({ onSaved, onFailed }: TransactionWriteC
     },
     onSuccess: async (confirmation, target) => {
       onSaved?.(target, confirmation);
-      await markTransactionsStale(queryClient);
+      await markTransactionInclusionViewsStale(queryClient);
       await refresh(confirmation.state);
     },
     onError: (error, target) => {

@@ -62,13 +62,13 @@ func TestReferenceCurrencyValuesReportsWithoutChangingRecords(t *testing.T) {
 		if query["currency_code"] != code || query["fx"].(map[string]any)["source"] == "" {
 			t.Fatalf("query valuation = %+v", query)
 		}
-		report := query["report_totals"].(map[string]any)
+		report := query["reporting"].(map[string]any)["totals"].(map[string]any)
 		if report["currency_code"] != code {
 			t.Fatalf("query report currency = %+v", report)
 		}
 		assertMoney(t, "query expense", report["outflow"], expense)
 		assertMoney(t, "native query expense", query["totals"].([]any)[0].(map[string]any)["outflow"], "50")
-		assertMoney(t, "group expense", query["groups"].([]any)[0].(map[string]any)["report_totals"].(map[string]any)["outflow"], expense)
+		assertMoney(t, "group expense", query["groups"].([]any)[0].(map[string]any)["reporting"].(map[string]any)["totals"].(map[string]any)["outflow"], expense)
 		item := query["items"].([]any)[0].(map[string]any)
 		assertMoney(t, "native transaction", item["amount"], "-50")
 		assertMoney(t, "native effective money", item["effective_money"].(map[string]any)["value"], "-50")

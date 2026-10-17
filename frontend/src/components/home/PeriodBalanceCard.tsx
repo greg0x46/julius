@@ -1,9 +1,10 @@
-import { ApiError } from "../../api/problems";
 import { ReportValuation } from "../shared/ReportValuation";
 import dayjs from "dayjs";
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
 
+import { ReportingDetails } from "../shared/ReportingDetails";
+import { problemMessage, reportingError } from "../../presentation/reporting";
 import type { Period } from "../../hooks/usePeriod";
 import { useHomePeriodBounds } from "../../hooks/useHomePeriodBounds";
 import { useTimeline } from "../../hooks/useTimeline";
@@ -21,11 +22,7 @@ const dateFormat = "YYYY-MM-DD";
 // something happened).
 function FlowFigure({ value, direction }: { value: string; direction: "inflow" | "outflow" }) {
   const zero = /^-?0*(\.0*)?$/.test(value);
-  return zero ? (
-    <Money value={value} tone="neutral" />
-  ) : (
-    <Money value={value} tone="flow" direction={direction} />
-  );
+  return zero ? <Money value={value} tone="neutral" /> : <Money value={value} tone="flow" direction={direction} />;
 }
 
 /**
@@ -84,7 +81,8 @@ export function PeriodBalanceCard({ period }: { period: Period }) {
               if (timeline.error) timeline.refetch();
             }}
           >
-            {error instanceof ApiError ? error.message : "Não foi possível carregar o resultado do período."}
+            {problemMessage(timeline.error) ?? "Não foi possível carregar o resultado do período."}
+            <ReportingDetails report={reportingError(timeline.error)?.problem?.reporting} totals={reportingError(timeline.error)?.problem?.totals} />
           </UnavailableState>
         )}
       </Section>
@@ -126,6 +124,7 @@ export function PeriodBalanceCard({ period }: { period: Period }) {
           },
         ]}
       />
+      <ReportingDetails report={totals?.reporting} totals={totals?.totals} />
     </ReportValuation>
   );
 }

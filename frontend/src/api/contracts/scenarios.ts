@@ -56,14 +56,14 @@ export interface ScenarioCreate {
 
 export interface ScenarioTransactionWrite {
   description: string;
-  amount: number;
+  amount: string;
   projected_at: string;
   category?: string | null;
 }
 
 export interface RealizationWrite {
   payable_link_id: string;
-  allocated_amount: number;
+  allocated_amount: string;
 }
 
 export const cadences = ["mensal", "semanal", "quinzenal"] as const;
@@ -73,7 +73,7 @@ export type Cadence = (typeof cadences)[number];
 export interface GenerateInstallmentsWrite {
   cadence: Cadence;
   months?: number;
-  installment_amount?: number;
+  installment_amount?: string;
   start_date?: string;
 }
 
