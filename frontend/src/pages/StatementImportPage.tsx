@@ -156,7 +156,7 @@ export function StatementImportPage() {
               {targetKind === "new" && preview.counts.new === 0 && <Alert type="info" showIcon message="Não há transações válidas para criar esta conta." />}
               {preview.counts.new === 0 && preview.counts.duplicate > 0 && ambiguousRows.length === 0 &&
                 <Alert type="info" showIcon message="Este extrato já foi importado nesta conta. Nenhuma transação nova será criada." />}
-              {ambiguousRows.length > 0 && <Alert type="warning" showIcon message="Revise as movimentações iguais às de outro arquivo e escolha importar ou ignorar cada uma." />}
+              {ambiguousRows.length > 0 && <Alert type="warning" showIcon message="Há movimentações com saldos diferentes. Compare os valores e escolha o que fazer em cada linha." />}
               {preview.warnings.map((warning, index) => <Alert key={index} type="warning" showIcon message={warning} />)}
               {preview.counts.invalid > 0 && <Alert type="warning" showIcon
                 message={`${preview.counts.invalid} linha(s) inválida(s). Corrija o arquivo ou escolha importar apenas as válidas.`} />}
@@ -164,7 +164,7 @@ export function StatementImportPage() {
                 Importar somente as linhas válidas; as inválidas serão ignoradas
               </Checkbox>}
             </div>
-            <StatementPreviewRows rows={preview.rows} ambiguousDecisions={ambiguousDecisions}
+            <StatementPreviewRows rows={preview.rows} conflicts={preview.conflicts} filename={preview.filename} ambiguousDecisions={ambiguousDecisions}
               onAmbiguousDecision={(line, decision) => setAmbiguousDecisions((current) => ({ ...current, [line]: decision }))} />
           </Section>
         )}

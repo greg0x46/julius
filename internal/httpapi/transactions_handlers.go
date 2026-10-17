@@ -785,6 +785,8 @@ func transactionNotFoundProblem(w http.ResponseWriter) {
 // category, which is a server-side 503, not a 422 about input the client never sent.
 func writeManualTransactionError(w http.ResponseWriter, err error, explicitCategory bool, investmentLinkedDetail, notManualDetail string) {
 	switch {
+	case errors.Is(err, transactions.ErrTransferLinked):
+		writeProblem(w, 409, "transfer-linked-transaction", "Lançamento vinculado a transferência", "Desvincule a transferência antes de editar o lançamento.")
 	case errors.Is(err, transactions.ErrInvestmentLinked):
 		writeProblem(w, 409, "investment-linked-transaction", "Lançamento vinculado a investimento", investmentLinkedDetail)
 	case errors.Is(err, transactions.ErrTransactionNotFound):

@@ -912,3 +912,23 @@ rules above. The whole copy, row equality validation and schema activation are
 atomic. Original tables and history remain in a separate backup schema; no
 source migration version is copied into the generation 1 runner. Concurrent
 starts serialize and incomplete or unmapped schemas fail without activation.
+
+## Tables introduced after legacy cutover
+
+These tables start empty during legacy conversion and are created by native
+migration `0002_transfer_links`; they are absent from the historical snapshots.
+
+### `transfer_links`
+
+| Column | SQLite | Postgres | Classification | Meaning |
+|---|---|---|---|---|
+| `id` | TEXT | UUID | identity | Owner's transfer annotation |
+| `created_at` | TEXT | TIMESTAMPTZ | instant | Link creation time |
+
+### `transfer_transaction_links`
+
+| Column | SQLite | Postgres | Classification | Meaning |
+|---|---|---|---|---|
+| `transaction_id` | TEXT | UUID | identity | Unique existing account movement |
+| `transfer_id` | TEXT | UUID | identity | Transfer annotation |
+| `role` | TEXT | TEXT | label | Source, destination or explicit fee; unique per transfer |

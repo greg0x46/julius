@@ -4,6 +4,33 @@ Notable changes per release. A section is added by `scripts/update-changelog.sh`
 only when a release is prepared, and the release job publishes that same text as
 the GitHub release notes. Newest release first.
 
+## v0.9.0 — 2026-10-17
+
+### Features
+
+- **investments:** Expose gross monthly capital movements over HTTP
+- **investments:** Pick or create the catalog asset inside the position form
+- **investments:** Automatically seed the starter asset catalog ([#118](https://github.com/greg0x46/julius/pull/118))
+- **transfers:** Link cross-currency account movements and explicit FX fees ([#119](https://github.com/greg0x46/julius/pull/119))
+- **investments:** Report realized gain on sales in the monthly movements
+- **investments:** Refuse manual holdings in a currency other than reais
+
+### Fixes
+
+- **money:** Keep cash balances separated by currency
+- **money:** Restrict BRL cash walks and validate ISO 4217 codes
+- **money:** Exclude foreign-currency accounts from BRL cash walks
+- **investments:** Exclude reconciliation pivots from monthly flows
+- **investments:** Preserve position draft across account refreshes
+- **investments:** Match backend asset identity when detecting duplicates
+- **money:** Preserve decimal precision at application boundaries ([#113](https://github.com/greg0x46/julius/pull/113))
+- **investments:** Read monthly movements through the typed-column decoders
+- **statement-imports:** Deduplicate files and show balance conflicts ([#122](https://github.com/greg0x46/julius/pull/122))
+
+### Performance
+
+- **frontend:** Profile and reduce expensive frontend test overhead ([#121](https://github.com/greg0x46/julius/pull/121))
+
 ## v0.8.0 — 2026-10-13
 
 ### Features

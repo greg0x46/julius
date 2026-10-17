@@ -1,3 +1,4 @@
+import { isPositiveDecimal } from "../../presentation/decimal";
 import { CloseOutlined } from "@ant-design/icons";
 import { Alert, Button, DatePicker, Drawer, Input, Select, Skeleton, Switch } from "antd";
 import type { ProColumns } from "@ant-design/pro-table";
@@ -56,7 +57,7 @@ function NewTransactionForm({
   const id = useId();
   const [description, setDescription] = useState("");
   const [kind, setKind] = useState<"income" | "expense">("expense");
-  const [amount, setAmount] = useState<number | null>(null);
+  const [amount, setAmount] = useState<string | null>(null);
   const [projectedAt, setProjectedAt] = useState<Dayjs>(dayjs());
   const [error, setError] = useState<string | null>(null);
   // `submitting` arrives a render late: a second Enter in the same tick would
@@ -69,7 +70,7 @@ function NewTransactionForm({
       setError("Informe uma descrição.");
       return;
     }
-    if (amount === null || amount <= 0) {
+    if (amount === null || !isPositiveDecimal(amount)) {
       setError("Informe um valor maior que zero.");
       return;
     }
@@ -78,7 +79,7 @@ function NewTransactionForm({
     try {
       const saved = await onAdd({
         description: description.trim(),
-        amount: kind === "expense" ? -amount : amount,
+        amount: kind === "expense" ? `-${amount}` : amount,
         projected_at: projectedAt.format(dateFormat),
       });
       if (saved) {
@@ -134,7 +135,7 @@ function NewTransactionForm({
           />
         </FormField>
         <FormField label="Valor" htmlFor={`${id}-amount`}>
-          <MoneyInput id={`${id}-amount`} min={0.01} value={amount} onChange={setAmount} />
+          <MoneyInput id={`${id}-amount`} min="0" value={amount} onChange={setAmount} />
         </FormField>
         <FormField label="Data prevista" htmlFor={`${id}-date`}>
           <DatePicker

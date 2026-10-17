@@ -91,6 +91,7 @@ describe("useAutomationRules", () => {
 
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["automationRules"] });
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["transactions"] });
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["transaction-transfer"] });
   });
 
   it("updates a rule and invalidates the list", async () => {

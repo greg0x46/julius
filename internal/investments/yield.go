@@ -273,18 +273,17 @@ func loadSyncedSeries(ctx context.Context, q Querier, cache *YieldCache, id stri
 	defer rows.Close()
 	soldQty, boughtQty := decimal.Zero, decimal.Zero
 	for rows.Next() {
-		var direction, quantityRaw, amountRaw, occurredRaw, tradeRaw sql.NullString
-		if err := rows.Scan(&direction, dbtypes.Decimal(&quantityRaw), dbtypes.Decimal(&amountRaw), dbtypes.Time(&occurredRaw), dbtypes.Time(&tradeRaw)); err != nil {
+		var direction, quantityRaw, amountRaw, occurredRaw sql.NullString
+		var tradeDate *time.Time
+		if err := rows.Scan(&direction, dbtypes.Decimal(&quantityRaw), dbtypes.Decimal(&amountRaw), dbtypes.Time(&occurredRaw), dbtypes.Date(&tradeDate)); err != nil {
 			return nil, err
 		}
 		s.movements++
 		inflow := direction.String == "inflow"
 		amount, amountErr := decimal.NewFromString(amountRaw.String)
-		when, err := dbtypes.ParseNullTime(tradeRaw)
-		if err != nil {
-			return nil, err
-		}
+		when := tradeDate
 		if when == nil {
+			var err error
 			if when, err = dbtypes.ParseNullTime(occurredRaw); err != nil {
 				return nil, err
 			}

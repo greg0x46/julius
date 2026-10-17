@@ -43,3 +43,9 @@ scenarios.
 `/cenarios` — "Simule decisões hipotéticas" (standalone scenarios). The payment
 plan of a specific debt/receivable is embedded in `/pendencias/:id` (see
 Payables).
+
+## Monetary precision
+
+Equal installment generation floors the exact quotient to BRL cents; the last
+installment keeps the full remainder, including fractional cents. It does not
+round division before flooring ([policy](../../precisao-monetaria.md)).

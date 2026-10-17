@@ -59,8 +59,8 @@ func (f *fixture) exec(query string, args ...any) {
 }
 
 // account is the input to addAccount; zero-value optional fields stay NULL.
-// A nil AccountType is the "provider never told us" case CashOnHand has to
-// treat as non-credit.
+// A nil AccountType is the "provider never told us" case CashOnHandByCurrency
+// has to treat as non-credit.
 type account struct {
 	Name         *string
 	Institution  *string
