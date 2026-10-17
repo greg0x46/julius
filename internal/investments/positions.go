@@ -380,6 +380,9 @@ func CreatePosition(ctx context.Context, conn *sql.DB, in PositionInput) (Positi
 	if err != nil {
 		return Position{}, err
 	}
+	if err := requireBRLAsset(asset.CurrencyCode); err != nil {
+		return Position{}, err
+	}
 	var alreadyExists bool
 	if err := tx.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM investment_positions WHERE account_id = ? AND asset_id = ?)`, in.AccountID, asset.ID).Scan(dbtypes.Bool(&alreadyExists)); err != nil {
 		return Position{}, err
