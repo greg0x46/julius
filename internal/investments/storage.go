@@ -12,15 +12,16 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/greg0x46/julius/internal/db"
+	dbtypes "github.com/greg0x46/julius/internal/db/types"
 	"github.com/greg0x46/julius/internal/money"
 )
 
 func parseDate(raw string) (time.Time, error) {
-	return time.Parse(DateLayout, raw)
+	return dbtypes.ParseDate(raw)
 }
 
 func parseTimestamp(raw string) (time.Time, error) {
-	return db.ParseTime(raw)
+	return dbtypes.ParseTime(raw)
 }
 
 func formatDate(t time.Time) string { return Day(t).Format(DateLayout) }
@@ -94,8 +95,8 @@ func scanAccount(row interface{ Scan(...any) error }) (Account, error) {
 		linkedBalanceRaw                                               sql.NullString
 		createdAtRaw, updatedAtRaw                                     string
 	)
-	if err := row.Scan(&a.ID, &a.Name, &a.Kind, &currencyRaw, &sourceIDRaw, &sourceNameRaw,
-		&financialAccountIDRaw, &a.Active, &linkedBalanceRaw, &createdAtRaw, &updatedAtRaw); err != nil {
+	if err := row.Scan(dbtypes.ID(&a.ID), &a.Name, &a.Kind, &currencyRaw, dbtypes.ID(&sourceIDRaw), &sourceNameRaw,
+		dbtypes.ID(&financialAccountIDRaw), dbtypes.Bool(&a.Active), dbtypes.Decimal(&linkedBalanceRaw), dbtypes.Time(&createdAtRaw), dbtypes.Time(&updatedAtRaw)); err != nil {
 		return Account{}, err
 	}
 	if currencyRaw.Valid {
@@ -215,7 +216,7 @@ func financialAccountIsFree(ctx context.Context, q Querier, financialAccountID, 
 	var linked bool
 	if err := q.QueryRowContext(ctx,
 		`SELECT EXISTS (SELECT 1 FROM investment_accounts WHERE financial_account_id = ? AND id <> ?)`,
-		financialAccountID, exceptID).Scan(&linked); err != nil {
+		financialAccountID, exceptID).Scan(dbtypes.Bool(&linked)); err != nil {
 		return err
 	}
 	if linked {

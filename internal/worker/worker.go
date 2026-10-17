@@ -22,6 +22,7 @@ import (
 
 	"github.com/greg0x46/julius/internal/datasources"
 	"github.com/greg0x46/julius/internal/db"
+	dbtypes "github.com/greg0x46/julius/internal/db/types"
 	"github.com/greg0x46/julius/internal/pluggy"
 	"github.com/greg0x46/julius/internal/settings"
 	"github.com/greg0x46/julius/internal/syncsvc"
@@ -77,7 +78,7 @@ func ClaimNextRun(ctx context.Context, conn *sql.DB, workerID string) (syncRunID
 			) AND worker_id IS NULL AND status = 'in_progress'
 			RETURNING id, source_id`,
 			workerID, db.FormatTime(time.Now()),
-		).Scan(&syncRunID, &sourceID)
+		).Scan(dbtypes.ID(&syncRunID), dbtypes.ID(&sourceID))
 		if err == nil {
 			log.Printf("sync_run_claimed run_id=%s worker_id=%s", syncRunID, workerID)
 			return syncRunID, sourceID, true, nil
@@ -91,7 +92,7 @@ func ClaimNextRun(ctx context.Context, conn *sql.DB, workerID string) (syncRunID
 				JOIN data_sources ds ON ds.id = sr.source_id
 				WHERE sr.status = 'in_progress' AND sr.worker_id IS NULL
 				  AND sr.run_type = 'sync' AND ds.provider = 'pluggy')`,
-		).Scan(&pending); err != nil {
+		).Scan(dbtypes.Bool(&pending)); err != nil {
 			return "", "", false, err
 		}
 		if !pending {

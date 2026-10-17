@@ -15,6 +15,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/greg0x46/julius/internal/db"
+	dbtypes "github.com/greg0x46/julius/internal/db/types"
 )
 
 // ProviderPluggy is the Open Banking provider: the connections users manage on
@@ -84,16 +85,16 @@ func scan(row rowScanner) (DataSource, error) {
 		createdAtRaw string
 		updatedAtRaw string
 	)
-	if err := row.Scan(&d.ID, &d.Provider, &d.ExternalItemID, &d.DisplayName, &d.Label,
-		&isActive, &createdAtRaw, &updatedAtRaw); err != nil {
+	if err := row.Scan(dbtypes.ID(&d.ID), &d.Provider, dbtypes.ID(&d.ExternalItemID), &d.DisplayName, &d.Label,
+		dbtypes.Bool(&isActive), dbtypes.Time(&createdAtRaw), dbtypes.Time(&updatedAtRaw)); err != nil {
 		return DataSource{}, err
 	}
 	d.IsActive = isActive == 1
 	var err error
-	if d.CreatedAt, err = db.ParseTime(createdAtRaw); err != nil {
+	if d.CreatedAt, err = dbtypes.ParseTime(createdAtRaw); err != nil {
 		return DataSource{}, err
 	}
-	if d.UpdatedAt, err = db.ParseTime(updatedAtRaw); err != nil {
+	if d.UpdatedAt, err = dbtypes.ParseTime(updatedAtRaw); err != nil {
 		return DataSource{}, err
 	}
 	return d, nil
@@ -115,7 +116,7 @@ func ListByProvider(ctx context.Context, q Querier, provider string) ([]DataSour
 // ListActive returns the connections a "sync everything" should cover.
 func ListActive(ctx context.Context, q Querier) ([]DataSource, error) {
 	return query(ctx, q,
-		`SELECT `+selectColumns+` FROM data_sources WHERE is_active = 1 AND provider = 'pluggy' ORDER BY created_at, id`)
+		`SELECT `+selectColumns+` FROM data_sources WHERE is_active = TRUE AND provider = 'pluggy' ORDER BY created_at, id`)
 }
 
 func query(ctx context.Context, q Querier, sqlText string, args ...any) ([]DataSource, error) {
@@ -160,7 +161,7 @@ func Create(ctx context.Context, q Querier, provider, externalItemID string, lab
 	}
 	_, err := q.ExecContext(ctx, `
 		INSERT INTO data_sources (id, provider, external_item_id, label, is_active, created_at, updated_at)
-		VALUES (?, ?, ?, ?, 1, ?, ?)`,
+		VALUES (?, ?, ?, ?, TRUE, ?, ?)`,
 		d.ID, d.Provider, d.ExternalItemID, d.Label, db.FormatTime(now), db.FormatTime(now))
 	// Narrowed to the item-identity constraint on purpose: a primary-key
 	// collision on the uuid we just generated is not something the user can
@@ -196,10 +197,7 @@ func Update(ctx context.Context, q Querier, id string, label *string, isActive *
 		args = append(args, normalizeLabel(label))
 	}
 	if isActive != nil {
-		active := 0
-		if *isActive {
-			active = 1
-		}
+		active := *isActive
 		assignments = append(assignments, "is_active = ?")
 		args = append(args, active)
 	}

@@ -7,7 +7,9 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"flag"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -19,6 +21,7 @@ import (
 	"github.com/greg0x46/julius/internal/categories"
 	"github.com/greg0x46/julius/internal/db"
 	"github.com/greg0x46/julius/internal/httpapi"
+	"github.com/greg0x46/julius/internal/investments"
 	"github.com/greg0x46/julius/internal/marketdata"
 	"github.com/greg0x46/julius/internal/payables"
 	"github.com/greg0x46/julius/internal/pluggy"
@@ -60,22 +63,21 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	// Opt-in and independent of the sync schedule above: unset means no
-	// automatic quoting, so a fresh install never starts market requests.
-	quotesSchedule, quotesScheduled, err := quotes.ParseSchedule(os.Getenv("JULIUS_QUOTES_SCHEDULE"))
-	if err != nil {
-		log.Fatal(err)
-	}
 	quoteProviders, err := marketdata.ParseProviders(os.Getenv("JULIUS_QUOTES_PROVIDERS"))
 	if err != nil {
 		log.Fatal(err)
 	}
-	conn, err := db.Open(*dbPath)
+	conn, err := openDatabase(*dbPath)
 	if err != nil {
-		log.Fatalf("open database: %v", err)
+		log.Fatal(err)
 	}
 	defer conn.Close()
 	if err := auth.NewStore(conn).Ready(context.Background(), master); err != nil {
+		log.Fatal(err)
+	}
+
+	quotesConfig, err := quotes.InitializeSchedule(context.Background(), conn, os.Getenv("JULIUS_QUOTES_SCHEDULE"))
+	if err != nil {
 		log.Fatal(err)
 	}
 
@@ -140,15 +142,27 @@ func main() {
 		go worker.RunSchedule(ctx, conn, schedule)
 	}
 
-	if quotesScheduled {
-		log.Printf("quote refresh scheduled daily at %02d:%02d %s", quotesSchedule.Hour, quotesSchedule.Minute, quotesSchedule.Location)
-		go quotes.RunSchedule(ctx, conn, marketService, quotesSchedule)
-	}
+	log.Printf("quote refresh enabled=%t daily at %s %s", quotesConfig.Enabled, quotesConfig.Time, quotesConfig.Timezone)
+	go quotes.RunSchedule(ctx, conn, marketService)
 
-	handler := httpapi.NewServer(conn, frontend, secrets, config)
+	handler := httpapi.NewServer(conn, frontend, secrets, config, marketService)
 	log.Printf("listening on http://%s", *addr)
 	server := &http.Server{Addr: *addr, Handler: handler, ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 60 * time.Second}
 	if err := server.ListenAndServe(); err != nil {
 		log.Fatalf("serve: %v", err)
 	}
+}
+
+func openDatabase(path string) (*sql.DB, error) {
+	conn, err := db.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("open database: %w", err)
+	}
+	inserted, err := investments.SeedInvestmentAssets(context.Background(), conn)
+	if err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("seed investment assets: %w", err)
+	}
+	log.Printf("investment asset catalog: %d new assets inserted", inserted)
+	return conn, nil
 }

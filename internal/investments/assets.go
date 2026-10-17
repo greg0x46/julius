@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/greg0x46/julius/internal/db"
+	dbtypes "github.com/greg0x46/julius/internal/db/types"
 )
 
 func assetCanonicalKey(name string, ticker *string, assetType string) string {
@@ -38,8 +39,8 @@ func scanAsset(row interface{ Scan(...any) error }) (Asset, error) {
 	var asset Asset
 	var ticker, quoteSource, quoteSymbol sql.NullString
 	var created, updated string
-	err := row.Scan(&asset.ID, &asset.CanonicalKey, &asset.Name, &ticker, &asset.AssetType, &asset.AssetClass, &asset.CurrencyCode,
-		&quoteSource, &quoteSymbol, &created, &updated)
+	err := row.Scan(dbtypes.ID(&asset.ID), &asset.CanonicalKey, &asset.Name, &ticker, &asset.AssetType, &asset.AssetClass, &asset.CurrencyCode,
+		&quoteSource, &quoteSymbol, dbtypes.Time(&created), dbtypes.Time(&updated))
 	if err != nil {
 		return Asset{}, err
 	}
@@ -187,6 +188,18 @@ func UpdateAsset(ctx context.Context, q Querier, id string, in AssetInput) (Asse
 	if exists {
 		return Asset{}, ErrAssetAlreadyExists
 	}
+	if normalized.CurrencyCode != current.CurrencyCode {
+		// Changing the currency under manual holdings would make them non-BRL.
+		var held bool
+		if err := q.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM investment_positions WHERE asset_id = ?)`, id).Scan(dbtypes.Bool(&held)); err != nil {
+			return Asset{}, err
+		}
+		if held {
+			if err := requireBRLAsset(normalized.CurrencyCode); err != nil {
+				return Asset{}, err
+			}
+		}
+	}
 	if _, err := q.ExecContext(ctx, `
 		UPDATE investment_assets
 		SET canonical_key = ?, name = ?, ticker = ?, asset_type = ?, asset_class = ?, currency_code = ?,
@@ -214,6 +227,21 @@ func DeleteAsset(ctx context.Context, q Querier, id string) error {
 	}
 	_, err := q.ExecContext(ctx, `DELETE FROM investment_assets WHERE id = ?`, id)
 	return err
+}
+
+// requireBRLAsset refuses a currency manual records cannot carry.
+//
+// TODO(#63): manual operations have no currency column and are in reais, so a
+// holding of an asset in another currency is refused on write until multi-
+// currency valuation exists. MonthlyMovements and its RealizedGain assume a
+// single currency until then. An integrated account stores no currency of its
+// own (NULL), so its local cash records cannot be checked; its manual holdings
+// are, through their asset.
+func requireBRLAsset(currencyCode string) error {
+	if currencyCode != "BRL" {
+		return ErrUnsupportedCurrency
+	}
+	return nil
 }
 
 // resolveAsset reuses the canonical instrument or creates it inside the same

@@ -189,7 +189,7 @@ func TestPostgresForeignKeysAreEnforced(t *testing.T) {
 
 	_, err := conn.Exec(
 		`INSERT INTO sync_runs (id, source_id, status, started_at, finished_at)
-		 VALUES ('r1', 'missing-source', 'completed', '2026-01-01T00:00:00Z', '2026-01-01T00:00:01Z')`,
+		 VALUES ('eb7ecba5-0dfb-5855-a8dd-cbc0eaeb8559', '95d9ca5b-29ef-515d-81b5-2926677b7f46', 'completed', '2026-01-01T00:00:00Z', '2026-01-01T00:00:01Z')`,
 	)
 	if err == nil {
 		t.Fatal("expected foreign key violation inserting sync_runs with missing source_id")
@@ -200,12 +200,12 @@ func TestPostgresOnlyOneActiveSyncRunPerSource(t *testing.T) {
 	conn := openPostgresTest(t)
 
 	mustExec(t, conn, `INSERT INTO data_sources (id, provider, external_item_id, created_at, updated_at)
-		VALUES ('s1', 'pluggy', 'item-1', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')`)
+		VALUES ('48f6bbd2-ab66-504e-9c84-1d192fc6514d', 'pluggy', 'item-1', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')`)
 	mustExec(t, conn, `INSERT INTO sync_runs (id, source_id, status, started_at, finished_at)
-		VALUES ('r1', 's1', 'in_progress', '2026-01-01T00:00:00Z', NULL)`)
+		VALUES ('eb7ecba5-0dfb-5855-a8dd-cbc0eaeb8559', '48f6bbd2-ab66-504e-9c84-1d192fc6514d', 'in_progress', '2026-01-01T00:00:00Z', NULL)`)
 
 	_, err := conn.Exec(`INSERT INTO sync_runs (id, source_id, status, started_at, finished_at)
-		VALUES ('r2', 's1', 'in_progress', '2026-01-01T00:00:01Z', NULL)`)
+		VALUES ('e4073650-2349-54e0-aae1-7f77de2e95bc', '48f6bbd2-ab66-504e-9c84-1d192fc6514d', 'in_progress', '2026-01-01T00:00:01Z', NULL)`)
 	if err == nil {
 		t.Fatal("expected unique violation for a second in_progress sync run on the same source (uq_sync_runs_active_source)")
 	}
@@ -215,22 +215,22 @@ func TestPostgresAppendOnlyTablesRejectUpdateAndDelete(t *testing.T) {
 	conn := openPostgresTest(t)
 
 	mustExec(t, conn, `INSERT INTO data_sources (id, provider, external_item_id, created_at, updated_at)
-		VALUES ('s1', 'pluggy', 'item-1', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')`)
+		VALUES ('48f6bbd2-ab66-504e-9c84-1d192fc6514d', 'pluggy', 'item-1', '2026-01-01T00:00:00Z', '2026-01-01T00:00:00Z')`)
 	mustExec(t, conn, `INSERT INTO sync_runs (id, source_id, status, started_at, finished_at)
-		VALUES ('r1', 's1', 'completed', '2026-01-01T00:00:00Z', '2026-01-01T00:00:01Z')`)
+		VALUES ('eb7ecba5-0dfb-5855-a8dd-cbc0eaeb8559', '48f6bbd2-ab66-504e-9c84-1d192fc6514d', 'completed', '2026-01-01T00:00:00Z', '2026-01-01T00:00:01Z')`)
 	mustExec(t, conn, `INSERT INTO raw_imports (
 		id, sync_run_id, source_id, scope, page_sequence, request_attempt,
 		request_method, request_path, http_status, response_headers, payload,
 		payload_sha256, received_at
 	) VALUES (
-		'ri1', 'r1', 's1', 'item', 1, 1, 'GET', '/items/1', 200, '{}', ?,
+		'2f1c6e3b-1201-59c3-803c-4b4975e218ce', 'eb7ecba5-0dfb-5855-a8dd-cbc0eaeb8559', '48f6bbd2-ab66-504e-9c84-1d192fc6514d', 'item', 1, 1, 'GET', '/items/1', 200, '{}', ?,
 		'deadbeef', '2026-01-01T00:00:00Z'
 	)`, []byte{0})
 
-	if _, err := conn.Exec("UPDATE raw_imports SET http_status = 500 WHERE id = 'ri1'"); err == nil {
+	if _, err := conn.Exec("UPDATE raw_imports SET http_status = 500 WHERE id = '2f1c6e3b-1201-59c3-803c-4b4975e218ce'"); err == nil {
 		t.Error("expected UPDATE on raw_imports to be rejected")
 	}
-	if _, err := conn.Exec("DELETE FROM raw_imports WHERE id = 'ri1'"); err == nil {
+	if _, err := conn.Exec("DELETE FROM raw_imports WHERE id = '2f1c6e3b-1201-59c3-803c-4b4975e218ce'"); err == nil {
 		t.Error("expected DELETE on raw_imports to be rejected")
 	}
 }
@@ -249,14 +249,14 @@ func TestPostgresOnConflictReturning(t *testing.T) {
 		RETURNING id`
 
 	var id string
-	if err := conn.QueryRow(insert, "s1", "pluggy", "item-1", "Nubank", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z").Scan(&id); err != nil {
+	if err := conn.QueryRow(insert, "48f6bbd2-ab66-504e-9c84-1d192fc6514d", "pluggy", "item-1", "Nubank", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z").Scan(&id); err != nil {
 		t.Fatalf("first insert should return the new id: %v", err)
 	}
-	if id != "s1" {
+	if id != "48f6bbd2-ab66-504e-9c84-1d192fc6514d" {
 		t.Errorf("got id %q, want s1", id)
 	}
 
-	err := conn.QueryRow(insert, "s2", "pluggy", "item-1", "Nubank (duplicate)", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z").Scan(&id)
+	err := conn.QueryRow(insert, "f64786c2-b4c3-5ac6-b14a-d3f58117c09d", "pluggy", "item-1", "Nubank (duplicate)", "2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z").Scan(&id)
 	if err != sql.ErrNoRows {
 		t.Errorf("conflicting insert should return no rows, got err=%v", err)
 	}

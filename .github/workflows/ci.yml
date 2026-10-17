@@ -1,16 +1,21 @@
 name: CI
 
+# `stage` is the integration branch: its pushes and PRs run the same checks as
+# `main`, but only a push to `main` can publish a release (see the release job).
 on:
   push:
-    branches: [main]
+    branches: [main, stage]
   pull_request:
+    branches: [main, stage]
 
 permissions:
   contents: read
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+  # Only superseded PR runs are cancelled: every push to main/stage must keep its
+  # own result, because that result is the evidence for that exact commit.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   backend:
@@ -43,6 +48,9 @@ jobs:
       # database, so a restored test cache must not stand in for a real run.
       - run: go test -p 1 -count=1 ./...
       - run: go run golang.org/x/vuln/cmd/govulncheck@v1.1.4 ./...
+      # Release scripts (version, changelog, notes) against throwaway Git histories.
+      - name: Release script tests
+        run: scripts/tests/run.sh
 
   frontend:
     name: Frontend (Node)
@@ -52,7 +60,7 @@ jobs:
         working-directory: frontend
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: "24"
           cache: npm
@@ -60,9 +68,12 @@ jobs:
       - run: npm ci
       - run: npm audit --omit=dev --audit-level=high
       - run: npm run lint
-      - run: npm run typecheck
       - run: npm test -- --run
+      # build runs tsc -b (strict app/test and Vite config checks) before Vite.
       - run: npm run build
+        env:
+          VITE_APP_VERSION: ${{ github.ref == 'refs/heads/stage' && 'stage' || 'dev' }}
+          VITE_APP_COMMIT: ${{ github.sha }}
       # Catches embed breakage on PRs instead of only in the release build.
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
@@ -100,11 +111,28 @@ jobs:
             echo "No feat/fix/perf or breaking change since the last tag; skipping release."
           fi
 
+      # The notes are the committed CHANGELOG.md section of the version just
+      # computed; they are not regenerated here. Fails (before anything is built
+      # or published) when the changelog has no section for that version or its
+      # newest section is a different version.
+      - name: Release notes from CHANGELOG.md
+        if: steps.version.outputs.tag != ''
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          latest=$(scripts/changelog-section.sh --latest)
+          if [ "$latest" != "$TAG" ]; then
+            echo "::error::next-version.sh computes $TAG but the newest CHANGELOG.md section is $latest"
+            exit 1
+          fi
+          scripts/changelog-section.sh "$TAG" > notes-body.md
+          { cat notes-body.md; printf '\n%s\n' "$GITHUB_SHA"; } > notes.md
+
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         if: steps.version.outputs.tag != ''
         with:
           go-version-file: go.mod
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         if: steps.version.outputs.tag != ''
         with:
           node-version: "24"
@@ -113,6 +141,9 @@ jobs:
 
       - name: Build
         if: steps.version.outputs.tag != ''
+        env:
+          VITE_APP_VERSION: ${{ steps.version.outputs.tag }}
+          VITE_APP_COMMIT: ${{ github.sha }}
         run: |
           ./build.sh
           mv julius julius-linux-amd64
@@ -133,7 +164,6 @@ jobs:
           TAG: ${{ steps.version.outputs.tag }}
         run: |
           cp "$BUNDLE_PATH" julius-linux-amd64.sigstore.json
-          { scripts/next-version.sh --notes; printf '\n%s\n' "$GITHUB_SHA"; } > notes.md
           gh release create "$TAG" \
             --target "$GITHUB_SHA" \
             --title "$TAG" \

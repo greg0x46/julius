@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	dbtypes "github.com/greg0x46/julius/internal/db/types"
 )
 
 // BackfillAutomatic applies the automatic category mapping to transactions
@@ -48,7 +49,7 @@ func BackfillAutomatic(ctx context.Context, conn *sql.DB, sourceCategory string)
 	var ids []string
 	for rows.Next() {
 		var id string
-		if err := rows.Scan(&id); err != nil {
+		if err := rows.Scan(dbtypes.ID(&id)); err != nil {
 			rows.Close()
 			return 0, err
 		}

@@ -32,6 +32,7 @@ const roots = {
   timeline: ["timeline"],
   timelineDataRange: ["timeline-data-range"],
   transactionReconciliation: ["transactionReconciliation"],
+  transactionTransfers: ["transaction-transfer"],
   transactions: ["transactions"],
 } as const;
 
@@ -73,7 +74,9 @@ export const queryKeys = {
   syncRunsList: [...roots.syncRuns, "list"] as const,
   syncRunDetail: (runId: string) => [...roots.syncRuns, "detail", runId] as const,
 
+  timelineDataRangeFor: (timezone: string) => [...roots.timelineDataRange, timezone] as const,
   timelineFor: (params: TimelineParams) => [...roots.timeline, params] as const,
+  transactionTransfer: (id: string) => [...roots.transactionTransfers, id] as const,
   transactionsFor: (query: TransactionQuery) => [...roots.transactions, query] as const,
   transactionsInvalidTimezone: [...roots.transactions, "invalid-timezone"] as const,
   transactionsInvalidTimezoneFor: (accountId: string) =>
@@ -157,7 +160,9 @@ export const invalidateAfterAutomationRuleChange = async (
   options: { transactionsChanged: boolean },
 ) => {
   await invalidate(client, roots.automationRules);
-  if (options.transactionsChanged) await invalidate(client, roots.transactions);
+  if (options.transactionsChanged) {
+    await invalidateAll(client, [roots.transactions, roots.transactionTransfers]);
+  }
 };
 
 /** Toggling or deleting a rule touches only the rule list. */
@@ -166,11 +171,21 @@ export const invalidateAutomationRules = (client: Client) =>
 
 /** A manual transaction create/update/delete. */
 export const invalidateAfterTransactionChange = (client: Client) =>
-  invalidate(client, roots.transactions);
+  invalidateAll(client, [roots.transactions, roots.accounts, roots.timeline, roots.netWorth, roots.transactionTransfers]);
+
+export const invalidateAfterManualAccountChange = (client: Client) =>
+  invalidateAll(client, [roots.accounts, roots.transactions, roots.timeline, roots.netWorth]);
 
 /** Marks every transactions query stale without refetching it. */
 export const markTransactionsStale = (client: Client) =>
   client.invalidateQueries({ queryKey: roots.transactions, refetchType: "none" });
+
+/** Ignoring a transfer participant can remove the whole relationship. */
+export const markTransactionInclusionViewsStale = (client: Client) =>
+  Promise.all([
+    markTransactionsStale(client),
+    client.invalidateQueries({ queryKey: roots.transactionTransfers, refetchType: "none" }),
+  ]);
 
 /** Closing day changes only the account record and the list that shows it. */
 export const invalidateAfterAccountClosingDayChange = (client: Client, accountId: string) =>

@@ -12,9 +12,11 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/greg0x46/julius/internal/categories"
-	"github.com/greg0x46/julius/internal/db"
+	dbtypes "github.com/greg0x46/julius/internal/db/types"
+	"github.com/greg0x46/julius/internal/exchange"
 	"github.com/greg0x46/julius/internal/investments"
 	"github.com/greg0x46/julius/internal/money"
+	"github.com/greg0x46/julius/internal/reporting"
 	"github.com/greg0x46/julius/internal/settings"
 )
 
@@ -57,6 +59,7 @@ type row struct {
 	categoryIsActive *bool
 	categoryIcon     *string
 	categoryColor    *string
+	linkedTransfer   bool
 }
 
 // view is a row with every rule from package money already applied. Query
@@ -66,6 +69,7 @@ type row struct {
 // simpler and fast enough), then filters, sorts, paginates, and aggregates
 // entirely in Go.
 type view struct {
+	reporting      reporting.Conversion
 	row            row
 	classification money.Classification
 	effective      *money.EffectiveMoney
@@ -96,7 +100,8 @@ const viewSelect = `
 		fa.name, fa.institution, fa.currency_code, fa.account_type,
 		tid.state, tid.changed_at, tid.origin, tid.rule_name,
 		tcd.category_id, tcd.changed_at, tcd.origin,
-		cat.id, cat.name, cat.kind, cat.is_active, cat.icon, cat.color
+		cat.id, cat.name, cat.kind, cat.is_active, cat.icon, cat.color,
+        EXISTS (SELECT 1 FROM transfer_transaction_links tl WHERE tl.transaction_id = ft.id AND tl.role IN ('source', 'destination'))
 	FROM financial_transactions ft
 	JOIN financial_accounts fa ON fa.id = ft.account_id
 	LEFT JOIN data_sources ds ON ds.id = ft.source_id
@@ -178,15 +183,14 @@ func fetchBillDueDates(ctx context.Context, q Querier) (map[string]time.Time, er
 
 	dueDates := make(map[string]time.Time)
 	for rows.Next() {
-		var accountID, externalID, dueDate string
-		if err := rows.Scan(&accountID, &externalID, &dueDate); err != nil {
+		var accountID, externalID string
+		var dueDate *time.Time
+		if err := rows.Scan(dbtypes.ID(&accountID), dbtypes.ID(&externalID), dbtypes.Date(&dueDate)); err != nil {
 			return nil, err
 		}
-		parsed, err := db.ParseNullTime(sql.NullString{String: dueDate, Valid: true})
-		if err != nil {
-			return nil, err
+		if dueDate != nil {
+			dueDates[accountID+"\x00"+externalID] = *dueDate
 		}
-		dueDates[accountID+"\x00"+externalID] = *parsed
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -199,9 +203,7 @@ func scanRow(rows *sql.Rows) (row, error) {
 		r                          row
 		externalID                 sql.NullString
 		sourceProvider             sql.NullString
-		amount, amountAcct         sql.NullString
 		currencyCode               sql.NullString
-		occurredAt                 sql.NullString
 		providerStatus             sql.NullString
 		movementType               sql.NullString
 		sourceCategory             sql.NullString
@@ -212,11 +214,9 @@ func scanRow(rows *sql.Rows) (row, error) {
 		accountCurrencyCode        sql.NullString
 		accountType                sql.NullString
 		inclusionState             sql.NullString
-		inclusionChangedAt         sql.NullString
 		inclusionOrigin            sql.NullString
 		inclusionRuleName          sql.NullString
 		categoryDecisionCategoryID sql.NullString
-		categoryDecisionChangedAt  sql.NullString
 		categoryDecisionOrigin     sql.NullString
 		categoryID                 sql.NullString
 		categoryName               sql.NullString
@@ -226,13 +226,13 @@ func scanRow(rows *sql.Rows) (row, error) {
 		categoryColor              sql.NullString
 	)
 	err := rows.Scan(
-		&r.id, &r.accountID, &externalID, &r.origin, &sourceProvider, &description, &amount,
-		&amountAcct, &currencyCode, &occurredAt,
+		dbtypes.ID(&r.id), dbtypes.ID(&r.accountID), dbtypes.ID(&externalID), &r.origin, &sourceProvider, &description, dbtypes.Decimal(&r.amount),
+		dbtypes.Decimal(&r.amountInAccountCurrency), &currencyCode, dbtypes.Time(&r.occurredAt),
 		&providerStatus, &movementType, &sourceCategory, &creditCardMetadata,
 		&accountName, &accountInstitution, &accountCurrencyCode, &accountType,
-		&inclusionState, &inclusionChangedAt, &inclusionOrigin, &inclusionRuleName,
-		&categoryDecisionCategoryID, &categoryDecisionChangedAt, &categoryDecisionOrigin,
-		&categoryID, &categoryName, &categoryKind, &categoryIsActive, &categoryIcon, &categoryColor,
+		&inclusionState, dbtypes.Time(&r.inclusionChangedAt), &inclusionOrigin, &inclusionRuleName,
+		dbtypes.ID(&categoryDecisionCategoryID), dbtypes.Time(&r.categoryDecisionChangedAt), &categoryDecisionOrigin,
+		dbtypes.ID(&categoryID), &categoryName, &categoryKind, dbtypes.Bool(&categoryIsActive), &categoryIcon, &categoryColor, dbtypes.Bool(&r.linkedTransfer),
 	)
 	if err != nil {
 		return row{}, err
@@ -264,21 +264,6 @@ func scanRow(rows *sql.Rows) (row, error) {
 	r.categoryIcon = nullString(categoryIcon)
 	r.categoryColor = nullString(categoryColor)
 
-	if r.amount, err = nullDecimal(amount); err != nil {
-		return row{}, err
-	}
-	if r.amountInAccountCurrency, err = nullDecimal(amountAcct); err != nil {
-		return row{}, err
-	}
-	if r.occurredAt, err = db.ParseNullTime(occurredAt); err != nil {
-		return row{}, err
-	}
-	if r.inclusionChangedAt, err = db.ParseNullTime(inclusionChangedAt); err != nil {
-		return row{}, err
-	}
-	if r.categoryDecisionChangedAt, err = db.ParseNullTime(categoryDecisionChangedAt); err != nil {
-		return row{}, err
-	}
 	return r, nil
 }
 
@@ -287,17 +272,6 @@ func nullString(ns sql.NullString) *string {
 		return nil
 	}
 	return &ns.String
-}
-
-func nullDecimal(ns sql.NullString) (*decimal.Decimal, error) {
-	if !ns.Valid {
-		return nil, nil
-	}
-	d, err := decimal.NewFromString(ns.String)
-	if err != nil {
-		return nil, fmt.Errorf("parse decimal %q: %w", ns.String, err)
-	}
-	return &d, nil
 }
 
 func buildView(r row, query QueryRequest, periodBasis string, billDueDates map[string]time.Time) (view, error) {
@@ -315,6 +289,10 @@ func buildView(r row, query QueryRequest, periodBasis string, billDueDates map[s
 	categoryKind := money.CategoryKind(stringOr(r.categoryKind, ""))
 
 	included, reason := money.Eligibility(classification, r.providerStatus, effective, inclusionState, categoryKind)
+	if r.linkedTransfer && (included || (reason != nil && *reason == money.ReasonTransferCategory)) {
+		linkedReason := money.ReasonLinkedTransfer
+		included, reason = false, &linkedReason
+	}
 
 	effectiveAt := effectiveDate(r, periodBasis, billDueDates)
 	period, err := money.PeriodFor(r.occurredAt, query.GroupBy, query.Timezone)
@@ -527,6 +505,20 @@ func Query(ctx context.Context, q Querier, query QueryRequest) (Result, error) {
 		}
 	}
 
+	rates := exchange.New(q, nil)
+	loc, _ := time.LoadLocation(query.Timezone)
+	for i := range filtered {
+		v := &filtered[i]
+		if v.included {
+			day := v.effectiveAt
+			if day != nil && loc != nil {
+				local := day.In(loc)
+				day = &local
+			}
+			v.reporting = reporting.Convert(ctx, rates, v.reportableAmount(), v.effective.CurrencyCode, day)
+		}
+	}
+
 	sort.SliceStable(filtered, func(i, j int) bool {
 		a, b := filtered[i], filtered[j]
 		ao, bo := a.row.occurredAt, b.row.occurredAt
@@ -584,6 +576,7 @@ func Query(ctx context.Context, q Querier, query QueryRequest) (Result, error) {
 		},
 		Items:            items,
 		Totals:           overallTotals,
+		Reporting:        reportingFor(filtered),
 		Groups:           groups,
 		AvailableFilters: availableFilters,
 	}, nil
@@ -623,6 +616,8 @@ func parseCardInfo(raw *string) *CardInfo {
 func toItem(v view) Item {
 	r := v.row
 	item := Item{
+		ReportingDate:  v.effectiveAt,
+		Reporting:      v.reporting,
 		ID:             r.id,
 		ExternalID:     r.externalID,
 		Origin:         r.origin,
@@ -761,6 +756,7 @@ func buildGroups(filtered, pageViews []view, startIndex, pageEnd int) []Group {
 			HasItemsBefore: b.minRN <= startIndex,
 			HasItemsAfter:  b.maxRN >= pageEnd+1,
 			Totals:         currencyTotalsFor(totalsByKey[key]),
+			Reporting:      reportingFor(totalsByKey[key]),
 		})
 	}
 	return groups
@@ -807,6 +803,16 @@ func currencyTotalsFor(views []view) []CurrencyTotals {
 	return totals
 }
 
+func reportingFor(views []view) reporting.Summary {
+	var a reporting.Accumulator
+	for _, v := range views {
+		if v.included {
+			a.Add(v.reporting, v.classification)
+		}
+	}
+	return a.Summary()
+}
+
 func buildOverallTotals(filtered []view) []CurrencyTotals {
 	eligible := make([]view, 0, len(filtered))
 	for _, v := range filtered {
@@ -827,73 +833,72 @@ type CategorySpending struct {
 	Amount        string
 }
 
-// SpendingByCategory sums each included, BRL-denominated outflow
-// transaction matching filters, grouped by internal category (a nil
-// CategoryID groups every uncategorized transaction together as "Sem
-// categoria"), sorted by amount descending. It reuses the same
-// filtering/eligibility machinery as Query, just aggregating by category
-// instead of by date period, and — unlike Query — always restricts to
-// outflow, since that is the only direction "spending" means here.
+// SpendingByCategory reports eligible outflows in the reference currency.
 func SpendingByCategory(ctx context.Context, q Querier, filters Filters, timezone string) ([]CategorySpending, error) {
 	return CategoryBreakdown(ctx, q, filters, timezone, money.Outflow)
 }
 
-// CategoryBreakdown groups eligible BRL transactions by category and direction.
+type CategoryReport struct {
+	Items     []CategorySpending
+	Reporting reporting.Summary
+	Totals    []CurrencyTotals
+}
+
 func CategoryBreakdown(ctx context.Context, q Querier, filters Filters, timezone string, classification money.Classification) ([]CategorySpending, error) {
-	allViews, err := fetchAllViews(ctx, q, QueryRequest{GroupBy: money.GroupNone, Filters: filters})
+	report, err := CategoryReporting(ctx, q, filters, timezone, classification)
 	if err != nil {
 		return nil, err
 	}
-	bounds, err := computeDateBounds(filters, timezone)
+	if report.Reporting.Totals == nil {
+		return nil, &reporting.IncompleteError{Coverage: report.Reporting, Totals: report.Totals}
+	}
+	return report.Items, nil
+}
+
+func CategoryReporting(ctx context.Context, q Querier, filters Filters, timezone string, classification money.Classification) (CategoryReport, error) {
+	if filters.Classification != nil && *filters.Classification != classification {
+		return CategoryReport{Items: []CategorySpending{}, Totals: []CurrencyTotals{}, Reporting: (reporting.Accumulator{}).Summary()}, nil
+	}
+	filters.Classification = &classification
+	result, err := Query(ctx, q, QueryRequest{Timezone: timezone, GroupBy: money.GroupNone, Page: 1, PageSize: 1_000_000, Filters: filters})
 	if err != nil {
-		return nil, err
+		return CategoryReport{}, err
 	}
-
-	type accum struct {
-		name   string
-		icon   string
-		color  string
-		amount decimal.Decimal
+	report := CategoryReport{Reporting: result.Reporting, Totals: result.Totals, Items: []CategorySpending{}}
+	if report.Reporting.Totals == nil {
+		return report, nil
 	}
-	const uncategorizedKey = ""
-	byCategory := make(map[string]*accum)
-	order := make([]string, 0)
-	for _, v := range allViews {
-		if !matches(v, filters, bounds) || !v.included {
+	byCategory := map[string]*CategorySpending{}
+	amounts := map[string]decimal.Decimal{}
+	for _, item := range result.Items {
+		if !item.TotalsEligibility.Included {
 			continue
 		}
-		if v.classification != classification || v.effective == nil || v.effective.CurrencyCode != "BRL" {
-			continue
+		key := ""
+		category := CategorySpending{CategoryName: "Sem categoria"}
+		if item.InternalCategory != nil {
+			c := item.InternalCategory
+			key = c.ID
+			category = CategorySpending{CategoryID: &c.ID, CategoryName: c.Name, CategoryIcon: c.Icon, CategoryColor: c.Color}
 		}
-		key, name, icon, color := uncategorizedKey, "Sem categoria", "", ""
-		if v.row.categoryDecisionCategoryID != nil {
-			key, name = *v.row.categoryDecisionCategoryID, stringOr(v.row.categoryName, "")
-			icon, color = stringOr(v.row.categoryIcon, ""), stringOr(v.row.categoryColor, "")
+		if byCategory[key] == nil {
+			byCategory[key] = &category
 		}
-		a, ok := byCategory[key]
-		if !ok {
-			a = &accum{name: name, icon: icon, color: color, amount: decimal.Zero}
-			byCategory[key] = a
-			order = append(order, key)
-		}
-		a.amount = a.amount.Add(v.reportableAmount())
+		amounts[key] = amounts[key].Add(*item.Reporting.Amount)
 	}
-
-	sort.SliceStable(order, func(i, j int) bool {
-		return byCategory[order[i]].amount.GreaterThan(byCategory[order[j]].amount)
+	for key, item := range byCategory {
+		item.Amount = money.CanonicalDecimal(amounts[key])
+		report.Items = append(report.Items, *item)
+	}
+	sort.Slice(report.Items, func(i, j int) bool {
+		a, _ := decimal.NewFromString(report.Items[i].Amount)
+		b, _ := decimal.NewFromString(report.Items[j].Amount)
+		if a.Equal(b) {
+			return report.Items[i].CategoryName < report.Items[j].CategoryName
+		}
+		return a.GreaterThan(b)
 	})
-
-	result := make([]CategorySpending, len(order))
-	for i, key := range order {
-		a := byCategory[key]
-		item := CategorySpending{CategoryName: a.name, CategoryIcon: a.icon, CategoryColor: a.color, Amount: money.CanonicalDecimal(a.amount)}
-		if key != uncategorizedKey {
-			id := key
-			item.CategoryID = &id
-		}
-		result[i] = item
-	}
-	return result, nil
+	return report, nil
 }
 
 func buildAvailableFilters(ctx context.Context, q Querier, allViews []view) (AvailableFilters, error) {

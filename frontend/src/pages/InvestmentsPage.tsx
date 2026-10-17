@@ -74,7 +74,8 @@ export function InvestmentsPage() {
   const [editingOperation, setEditingOperation] = useState<InvestmentOperation | null>(null);
   const [operationAccountId, setOperationAccountId] = useState<string | null>(null);
 
-  const manualAccounts = workspace.accounts.filter((account) => account.kind === "manual");
+  // Manual holdings may sit in a manual account or next to a connection's holdings.
+  const holdingAccounts = workspace.accounts.filter((account) => account.active);
   const accountName = (accountId: string) =>
     workspace.accounts.find((account) => account.id === accountId)?.name ?? "Conta não encontrada";
   const summaryAccount = (accountId: string) =>
@@ -259,11 +260,11 @@ export function InvestmentsPage() {
           key: "position",
           label: "Nova posição",
           description:
-            manualAccounts.length === 0
-              ? "Cadastre uma conta de investimento manual primeiro"
-              : "Um ativo dentro de uma conta manual",
+            holdingAccounts.length === 0
+              ? "Cadastre uma conta de investimento primeiro"
+              : "Um ativo dentro de uma conta de investimento",
           icon: <PieChartOutlined aria-hidden="true" />,
-          disabled: manualAccounts.length === 0,
+          disabled: holdingAccounts.length === 0,
           onClick: () => openPositionCreate(null),
         },
         {

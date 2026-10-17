@@ -1,11 +1,13 @@
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { InvestmentPosition } from "../../api/contracts";
+import { integratedAccount } from "../../test/investmentWorkspaceFixtures";
 import * as compactScreen from "../shared/useCompactScreen";
 import { InvestmentFigures } from "./InvestmentFigures";
+import { InvestmentOperationFields } from "./InvestmentOperationForm";
 import { InvestmentPositionsTable } from "./InvestmentPositionsTable";
 import { fromMoneyInput, toMoneyInput } from "./moneyDraft";
 
@@ -70,6 +72,27 @@ function renderTable(compact: boolean, onDelete = vi.fn()) {
   );
   return onDelete;
 }
+
+describe("InvestmentOperationFields", () => {
+  it("offers trades for the manual holdings of an integrated account, but no cash opening balance", async () => {
+    render(
+      <InvestmentOperationFields
+        formId="operation"
+        operation={null}
+        accounts={[integratedAccount]}
+        positions={[]}
+        submitError={null}
+        onSubmit={vi.fn()}
+      />,
+    );
+    fireEvent.mouseDown(screen.getByRole("combobox", { name: "Tipo" }));
+    const option = (label: string) => screen.queryByText(label, { selector: ".ant-select-item-option-content" });
+    expect(await screen.findByText("Compra", { selector: ".ant-select-item-option-content" })).toBeInTheDocument();
+    expect(option("Venda")).toBeInTheDocument();
+    expect(option("Cotação manual")).toBeInTheDocument();
+    expect(option("Saldo inicial")).toBeNull();
+  });
+});
 
 describe("InvestmentPositionsTable", () => {
   it("is a stack of rows with a record menu on a phone, with no table to scroll sideways", async () => {
@@ -146,8 +169,8 @@ describe("InvestmentFigures", () => {
 
 describe("moneyDraft", () => {
   it("round-trips a decimal string through the money field without drifting", () => {
-    expect(toMoneyInput("1234.50")).toBe(1234.5);
-    expect(fromMoneyInput(1234.5)).toBe("1234.50");
+    expect(toMoneyInput("1234.50")).toBe("1234.50");
+    expect(fromMoneyInput("1234.5")).toBe("1234.50");
     expect(toMoneyInput(null)).toBeNull();
     expect(fromMoneyInput(null)).toBeNull();
   });

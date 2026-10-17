@@ -12,6 +12,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/greg0x46/julius/internal/db"
+	dbtypes "github.com/greg0x46/julius/internal/db/types"
 	"github.com/greg0x46/julius/internal/money"
 	"github.com/greg0x46/julius/internal/recurrences"
 	"github.com/greg0x46/julius/internal/transactions"
@@ -83,8 +84,8 @@ func ListRealizations(ctx context.Context, q Querier, scenarioID string) ([]Gene
 			relationRaw                            string
 		)
 		if err := rows.Scan(
-			&value.ID, &value.ScenarioID, &scenarioTransactionID, &occurrenceRaw, &transactionID,
-			&relationRaw, &value.State, &value.Origin, &allocatedRaw, &linkedRaw, &createdAtRaw,
+			dbtypes.ID(&value.ID), dbtypes.ID(&value.ScenarioID), dbtypes.ID(&scenarioTransactionID), dbtypes.Date(&occurrenceRaw), dbtypes.ID(&transactionID),
+			&relationRaw, &value.State, &value.Origin, dbtypes.Decimal(&allocatedRaw), dbtypes.Decimal(&linkedRaw), dbtypes.Time(&createdAtRaw),
 		); err != nil {
 			return nil, err
 		}
@@ -93,7 +94,7 @@ func ListRealizations(ctx context.Context, q Querier, scenarioID string) ([]Gene
 			value.ScenarioTransactionID = &scenarioTransactionID.String
 		}
 		if occurrenceRaw.Valid {
-			parsed, err := time.Parse(dateLayout, occurrenceRaw.String)
+			parsed, err := dbtypes.ParseDate(occurrenceRaw.String)
 			if err != nil {
 				return nil, err
 			}
@@ -117,7 +118,7 @@ func ListRealizations(ctx context.Context, q Querier, scenarioID string) ([]Gene
 			}
 			value.LinkedAmount = &parsed
 		}
-		value.CreatedAt, parseErr = db.ParseTime(createdAtRaw)
+		value.CreatedAt, parseErr = dbtypes.ParseTime(createdAtRaw)
 		if parseErr != nil {
 			return nil, parseErr
 		}
@@ -185,7 +186,7 @@ func RealizeEvent(ctx context.Context, conn *sql.DB, scenarioID, eventKey string
 			var plannedAmountRaw string
 			if err := conn.QueryRowContext(ctx,
 				`SELECT amount FROM scenario_transactions WHERE id = ?`, *scenarioTransactionID,
-			).Scan(&plannedAmountRaw); err != nil {
+			).Scan(dbtypes.Decimal(&plannedAmountRaw)); err != nil {
 				return GenericRealization{}, err
 			}
 			plannedAmount, err := decimal.NewFromString(plannedAmountRaw)
@@ -334,7 +335,7 @@ func eventIdentity(ctx context.Context, q Querier, scenario Scenario, eventKey s
 			return "", nil, nil, nil, ErrInvalidEventKey
 		}
 		dateRaw := strings.TrimPrefix(rest, "occurrence:")
-		date, err := time.Parse(dateLayout, dateRaw)
+		date, err := dbtypes.ParseDate(dateRaw)
 		if err != nil {
 			return "", nil, nil, nil, ErrInvalidEventKey
 		}
@@ -365,8 +366,8 @@ func isRecurringOccurrence(ctx context.Context, q Querier, scenarioID string, da
 		       day_of_month, month_of_year, start_date, end_date
 		FROM scenario_recurring_schedules
 		WHERE scenario_id = ?`, scenarioID).Scan(
-		&cashflowKind, &amountRaw, &categoryID, &accountID, &cadence,
-		&dayOfMonth, &monthOfYear, &startRaw, &endRaw,
+		&cashflowKind, dbtypes.Decimal(&amountRaw), dbtypes.ID(&categoryID), dbtypes.ID(&accountID), &cadence,
+		&dayOfMonth, &monthOfYear, dbtypes.Date(&startRaw), dbtypes.Date(&endRaw),
 	)
 	if err != nil {
 		return false
@@ -375,13 +376,13 @@ func isRecurringOccurrence(ctx context.Context, q Querier, scenarioID string, da
 	if err != nil {
 		return false
 	}
-	start, err := time.Parse(dateLayout, startRaw)
+	start, err := dbtypes.ParseDate(startRaw)
 	if err != nil {
 		return false
 	}
 	var end *time.Time
 	if endRaw.Valid {
-		parsed, err := time.Parse(dateLayout, endRaw.String)
+		parsed, err := dbtypes.ParseDate(endRaw.String)
 		if err != nil {
 			return false
 		}
@@ -416,7 +417,7 @@ func linkedAmountSnapshot(ctx context.Context, q Querier, transactionID *string)
 	err := q.QueryRowContext(ctx, `
 		SELECT ft.amount, ft.amount_in_account_currency, ft.currency_code, fa.currency_code
 		FROM financial_transactions ft JOIN financial_accounts fa ON fa.id = ft.account_id
-			WHERE ft.id = ? AND ft.deleted_at IS NULL`, *transactionID).Scan(&amountRaw, &amountAccountRaw, &currencyRaw, &accountCurrencyRaw)
+			WHERE ft.id = ? AND ft.deleted_at IS NULL`, *transactionID).Scan(dbtypes.Decimal(&amountRaw), dbtypes.Decimal(&amountAccountRaw), &currencyRaw, &accountCurrencyRaw)
 	if err != nil {
 		return nil
 	}

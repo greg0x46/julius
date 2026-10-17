@@ -87,38 +87,26 @@ func textMatches(candidateValue *string, operator ConditionOperator, value strin
 	return strings.Contains(nc, nv)
 }
 
-// splitReferenceAndTolerance parses a "<reference>:<tolerance>" Value into
-// its two float64 parts. ok is false if the value isn't well-formed, in
-// which case the condition never matches (a malformed condition is treated
-// as impossible to satisfy, not a panic).
-func splitReferenceAndTolerance(value string) (reference, tolerance float64, ok bool) {
-	parts := strings.SplitN(value, ":", 2)
-	if len(parts) != 2 {
-		return 0, 0, false
-	}
-	reference, err := strconv.ParseFloat(strings.TrimSpace(parts[0]), 64)
-	if err != nil {
-		return 0, 0, false
-	}
-	tolerance, err = strconv.ParseFloat(strings.TrimSpace(parts[1]), 64)
-	if err != nil {
-		return 0, 0, false
-	}
-	return reference, tolerance, true
-}
-
+// Malformed amount conditions never match.
 func withinPercentMatches(candidateAmount *decimal.Decimal, value string) bool {
 	if candidateAmount == nil {
 		return false
 	}
-	reference, toleranceFraction, ok := splitReferenceAndTolerance(value)
-	if !ok || reference == 0 {
+	parts := strings.SplitN(value, ":", 2)
+	if len(parts) != 2 {
 		return false
 	}
-	referenceDecimal := decimal.NewFromFloat(reference)
-	diff := candidateAmount.Sub(referenceDecimal).Abs()
-	toleranceDecimal := referenceDecimal.Abs().Mul(decimal.NewFromFloat(toleranceFraction / 100))
-	return diff.LessThanOrEqual(toleranceDecimal)
+	reference, err := decimal.NewFromString(strings.TrimSpace(parts[0]))
+	if err != nil || reference.IsZero() {
+		return false
+	}
+	tolerance, err := decimal.NewFromString(strings.TrimSpace(parts[1]))
+	if err != nil {
+		return false
+	}
+	diff := candidateAmount.Sub(reference).Abs()
+	limit := reference.Abs().Mul(tolerance).Shift(-2)
+	return diff.LessThanOrEqual(limit)
 }
 
 // dayRangeMatches parses a "<min>:<max>" Value and checks candidateDay falls

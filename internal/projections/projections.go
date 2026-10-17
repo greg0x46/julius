@@ -17,6 +17,7 @@ import (
 	"github.com/greg0x46/julius/internal/automation"
 	"github.com/greg0x46/julius/internal/dates"
 	"github.com/greg0x46/julius/internal/db"
+	dbtypes "github.com/greg0x46/julius/internal/db/types"
 	"github.com/greg0x46/julius/internal/money"
 	"github.com/greg0x46/julius/internal/recurrences"
 	"github.com/greg0x46/julius/internal/scenarios"
@@ -289,7 +290,7 @@ func allocationRealizations(ctx context.Context, q Querier, scenarioTransactionI
 	defer rows.Close()
 	for rows.Next() {
 		var installmentID, state, origin, amountRaw string
-		if err := rows.Scan(&installmentID, &state, &origin, &amountRaw); err != nil {
+		if err := rows.Scan(dbtypes.ID(&installmentID), &state, &origin, dbtypes.Decimal(&amountRaw)); err != nil {
 			return nil, err
 		}
 		amount, err := decimal.NewFromString(amountRaw)
@@ -343,8 +344,8 @@ func loadSchedules(ctx context.Context, q Querier, scenarioIDs []string) (map[st
 			monthOfYear                                            sql.NullInt64
 		)
 		if err := rows.Scan(
-			&scenarioID, &cashflowKind, &amountRaw, &categoryID, &accountID, &cadence,
-			&dayOfMonth, &monthOfYear, &startRaw, &endRaw, &categoryName,
+			dbtypes.ID(&scenarioID), &cashflowKind, dbtypes.Decimal(&amountRaw), dbtypes.ID(&categoryID), dbtypes.ID(&accountID), &cadence,
+			&dayOfMonth, &monthOfYear, dbtypes.Date(&startRaw), dbtypes.Date(&endRaw), &categoryName,
 		); err != nil {
 			return nil, err
 		}
@@ -352,13 +353,13 @@ func loadSchedules(ctx context.Context, q Querier, scenarioIDs []string) (map[st
 		if err != nil {
 			return nil, err
 		}
-		start, err := time.Parse(isoDate, startRaw)
+		start, err := dbtypes.ParseDate(startRaw)
 		if err != nil {
 			return nil, err
 		}
 		var end *time.Time
 		if endRaw.Valid {
-			parsed, err := time.Parse(isoDate, endRaw.String)
+			parsed, err := dbtypes.ParseDate(endRaw.String)
 			if err != nil {
 				return nil, err
 			}

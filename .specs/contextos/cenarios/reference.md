@@ -1,35 +1,37 @@
-# Cenários
+# Scenarios
 
-> Referência viva deste contexto — o que existe e funciona hoje. Mantenha
-> atualizado ao mudar a feature. Motor de domínio por trás: Cenários, a
-> camada hipotética (seção 5 de `.specs/motores-de-dominio.md`).
+> Living reference — what exists and works today. Keep it updated when the
+> feature changes. Engine behind it: Scenarios, the hypothetical layer (section
+> 5 of `.specs/motores-de-dominio.md`).
 
-## O que é
+## What it is
 
-Projeções autoradas pelo usuário, nunca fato sincronizado. Duas formas,
-mesma entidade (`Scenario`/`ScenarioTransaction`): presa a um `Payable`
-(plano de parcelas de uma dívida/recebível específica) ou livre
-(`standalone`, "e se" genérico sem `Payable` nenhum — ex.: viagem, novo
-emprego). Um cenário nunca contamina totais reais por padrão — só entra
-num relatório quando o chamador passa `scenario_id` explicitamente.
+User-authored projections, never synced facts. One entity
+(`Scenario`/`ScenarioTransaction`), several kinds: attached to a `Payable` (the
+installment plan of a specific debt/receivable), free (`standalone`, a generic
+"what if" with no `Payable` — e.g. trip, new job), or `recurring` (see
+Recurrences). A scenario never contaminates real totals by default — it enters a
+report only when the caller passes `scenario_id` explicitly.
 
-## Estado vs. ideal
+## State vs. ideal
 
-Totalmente implementado como descrito: `Kind` cobre `debt_plan`,
-`receivable_plan` e `standalone`; `PayableID` é nulo para `standalone` e
-obrigatório para os outros dois (checado por constraint no banco e na
-camada HTTP).
+Fully implemented as described: `Kind` covers `debt_plan`, `receivable_plan`,
+`standalone` and `recurring`; `PayableID` is null for `standalone`/`recurring`
+and required for the plan kinds (enforced by a database constraint and in the
+HTTP layer).
 
 ## Backend
 
-`internal/scenarios`. Além do CRUD: `SignedAmount` (a direção de caixa de
-uma parcela, derivada do `Kind` do próprio cenário — é o que permite a
-Timeline projetar um plano sem conhecer `payables`), `ListPlanInstallments`
-(parcelas não realizadas de todo plano num intervalo) e `Summarize`/
-`SummarizeTransaction` (status por parcela e desvio acumulado, antes
-calculados no handler HTTP).
+`internal/scenarios`. Besides CRUD: `SignedAmount` (the cash direction of an
+installment, derived from the scenario's own `Kind` — what lets the Timeline
+project a plan without knowing `payables`), `ListPlanInstallments` (unrealized
+installments of every plan in a range) and `Summarize`/`SummarizeTransaction`
+(per-installment status and accumulated deviation, previously computed in the
+HTTP handler). `internal/projections` is the read boundary consumers such as the
+Timeline use; it returns one event shape for plans, standalone and recurring
+scenarios.
 
-## Rotas HTTP
+## HTTP routes
 
 `GET/POST /api/scenarios`, `GET/DELETE /api/scenarios/{id}`,
 `POST .../generate-installments`, `POST .../readjust`,
@@ -38,6 +40,12 @@ calculados no handler HTTP).
 
 ## Frontend
 
-`/cenarios` — "Simule decisões hipotéticas" (cenários standalone). O plano
-de pagamento de uma dívida/recebível específica vive embutido em
-`/pendencias/:id` (ver contexto de Pendências).
+`/cenarios` — "Simule decisões hipotéticas" (standalone scenarios). The payment
+plan of a specific debt/receivable is embedded in `/pendencias/:id` (see
+Payables).
+
+## Monetary precision
+
+Equal installment generation floors the exact quotient to BRL cents; the last
+installment keeps the full remainder, including fractional cents. It does not
+round division before flooring ([policy](../../precisao-monetaria.md)).

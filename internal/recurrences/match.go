@@ -19,14 +19,24 @@ func matchCandidateFor(item transactions.Item) (rules.MatchCandidate, bool) {
 	}
 	amount = amount.Abs()
 	day := item.OccurredAt.Day()
-	return rules.MatchCandidate{Amount: &amount, DayOfMonth: &day}, true
+	candidate := rules.MatchCandidate{
+		Description:        item.Description,
+		AccountName:        item.Account.Name,
+		AccountInstitution: item.Account.Institution,
+		Amount:             &amount,
+		DayOfMonth:         &day,
+	}
+	if item.Card != nil && item.Card.Number != "" {
+		candidate.CardNumber = &item.Card.Number
+	}
+	return candidate, true
 }
 
 // ResolveOccurrence decides whether an occurrence of the commitment behind
 // conditions/logic has already been satisfied by a real transaction among
 // candidates (expected to already be filtered by the caller to the
-// commitment's category/account and the occurrence's month via
-// transactions.Query). conditions/logic come from the automation rule
+// commitment's account (when specified) and the occurrence's month).
+// conditions/logic come from the automation rule
 // linked to the commitment via a "reconcile" action
 // (internal/automation.ListActiveReconcileTargets) — callers with no linked
 // rule should not call this at all, since there's nothing to match against.

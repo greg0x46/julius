@@ -39,6 +39,29 @@ func TestManualInvestmentsAndLinkedBrokerageCashCountOnce(t *testing.T) {
 	assertDecimalEqual(t, "linked net worth", b.NetWorth, "3100")
 }
 
+func TestManualHoldingInIntegratedAccountCountsOnce(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	f.addInvestment("2000")
+	if err := investments.EnsureIntegratedAccounts(ctx, f.conn); err != nil {
+		t.Fatal(err)
+	}
+	ticker := "BTC"
+	if _, err := investments.CreatePosition(ctx, f.conn, investments.PositionInput{
+		AccountID: "integrated:" + f.sourceID, Name: "Bitcoin", Ticker: &ticker, AssetType: "Criptoativo",
+		InitialQuantity: decimal.RequireFromString("0.5"), InitialUnitCost: decimal.RequireFromString("1000"),
+		OccurredOn: time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	b, err := networth.Compute(ctx, f.conn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	assertDecimalEqual(t, "investments", b.InvestmentBalance, "2500")
+	assertDecimalEqual(t, "net worth", b.NetWorth, "2500")
+}
+
 func TestInvestmentLifecycleConservesWealthAndSeparatesSpending(t *testing.T) {
 	f := newFixture(t)
 	ctx := context.Background()
@@ -96,12 +119,77 @@ func TestInvestmentLifecycleConservesWealthAndSeparatesSpending(t *testing.T) {
 		t.Fatal(err)
 	}
 	wealth("5200")
+	operation(investments.OperationIncome, 6, "50", nil)
+	wealth("5250")
+	operation(investments.OperationFee, 7, "20", nil)
+	wealth("5230")
 	series, err := timeline.BuildSeries(ctx, f.conn, timeline.BuildParams{From: day(1), To: day(30), ReferenceDate: day(17)})
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Principal transfers and valuation stay out; only realized flows report.
 	totals := timeline.TotalsForPeriod(series)
-	if !totals.Expense.IsZero() || !totals.Income.IsZero() {
+	if totals.Expense.String() != "20" || totals.Income.String() != "50" {
 		t.Fatalf("totals %+v", totals)
 	}
+}
+
+func TestPrincipalTransferAloneKeepsNetWorth(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	bank := f.addAccount("BANK", "5000")
+	account, err := investments.CreateAccount(ctx, f.conn, investments.AccountInput{Name: "Corretora"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	position, err := investments.CreatePosition(ctx, f.conn, investments.PositionInput{AccountID: account.ID, Name: "Ativo", AssetType: "Ações"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	day := func(n int) time.Time { return time.Date(2026, 9, n, 0, 0, 0, 0, time.UTC) }
+	create := func(in investments.OperationInput) investments.Operation {
+		t.Helper()
+		in.AccountID = account.ID
+		op, err := investments.CreateOperation(ctx, f.conn, in)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return op
+	}
+	reconcile := func(op investments.Operation, transactionID, amount string) {
+		t.Helper()
+		if _, err := investments.CreateReconciliation(ctx, f.conn, investments.ReconciliationInput{
+			OperationID: op.ID, FinancialTransactionID: &transactionID, Amount: decimal.RequireFromString(amount),
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	wealth := func(label, want string) {
+		t.Helper()
+		b, err := networth.Compute(ctx, f.conn)
+		if err != nil {
+			t.Fatal(err)
+		}
+		assertDecimalEqual(t, label, b.NetWorth, want)
+	}
+
+	wealth("start", "5000")
+	deposit := create(investments.OperationInput{Kind: investments.OperationDeposit, OccurredOn: day(1), Amount: decimal.RequireFromString("1000")})
+	f.exec(`UPDATE financial_accounts SET balance='4000' WHERE id=?`, bank)
+	reconcile(deposit, f.addCardTransaction(bank, day(1), "-1000", "DEBIT"), "1000")
+	wealth("after contribution", "5000")
+
+	withdrawal := create(investments.OperationInput{Kind: investments.OperationWithdrawal, OccurredOn: day(2), Amount: decimal.RequireFromString("400")})
+	f.exec(`UPDATE financial_accounts SET balance='4400' WHERE id=?`, bank)
+	reconcile(withdrawal, f.addCardTransaction(bank, day(2), "400", "CREDIT"), "400")
+	wealth("after withdrawal", "5000")
+
+	create(investments.OperationInput{Kind: investments.OperationFee, OccurredOn: day(3), Amount: decimal.RequireFromString("10")})
+	wealth("after fee", "4990")
+
+	quantity := decimal.RequireFromString("5")
+	create(investments.OperationInput{PositionID: &position.ID, Kind: investments.OperationBuy, OccurredOn: day(4), Amount: decimal.RequireFromString("500"), Quantity: &quantity})
+	wealth("after buy", "4990")
+	create(investments.OperationInput{PositionID: &position.ID, Kind: investments.OperationValuation, OccurredOn: day(5), Amount: decimal.RequireFromString("700")})
+	wealth("after valuation", "5190")
 }

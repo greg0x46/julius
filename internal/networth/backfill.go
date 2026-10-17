@@ -11,6 +11,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/greg0x46/julius/internal/db"
+	dbtypes "github.com/greg0x46/julius/internal/db/types"
 	"github.com/greg0x46/julius/internal/money"
 	"github.com/greg0x46/julius/internal/payables"
 	"github.com/greg0x46/julius/internal/transactions"
@@ -30,9 +31,7 @@ import (
 //
 //   - CashBalance: today's non-CREDIT account balances, walked backward by
 //     reversing each eligible transaction's effect in turn (same
-//     eligibility/inclusion rules the rest of the app uses — an ignored
-//     transaction is never reversed, matching how it never entered the
-//     balance's story to begin with as far as this app is concerned).
+//     eligibility rules for actual cash, including ignored bank movements).
 //   - CreditCardBalance: transactions.CreditCardTransactionTotalAt, which
 //     already accepts an arbitrary reference date — reused as-is per bill
 //     cycle, so it naturally reports 0 for a day before any known bill
@@ -55,7 +54,7 @@ import (
 // showing a lower total on past days.
 func Backfill(ctx context.Context, q Querier, today time.Time) error {
 	todayDay := formatDate(today)
-	todayBoundary, err := time.Parse(dateLayout, todayDay)
+	todayBoundary, err := dbtypes.ParseDate(todayDay)
 	if err != nil {
 		return err
 	}
@@ -158,7 +157,7 @@ func existingCapturedDays(ctx context.Context, q Querier, from, to time.Time) (m
 	result := make(map[string]bool)
 	for rows.Next() {
 		var capturedAt string
-		if err := rows.Scan(&capturedAt); err != nil {
+		if err := rows.Scan(dbtypes.Date(&capturedAt)); err != nil {
 			return nil, err
 		}
 		result[capturedAt] = true
@@ -173,7 +172,7 @@ func insertBackfillSnapshot(ctx context.Context, q Querier, capturedAt string, b
 			id, captured_at, total_assets, total_liabilities, net_worth,
 			cash_balance, investment_balance, credit_card_balance, payables_debt,
 			is_backfilled, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, TRUE, ?, ?)
 		ON CONFLICT (captured_at) DO NOTHING`,
 		uuid.NewString(), capturedAt,
 		money.CanonicalDecimal(breakdown.TotalAssets), money.CanonicalDecimal(breakdown.TotalLiabilities), money.CanonicalDecimal(breakdown.NetWorth),
@@ -206,20 +205,19 @@ type cashTransactionDelta struct {
 // past day's reconstructed balance must reverse it out too, or every day
 // before an ignored transaction ends up off by its full amount.
 //
-// origin = 'synced' excludes every lançamento manual for the opposite
-// reason: financial_accounts.balance is only ever what the provider itself
-// reports, and a manual row never touched that — the account it sits on may
-// even be a Pluggy account, but the money it describes moved outside what
-// Pluggy tracks (a cash purchase, an unlinked account). Reversing it out of
-// a past day's reconstructed balance would subtract money that today's real
-// balance never included in the first place.
+// Manual entries on synced accounts are excluded: they never changed the
+// provider balance. Manual accounts reverse their posted movements and
+// adjustment deltas; opening balance remains the historical baseline.
 func cashDeltasDescending(ctx context.Context, q Querier) ([]cashTransactionDelta, error) {
 	rows, err := q.QueryContext(ctx, `
 		SELECT ft.amount, ft.amount_in_account_currency, ft.currency_code, fa.currency_code,
 		       ft.occurred_at, ft.provider_status, ft.movement_type
 		FROM financial_transactions ft
 		JOIN financial_accounts fa ON fa.id = ft.account_id
-		WHERE (fa.account_type IS NULL OR fa.account_type != 'CREDIT') AND ft.origin = 'synced'`)
+		WHERE (fa.account_type IS NULL OR fa.account_type != 'CREDIT') AND (fa.currency_code IS NULL OR fa.currency_code = 'BRL') AND ft.deleted_at IS NULL AND (ft.origin = 'synced' OR (fa.origin = 'manual' AND ft.provider_status = 'POSTED'))
+ UNION ALL SELECT aba.amount, aba.amount, fa.currency_code, fa.currency_code,
+ aba.created_at, 'POSTED', CASE WHEN SUBSTR(CAST(aba.amount AS TEXT), 1, 1) = '-' THEN 'DEBIT' ELSE 'CREDIT' END
+ FROM account_balance_adjustments aba JOIN financial_accounts fa ON fa.id = aba.account_id WHERE fa.currency_code = 'BRL'`)
 	if err != nil {
 		return nil, fmt.Errorf("query cash transactions: %w", err)
 	}
@@ -230,8 +228,8 @@ func cashDeltasDescending(ctx context.Context, q Querier) ([]cashTransactionDelt
 		var amountRaw, amountInAccountCurrencyRaw, currencyCodeRaw, accountCurrencyRaw sql.NullString
 		var occurredAtRaw, providerStatusRaw, movementTypeRaw sql.NullString
 		if err := rows.Scan(
-			&amountRaw, &amountInAccountCurrencyRaw, &currencyCodeRaw, &accountCurrencyRaw,
-			&occurredAtRaw, &providerStatusRaw, &movementTypeRaw,
+			dbtypes.Decimal(&amountRaw), dbtypes.Decimal(&amountInAccountCurrencyRaw), &currencyCodeRaw, &accountCurrencyRaw,
+			dbtypes.Time(&occurredAtRaw), &providerStatusRaw, &movementTypeRaw,
 		); err != nil {
 			return nil, err
 		}
@@ -242,7 +240,7 @@ func cashDeltasDescending(ctx context.Context, q Querier) ([]cashTransactionDelt
 			// (equivalent to treating it as having always already happened).
 			continue
 		}
-		occurredAt, err := db.ParseTime(occurredAtRaw.String)
+		occurredAt, err := dbtypes.ParseTime(occurredAtRaw.String)
 		if err != nil {
 			return nil, err
 		}
@@ -278,7 +276,10 @@ func cashDeltasDescending(ctx context.Context, q Querier) ([]cashTransactionDelt
 		// the transfer rule reach here would leave every day before a
 		// transfer off by its full amount.
 		included, _ := money.Eligibility(classification, providerStatus, effective, money.Considered, "")
-		if !included || effective == nil {
+		// cashBalance is BRL-only: other currencies, and foreign accounts whose
+		// transaction falls back to a BRL amount, are not reversed out.
+		if !included || effective == nil || effective.CurrencyCode != money.BRL ||
+			accountCurrency == nil || *accountCurrency != money.BRL {
 			continue
 		}
 
@@ -318,20 +319,22 @@ func decimalFromNullString(value sql.NullString) (*decimal.Decimal, error) {
 func earliestCashTransactionDay(ctx context.Context, q Querier) (day time.Time, ok bool, err error) {
 	var raw sql.NullString
 	err = q.QueryRowContext(ctx, `
-		SELECT MIN(ft.occurred_at)
+		SELECT MIN(occurred_at) FROM (SELECT ft.occurred_at
 		FROM financial_transactions ft
 		JOIN financial_accounts fa ON fa.id = ft.account_id
 		WHERE (fa.account_type IS NULL OR fa.account_type != 'CREDIT')
-		  AND ft.occurred_at IS NOT NULL AND ft.origin = 'synced'`).Scan(&raw)
+		  AND ft.occurred_at IS NOT NULL AND (fa.currency_code IS NULL OR fa.currency_code = 'BRL') AND ft.deleted_at IS NULL AND (ft.origin = 'synced' OR (fa.origin = 'manual' AND ft.provider_status = 'POSTED'))
+ UNION ALL SELECT aba.created_at FROM account_balance_adjustments aba
+ JOIN financial_accounts fa ON fa.id = aba.account_id WHERE fa.currency_code = 'BRL') history`).Scan(dbtypes.Time(&raw))
 	if err != nil || !raw.Valid {
 		return time.Time{}, false, err
 	}
-	earliest, err := db.ParseTime(raw.String)
+	earliest, err := dbtypes.ParseTime(raw.String)
 	if err != nil {
 		return time.Time{}, false, err
 	}
 	dayString := formatDate(earliest)
-	dayBoundary, err := time.Parse(dateLayout, dayString)
+	dayBoundary, err := dbtypes.ParseDate(dayString)
 	if err != nil {
 		return time.Time{}, false, err
 	}

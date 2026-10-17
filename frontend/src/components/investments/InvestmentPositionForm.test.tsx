@@ -260,21 +260,29 @@ describe("new asset inside the position form", () => {
 });
 
 describe("account selection", () => {
-  it("offers only manual accounts and preselects the first", async () => {
+  it("offers manual and integrated accounts and preselects the first", async () => {
     const onCreate = renderForm([integratedAccount, manualAccount]);
     fireEvent.mouseDown(screen.getByRole("combobox", { name: "Conta de investimento" }));
-    expect(await screen.findAllByText(manualAccount.name)).not.toHaveLength(0);
-    expect(screen.queryByText(integratedAccount.name, { selector: ".ant-select-item-option-content" })).toBeNull();
+    expect(await screen.findAllByText(manualAccount.name, { selector: ".ant-select-item-option-content" })).not.toHaveLength(0);
+    expect(await screen.findAllByText(integratedAccount.name, { selector: ".ant-select-item-option-content" })).not.toHaveLength(0);
     await choose("Ativo", "BTC · Bitcoin");
     await save();
-    await waitFor(() => expect(onCreate).toHaveBeenCalledWith(expect.objectContaining({ account_id: manualAccount.id })));
+    await waitFor(() => expect(onCreate).toHaveBeenCalledWith(expect.objectContaining({ account_id: integratedAccount.id })));
   });
 
-  it("refuses to save without a manual account", async () => {
-    const onCreate = renderForm([integratedAccount]);
+  it("saves a holding on an integrated account when picked explicitly", async () => {
+    const onCreate = renderForm([manualAccount, integratedAccount]);
+    await choose("Conta de investimento", integratedAccount.name);
     await choose("Ativo", "BTC · Bitcoin");
     await save();
-    expect(await screen.findByText("Selecione uma conta de investimento manual.")).toBeInTheDocument();
+    await waitFor(() => expect(onCreate).toHaveBeenCalledWith(expect.objectContaining({ account_id: integratedAccount.id })));
+  });
+
+  it("refuses to save without an active account", async () => {
+    const onCreate = renderForm([]);
+    await choose("Ativo", "BTC · Bitcoin");
+    await save();
+    expect(await screen.findByText("Selecione uma conta de investimento.")).toBeInTheDocument();
     expect(onCreate).not.toHaveBeenCalled();
   });
 });

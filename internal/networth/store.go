@@ -11,6 +11,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/greg0x46/julius/internal/db"
+	dbtypes "github.com/greg0x46/julius/internal/db/types"
 	"github.com/greg0x46/julius/internal/investments"
 	"github.com/greg0x46/julius/internal/money"
 	"github.com/greg0x46/julius/internal/payables"
@@ -28,12 +29,12 @@ const dateLayout = "2006-01-02"
 
 func formatDate(t time.Time) string { return t.UTC().Format(dateLayout) }
 
-// cashBalance is the asset side's cash figure: the same
-// transactions.CashOnHand the timeline anchors on, so the two views can
-// never disagree. Credit card accounts are excluded there — their balance
-// is owed debt, handled by creditCardBalance below.
+// cashBalance is the asset side's cash figure: BRL cash from
+// transactions.CashOnHandIn; other currencies are not converted into it.
+// Credit card accounts are excluded there — their balance is owed debt,
+// handled by creditCardBalance below.
 func cashBalance(ctx context.Context, q Querier) (decimal.Decimal, error) {
-	return transactions.CashOnHand(ctx, q, nil)
+	return transactions.CashOnHandIn(ctx, q, nil, money.BRL)
 }
 
 // creditCardBalance is what's currently owed across every credit card,
@@ -63,7 +64,7 @@ func investmentBalance(ctx context.Context, q Querier) (decimal.Decimal, error) 
 	total := manual
 	for rows.Next() {
 		var raw string
-		if err := rows.Scan(&raw); err != nil {
+		if err := rows.Scan(dbtypes.Decimal(&raw)); err != nil {
 			return decimal.Decimal{}, err
 		}
 		amount, err := decimal.NewFromString(raw)
@@ -126,7 +127,7 @@ func Snapshot(ctx context.Context, q Querier) (SnapshotRow, error) {
 			id, captured_at, total_assets, total_liabilities, net_worth,
 			cash_balance, investment_balance, credit_card_balance, payables_debt,
 			is_backfilled, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, FALSE, ?, ?)
 		ON CONFLICT (captured_at) DO UPDATE SET
 			total_assets = excluded.total_assets,
 			total_liabilities = excluded.total_liabilities,
@@ -135,7 +136,7 @@ func Snapshot(ctx context.Context, q Querier) (SnapshotRow, error) {
 			investment_balance = excluded.investment_balance,
 			credit_card_balance = excluded.credit_card_balance,
 			payables_debt = excluded.payables_debt,
-			is_backfilled = 0,
+			is_backfilled = FALSE,
 			updated_at = excluded.updated_at`,
 		id, capturedAt,
 		money.CanonicalDecimal(breakdown.TotalAssets), money.CanonicalDecimal(breakdown.TotalLiabilities), money.CanonicalDecimal(breakdown.NetWorth),
@@ -158,20 +159,20 @@ func scanSnapshotRow(scan func(...any) error) (SnapshotRow, error) {
 		cashRaw, investmentRaw, creditCardRaw, payablesDebtRaw string
 		isBackfilledRaw                                        int
 	)
-	if err := scan(&s.ID, &capturedAtRaw, &totalAssetsRaw, &totalLiabilitiesRaw, &netWorthRaw,
-		&cashRaw, &investmentRaw, &creditCardRaw, &payablesDebtRaw, &isBackfilledRaw,
-		&createdAtRaw, &updatedAtRaw); err != nil {
+	if err := scan(dbtypes.ID(&s.ID), dbtypes.Date(&capturedAtRaw), dbtypes.Decimal(&totalAssetsRaw), dbtypes.Decimal(&totalLiabilitiesRaw), dbtypes.Decimal(&netWorthRaw),
+		dbtypes.Decimal(&cashRaw), dbtypes.Decimal(&investmentRaw), dbtypes.Decimal(&creditCardRaw), dbtypes.Decimal(&payablesDebtRaw), dbtypes.Bool(&isBackfilledRaw),
+		dbtypes.Time(&createdAtRaw), dbtypes.Time(&updatedAtRaw)); err != nil {
 		return SnapshotRow{}, err
 	}
 	s.IsBackfilled = isBackfilledRaw != 0
 	var err error
-	if s.CapturedAt, err = time.Parse(dateLayout, capturedAtRaw); err != nil {
+	if s.CapturedAt, err = dbtypes.ParseDate(capturedAtRaw); err != nil {
 		return SnapshotRow{}, err
 	}
-	if s.CreatedAt, err = db.ParseTime(createdAtRaw); err != nil {
+	if s.CreatedAt, err = dbtypes.ParseTime(createdAtRaw); err != nil {
 		return SnapshotRow{}, err
 	}
-	if s.UpdatedAt, err = db.ParseTime(updatedAtRaw); err != nil {
+	if s.UpdatedAt, err = dbtypes.ParseTime(updatedAtRaw); err != nil {
 		return SnapshotRow{}, err
 	}
 	for _, field := range []struct {

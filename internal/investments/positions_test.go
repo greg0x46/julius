@@ -341,11 +341,6 @@ func TestSyncedPositionIsReadOnlyAndCountedOnce(t *testing.T) {
 	if err := investments.DeletePosition(ctx, f.conn, investmentID); !errors.Is(err, investments.ErrIntegratedReadOnly) {
 		t.Fatalf("delete = %v", err)
 	}
-	if _, err := investments.CreatePosition(ctx, f.conn, investments.PositionInput{
-		AccountID: "integrated:" + f.sourceID, Name: "Manual", AssetType: "Ativo", InitialValue: bookDecPtr("10"),
-	}); !errors.Is(err, investments.ErrIntegratedReadOnly) {
-		t.Fatalf("create on integrated account = %v", err)
-	}
 }
 
 func TestGoalAssignmentMovesNoMoney(t *testing.T) {

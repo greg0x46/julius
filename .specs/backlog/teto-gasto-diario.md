@@ -1,143 +1,140 @@
-# Ideia (não implementar ainda): Teto de gasto diário ("quanto posso gastar hoje")
+# Idea (do not implement yet): daily spending cap ("how much can I spend today")
 
-> Discussão salva para retomar depois. Nenhuma implementação foi feita.
-> Esse arquivo deve virar `.ideas/teto-gasto-diario.md` no repositório
-> `github.com/greg0x46/julius` quando sair do plan mode.
+> Discussion saved to resume later. Not implemented as designed here (Home has
+> a simpler `DailyAllowanceCard`, see `contextos/home/reference.md`). Some code
+> references below predate refactors (e.g. `internal/debts` is now
+> `internal/payables`); re-verify them before relying on them.
 
-## Motivação original
+## Original motivation
 
-Mostrar ao usuário quanto ele pode gastar **hoje** sem comprometer o resto
-do mês — não uma média fixa (orçamento ÷ dias do mês), mas um teto que sobe
-quando os dias anteriores economizaram e desce quando estouraram, com um
-freio contra quedas bruscas (compra grande não deve zerar o teto de um dia
-pro outro).
+Show the user how much they can spend **today** without compromising the rest of
+the month — not a fixed average (budget ÷ days in the month), but a cap that
+rises when previous days saved and falls when they overspent, with a brake
+against sharp drops (a big purchase must not zero the cap from one day to the
+next).
 
-## Versão 1: orçamento manual + amortecimento (desenhada, com dois bugs achados)
+## Version 1: manual budget + damping (designed, two bugs found)
 
-### Mecanismo
+### Mechanism
 ```
-teto_bruto(dia N)     = (orçamento_efetivo_do_mês − gasto_até_ontem) / dias_restantes
-teto_amortecido(N)    = teto_bruto(N), se for alta (sem limite)
-                       = max(teto_bruto(N), teto_amortecido(N-1) * (1 - damping%)), se for queda
-                       = 0 imediatamente (sem amortecer), se teto_bruto(N) <= 0
-                         + expõe "estourado em R$ X" = -teto_bruto(N) * dias_restantes
+raw_cap(day N)        = (effective_budget_of_month − spent_until_yesterday) / remaining_days
+damped_cap(N)         = raw_cap(N), if it is a rise (no limit)
+                       = max(raw_cap(N), damped_cap(N-1) * (1 - damping%)), if it is a fall
+                       = 0 immediately (no damping), if raw_cap(N) <= 0
+                         + exposes "overspent by R$ X" = -raw_cap(N) * remaining_days
 ```
-"Gasto elegível" = soma de `money.SelectEffectiveMoney` (BRL) de transações
-`Outflow` + `Considered` + categoria `kind='expense'`.
+"Eligible spending" = sum of `money.SelectEffectiveMoney` (BRL) of `Outflow` +
+`Considered` transactions with category `kind='expense'`.
 
-Sem estado por dia persistido — recalculado do zero a cada leitura, no
-mesmo espírito de `internal/debts` (paid/remaining/status nunca gravados,
-sempre recomputados dos links vigentes — ver `internal/debts/eligibility.go`,
-`internal/debts/store.go`).
+No per-day state persisted — recomputed from scratch on every read, in the same
+spirit as `internal/payables` (settled/remaining/status never stored, always
+recomputed from current links — see `internal/payables/eligibility.go` and
+`summary.go`).
 
-### Bug 1 — rollover ingênuo se autocancela/inverte
-Comparar sempre o gasto real do mês anterior contra o **valor bruto atual**
-do orçamento faz um rombo desaparecer (ou virar crédito fantasma) em ~2
-meses: o mês seguinte já gasta dentro de um teto reduzido, mas seria
-comparado de novo contra o valor não-reduzido.
-Exemplo: orçamento R$3000, janeiro gasta R$4000 (estoura R$1000) → fevereiro
-vira R$2000 de teto efetivo → se o usuário gastar certinho R$2000 em
-fevereiro, março recalcula rollover = 3000 − 2000 = **+1000** (crédito
-fantasma, quando na verdade só empatou).
+### Bug 1 — naive rollover cancels itself out / inverts
+Always comparing the previous month's real spending against the **current raw
+value** of the budget makes a deficit disappear (or become a phantom credit) in
+about 2 months: the next month already spends within a reduced cap, but would be
+compared again against the unreduced value.
+Example: budget R$3000, January spends R$4000 (overspends R$1000) → February's
+effective cap is R$2000 → if the user spends exactly R$2000 in February, March
+recomputes rollover = 3000 − 2000 = **+1000** (phantom credit, when in fact they
+only broke even).
 
-### Bug 2 — rollover cumulativo "puro" (sem histórico) é instável a edições
-Fix ingênuo pro bug 1: um saldo acumulado desde uma âncora (`Σ orçamento −
-gasto_real` de cada mês). Mas se cada termo da soma usa o valor **atual**
-do orçamento (já que a decisão foi "orçamento = valor único, sem
-histórico"), editar o orçamento hoje recalcula retroativamente **todo o
-passado acumulado**, sem limite de tempo — ao contrário do teto diário, que
-só reabre os dias do mês corrente.
+### Bug 2 — "pure" cumulative rollover (no history) is unstable under edits
+Naive fix for bug 1: a running balance since an anchor (`Σ budget − real spending`
+for each month). But if each term of the sum uses the **current** budget value
+(since the decision was "budget = a single value, no history"), editing the
+budget today retroactively recomputes the **entire accumulated past**, with no
+time limit — unlike the daily cap, which only reopens days of the current month.
 
-### Fix decidido (mas superado pela Versão 2 abaixo)
-Snapshot mensal dentro da própria tabela `settings` (sem migration nova):
-- `budget.monthly_amount` — valor atual/editável.
-- `budget.monthly_amount.<YYYY-MM>` — snapshot congelado de cada mês,
-  criado na 1ª leitura daquele mês; editar o orçamento no mês corrente
-  atualiza as duas chaves juntas, meses passados nunca são tocados.
-- `budget.first_configured_month` — âncora gravada uma única vez, pra não
-  aplicar rollover retroativo a meses anteriores a ter orçamento configurado.
-- Rollover cumulativo = `Σ (snapshot_do_mês(m) − gasto_real(m))` de
-  `first_configured_month` até o mês anterior — estável, não se autocancela
-  nem é distorcido por edições futuras.
+### Decided fix (but superseded by Version 2 below)
+Monthly snapshot inside the `settings` table itself (no new migration):
+- `budget.monthly_amount` — current/editable value.
+- `budget.monthly_amount.<YYYY-MM>` — frozen snapshot of each month, created on
+  that month's first read; editing the budget in the current month updates both
+  keys together, past months are never touched.
+- `budget.first_configured_month` — anchor written once, so rollover is not
+  applied retroactively to months before a budget was configured.
+- Cumulative rollover = `Σ (snapshot_of_month(m) − real_spending(m))` from
+  `first_configured_month` to the previous month — stable, does not cancel itself
+  out and is not distorted by future edits.
 
-## Versão 2 (proposta durante a discussão, não desenhada em detalhe): orçamento = saldo real
+## Version 2 (proposed during discussion, not designed in detail): budget = real balance
 
-Em vez do usuário configurar um número manual ("orçamento mensal"), usar o
-**saldo real das contas** (`financial_accounts.balance`, já sincronizado via
-Pluggy) como base do teto:
+Instead of the user configuring a manual number ("monthly budget"), use the
+**real account balances** (`financial_accounts.balance`, already synced via
+Pluggy) as the cap's basis:
 ```
-teto_bruto(dia N) ≈ saldo_disponível_agora / dias_restantes
+raw_cap(day N) ≈ available_balance_now / remaining_days
 ```
 
-### Por que é melhor
-- **Mata os dois bugs de rollover inteiros** — saldo real já carrega o
-  histórico sozinho (não precisa de snapshot mensal, âncora, nem soma
-  cumulativa).
-- **Elimina a dependência de categorização correta** — transferência entre
-  contas próprias se cancela sozinha ao somar os saldos de todas as contas
-  (outflow de uma, inflow de outra, soma líquida zero), sem precisar
-  filtrar por `kind='expense'`/`kind='transfer'`.
-- Reflete timing real de caixa (aperta antes do pagamento do salário, afrouxa
-  depois) em vez de uma média artificial.
+### Why it is better
+- **Kills both rollover bugs outright** — the real balance carries the history
+  by itself (no monthly snapshot, anchor or cumulative sum needed).
+- **Removes the dependency on correct categorization** — transfers between own
+  accounts cancel by summing the balances of all accounts (outflow of one,
+  inflow of another, net zero), with no need to filter on
+  `kind='expense'`/`kind='transfer'`.
+- Reflects real cash timing (tight before payday, looser after) instead of an
+  artificial average.
 
-### O que fica em aberto / mais complexo
-- **`financial_accounts.balance` é só um snapshot** (atualizado a cada
-  sync, `internal/syncsvc/service.go:197-230`), não uma série histórica —
-  pra rodar o loop de amortecimento dia a dia dentro do mês corrente,
-  precisa reconstruir a trajetória do saldo a partir das transações (saldo
-  de hoje menos/mais os movimentos de cada dia), não é um valor direto.
-- **`account_type`/`account_subtype` são texto cru vindo do Pluggy**
-  (`internal/pluggy/mapping.go:204-208`, `payload["type"]`/`payload["subtype"]`),
-  **sem enum validado neste repo** — nenhum `CHECK` constraint (diferente de
-  `categories.kind`), nenhum lugar no código assume valores específicos hoje.
-- **Nada expõe saldo de conta em nenhuma API ou tela hoje** — não existe
-  handler de contas nem UI de contas no frontend. Essa feature seria a
-  primeira a expor isso, não uma extensão de algo existente.
+### What stays open / is more complex
+- **`financial_accounts.balance` is just a snapshot** (updated on every sync,
+  `internal/syncsvc/service.go`), not a historical series — to run the damping
+  loop day by day within the current month, the balance trajectory must be
+  rebuilt from transactions (today's balance minus/plus each day's movements);
+  it is not a direct value.
+- **`account_type`/`account_subtype` are raw text from Pluggy**
+  (`internal/pluggy/mapping.go`, `payload["type"]`/`payload["subtype"]`), **with
+  no validated enum in this repo** — no `CHECK` constraint (unlike
+  `categories.kind`), and nowhere in the code assumes specific values today.
+- **Outdated since the idea was written:** it claimed no API or screen exposed
+  account balances. `GET /api/accounts` and `/contas-e-cartoes` exist now; check
+  what they expose before designing.
 
-### Pergunta em aberto: quais contas entram na soma do "saldo disponível"?
-Discutida, **não decidida** — três opções, com os tradeoffs de cada uma:
+### Open question: which accounts go into the "available balance" sum?
+Discussed, **not decided** — three options, with trade-offs:
 
-1. **Somar todas as contas** (corrente + poupança + investimento + cartão de
-   crédito como dívida negativa). Matematicamente mais limpo — transferências
-   e pagamento de fatura se cancelam sozinhos. Mas dinheiro guardado em
-   poupança/investimento reduziria o teto de hoje tanto quanto dinheiro na
-   conta corrente, o que pode não ser o que o usuário sente como "disponível".
-2. **Só contas correntes** (excluir poupança/investimento/cartão). Mais fiel
-   a "dinheiro realmente disponível pra gastar agora", mas exige distinguir
-   tipos de conta a partir de `account_type`/`account_subtype` crus do
-   Pluggy — sem enum validado, precisaria olhar dados reais de sync pra
-   descobrir os valores exatos usados, ou then uma tela nova pro usuário
-   marcar manualmente.
-3. **Usuário escolhe manualmente quais contas contam**. Mais correto e
-   flexível, mas exige criar uma tela de contas do zero (não existe nenhuma
-   hoje) só para esse toggle — escopo bem maior que as outras duas opções.
+1. **Sum all accounts** (checking + savings + investment + credit card as
+   negative debt). Mathematically cleanest — transfers and bill payments cancel
+   themselves. But money kept in savings/investment would lower today's cap as
+   much as money in checking, which may not match what the user feels as
+   "available".
+2. **Checking accounts only** (exclude savings/investment/card). More faithful to
+   "money really available to spend now", but requires distinguishing account
+   types from Pluggy's raw `account_type`/`account_subtype` — with no validated
+   enum, it would need real sync data to find the exact values used, or else a
+   new screen for the user to mark them manually.
+3. **User chooses manually which accounts count**. Most correct and flexible, but
+   requires building an accounts screen from scratch just for that toggle —
+   a much bigger scope than the other two.
 
-## Peças técnicas reaproveitáveis (válidas pra qualquer uma das duas versões)
+## Reusable technical pieces (valid for either version)
 
-- `internal/money/money.go`: `Classify`, `SelectEffectiveMoney`,
-  `Eligibility`, `CanonicalDecimal`.
-- `internal/money/period.go`: `Date`, `PeriodFor` (`GroupDay`/`GroupMonth`)
-  — bucketing por dia/mês local dado um timezone.
-- `internal/debts/eligibility.go`, `internal/debts/store.go`: padrão de
-  "recomputar tudo na leitura, nunca persistir valor derivado" a espelhar.
-- `internal/settings/store.go`: `Get`/`Set` de chave-valor em texto plano
-  (`encrypted=false, unlockKey=nil`), reusável pra qualquer config nova sem
+- `internal/money/money.go`: `Classify`, `SelectEffectiveMoney`, `Eligibility`,
+  `CanonicalDecimal`.
+- `internal/money/period.go`: `Date`, `PeriodFor` (`GroupDay`/`GroupMonth`) —
+  day/month bucketing in local time given a time zone.
+- `internal/payables/eligibility.go`, `summary.go`: the "recompute everything on
+  read, never persist derived values" pattern to mirror.
+- `internal/settings/store.go`: plain-text key-value `Get`/`Set`
+  (`encrypted=false, unlockKey=nil`), reusable for any new config without a
   migration.
-- `internal/httpapi/transactions_handlers.go` `handleSpendingByCategory`
-  (~389-410): padrão de `?timezone=` por request + `time.LoadLocation`,
-  sem timezone persistido no servidor — deve ser reusado igual pra "hoje".
-- **Cuidado de performance confirmado**: `internal/transactions/query.go`'s
-  `fetchAllViews` faz `SELECT *` sem `WHERE`, filtra tudo em Go — aceitável
-  pro uso atual, mas essa feature não deve reusar esse padrão em loop (uma
-  query por dia do mês); precisa de queries bounded por `WHERE occurred_at
-  >= ? AND occurred_at < ?`, usando o índice existente
+- `internal/httpapi/transactions_handlers.go` `handleSpendingByCategory`:
+  per-request `?timezone=` + `time.LoadLocation`, with no time zone persisted on
+  the server — reuse the same for "today".
+- **Confirmed performance caution**: `internal/transactions/query.go`'s
+  `fetchAllViews` does `SELECT *` with no `WHERE` and filters everything in Go —
+  acceptable for current use, but this feature must not reuse that pattern in a
+  loop (one query per day of the month); it needs bounded queries with
+  `WHERE occurred_at >= ? AND occurred_at < ?`, using the existing index
   `ix_financial_transactions_occurred_at_id_desc`.
 
-## Próximos passos ao retomar
-1. Decidir Versão 1 (orçamento manual, com o fix de snapshot mensal) vs.
-   Versão 2 (saldo real) — Versão 2 é mais elegante mas tem escopo maior
-   (expor saldo de conta é território novo no app).
-2. Se for Versão 2: decidir o escopo de contas (uma das 3 opções acima) e
-   olhar dados reais de sync do Pluggy pra saber os valores de
-   `account_type`/`account_subtype` disponíveis antes de desenhar qualquer
-   filtro automático.
+## Next steps when resuming
+1. Decide Version 1 (manual budget, with the monthly snapshot fix) vs. Version 2
+   (real balance) — Version 2 is more elegant but has a larger scope (exposing
+   account balance is new territory for the app).
+2. If Version 2: decide the account scope (one of the 3 options above) and look at
+   real Pluggy sync data to learn the available `account_type`/`account_subtype`
+   values before designing any automatic filter.

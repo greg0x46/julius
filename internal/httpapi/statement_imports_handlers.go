@@ -19,6 +19,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/greg0x46/julius/internal/db"
+	dbtypes "github.com/greg0x46/julius/internal/db/types"
 	"github.com/greg0x46/julius/internal/ledger"
 	"github.com/greg0x46/julius/internal/statementimport"
 )
@@ -113,7 +114,7 @@ func loadFileAccount(ctx context.Context, q interface {
 	QueryRowContext(context.Context, string, ...any) *sql.Row
 }, id string) (string, error) {
 	var source string
-	err := q.QueryRowContext(ctx, `SELECT fa.source_id FROM financial_accounts fa JOIN data_sources ds ON ds.id=fa.source_id WHERE fa.id=? AND ds.provider='file' AND fa.currency_code='BRL'`, id).Scan(&source)
+	err := q.QueryRowContext(ctx, `SELECT fa.source_id FROM financial_accounts fa JOIN data_sources ds ON ds.id=fa.source_id WHERE fa.id=? AND ds.provider='file' AND fa.currency_code='BRL'`, id).Scan(dbtypes.ID(&source))
 	return source, err
 }
 func digest(parts ...string) string {
@@ -187,18 +188,18 @@ func classifyStatement(ctx context.Context, q interface {
 			matchedID := row.Identity
 			var oldBalance sql.NullString
 			forcedID := digest("statement-v3", accountID, p.SHA256, fmt.Sprint(row.LineNumber))
-			err := q.QueryRowContext(ctx, `SELECT balance_after FROM financial_transactions WHERE account_id=? AND external_id=?`, accountID, forcedID).Scan(&oldBalance)
+			err := q.QueryRowContext(ctx, `SELECT balance_after FROM financial_transactions WHERE account_id=? AND external_id=?`, accountID, forcedID).Scan(dbtypes.Decimal(&oldBalance))
 			if err == nil {
 				matchedID = forcedID
 			} else if err == sql.ErrNoRows {
-				err = q.QueryRowContext(ctx, `SELECT balance_after FROM financial_transactions WHERE account_id=? AND external_id=?`, accountID, row.Identity).Scan(&oldBalance)
+				err = q.QueryRowContext(ctx, `SELECT balance_after FROM financial_transactions WHERE account_id=? AND external_id=?`, accountID, row.Identity).Scan(dbtypes.Decimal(&oldBalance))
 			}
 			if err == sql.ErrNoRows {
 				// Statements imported before v2 used an identity without balance.
 				// Match those only when the balance agrees; otherwise keep the
 				// new movement and show the ambiguity in the preview.
 				legacyID := digest("statement-v1", accountID, base, fmt.Sprint(legacySeen[base]))
-				err = q.QueryRowContext(ctx, `SELECT balance_after FROM financial_transactions WHERE account_id=? AND external_id=?`, accountID, legacyID).Scan(&oldBalance)
+				err = q.QueryRowContext(ctx, `SELECT balance_after FROM financial_transactions WHERE account_id=? AND external_id=?`, accountID, legacyID).Scan(dbtypes.Decimal(&oldBalance))
 				if err == nil && (!oldBalance.Valid || !sameStatementBalance(oldBalance.String, row.Balance)) {
 					row.Warnings = append(row.Warnings, warnBalanceDiffers)
 					err = sql.ErrNoRows
@@ -344,7 +345,7 @@ func handleStatementAccounts(conn *sql.DB) http.HandlerFunc {
 		out := []importAccount{}
 		for rows.Next() {
 			var a importAccount
-			if err := rows.Scan(&a.ID, &a.Name, &a.CurrencyCode); err != nil {
+			if err := rows.Scan(dbtypes.ID(&a.ID), &a.Name, &a.CurrencyCode); err != nil {
 				writeProblem(w, 503, "accounts-unavailable", "Contas indisponíveis", "")
 				return
 			}
@@ -368,7 +369,7 @@ func handleStatementHistory(conn *sql.DB) http.HandlerFunc {
 		out := []importHistory{}
 		for rows.Next() {
 			var h importHistory
-			if err := rows.Scan(&h.RunID, &h.AccountID, &h.AccountName, &h.Filename, &h.Format, &h.CreatedAt, &h.Counts.Total, &h.Counts.New, &h.Counts.Duplicate, &h.Counts.Invalid); err != nil {
+			if err := rows.Scan(dbtypes.ID(&h.RunID), dbtypes.ID(&h.AccountID), &h.AccountName, &h.Filename, &h.Format, dbtypes.Time(&h.CreatedAt), &h.Counts.Total, &h.Counts.New, &h.Counts.Duplicate, &h.Counts.Invalid); err != nil {
 				writeProblem(w, 503, "imports-unavailable", "Importações indisponíveis", "")
 				return
 			}
@@ -595,7 +596,7 @@ func latestStatementBalance(rows []statementimport.Row) (asOf, balance string) {
 // preview and confirmation on the same database transaction.
 func loadFileAccountTx(ctx context.Context, tx *sql.Tx, id string) (string, error) {
 	var s string
-	err := tx.QueryRowContext(ctx, `SELECT fa.source_id FROM financial_accounts fa JOIN data_sources ds ON ds.id=fa.source_id WHERE fa.id=? AND ds.provider='file' AND fa.currency_code='BRL'`, id).Scan(&s)
+	err := tx.QueryRowContext(ctx, `SELECT fa.source_id FROM financial_accounts fa JOIN data_sources ds ON ds.id=fa.source_id WHERE fa.id=? AND ds.provider='file' AND fa.currency_code='BRL'`, id).Scan(dbtypes.ID(&s))
 	return s, err
 }
 func makeStatementPreviewTx(ctx context.Context, tx *sql.Tx, data []byte, name, format, account string) (importPreview, error) {
