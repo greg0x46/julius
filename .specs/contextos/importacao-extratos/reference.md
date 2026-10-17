@@ -49,6 +49,8 @@ fields, spaces after commas). The file name never determines the period.
   line number for its distinct identity; an ignore choice records an unchanged
   normalization event linked to the existing transaction. Re-uploading after
   either choice is automatically skipped, without another decision.
+  An ignored row's balance remains ineligible for the account balance anchor
+  on replay, including when the account has no balance timestamp yet.
   The preview fingerprint includes the compared existing data; changing that
   data or the classification before confirmation requires a new preview.
 - Identical rows within the same file are distinct movements (ordinal 1, 2, ...).

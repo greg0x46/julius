@@ -253,6 +253,8 @@ func classifyStatement(ctx context.Context, q interface {
 			err := q.QueryRowContext(ctx, `SELECT 1 FROM normalization_events ne JOIN financial_transactions ft ON ft.id=ne.transaction_id WHERE ft.account_id=? AND ne.external_id=? AND ne.outcome='unchanged' LIMIT 1`, accountID, ignoredID).Scan(&ignored)
 			if err == nil {
 				row.Status = "duplicate"
+				// Replaying an ignored conflict must not apply its balance.
+				row.Warnings = append(row.Warnings, warnBalanceDiffers)
 				p.Counts.Duplicate++
 				continue
 			}
