@@ -93,10 +93,17 @@ total comes from the cycle's eligible entries, not from the reported balance
 (`transactions.CreditCardTransactionTotal`). Manual bank accounts instead derive native balance from opening balance +
 posted undeleted transaction amounts + explicit adjustment deltas; their
 inclusion/category annotations do not alter cash either. Synced balances retain
-provider ownership. Cash on hand is BRL-only without a rate source and comes from
-`transactions.CashOnHand`, Net Worth's BRL aggregate. Timeline reuses `AccountBalance` for native
+provider ownership. Cash on hand comes from `transactions.CashOnHandByCurrency`, one
+total per currency; Net Worth reads the BRL total via `CashOnHandIn`, without a rate source. Timeline reuses `AccountBalance` for native
 balance ownership, then converts its reference-date anchor and historical flows
 through `internal/reporting`, with explicit FX coverage.
+
+Currency-bearing values use `money.Amount` (value + code) and `money.Balances`
+(one total per currency): adding different currencies is `ErrCurrencyMismatch`,
+and this layer never converts. `money.ParseCurrency` accepts only uppercase ISO
+4217 codes; a missing, malformed or unknown code (`ABC`) is an explicit error,
+never BRL. Net-worth backfill reverses only BRL movements of BRL accounts, to
+match the BRL anchor.
 
 The matrix of each of these rules, its owning module and the test that pins it
 is in [`invariantes-financeiros.md`](invariantes-financeiros.md).
