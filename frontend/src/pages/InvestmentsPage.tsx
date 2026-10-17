@@ -1,3 +1,4 @@
+import { ApiError } from "../api/problems";
 import { AimOutlined, BankOutlined, PieChartOutlined, SwapOutlined } from "@ant-design/icons";
 import { Alert, Button, Skeleton, Switch } from "antd";
 import { useMemo, useState } from "react";
@@ -74,7 +75,8 @@ export function InvestmentsPage() {
   const [editingOperation, setEditingOperation] = useState<InvestmentOperation | null>(null);
   const [operationAccountId, setOperationAccountId] = useState<string | null>(null);
 
-  const manualAccounts = workspace.accounts.filter((account) => account.kind === "manual");
+  // Manual holdings may sit in a manual account or next to a connection's holdings.
+  const holdingAccounts = workspace.accounts.filter((account) => account.active);
   const accountName = (accountId: string) =>
     workspace.accounts.find((account) => account.id === accountId)?.name ?? "Conta não encontrada";
   const summaryAccount = (accountId: string) =>
@@ -259,11 +261,11 @@ export function InvestmentsPage() {
           key: "position",
           label: "Nova posição",
           description:
-            manualAccounts.length === 0
-              ? "Cadastre uma conta de investimento manual primeiro"
-              : "Um ativo dentro de uma conta manual",
+            holdingAccounts.length === 0
+              ? "Cadastre uma conta de investimento primeiro"
+              : "Um ativo dentro de uma conta de investimento",
           icon: <PieChartOutlined aria-hidden="true" />,
-          disabled: manualAccounts.length === 0,
+          disabled: holdingAccounts.length === 0,
           onClick: () => openPositionCreate(null),
         },
         {
@@ -292,9 +294,9 @@ export function InvestmentsPage() {
       actions={createMenu}
       tabs={<PageTabs label="Visão dos investimentos" options={viewOptions} value={view} onChange={setView} />}
     >
-      {workspace.error && !workspace.isLoading && view !== "synced" && (
+      {workspace.error && !workspace.isLoading && (
         <UnavailableState onRetry={() => void workspace.refetch()}>
-          Não foi possível carregar os investimentos
+          {workspace.error instanceof ApiError ? workspace.error.message : "Não foi possível carregar os investimentos"}
         </UnavailableState>
       )}
       {actionError && (
@@ -314,20 +316,30 @@ export function InvestmentsPage() {
             <Skeleton active paragraph={{ rows: 5 }} />
           </div>
         </div>
-      ) : workspace.error && view !== "synced" ? null : (
+      ) : workspace.error ? null : (
         // A failed load shows only the retry above: zeroed totals and "Nenhuma
         // conta ainda" beside it would claim there is nothing there.
         <>
-          {workspace.summary?.valuation && workspace.positions.some((position) => position.currency_code !== "BRL") && (
-            <Alert type="info" showIcon style={{ marginBottom: 16 }} message="Totais em reais"
-              description={`Posições em outras moedas entram nos totais com o câmbio disponível até ${new Date(workspace.summary.valuation.valued_at).toLocaleString("pt-BR")}. Os valores das posições continuam na moeda original.`} />
+          {workspace.positions.some((position) => position.currency_code !== "BRL") && (
+            <Alert
+              type="info"
+              showIcon
+              style={{ marginBottom: 16 }}
+              message={`Totais em ${workspace.summary?.currency_code ?? "BRL"}`}
+              description="Posições fora da base em BRL são exibidas na moeda original e continuam fora dos totais e metas. A moeda de referência altera a avaliação dos totais consolidados."
+            />
           )}
           {/* Each view's hero is its own scope: the workspace total for the
               account and goal views, the imported investments' total for the
               synced one. Two heroes on one screen would compete. */}
           {view === "synced" ? (
             !syncedInvestments.isLoading &&
-            syncedInvestments.investments.length > 0 && <InvestmentsSummary investments={syncedInvestments.investments} summary={workspace.error ? null : workspace.summary} />
+            syncedInvestments.investments.length > 0 && (
+              <InvestmentsSummary
+                valuation={workspace.summary ?? undefined}
+                investments={syncedInvestments.investments}
+              />
+            )
           ) : (
             <InvestmentWorkspaceSummary
               summary={workspace.summary}
@@ -368,6 +380,7 @@ export function InvestmentsPage() {
               <div className="investments-list">
                 {workspace.accounts.map((account) => (
                   <InvestmentAccountCard
+                    valuation={workspace.summary ?? undefined}
                     key={account.id}
                     account={account}
                     summary={summaryAccount(account.id)}
@@ -414,6 +427,7 @@ export function InvestmentsPage() {
                 if (portfolio === null && positions.length === 0) return null;
                 return (
                   <InvestmentGoalCard
+                    valuation={workspace.summary ?? undefined}
                     key={portfolio?.id ?? "sem-objetivo"}
                     portfolio={portfolio}
                     summary={summaryPortfolio(portfolio?.id ?? null)}
@@ -502,7 +516,6 @@ export function InvestmentsPage() {
         open={positionFormOpen}
         position={editingPosition}
         accounts={positionAccounts ?? workspace.accounts}
-        positions={workspace.positions}
         portfolios={workspace.portfolios}
         submitting={workspace.isSaving}
         submitError={saveError}

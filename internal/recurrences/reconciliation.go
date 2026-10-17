@@ -212,21 +212,17 @@ func MonthKey(t time.Time) time.Time {
 }
 
 // CandidatesByMonth selects the real transactions a commitment could
-// reconcile against — same category, and same account when it names one —
+// reconcile against — same account when it names one —
 // bucketed by MonthKey, which is the scope ResolveOccurrence needs: its
 // conditions (amount, day-of-month) are month-agnostic, so one month's
 // transaction would otherwise reconcile every other month's occurrence.
 //
 // This is the *automatic* candidate set only. A manual pick deliberately
-// isn't filtered this way (see EligibilityForReconciliation): a common reason
-// to reconcile by hand is that the category on the transaction is wrong.
+// can use another account or a nearby month (see EligibilityForReconciliation).
 func CandidatesByMonth(commitment RecurringCommitment, realCandidates []transactions.Item) map[time.Time][]transactions.Item {
 	byMonth := map[time.Time][]transactions.Item{}
 	for _, item := range realCandidates {
 		if item.OccurredAt == nil {
-			continue
-		}
-		if item.InternalCategory == nil || item.InternalCategory.ID != commitment.CategoryID {
 			continue
 		}
 		if commitment.AccountID != nil && item.Account.ID != *commitment.AccountID {

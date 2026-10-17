@@ -1,11 +1,14 @@
+import { ReportValuation } from "../shared/ReportValuation";
 import dayjs from "dayjs";
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
 
+import { ReportingDetails } from "../shared/ReportingDetails";
+import { problemMessage, reportingError } from "../../presentation/reporting";
 import type { Period } from "../../hooks/usePeriod";
 import { useHomePeriodBounds } from "../../hooks/useHomePeriodBounds";
 import { useTimeline } from "../../hooks/useTimeline";
-import { formatBRL } from "../../presentation/money";
+import { formatReportMoney } from "../../presentation/money";
 import { Skeleton } from "antd";
 
 import { UnavailableState } from "../AsyncState";
@@ -78,7 +81,8 @@ export function PeriodBalanceCard({ period }: { period: Period }) {
               if (timeline.error) timeline.refetch();
             }}
           >
-            Não foi possível carregar o resultado do período.
+            {problemMessage(timeline.error) ?? "Não foi possível carregar o resultado do período."}
+            <ReportingDetails report={reportingError(timeline.error)?.problem?.reporting} totals={reportingError(timeline.error)?.problem?.totals} />
           </UnavailableState>
         )}
       </Section>
@@ -89,35 +93,38 @@ export function PeriodBalanceCard({ period }: { period: Period }) {
     `/transacoes?date_from=${bounds.from}&date_to=${bounds.to}&classification=${classification}`;
 
   return (
-    <SummaryStrip
-      className="period-balance"
-      label="Resultado do período"
-      value={<Money value={balance} tone="result" size="hero" />}
-      note={empty ? "Nenhuma movimentação no período" : "Entradas menos saídas, incluindo cenários ativos"}
-      items={[
-        {
-          label: "Entradas",
-          value: (
-            <Link
-              to={transactionsLink("inflow")}
-              aria-label={`Entradas: ${formatBRL(inflow)}. Ver transações`}
-            >
-              <FlowFigure value={inflow} direction="inflow" />
-            </Link>
-          ),
-        },
-        {
-          label: "Saídas",
-          value: (
-            <Link
-              to={transactionsLink("outflow")}
-              aria-label={`Saídas: ${formatBRL(outflow)}. Ver transações`}
-            >
-              <FlowFigure value={outflow} direction="outflow" />
-            </Link>
-          ),
-        },
-      ]}
-    />
+    <ReportValuation valuation={timeline.valuation}>
+      <SummaryStrip
+        className="period-balance"
+        label="Resultado do período"
+        value={<Money value={balance} tone="result" size="hero" />}
+        note={empty ? "Nenhuma movimentação no período" : "Entradas menos saídas, incluindo cenários ativos"}
+        items={[
+          {
+            label: "Entradas",
+            value: (
+              <Link
+                to={transactionsLink("inflow")}
+                aria-label={`Entradas: ${formatReportMoney(inflow, timeline.currencyCode)}. Ver transações`}
+              >
+                <FlowFigure value={inflow} direction="inflow" />
+              </Link>
+            ),
+          },
+          {
+            label: "Saídas",
+            value: (
+              <Link
+                to={transactionsLink("outflow")}
+                aria-label={`Saídas: ${formatReportMoney(outflow, timeline.currencyCode)}. Ver transações`}
+              >
+                <FlowFigure value={outflow} direction="outflow" />
+              </Link>
+            ),
+          },
+        ]}
+      />
+      <ReportingDetails report={totals?.reporting} totals={totals?.totals} />
+    </ReportValuation>
   );
 }

@@ -1,13 +1,13 @@
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { Investment, InvestmentPosition, InvestmentTransaction } from "../../api/contracts";
+import type { InvestmentPosition } from "../../api/contracts";
+import { integratedAccount } from "../../test/investmentWorkspaceFixtures";
 import * as compactScreen from "../shared/useCompactScreen";
-import { InvestmentHeaderCard } from "./InvestmentHeaderCard";
-import { InvestmentTimeline } from "./InvestmentTimeline";
 import { InvestmentFigures } from "./InvestmentFigures";
+import { InvestmentOperationFields } from "./InvestmentOperationForm";
 import { InvestmentPositionsTable } from "./InvestmentPositionsTable";
 import { fromMoneyInput, toMoneyInput } from "./moneyDraft";
 
@@ -72,6 +72,27 @@ function renderTable(compact: boolean, onDelete = vi.fn()) {
   );
   return onDelete;
 }
+
+describe("InvestmentOperationFields", () => {
+  it("offers trades for the manual holdings of an integrated account, but no cash opening balance", async () => {
+    render(
+      <InvestmentOperationFields
+        formId="operation"
+        operation={null}
+        accounts={[integratedAccount]}
+        positions={[]}
+        submitError={null}
+        onSubmit={vi.fn()}
+      />,
+    );
+    fireEvent.mouseDown(screen.getByRole("combobox", { name: "Tipo" }));
+    const option = (label: string) => screen.queryByText(label, { selector: ".ant-select-item-option-content" });
+    expect(await screen.findByText("Compra", { selector: ".ant-select-item-option-content" })).toBeInTheDocument();
+    expect(option("Venda")).toBeInTheDocument();
+    expect(option("Cotação manual")).toBeInTheDocument();
+    expect(option("Saldo inicial")).toBeNull();
+  });
+});
 
 describe("InvestmentPositionsTable", () => {
   it("is a stack of rows with a record menu on a phone, with no table to scroll sideways", async () => {
@@ -148,41 +169,9 @@ describe("InvestmentFigures", () => {
 
 describe("moneyDraft", () => {
   it("round-trips a decimal string through the money field without drifting", () => {
-    expect(toMoneyInput("1234.50")).toBe(1234.5);
-    expect(fromMoneyInput(1234.5)).toBe("1234.50");
+    expect(toMoneyInput("1234.50")).toBe("1234.50");
+    expect(fromMoneyInput("1234.5")).toBe("1234.50");
     expect(toMoneyInput(null)).toBeNull();
     expect(fromMoneyInput(null)).toBeNull();
   });
-});
-
-describe("native provider investment amounts", () => {
-  for (const currency of ["USD", "BRL"]) {
-    it(`labels the holding and its movements in ${currency}`, () => {
-      const investment: Investment = {
-        id: "holding", external_id: "holding", source_display_name: null, investment_type: "FIXED_INCOME",
-        subtype: null, name: "Foreign fund", balance: "100", currency_code: currency, quantity: null,
-        value: null, amount: null, amount_profit: null, amount_withdrawal: null, amount_original: "90",
-        taxes: "2", taxes2: null, rate: null, rate_type: null, fixed_annual_rate: null, annual_rate: null,
-        last_twelve_months_rate: null, issuer: null, due_date: null, as_of_date: null, provider_updated_at: null,
-        yield_value: "10", yield_source: "informado", yield_unavailable_reason: null,
-      };
-      const transaction: InvestmentTransaction = {
-        id: "movement", external_id: "movement", movement_type: "BUY", direction: "inflow", quantity: null,
-        value: null, amount: "90", occurred_at: "2020-01-01", trade_date: null,
-      };
-      render(<>
-        <InvestmentHeaderCard investment={investment} transactions={[transaction]} />
-        <InvestmentTimeline transactions={[transaction]} currency={currency} isLoading={false} error={null} onRetry={vi.fn()} />
-      </>);
-      const prefix = currency === "USD" ? "USD" : "R$";
-      expect(screen.getByText(`${prefix} 100,00`)).toBeVisible();
-      expect(screen.getByText(`${prefix} 2,00`)).toBeVisible();
-      const movements = screen.getByRole("list", { name: "Movimentações" });
-      expect(within(movements).getByText(`${prefix} 90,00`)).toBeVisible();
-      if (currency === "USD") {
-        expect(screen.getByText(/Valores deste investimento em USD/)).toBeVisible();
-        expect(screen.queryByText(/R\$/)).toBeNull();
-      }
-    });
-  }
 });

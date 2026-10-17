@@ -81,6 +81,10 @@ func openSQLite(path string) (*sql.DB, error) {
 	// through a single connection so WAL readers never race a writer that
 	// goose or the app opened on a second pooled connection.
 	conn.SetMaxOpenConns(1)
+	if _, err := conn.Exec("PRAGMA foreign_keys = ON"); err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("enable sqlite foreign keys: %w", err)
+	}
 
 	if err := migrate(conn, goose.DialectSQLite3, sqliteMigrationsFS, "migrations/sqlite"); err != nil {
 		conn.Close()
@@ -111,6 +115,11 @@ func openPostgres(dsn string) (*sql.DB, error) {
 	conn := sql.OpenDB(connector)
 	pool.apply(conn)
 
+	if err := convertLegacyPostgres(conn); err != nil {
+		conn.Close()
+		return nil, fmt.Errorf("convert legacy Postgres: %w", err)
+	}
+
 	locker, err := lock.NewPostgresSessionLocker(lock.WithLockTimeout(1, 300))
 	if err != nil {
 		conn.Close()
@@ -131,6 +140,11 @@ func Migrate(conn *sql.DB) error {
 // migrate applies every pending migration under root. SQLite callers pass no
 // options: goose rejects a session locker on a pool capped at one connection.
 func migrate(conn *sql.DB, dialect goose.Dialect, migrationsFS embed.FS, root string, opts ...goose.ProviderOption) error {
+	if !strings.Contains(root, "/archive/") {
+		if err := guardSchema(conn, dialect); err != nil {
+			return err
+		}
+	}
 	migrations, err := fs.Sub(migrationsFS, root)
 	if err != nil {
 		return fmt.Errorf("root migrations fs: %w", err)

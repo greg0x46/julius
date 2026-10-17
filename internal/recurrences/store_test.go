@@ -9,6 +9,7 @@ import (
 
 	"github.com/greg0x46/julius/internal/categories"
 	"github.com/greg0x46/julius/internal/db"
+	"github.com/greg0x46/julius/internal/db/dbtest"
 	"github.com/greg0x46/julius/internal/money"
 	"github.com/greg0x46/julius/internal/recurrences"
 )
@@ -59,6 +60,53 @@ func TestCreateAndGetRoundTrips(t *testing.T) {
 	if fetched.DayOfMonth != 5 || fetched.Cadence != recurrences.CadenceMonthly {
 		t.Errorf("unexpected cadence/day: %+v", fetched)
 	}
+}
+
+func TestCommitmentLifecycleBothDialects(t *testing.T) {
+	dbtest.Each(t, func(t *testing.T, conn *sql.DB) {
+		ctx := context.Background()
+		category := newCategory(t, conn)
+		write := testWrite(t, category.ID)
+		created, err := recurrences.Create(ctx, conn, write)
+		if err != nil {
+			t.Fatalf("Create: %v", err)
+		}
+		fetched, err := recurrences.Get(ctx, conn, created.ID)
+		if err != nil {
+			t.Fatalf("Get: %v", err)
+		}
+		if fetched.CategoryID != category.ID || !fetched.IsActive || !fetched.Amount.Equal(write.Amount) || !fetched.StartDate.Equal(write.StartDate) {
+			t.Fatalf("unexpected commitment: %+v", fetched)
+		}
+		write.Amount = dec(t, "1600.25")
+		updated, err := recurrences.Update(ctx, conn, created.ID, write)
+		if err != nil || !updated.Amount.Equal(write.Amount) {
+			t.Fatalf("Update: %+v, %v", updated, err)
+		}
+		paused, err := recurrences.SetActive(ctx, conn, created.ID, false)
+		if err != nil || paused.IsActive {
+			t.Fatalf("SetActive: %+v, %v", paused, err)
+		}
+		active, err := recurrences.ListActive(ctx, conn)
+		if err != nil || len(active) != 0 {
+			t.Fatalf("ListActive after pause: %+v, %v", active, err)
+		}
+		// The schema permits uncategorized schedules; their public ID stays empty.
+		if _, err := conn.ExecContext(ctx, `UPDATE scenario_recurring_schedules SET category_id = NULL WHERE scenario_id = ?`, created.ID); err != nil {
+			t.Fatalf("clear category: %v", err)
+		}
+		fetched, err = recurrences.Get(ctx, conn, created.ID)
+		if err != nil || fetched.CategoryID != "" {
+			t.Fatalf("Get without category: %+v, %v", fetched, err)
+		}
+		all, err := recurrences.List(ctx, conn)
+		if err != nil || len(all) != 1 || all[0].CategoryID != "" {
+			t.Fatalf("List without category: %+v, %v", all, err)
+		}
+		if err := recurrences.Delete(ctx, conn, created.ID); err != nil {
+			t.Fatalf("Delete: %v", err)
+		}
+	})
 }
 
 func TestUpdateReplacesFields(t *testing.T) {

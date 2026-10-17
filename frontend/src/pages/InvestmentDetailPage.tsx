@@ -51,7 +51,6 @@ function ValidInvestmentDetail({ id }: { id: string }) {
 
           <InvestmentTimeline
             transactions={investment.transactions}
-            currency={snapshot.currency_code ?? "BRL"}
             isLoading={investment.transactionsLoading}
             error={investment.transactionsError}
             onRetry={investment.retryTransactions}

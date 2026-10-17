@@ -1,8 +1,10 @@
-import { UploadOutlined } from "@ant-design/icons";
+import { PlusOutlined, UploadOutlined } from "@ant-design/icons";
 import { Alert, Button } from "antd";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import type { Account } from "../api/contracts";
+import { ManualAccountForm } from "../components/accounts/ManualAccountForm";
 import { AccountsSummary } from "../components/accounts/AccountsSummary";
 import { BankAccountList } from "../components/accounts/BankAccountList";
 import { CreditCardList } from "../components/accounts/CreditCardList";
@@ -10,6 +12,7 @@ import { EmptyState, Page, PageAction, Section } from "../components/layout";
 import { useAccounts } from "../hooks/useAccounts";
 
 export function AccountsPage() {
+  const [creating, setCreating] = useState(false);
   const accounts = useAccounts();
   const navigate = useNavigate();
 
@@ -35,12 +38,13 @@ export function AccountsPage() {
   return (
     <Page
       title="Contas e cartões"
-      description="Saldos e detalhes das suas contas conectadas e importadas por arquivo"
-      actions={importAction}
+      description="Saldos e detalhes das suas contas bancárias e cartões"
+      actions={<><PageAction icon={<PlusOutlined aria-hidden="true" />} label="Nova conta" shortLabel="Nova" onClick={() => setCreating(true)} />{importAction}</>}
       className="accounts-page"
       width="narrow"
       compactMobileHeader
     >
+      {creating && <ManualAccountForm onClose={() => setCreating(false)} onSaved={(account) => { setCreating(false); openDetail(account); }} />}
       {accounts.error && (
         <Alert
           type="error"
@@ -56,8 +60,8 @@ export function AccountsPage() {
         <Section title="Contas">
           <EmptyState
             title="Nenhuma conta ainda"
-            hint="Importe um extrato ou conecte um banco em Configurações para ver saldos, faturas e limites aqui."
-            action={<Button onClick={() => navigate("/configuracoes/open-banking")}>Conectar um banco</Button>}
+            hint="Crie uma conta manual, importe um extrato ou conecte um banco em Configurações."
+            action={<Button onClick={() => setCreating(true)}>Nova conta</Button>}
           />
         </Section>
       ) : (

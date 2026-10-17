@@ -1,20 +1,23 @@
-import { DatePicker, Input, InputNumber, Select } from "antd";
+import { isPositiveDecimal } from "../../presentation/decimal";
+import { Button, DatePicker, Input, InputNumber, Select } from "antd";
 import dayjs, { type Dayjs } from "dayjs";
-import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import type {
   InvestmentAccount,
+  InvestmentAsset,
   InvestmentPortfolio,
   InvestmentPosition,
   InvestmentPositionUpdate,
   InvestmentPositionWrite,
 } from "../../api/contracts";
-import { listInvestmentAssets } from "../../api/investmentPortfolio";
-import { investmentAssetsQueryKey } from "../../hooks/useInvestmentAssets";
+import { useInvestmentAssets } from "../../hooks/useInvestmentAssets";
+import { errorMessage } from "../../presentation/errors";
 import { FormDrawer } from "../forms/FormDrawer";
 import { FormField } from "../forms/FormField";
 import { MoneyInput } from "../forms/MoneyInput";
+import { assetWriteFrom, catalogQuoteMarket, emptyAssetDraft, type AssetDraft } from "./assetDraft";
+import { InvestmentAssetFields } from "./InvestmentAssetFields";
 import { fromMoneyInput, toMoneyInput } from "./moneyDraft";
 
 type Draft = {
@@ -33,7 +36,7 @@ type Draft = {
 
 function blankDraft(accounts: InvestmentAccount[]): Draft {
   return {
-    accountId: accounts.find((account) => account.kind === "manual" && account.active)?.id ?? "",
+    accountId: accounts.find((account) => account.active)?.id ?? "",
     assetId: null,
     portfolioId: null,
     name: "",
@@ -65,14 +68,45 @@ function draftFrom(position: InvestmentPosition | null, accounts: InvestmentAcco
 }
 
 function positive(value: string | null): boolean {
-  return value !== null && Number(value) > 0;
+  return value !== null && isPositiveDecimal(value);
+}
+
+/** Case-, accent- and punctuation-insensitive search. */
+function searchKey(value: string): string {
+  return value.normalize("NFD").replace(/[^\p{L}\p{N}]/gu, "").toUpperCase();
+}
+
+function assetLabel(asset: InvestmentAsset): string {
+  return [asset.ticker, asset.name].filter(Boolean).join(" · ");
+}
+
+/** Mirrors the backend's canonical key: the ticker when there is one, else type and name. */
+function assetCanonicalKey(asset: { name: string; ticker: string | null; asset_type: string }): string {
+  const clean = (value: string) => Array.from(value.replace(/[^\p{L}\p{Nd}]/gu, ""), (letter) => {
+    const upper = letter.toUpperCase();
+    // Go's Unicode uppercase maps one rune at a time.
+    return Array.from(upper).length === 1 ? upper : letter;
+  }).join("");
+  const ticker = clean(asset.ticker ?? "");
+  return ticker ? `ticker:${ticker}` : `name:${clean(asset.asset_type)}:${clean(asset.name)}`;
+}
+
+function findDuplicate(assets: InvestmentAsset[], write: { name: string; ticker: string | null; asset_type: string }) {
+  const key = assetCanonicalKey(write);
+  return assets.find((asset) => assetCanonicalKey(asset) === key);
+}
+
+/** A short code-like search (BTC, PETR4) starts the new asset's ticker; anything else its name. */
+function assetDraftFromSearch(search: string): AssetDraft {
+  const text = search.trim();
+  const looksLikeTicker = /^[A-Za-z0-9]+$/.test(text) && (/\d/.test(text) || text.length <= 5);
+  return looksLikeTicker ? { ...emptyAssetDraft, ticker: text.toUpperCase() } : { ...emptyAssetDraft, name: text };
 }
 
 export function InvestmentPositionForm({
   open,
   position,
   accounts,
-  positions,
   portfolios,
   submitting,
   submitError,
@@ -83,7 +117,6 @@ export function InvestmentPositionForm({
   open: boolean;
   position: InvestmentPosition | null;
   accounts: InvestmentAccount[];
-  positions: InvestmentPosition[];
   portfolios: InvestmentPortfolio[];
   submitting: boolean;
   submitError: string | null;
@@ -93,42 +126,111 @@ export function InvestmentPositionForm({
 }) {
   const [draft, setDraft] = useState<Draft>(() => draftFrom(position, accounts));
   const [error, setError] = useState<string | null>(null);
+  const [creatingAsset, setCreatingAsset] = useState(false);
+  const [assetDraft, setAssetDraft] = useState<AssetDraft>(emptyAssetDraft);
+  const [assetSearch, setAssetSearch] = useState("");
+  const [savingAsset, setSavingAsset] = useState(false);
+  const [createdAsset, setCreatedAsset] = useState<InvestmentAsset | null>(null);
   const isEditing = position !== null;
-  const catalog = useQuery({
-    queryKey: investmentAssetsQueryKey,
-    queryFn: ({ signal }) => listInvestmentAssets(signal),
-    enabled: open && !isEditing,
-  });
+  const catalog = useInvestmentAssets({ enabled: open && !isEditing });
+  const session = useRef<{ open: boolean; positionId: string | null }>({ open: false, positionId: null });
 
   useEffect(() => {
-    if (open) {
+    const positionId = position?.id ?? null;
+    const reset = open && (!session.current.open || session.current.positionId !== positionId);
+    session.current = { open, positionId };
+    if (reset) {
       setDraft(draftFrom(position, accounts));
       setError(null);
+      setCreatingAsset(false);
+      setAssetDraft(emptyAssetDraft);
+      setAssetSearch("");
+      setCreatedAsset(null);
+    } else if (open && !position) {
+      setDraft((current) => current.accountId ? current : { ...current, accountId: blankDraft(accounts).accountId });
     }
   }, [open, position, accounts]);
 
   const editableAccounts = useMemo(
-    () => accounts.filter((account) => account.kind === "manual" && account.active),
+    () => accounts.filter((account) => account.active),
     [accounts],
   );
   const accountOptions = editableAccounts.map((account) => ({ value: account.id, label: account.name }));
   const portfolioOptions = portfolios.map((portfolio) => ({ value: portfolio.id, label: portfolio.name }));
-  const assetOptions = Array.from(new Map([
-    ...positions.filter((item) => item.asset_id !== null).map((item) => [item.asset_id!, { value: item.asset_id!, label: [item.ticker, item.name].filter(Boolean).join(" · ") }] as const),
-    ...(catalog.data ?? []).map((item) => [item.id, { value: item.id, label: [item.ticker, item.name].filter(Boolean).join(" · ") }] as const),
-  ]).values());
+  // The asset this form just created stays selectable until the catalog refetch brings it in.
+  const assets = createdAsset && !catalog.assets.some((asset) => asset.id === createdAsset.id)
+    ? [...catalog.assets, createdAsset]
+    : catalog.assets;
+  const assetOptions = assets.map((asset) => ({ value: asset.id, label: assetLabel(asset) }));
+  const selectedAsset = assets.find((asset) => asset.id === draft.assetId);
+  // With nothing in the catalog there is nothing to pick: the form opens on a new asset.
+  const catalogEmpty = !catalog.isLoading && !catalog.error && assets.length === 0;
+  const showNewAsset = creatingAsset || catalogEmpty;
+  const assetQuoteMarket = catalogQuoteMarket(assetDraft, catalog.classification);
+  const classLabel = (asset: InvestmentAsset) =>
+    catalog.classification.find((item) => item.asset_class === asset.asset_class)?.label ?? asset.asset_class;
 
-  const submit = () => {
-    if (draft.name.trim() === "") {
+  const startNewAsset = () => {
+    if (assetDraft === emptyAssetDraft) setAssetDraft(assetDraftFromSearch(assetSearch));
+    setCreatingAsset(true);
+  };
+  const pickAsset = (asset: InvestmentAsset | undefined) => {
+    setCreatingAsset(false);
+    setDraft((current) => ({
+      ...current,
+      assetId: asset?.id ?? null,
+      name: asset?.name ?? "",
+      ticker: asset?.ticker ?? "",
+      assetType: asset?.asset_type ?? "",
+    }));
+  };
+
+  // A new asset is created first, through the same validation as the asset
+  // registry, and the position then refers to it by id. Once created it
+  // becomes the selection, so retrying a failed position never creates it twice.
+  const createAsset = async (): Promise<InvestmentAsset | null> => {
+    const quoteSource = assetDraft.quoteEnabled ? assetQuoteMarket : null;
+    const write = assetWriteFrom(assetDraft, quoteSource, quoteSource ? assetDraft.quoteSymbol.trim() : "");
+    if (typeof write === "string") {
+      setError(write);
+      return null;
+    }
+    const duplicate = findDuplicate(assets, write);
+    if (duplicate) {
+      pickAsset(duplicate);
+      setError(`Já existe o ativo ${assetLabel(duplicate)} no catálogo. Ele foi selecionado; confira e salve.`);
+      return null;
+    }
+    setSavingAsset(true);
+    try {
+      const asset = await catalog.createAsset(write);
+      setCreatedAsset(asset);
+      pickAsset(asset);
+      setAssetDraft(emptyAssetDraft);
+      return asset;
+    } catch (failure) {
+      setError(errorMessage(failure, "Não foi possível cadastrar o ativo."));
+      return null;
+    } finally {
+      setSavingAsset(false);
+    }
+  };
+
+  const submit = async () => {
+    if (isEditing && draft.name.trim() === "") {
       setError("Informe o nome da posição.");
       return;
     }
-    if (draft.assetType.trim() === "") {
+    if (isEditing && draft.assetType.trim() === "") {
       setError("Informe o tipo do ativo.");
       return;
     }
+    if (!isEditing && !showNewAsset && !selectedAsset) {
+      setError("Escolha um ativo ou cadastre um novo.");
+      return;
+    }
     if (!isEditing && draft.accountId === "") {
-      setError("Selecione uma conta de investimento manual.");
+      setError("Selecione uma conta de investimento.");
       return;
     }
     if ((draft.initialQuantity !== null && !positive(draft.initialQuantity)) || (draft.initialUnitCost !== null && !positive(draft.initialUnitCost))) {
@@ -150,12 +252,14 @@ export function InvestmentPositionForm({
       });
       return;
     }
+    const asset = showNewAsset ? await createAsset() : selectedAsset;
+    if (!asset) return;
     onCreate({
       account_id: draft.accountId,
-      asset_id: draft.assetId,
-      name: draft.name.trim(),
-      ticker: draft.ticker.trim() || null,
-      asset_type: draft.assetType.trim(),
+      asset_id: asset.id,
+      name: asset.name,
+      ticker: asset.ticker,
+      asset_type: asset.asset_type,
       portfolio_id: draft.portfolioId,
       initial_quantity: draft.initialQuantity ?? undefined,
       initial_unit_cost: draft.initialUnitCost ?? undefined,
@@ -175,14 +279,15 @@ export function InvestmentPositionForm({
       title={isEditing ? "Editar posição manual" : "Nova posição manual"}
       open={open}
       onClose={onCancel}
-      onSubmit={submit}
-      submitting={submitting}
+      onSubmit={() => void submit()}
+      submitting={submitting || savingAsset}
       error={error ?? submitError}
     >
       {!isEditing && (
         <p className="form-field-hint">
           Posição manual em reais. Ativos com cotação automática buscam preços de mercado. Para os demais, registre
-          avaliações manuais; sem avaliação, o valor exibido é o custo acumulado.
+          avaliações manuais; sem avaliação, o valor exibido é o custo acumulado. Numa conta integrada, a posição
+          fica ao lado das posições da instituição e a sincronização não a altera.
         </p>
       )}
       <FormField
@@ -195,61 +300,99 @@ export function InvestmentPositionForm({
           value={draft.accountId || undefined}
           options={accountOptions}
           disabled={isEditing}
-          placeholder="Selecione uma conta manual"
+          placeholder="Selecione uma conta de investimento"
           onChange={(value: string) => setDraft((current) => ({ ...current, accountId: value }))}
         />
       </FormField>
-      {!isEditing && assetOptions.length > 0 && (
+      {!isEditing && !showNewAsset && (
         <FormField
-          label="Ativo existente (opcional)"
+          label="Ativo"
           htmlFor="investment-position-asset"
-          hint="O mesmo ativo pode ser mantido em várias contas."
+          error={catalog.error ? (
+            <>
+              Não foi possível carregar os ativos.{" "}
+              <Button type="link" size="small" htmlType="button" onClick={() => void catalog.refetch()}>
+                Tentar novamente
+              </Button>
+            </>
+          ) : undefined}
+          hint={selectedAsset && (
+            <span aria-live="polite">
+              {[classLabel(selectedAsset), selectedAsset.asset_type, selectedAsset.currency_code,
+                selectedAsset.quote_source ? "Cotação automática" : "Avaliação manual"].join(" · ")}
+            </span>
+          )}
         >
           <Select
             id="investment-position-asset"
+            aria-describedby={selectedAsset ? "investment-position-asset-hint" : undefined}
             value={draft.assetId ?? undefined}
             options={assetOptions}
-            allowClear
             showSearch
-            optionFilterProp="label"
-            placeholder="Cadastre um novo ativo abaixo"
+            autoFocus
+            filterOption={(input, option) => searchKey(option?.label ?? "").includes(searchKey(input))}
+            // Leaving the field clears its search; the last text typed still seeds a new asset.
+            onSearch={(value) => value !== "" && setAssetSearch(value)}
+            notFoundContent="Nenhum ativo encontrado."
+            placeholder={catalog.isLoading ? "Carregando ativos…" : "Busque por código ou nome (ex.: PETR4, Bitcoin)"}
             loading={catalog.isLoading}
-            onChange={(value: string | undefined) => {
-              const selected = catalog.data?.find((item) => item.id === value) ?? positions.find((item) => item.asset_id === value);
-              setDraft((current) => ({ ...current, assetId: value ?? null,
-                name: selected?.name ?? current.name, ticker: selected?.ticker ?? current.ticker,
-                assetType: selected?.asset_type ?? current.assetType }));
-            }}
+            onChange={(value: string) => pickAsset(assets.find((asset) => asset.id === value))}
           />
+          <Button type="link" htmlType="button" className="investment-new-asset-link" onClick={startNewAsset}>
+            + Cadastrar novo ativo
+          </Button>
         </FormField>
       )}
-      <FormField label="Nome" htmlFor="investment-position-name">
-        <Input
-          id="investment-position-name"
-          value={draft.name}
-          autoFocus
-          onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))}
-          placeholder="Ex.: Tesouro Selic 2029"
-        />
-      </FormField>
-      <div className="investment-form-pair">
-        <FormField label="Código (opcional)" htmlFor="investment-position-ticker">
-          <Input
-            id="investment-position-ticker"
-            value={draft.ticker}
-            onChange={(event) => setDraft((current) => ({ ...current, ticker: event.target.value }))}
-            placeholder="Ex.: BOVA11"
+      {!isEditing && showNewAsset && (
+        <section className="investment-new-asset" role="group" aria-labelledby="investment-new-asset-title">
+          <div className="investment-new-asset-header">
+            <h3 id="investment-new-asset-title">Novo ativo</h3>
+            {!catalogEmpty && (
+              <Button type="link" htmlType="button" onClick={() => setCreatingAsset(false)}>
+                Escolher ativo existente
+              </Button>
+            )}
+          </div>
+          {catalogEmpty && <p className="form-field-hint">Nenhum ativo no catálogo ainda.</p>}
+          <InvestmentAssetFields
+            draft={assetDraft}
+            onChange={setAssetDraft}
+            classification={catalog.classification}
+            quoteMarket={assetQuoteMarket}
           />
-        </FormField>
-        <FormField label="Tipo do ativo" htmlFor="investment-position-type">
-          <Input
-            id="investment-position-type"
-            value={draft.assetType}
-            onChange={(event) => setDraft((current) => ({ ...current, assetType: event.target.value }))}
-            placeholder="Ex.: ETF, CDB, Fundo"
-          />
-        </FormField>
-      </div>
+        </section>
+      )}
+      {isEditing && (
+        <>
+          <FormField label="Nome" htmlFor="investment-position-name">
+            <Input
+              id="investment-position-name"
+              value={draft.name}
+              autoFocus
+              onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))}
+              placeholder="Ex.: Tesouro Selic 2029"
+            />
+          </FormField>
+          <div className="investment-form-pair">
+            <FormField label="Código (opcional)" htmlFor="investment-position-ticker">
+              <Input
+                id="investment-position-ticker"
+                value={draft.ticker}
+                onChange={(event) => setDraft((current) => ({ ...current, ticker: event.target.value }))}
+                placeholder="Ex.: BOVA11"
+              />
+            </FormField>
+            <FormField label="Tipo do ativo" htmlFor="investment-position-type">
+              <Input
+                id="investment-position-type"
+                value={draft.assetType}
+                onChange={(event) => setDraft((current) => ({ ...current, assetType: event.target.value }))}
+                placeholder="Ex.: ETF, CDB, Fundo"
+              />
+            </FormField>
+          </div>
+        </>
+      )}
       <FormField label="Objetivo (opcional)" htmlFor="investment-position-goal">
         <Select
           id="investment-position-goal"
@@ -298,7 +441,7 @@ export function InvestmentPositionForm({
           >
             <MoneyInput
               id="investment-position-value"
-              min={0.01}
+              min="0"
               value={toMoneyInput(draft.initialValue)}
               onChange={(value) => setDraft((current) => ({ ...current, initialValue: fromMoneyInput(value) }))}
             />

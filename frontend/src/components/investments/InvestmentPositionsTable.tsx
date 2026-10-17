@@ -4,7 +4,10 @@ import type { ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import type { InvestmentPortfolio, InvestmentPosition } from "../../api/contracts";
-import { investmentValuationBasisLabel } from "../../presentation/investmentWorkspaceLabels";
+import {
+  investmentPositionSourceLabel,
+  investmentValuationBasisLabel,
+} from "../../presentation/investmentWorkspaceLabels";
 import { formatDecimal } from "../../presentation/investmentLabels";
 import { formatBRL, formatMoney } from "../../presentation/money";
 import { EmptyState, ResponsiveList } from "../layout";
@@ -57,6 +60,7 @@ export function InvestmentPositionsTable({
   onAssignGoal,
   onEdit,
   onDelete,
+  markManual = false,
   busy,
   emptyTitle,
   emptyHint,
@@ -74,6 +78,8 @@ export function InvestmentPositionsTable({
   onAssignGoal: (position: InvestmentPosition, portfolioId: string | null) => void;
   onEdit?: (position: InvestmentPosition) => void;
   onDelete?: (position: InvestmentPosition) => void;
+  /** Tags manual rows of an integrated account, where they sit next to the provider's. */
+  markManual?: boolean;
   busy: boolean;
   emptyTitle: string;
   emptyHint?: ReactNode;
@@ -86,6 +92,8 @@ export function InvestmentPositionsTable({
   const subtitle = (position: InvestmentPosition) =>
     [position.ticker, position.asset_type].filter(Boolean).join(" · ");
   const costOf = (position: InvestmentPosition) => costs[position.id] ?? null;
+  const manualTag = (position: InvestmentPosition) =>
+    markManual && position.source === "manual" ? investmentPositionSourceLabel.manual : null;
 
   /**
    * An imported position is the institution's record: only the goal, which is
@@ -162,6 +170,7 @@ export function InvestmentPositionsTable({
             ) : (
               position.name
             )}
+            {manualTag(position) && <span className="investment-quiet"> · {manualTag(position)}</span>}
             {position.closed && <span className="investment-quiet"> · Encerrada</span>}
           </span>
           <span className="investment-quiet">{subtitle(position)}</span>
@@ -249,7 +258,7 @@ export function InvestmentPositionsTable({
       empty={<EmptyState title={emptyTitle} hint={emptyHint} action={emptyAction} />}
       row={(position) => ({
         title: position.name,
-        meta: [subtitle(position), showAccount ? accountNameOf?.(position.account_id) : goalName(position)]
+        meta: [manualTag(position), subtitle(position), showAccount ? accountNameOf?.(position.account_id) : goalName(position)]
           .filter(Boolean)
           .join(" · "),
         trailing: (

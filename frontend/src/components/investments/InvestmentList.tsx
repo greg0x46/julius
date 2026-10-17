@@ -2,7 +2,6 @@ import { Skeleton } from "antd";
 
 import type { Investment } from "../../api/contracts";
 import { investmentTypeLabel, investmentYield, yieldUnavailable } from "../../presentation/investmentLabels";
-import { formatMoney } from "../../presentation/money";
 import { EmptyState, ListRow, Section } from "../layout";
 import { Money } from "../shared/Money";
 
@@ -16,7 +15,7 @@ function YieldFigure({ investment }: { investment: Investment }) {
   if (estimate === null) return <span className="investment-row-yield">{yieldUnavailable(investment).label}</span>;
   return (
     <span className="investment-row-yield">
-      Rendimento {investment.currency_code && investment.currency_code !== "BRL" ? formatMoney(estimate.value, investment.currency_code) : <Money value={estimate.value} tone="result" />}
+      Rendimento <Money value={estimate.value} tone="result" />
     </span>
   );
 }
@@ -55,7 +54,7 @@ export function InvestmentList({
               meta={[investment.source_display_name, investmentTypeLabel(investment.investment_type)]
                 .filter(Boolean)
                 .join(" · ")}
-              trailing={investment.balance !== null ? (investment.currency_code && investment.currency_code !== "BRL" ? formatMoney(investment.balance, investment.currency_code) : <Money value={investment.balance} tone="balance" />) : "—"}
+              trailing={investment.balance !== null ? <Money value={investment.balance} tone="balance" /> : "—"}
               status={<YieldFigure investment={investment} />}
               onClick={() => onOpen(investment)}
               ariaLabel={`Abrir ${investment.name ?? "investimento sem nome"}`}

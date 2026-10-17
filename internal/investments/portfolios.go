@@ -11,7 +11,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/greg0x46/julius/internal/db"
-	"github.com/greg0x46/julius/internal/fx"
+	dbtypes "github.com/greg0x46/julius/internal/db/types"
 )
 
 const portfolioColumns = `id, name, target_amount, target_date, notes, created_at, updated_at`
@@ -22,7 +22,7 @@ func scanPortfolio(row interface{ Scan(...any) error }) (Portfolio, error) {
 		targetAmountRaw, targetDateRaw, notes sql.NullString
 		createdAtRaw, updatedAtRaw            string
 	)
-	if err := row.Scan(&p.ID, &p.Name, &targetAmountRaw, &targetDateRaw, &notes, &createdAtRaw, &updatedAtRaw); err != nil {
+	if err := row.Scan(dbtypes.ID(&p.ID), &p.Name, dbtypes.Decimal(&targetAmountRaw), dbtypes.Date(&targetDateRaw), &notes, dbtypes.Time(&createdAtRaw), dbtypes.Time(&updatedAtRaw)); err != nil {
 		return Portfolio{}, err
 	}
 	if targetAmountRaw.Valid {
@@ -115,10 +115,7 @@ func ListPortfolios(ctx context.Context, q Querier) ([]Portfolio, error) {
 	if err != nil {
 		return nil, err
 	}
-	values, err := valuedPortfolioValues(ctx, q, positions)
-	if err != nil {
-		return nil, err
-	}
+	values := portfolioValues(positions)
 	for i := range portfolios {
 		applyPortfolioValue(&portfolios[i], values[portfolios[i].ID])
 	}
@@ -134,11 +131,7 @@ func GetPortfolio(ctx context.Context, q Querier, id string) (Portfolio, error) 
 	if err != nil {
 		return Portfolio{}, err
 	}
-	values, err := valuedPortfolioValues(ctx, q, positions)
-	if err != nil {
-		return Portfolio{}, err
-	}
-	applyPortfolioValue(&portfolio, values[id])
+	applyPortfolioValue(&portfolio, portfolioValues(positions)[id])
 	return portfolio, nil
 }
 
@@ -193,20 +186,4 @@ func DeletePortfolio(ctx context.Context, q Querier, id string) error {
 	}
 	_, err := q.ExecContext(ctx, `DELETE FROM investment_portfolios WHERE id = ?`, id)
 	return err
-}
-
-func valuedPortfolioValues(ctx context.Context, q Querier, positions []Position) (map[string]decimal.Decimal, error) {
-	valuation := fx.New(time.Now())
-	values := map[string]decimal.Decimal{}
-	for _, p := range positions {
-		if p.PortfolioID == nil {
-			continue
-		}
-		value, err := valuation.Convert(ctx, q, p.CurrentValue, fx.Currency(p.CurrencyCode))
-		if err != nil {
-			return nil, err
-		}
-		values[*p.PortfolioID] = values[*p.PortfolioID].Add(value)
-	}
-	return values, nil
 }

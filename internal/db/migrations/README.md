@@ -1,56 +1,74 @@
 # Migrations
 
-Two independent goose sequences, one per dialect. `internal/db` picks the
-directory from the DSN and each database tracks its own version, so the two
-sequences never meet at runtime.
+SQLite and Postgres share one numbered Goose sequence. Each dialect starts at
+`0001_initial.sql`, representing the final application schema; add the same
+number and suffix in both directories for every subsequent change. Migrations
+remain forward-only: never modify an applied migration.
 
-## Reference-currency valuation
+## Storage contract
 
-`reference_currency_valuation` leaves existing snapshot amounts untouched,
-with version 0, status `legacy_unknown`, and no currency or valuation date.
-They cannot be assumed to be BRL or historically FX-correct. Version 1 live
-snapshots use BRL and the latest stored rate observed at or before `valued_at`;
-the exact rates, observation timestamps, and sources are copied into the row.
-Rates are BRL per native currency unit, recorded through `fx.StoreRate`;
-there is no automatic FX feed or implicit fallback rate.
+Postgres uses unconstrained `NUMERIC` for exact money, quantities and rates,
+`TIMESTAMPTZ` for UTC instants, `DATE` for calendar days, `BOOLEAN` for flags and
+`UUID` for UUID identities and their links. Opaque provider identifiers, hashes,
+keys and integrated investment-account IDs (`integrated:<source id>`) remain
+text. SQLite uses exact decimal and UTC timestamp text, date text and integer
+0/1 flags. Both enforce the same enums, currency codes, relationships and
+partial uniqueness; all foreign keys declare their delete behavior.
 
-Backfills reconstruct native cash before converting at the end of each UTC
-day. They are `reconstructed_partial` because historical investment values
-are unavailable. Days with missing historical FX are `unavailable`, with no
-usable totals. Today's rates are never applied to an earlier day.
-The same unavailable status applies when a transaction lacks its actual
-account-currency amount and only supplies a different currency: a valuation
-rate cannot recover the bank's historical exchange rate for that movement.
+No decimal check casts to floating point. SQLite's positive/nonnegative checks
+validate decimal text and inspect its sign/nonzero digits; Postgres compares
+native numeric values and rejects non-finite numbers. Reads use `internal/db/types`
+to normalize native values without introducing floating point. Authentication
+instants now use the same timestamp representation as other stores.
 
-## Os números não correspondem entre dialetos
+## Existing databases
 
-Um mesmo passo lógico tem números diferentes em `sqlite/` e `postgres/`. Não é
-descuido: as sequências divergiram cedo (o SQLite ganhou migrations que o
-Postgres nunca precisou, e vice-versa — `00024_drop_stale_payables_receivable_column`
-só existe no Postgres), e renumerar história quebraria qualquer banco já
-migrado. Desde `00025` o Postgres está exatamente **um número atrás** do
-SQLite para os mesmos passos:
+`julius_schema_version` distinguishes this schema generation from legacy Goose
+version 1. `db.Open` automatically converts final legacy Postgres (version 46)
+before running the new migration sequence. It locks the source tables, creates
+the baseline in a temporary schema, copies in FK order and checks counts and
+complete converted row equality. Activation, fresh Goose history and conversion
+commit together; all failures roll back. Original tables, old history and the
+append-only trigger function remain in a `julius_legacy_<id>` schema recorded in
+startup logs. An advisory transaction lock serializes concurrent conversions.
+The same DSN and master key continue to work. Stop old instances before upgrade;
+retain an external backup and grant the application role schema creation rights.
+Incomplete legacy Postgres and legacy SQLite are rejected without mutation.
+Empty databases initialize normally and generation 1 databases reopen normally.
+Use `cmd/migrate-legacy` with a read-only final legacy SQLite backup and a
+separate fresh SQLite/Postgres target; see README "Database schema generations".
+Keep the old binary, database and master key until cutover is validated. Never
+delete the old database or rewrite its Goose version to bypass the guard. The
+generic SQLite-to-Postgres copier has been replaced by this temporary tool.
+It converts the inventory allowlist, checks native types, fills new columns from
+baseline defaults, and explicitly skips obsolete tables and Goose metadata.
+Real copies use one transaction per table; dry-run uses row savepoints in one
+rollback transaction so it can check FKs and report all row errors. Validation
+compares every surviving table count, native account balance and account movement
+sum with exact decimal arithmetic. Targets with application data or edited seeds
+are refused; a failed real copy requires a fresh target for retry.
 
-| passo lógico | sqlite | postgres |
-|---|---|---|
-| `recurrence_reconciliations` | 00026 | 00025 |
-| `scenario_projection_unification` | 00027 | 00026 |
-| `drop_scenario_transaction_realizations` | 00028 | 00027 |
-| `drop_recurrence_reconciliations` | 00029 | 00028 |
-| `drop_recurring_commitments` | 00030 | 00029 |
+`archive/sqlite` and `archive/postgres` retain the original migrations unchanged.
+They are embedded only in tests that pin historical data migrations and rollbacks,
+not in the application binary. Their independent numbering is historical and
+must never be reused by the active runner.
 
-**Ao adicionar uma migration:** case pelo *sufixo* (o nome do passo), nunca
-pelo número. Se o passo vale para os dois bancos, crie os dois arquivos com o
-mesmo sufixo e o próximo número **de cada** diretório.
+## Validation
 
-## SQLite: `PRAGMA foreign_keys`
+`TestBaselineSchemaParity` applies both baselines and compares tables, columns,
+nullability, index definitions, checks and foreign keys. It normalizes equivalent
+dialect syntax and native type-domain checks; `TestBaselineNativeTypes` separately
+pins every money/decimal/date/instant/boolean column against the inventory.
+Postgres tests require a disposable `JULIUS_TEST_POSTGRES_DSN`. Guard tests cover
+legacy SQLite and incomplete Postgres versions, unchanged migration history, and an
+unsupported generation. Shared constraint tests also pin currency/enum domains,
+boolean flags, and exact decimal round trips beyond floating-point range. The
+financial invariant matrix links this precision rule to its tests.
 
-Um rebuild de tabela (`CREATE ... _new` / copiar / `DROP` / `RENAME`) só
-precisa desligar as FKs quando **outra** tabela referencia a que está sendo
-reconstruída, ou quando uma linha precisa apontar para outra que ainda não
-existe. Fora esses casos, deixe as FKs ligadas e a migration dentro da
-transação do goose — é o que dá rollback de verdade se algo falhar no meio.
-`PRAGMA foreign_keys` é ignorado dentro de uma transação, então usá-lo obriga
-a `-- +goose NO TRANSACTION`, e aí uma falha no meio deixa o schema pela
-metade *e* a conexão do pool com FK desligada. Prefira reordenar os inserts
-(ver `00030_drop_recurring_commitments.sql`) a pagar esse preço.
+SQLite table rebuilds should remain transactional where possible. Turning off
+foreign keys requires `-- +goose NO TRANSACTION`; prefer ordering inserts and
+using a transaction over leaving a half-applied schema after a failure.
+
+`legacy_postgres_test.go` pins automatic Postgres conversion, exact balances,
+encrypted values, retained backup, unchanged session deadlines, restart, atomic
+rollback/retry, concurrent startups and calendar conventions.

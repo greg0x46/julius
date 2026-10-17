@@ -2,16 +2,13 @@
 // minus liabilities) over time. There is no background worker: a snapshot
 // for "today" is written on every read (Snapshot, called from the HTTP
 // handler before List), which is enough for a self-hosted app used
-// sporadically. The cash figure comes from transactions.CashOnHand, the
-// same implementation internal/timeline anchors its series on.
+// sporadically. The cash figure comes from transactions.CashOnHandIn (BRL).
 package networth
 
 import (
 	"time"
 
 	"github.com/shopspring/decimal"
-
-	"github.com/greg0x46/julius/internal/fx"
 )
 
 // Breakdown is a point-in-time decomposition of net worth into the
@@ -58,12 +55,10 @@ func (b Breakdown) TotalsFor() Breakdown {
 // Snapshot mirrors one net_worth_snapshots row: a Breakdown captured on a
 // given calendar day.
 type SnapshotRow struct {
-	Valuation        *fx.Metadata
-	ValuationVersion int
-	ValuationStatus  string
-	ID               string
-	CapturedAt       time.Time
-	Breakdown        Breakdown
+	CurrencyCode string
+	ID           string
+	CapturedAt   time.Time
+	Breakdown    Breakdown
 	// IsBackfilled marks a row written by Backfill (reconstructed from past
 	// transactions) rather than Snapshot (a live read of today's
 	// provider-synced balances). Breakdown.InvestmentBalance is always zero
@@ -72,9 +67,3 @@ type SnapshotRow struct {
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 }
-
-const (
-	ValuationComplete      = "complete"
-	ValuationReconstructed = "reconstructed_partial"
-	ValuationUnavailable   = "unavailable"
-)

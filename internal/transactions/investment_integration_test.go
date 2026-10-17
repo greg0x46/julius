@@ -41,7 +41,7 @@ func TestReconciledInvestmentSplitFlowsThroughQueryAndCategories(t *testing.T) {
 	if err != nil || len(spending) != 1 || spending[0].Amount != "50" {
 		t.Fatalf("spending = %+v, err=%v", spending, err)
 	}
-	cash, err := transactions.CashOnHand(ctx, f.conn, nil)
+	cash, err := transactions.CashOnHandIn(ctx, f.conn, nil, money.BRL)
 	if err != nil || cash.String() != "500" {
 		t.Fatalf("cash changed: %s err=%v", cash, err)
 	}

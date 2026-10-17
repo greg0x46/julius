@@ -38,7 +38,7 @@ const groups: SettingsGroup[] = [
   {
     title: "Conta",
     entries: [
-      { path: "geral", title: "Geral", description: "Como as compras no cartão entram no mês." },
+      { path: "geral", title: "Geral", description: "Moeda dos relatórios e mês das compras no cartão." },
       { path: "seguranca", title: "Segurança", description: "Senha e acesso à sua conta." },
     ],
   },

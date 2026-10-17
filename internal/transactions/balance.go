@@ -4,18 +4,18 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"time"
 
 	"github.com/shopspring/decimal"
 
 	"github.com/greg0x46/julius/internal/db"
-	"github.com/greg0x46/julius/internal/fx"
+	dbtypes "github.com/greg0x46/julius/internal/db/types"
+	"github.com/greg0x46/julius/internal/money"
 )
 
-// CashOnHand is how much cash sits in the user's non-credit accounts: the
-// sum of the providers' reported balances valued in BRL. It is the one implementation
-// every cash-side reader goes through — the timeline's t=today anchor and
-// net worth's asset side — so those two views cannot drift apart.
+// CashOnHandByCurrency is how much cash sits in the user's non-credit
+// accounts: provider-reported balances plus derived manual balances (see
+// AccountBalance), one total per currency. Net worth's asset side reads it
+// through CashOnHandIn.
 //
 // The reported balance is authoritative here, and deliberately so. A
 // transaction the user marked "ignored" still moved real money through the
@@ -38,36 +38,20 @@ import (
 // "what will this bill charge me", which inclusion decisions legitimately
 // shape.
 //
+// Balances in different currencies are never added together, and there is
+// no conversion. An account with a balance but a missing or malformed
+// currency_code fails the whole call (wrapping money.ErrMissingCurrency or
+// money.ErrInvalidCurrency) instead of being assumed to be BRL.
+//
 // Credit card accounts are excluded: their balance is owed debt, not cash
 // on hand. accountIDs optionally scopes the result; empty means every
 // account.
-func CashOnHand(ctx context.Context, q Querier, accountIDs []string) (decimal.Decimal, error) {
-	return CashOnHandValued(ctx, q, accountIDs, fx.New(time.Now()))
-}
-
-func CashOnHandValued(ctx context.Context, q Querier, accountIDs []string, valuation *fx.Valuation) (decimal.Decimal, error) {
-	balances, err := CashBalances(ctx, q, accountIDs)
-	if err != nil {
-		return decimal.Zero, err
-	}
-	total := decimal.Zero
-	for currency, balance := range balances {
-		value, err := valuation.Convert(ctx, q, balance, currency)
-		if err != nil {
-			return decimal.Zero, err
-		}
-		total = total.Add(value)
-	}
-	return total, nil
-}
-
-// CashBalances returns provider balances grouped by native currency.
-func CashBalances(ctx context.Context, q Querier, accountIDs []string) (map[string]decimal.Decimal, error) {
+func CashOnHandByCurrency(ctx context.Context, q Querier, accountIDs []string) (money.Balances, error) {
 	// The OR must stay parenthesized: without it, `... IS NULL OR ... AND id
 	// IN (...)` binds as `... IS NULL OR (... AND id IN (...))`, letting
 	// every untyped account escape the accountIDs filter.
-	query := `SELECT balance, currency_code FROM financial_accounts
-	          WHERE balance IS NOT NULL AND (account_type IS NULL OR account_type != 'CREDIT')`
+	query := `SELECT id, currency_code FROM financial_accounts
+	          WHERE (balance IS NOT NULL OR origin = 'manual') AND (account_type IS NULL OR account_type != 'CREDIT')`
 	in, args := db.InClause(accountIDs)
 	if in != "" {
 		query += ` AND id IN (` + in + `)`
@@ -78,22 +62,61 @@ func CashBalances(ctx context.Context, q Querier, accountIDs []string) (map[stri
 	}
 	defer rows.Close()
 
-	total := map[string]decimal.Decimal{}
+	type account struct {
+		id       string
+		currency sql.NullString
+	}
+	var accounts []account
 	for rows.Next() {
-		// A plain string, not sql.NullString: the query already filters
-		// `balance IS NOT NULL`, so a NULL here would be a schema surprise
-		// worth surfacing as a scan error rather than silently summing "".
-		var balanceRaw string
-		var currency sql.NullString
-		if err := rows.Scan(&balanceRaw, &currency); err != nil {
+		var a account
+		if err := rows.Scan(dbtypes.ID(&a.id), &a.currency); err != nil {
 			return nil, err
 		}
-		amount, err := decimal.NewFromString(balanceRaw)
-		if err != nil {
-			return nil, fmt.Errorf("parse account balance %q: %w", balanceRaw, err)
-		}
-		code := fx.Currency(&currency.String)
-		total[code] = total[code].Add(amount)
+		accounts = append(accounts, a)
 	}
-	return total, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	rows.Close()
+
+	totals := money.Balances{}
+	for _, a := range accounts {
+		raw, err := AccountBalance(ctx, q, a.id)
+		if err != nil {
+			return nil, err
+		}
+		if raw == nil {
+			continue
+		}
+		value, err := decimal.NewFromString(*raw)
+		if err != nil {
+			return nil, fmt.Errorf("parse account balance %q: %w", *raw, err)
+		}
+		var code *string
+		if a.currency.Valid {
+			code = &a.currency.String
+		}
+		currency, err := money.ParseCurrency(code)
+		if err != nil {
+			return nil, fmt.Errorf("account %s: %w", a.id, err)
+		}
+		if err := totals.Add(money.Amount{Value: value, Currency: currency}); err != nil {
+			return nil, err
+		}
+	}
+	return totals, nil
+}
+
+// CashOnHandIn is CashOnHandByCurrency's total for one named currency;
+// cash in any other currency is left out, not converted.
+func CashOnHandIn(ctx context.Context, q Querier, accountIDs []string, currency string) (decimal.Decimal, error) {
+	code, err := money.ParseCurrency(&currency)
+	if err != nil {
+		return decimal.Decimal{}, err
+	}
+	totals, err := CashOnHandByCurrency(ctx, q, accountIDs)
+	if err != nil {
+		return decimal.Decimal{}, err
+	}
+	return totals.Get(code), nil
 }

@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/greg0x46/julius/internal/fx"
+	"github.com/greg0x46/julius/internal/exchange"
 	"github.com/greg0x46/julius/internal/money"
 	"github.com/greg0x46/julius/internal/networth"
 )
@@ -33,11 +33,10 @@ func toNetWorthBreakdownDTO(b networth.Breakdown) netWorthBreakdownDTO {
 }
 
 type netWorthSnapshotDTO struct {
-	CapturedAt       time.Time    `json:"captured_at"`
-	Valuation        *fx.Metadata `json:"valuation"`
-	ValuationVersion int          `json:"valuation_version"`
-	ValuationStatus  string       `json:"valuation_status"`
-	*netWorthBreakdownDTO
+	valuationDTO
+	StoredCurrency string    `json:"stored_currency"`
+	CapturedAt     time.Time `json:"captured_at"`
+	netWorthBreakdownDTO
 	// IsBackfilled mirrors SnapshotRow.IsBackfilled: true when this row was
 	// reconstructed by networth.Backfill rather than captured live, in
 	// which case InvestmentBalance is always "0" — see Backfill's doc
@@ -82,22 +81,26 @@ func handleGetNetWorth(conn *sql.DB) http.HandlerFunc {
 			return
 		}
 
+		valuation, ok := reportValuation(w, r, conn, latest.CapturedAt)
+		if !ok {
+			return
+		}
+		fx := exchange.New(conn, nil)
 		series := make([]netWorthSnapshotDTO, len(rows))
 		for i, row := range rows {
-			series[i] = netWorthSnapshotToDTO(row)
+			valuation, ok := valuationForCurrency(w, r, fx, valuation.CurrencyCode, row.CapturedAt)
+			if !ok {
+				return
+			}
+			breakdown := toNetWorthBreakdownDTO(row.Breakdown)
+			valuation.breakdown(&breakdown)
+			series[i] = netWorthSnapshotDTO{valuationDTO: valuation, StoredCurrency: row.CurrencyCode, CapturedAt: row.CapturedAt, netWorthBreakdownDTO: breakdown, IsBackfilled: row.IsBackfilled}
 		}
+		breakdown := toNetWorthBreakdownDTO(latest.Breakdown)
+		valuation.breakdown(&breakdown)
 		writeJSON(w, http.StatusOK, netWorthResponseDTO{
 			Series: series,
-			Latest: netWorthSnapshotToDTO(latest),
+			Latest: netWorthSnapshotDTO{valuationDTO: valuation, StoredCurrency: latest.CurrencyCode, CapturedAt: latest.CapturedAt, netWorthBreakdownDTO: breakdown, IsBackfilled: latest.IsBackfilled},
 		})
 	}
-}
-
-func netWorthSnapshotToDTO(row networth.SnapshotRow) netWorthSnapshotDTO {
-	breakdown := toNetWorthBreakdownDTO(row.Breakdown)
-	dto := netWorthSnapshotDTO{CapturedAt: row.CapturedAt, netWorthBreakdownDTO: &breakdown, IsBackfilled: row.IsBackfilled, Valuation: row.Valuation, ValuationVersion: row.ValuationVersion, ValuationStatus: row.ValuationStatus}
-	if row.ValuationStatus == networth.ValuationUnavailable {
-		dto.netWorthBreakdownDTO = nil
-	}
-	return dto
 }

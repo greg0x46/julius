@@ -81,8 +81,8 @@ func insertBill(t *testing.T, conn *sql.DB, seed accountSeed, dueDate time.Time,
 			currency_code, minimum_payment_amount, current_raw_import_id, normalized_hash,
 			created_at, updated_at
 		) VALUES (?, ?, ?, ?, ?, ?, ?, 'BRL', '120.00', ?, 'hash', ?, ?)`,
-		billID, seed.sourceID, seed.accountID, billID, db.FormatTime(dueDate),
-		db.FormatTime(dueDate.AddDate(0, 0, -7)), totalAmount, seed.rawImportID, now, now)
+		billID, seed.sourceID, seed.accountID, billID, dueDate.Format("2006-01-02"),
+		dueDate.AddDate(0, 0, -7).Format("2006-01-02"), totalAmount, seed.rawImportID, now, now)
 	if err != nil {
 		t.Fatalf("insert bill: %v", err)
 	}
@@ -91,7 +91,7 @@ func insertBill(t *testing.T, conn *sql.DB, seed accountSeed, dueDate time.Time,
 func setBalanceCloseDate(t *testing.T, conn *sql.DB, seed accountSeed, closeDate time.Time) {
 	t.Helper()
 	if _, err := conn.Exec(`UPDATE financial_accounts SET balance_close_date = ? WHERE id = ?`,
-		db.FormatTime(closeDate), seed.accountID); err != nil {
+		closeDate.Format("2006-01-02"), seed.accountID); err != nil {
 		t.Fatalf("set balance_close_date: %v", err)
 	}
 }
@@ -497,5 +497,17 @@ func TestListAccountBillsReturnsEmptyArrayForBankAccount(t *testing.T) {
 	}
 	if string(body) != "[]\n" {
 		t.Errorf("body = %q, want an empty JSON array", body)
+	}
+}
+
+func TestAccountCalendarDates(t *testing.T) {
+	srv, conn := newTestServer(t)
+	seed := insertAccount(t, conn, "CREDIT", "Cartão", strPtr("0"), strPtr("1000"))
+	if _, err := conn.Exec(`UPDATE financial_accounts SET balance_close_date = ?, balance_due_date = ? WHERE id = ?`, "2026-04-03", "2026-04-10", seed.accountID); err != nil {
+		t.Fatal(err)
+	}
+	got := getAccountJSON(t, srv.URL, seed.accountID)
+	if got["balance_close_date"] != "2026-04-03T00:00:00Z" || got["balance_due_date"] != "2026-04-10T00:00:00Z" || got["closing_day"] != float64(3) {
+		t.Fatalf("calendar dates = %+v", got)
 	}
 }

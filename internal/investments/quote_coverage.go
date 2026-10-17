@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/greg0x46/julius/internal/db"
+	dbtypes "github.com/greg0x46/julius/internal/db/types"
 	"github.com/greg0x46/julius/internal/money"
 )
 
@@ -35,7 +36,7 @@ func GetQuoteCoverage(ctx context.Context, q Querier, assetID string) (*QuoteCov
 	)
 	err := q.QueryRowContext(ctx,
 		`SELECT asset_id, source, symbol, covered_from, covered_to FROM investment_asset_quote_coverage WHERE asset_id = ?`,
-		assetID).Scan(&coverage.AssetID, &coverage.Source, &coverage.Symbol, &from, &to)
+		assetID).Scan(dbtypes.ID(&coverage.AssetID), &coverage.Source, &coverage.Symbol, dbtypes.Date(&from), dbtypes.Date(&to))
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
@@ -112,7 +113,7 @@ func AssetHeldFrom(ctx context.Context, q Querier, assetID string) (*time.Time, 
 		FROM investment_operations o
 		JOIN investment_positions p ON p.id = o.position_id
 		WHERE p.asset_id = ? AND o.kind IN ('initial_balance', 'buy', 'transfer_in')`,
-		assetID).Scan(&first)
+		assetID).Scan(dbtypes.Date(&first))
 	if err != nil {
 		return nil, err
 	}

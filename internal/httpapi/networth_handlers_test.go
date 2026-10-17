@@ -8,9 +8,6 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/greg0x46/julius/internal/db"
-	"github.com/greg0x46/julius/internal/fx"
-	"github.com/greg0x46/julius/internal/networth"
-	"github.com/shopspring/decimal"
 )
 
 func TestGetNetWorthComputesBreakdownFromLiveData(t *testing.T) {
@@ -81,10 +78,6 @@ func TestGetNetWorthComputesBreakdownFromLiveData(t *testing.T) {
 	if !ok {
 		t.Fatalf("latest = %+v, want an object", got["latest"])
 	}
-	valuation, ok := latest["valuation"].(map[string]any)
-	if !ok || valuation["reference_currency"] != "BRL" || valuation["rate_policy"] != fx.RatePolicy || latest["valuation_status"] != "complete" || latest["valuation_version"] != float64(1) {
-		t.Fatalf("valuation metadata = %+v", latest)
-	}
 	// assets = 1000 (cash) + 500 (investments) = 1500 — the 150 receivable
 	// payable above never enters this model at all, a future possibility
 	// rather than a realized asset (see internal/networth's Breakdown doc
@@ -128,55 +121,5 @@ func TestGetNetWorthIsIdempotentWithinTheSameDay(t *testing.T) {
 	secondSeries, _ := secondBody["series"].([]any)
 	if len(firstSeries) != 1 || len(secondSeries) != 1 {
 		t.Fatalf("expected exactly one snapshot per call within the same day, got %d then %d", len(firstSeries), len(secondSeries))
-	}
-}
-
-func TestNetWorthUnavailableHistoryDoesNotExposeZeroTotals(t *testing.T) {
-	srv, conn := newTestServer(t)
-	seed := insertAccount(t, conn, "BANK", "USD cash", strPtr("100"), nil)
-	if _, err := conn.Exec(`UPDATE financial_accounts SET currency_code='USD' WHERE id=?`, seed.accountID); err != nil {
-		t.Fatal(err)
-	}
-	yesterday := time.Now().UTC().AddDate(0, 0, -1)
-	insertAccountTransaction(t, conn, seed, nil, yesterday)
-	if err := fx.StoreRate(t.Context(), conn, "USD", fx.Rate{Value: decimal.NewFromInt(5), ObservedAt: time.Now().UTC(), Source: "test"}); err != nil {
-		t.Fatal(err)
-	}
-	if err := networth.Backfill(t.Context(), conn, time.Now()); err != nil {
-		t.Fatal(err)
-	}
-	resp, err := testGet(t, srv.URL+"/api/net-worth")
-	if err != nil {
-		t.Fatal(err)
-	}
-	var got map[string]any
-	decodeJSON(t, resp, &got)
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("status %d: %+v", resp.StatusCode, got)
-	}
-	first := got["series"].([]any)[0].(map[string]any)
-	if first["valuation_status"] != "unavailable" {
-		t.Fatal(first)
-	}
-	if _, exists := first["net_worth"]; exists {
-		t.Fatalf("unavailable total exposed: %+v", first)
-	}
-}
-
-func TestMissingFXMakesNetWorthAndInvestmentSummaryUnavailable(t *testing.T) {
-	srv, conn := newTestServer(t)
-	id := insertInvestment(t, conn)
-	if _, err := conn.Exec(`UPDATE financial_investments SET currency_code='USD' WHERE id=?`, id); err != nil {
-		t.Fatal(err)
-	}
-	for _, path := range []string{"/api/net-worth", "/api/investment-summary"} {
-		resp, err := testGet(t, srv.URL+path)
-		if err != nil {
-			t.Fatal(err)
-		}
-		resp.Body.Close()
-		if resp.StatusCode != http.StatusServiceUnavailable {
-			t.Fatalf("%s: %d", path, resp.StatusCode)
-		}
 	}
 }

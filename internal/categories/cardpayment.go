@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	dbtypes "github.com/greg0x46/julius/internal/db/types"
 	"strings"
 )
 
@@ -115,7 +116,7 @@ func BackfillAutomaticCardPayment(ctx context.Context, conn *sql.DB) (int, error
 			c                                                              candidate
 			movementType, sourceCategory, sourceCategoryID, additionalInfo sql.NullString
 		)
-		if err := rows.Scan(&c.id, &movementType, &sourceCategory, &sourceCategoryID, &additionalInfo); err != nil {
+		if err := rows.Scan(dbtypes.ID(&c.id), &movementType, &sourceCategory, dbtypes.ID(&sourceCategoryID), &additionalInfo); err != nil {
 			rows.Close()
 			return 0, err
 		}

@@ -1,38 +1,69 @@
-# Patrimônio Líquido (Net Worth)
+# Net Worth
 
-> Referência viva deste contexto — o que existe e funciona hoje. Mantenha
-> atualizado ao mudar a feature. Sem spec de feature dedicado até o
-> momento.
+> Living reference — what exists and works today. Keep it updated when the
+> feature changes. No dedicated feature spec so far.
 
-## O que é
+## What it is
 
-Snapshots e histórico de patrimônio (ativos − passivos) ao longo do tempo.
+Snapshots and history of net worth (assets − liabilities) over time.
 
-## Estado vs. ideal
+## State vs. ideal
 
-Não avaliado como candidato a motor de domínio em profundidade — ver
-`.specs/motores-de-dominio.md` seção "Não são motores": não atende (por
-ora) ao critério 3 (reuso em múltiplos contextos).
+Not evaluated in depth as a domain-engine candidate — see "Not engines" in
+`.specs/motores-de-dominio.md`: it does not (for now) meet criterion 3 (reuse
+across multiple contexts).
 
 ## Backend
 
-`internal/networth` — cálculo/backfill de snapshots (`Breakdown`,
-`SnapshotRow`).
+`internal/networth` — snapshot calculation/backfill (`Breakdown`,
+`SnapshotRow`). A snapshot for "today" is written on every read; there is no
+background worker.
 
-O cálculo atual inclui posições e caixa de investimentos manuais via
-`investments.ManualNetWorth`, além das posições importadas. Caixa de uma conta
-de investimento vinculado a uma conta financeira existente não é somado de
-novo. Carteiras por objetivo são agrupamentos e não acrescentam patrimônio.
-Avaliações manuais são datadas; ativos com cotação automática valem
-quantidade × a última cotação quando ela é mais recente que a avaliação
-(`market_quote`); na ausência de ambas o valor é o custo informado.
-O backfill continua sem inventar valorizações históricas dos investimentos.
+The current calculation includes positions and cash of manual investments via
+`investments.ManualNetWorth`, plus imported positions. Cash of an investment
+account linked to an existing financial account is not added again. Goal
+portfolios are groupings and add no net worth. Manual valuations are dated;
+assets with automatic quotes are worth quantity × latest quote when it is newer
+than the valuation (`market_quote`); with neither, the value is the informed
+cost. The backfill still does not invent historical appreciation of
+investments.
 
-## Rotas HTTP
+Cash is a BRL aggregate: foreign account balances and movements are excluded
+without FX rates. A cash account with a balance but a missing or invalid
+`currency_code` fails the computation with an error naming the account instead of
+being treated as BRL. Manual bank-account balances derive from opening balance,
+posted undeleted transactions and adjustment deltas. Their movements and dated
+adjustments enter historical reconstruction; opening balance is the baseline.
+Manual transactions on synced accounts still never enter reconstruction,
+since they did not change the provider balance. See Transactions, Notes.
+
+## HTTP routes
 
 `GET /api/net-worth`.
 
 ## Frontend
 
-`/patrimonio-liquido` — card de composição + `NetWorthChart` (Recharts)
-com a evolução ao longo do tempo.
+`/patrimonio-liquido` — composition card + `NetWorthChart` (Recharts) with the
+evolution over time.
+
+## Snapshot valuation and revaluation policy
+
+Migration `0003_snapshot_currency` tags every existing snapshot with explicit
+`valuation_currency = BRL` in both dialects, without changing its amounts.
+Snapshots and backfill continue to write BRL valuations, enforced by a database
+constraint. Changing the reference preference never rebuilds or rewrites a
+historical snapshot. Today's upsert retains its existing refresh behavior.
+
+On read, `/api/net-worth` converts each stored BRL breakdown using
+`internal/exchange.On` for `captured_at`, returning the chosen `currency_code`,
+`stored_currency = BRL` and that day's full `fx` provenance alongside the figures.
+The chosen reference currency is read once for the whole response. Today's
+snapshot uses today's FX. Historical revaluation can therefore change when
+cached FX is refreshed, but the stored BRL observation is preserved. There is
+no automatic history rebuild: old observations retain their original coverage,
+and reconstructed days still omit historical investment balances.
+
+Any missing historical rate makes the report unavailable (503); there is no
+mixed-currency curve, silently omitted day, or 1:1 fallback. The chart labels
+its valuation currency and explains that historical FX uses each day. Native
+foreign balances/holdings remain outside the existing BRL base.

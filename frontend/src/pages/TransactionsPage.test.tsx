@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -58,7 +58,8 @@ describe("TransactionsPage", () => {
 
     renderPage();
     await user.click(await screen.findByRole("button", { name: /Ver detalhes de Mercado/ }));
-    const toggle = await screen.findByRole("switch", { name: "Considerar nos totais" });
+    const panel = within(await screen.findByRole("dialog"));
+    const toggle = await panel.findByRole("switch", { name: "Considerar nos totais" });
     expect(toggle).toBeChecked();
 
     await user.click(toggle);
@@ -66,8 +67,8 @@ describe("TransactionsPage", () => {
     // The list refetched and no longer has the line…
     await waitFor(() => expect(screen.queryByRole("button", { name: /Ver detalhes de Mercado/ })).toBeNull());
     // …but the panel the person is working in is still there, showing the new decision.
-    expect(screen.getByRole("heading", { name: "Transação" })).toBeVisible();
-    expect(await screen.findByRole("switch", { name: "Considerar nos totais" })).not.toBeChecked();
+    expect(panel.getByRole("heading", { name: "Transação" })).toBeVisible();
+    expect(await panel.findByRole("switch", { name: "Considerar nos totais" })).not.toBeChecked();
   });
 
   it("keeps showing the saved decision while the refetch after the write is still in flight", async () => {
@@ -88,16 +89,17 @@ describe("TransactionsPage", () => {
 
     renderPage();
     await user.click(await screen.findByRole("button", { name: /Ver detalhes de Mercado/ }));
-    await user.click(await screen.findByRole("switch", { name: "Considerar nos totais" }));
+    const panel = within(await screen.findByRole("dialog"));
+    await user.click(await panel.findByRole("switch", { name: "Considerar nos totais" }));
 
     // The write is confirmed but the list still holds the old copy of the line.
     await waitFor(() => expect(transactionsApi.queryTransactions).toHaveBeenCalledTimes(2));
     expect(screen.getByRole("button", { name: /Ver detalhes de Mercado/ })).toBeInTheDocument();
-    expect(screen.getByRole("switch", { name: "Considerar nos totais" })).not.toBeChecked();
+    expect(panel.getByRole("switch", { name: "Considerar nos totais" })).not.toBeChecked();
 
     releaseRefetch();
     await waitFor(() => expect(screen.queryByRole("button", { name: /Ver detalhes de Mercado/ })).toBeNull());
-    expect(screen.getByRole("switch", { name: "Considerar nos totais" })).not.toBeChecked();
+    expect(panel.getByRole("switch", { name: "Considerar nos totais" })).not.toBeChecked();
   });
 
   it("shows a failed write inside the panel, next to the control, with a retry", async () => {
@@ -107,11 +109,12 @@ describe("TransactionsPage", () => {
 
     renderPage();
     await user.click(await screen.findByRole("button", { name: /Ver detalhes de Mercado/ }));
-    await user.click(await screen.findByRole("switch", { name: "Considerar nos totais" }));
+    const panel = within(await screen.findByRole("dialog"));
+    await user.click(await panel.findByRole("switch", { name: "Considerar nos totais" }));
 
-    expect(await screen.findByText("Não foi possível salvar a decisão")).toBeVisible();
-    expect(screen.getByText("Servidor indisponível.")).toBeVisible();
-    expect(screen.getByRole("button", { name: "Tentar novamente" })).toBeVisible();
+    expect(await panel.findByText("Não foi possível salvar a decisão")).toBeVisible();
+    expect(panel.getByText("Servidor indisponível.")).toBeVisible();
+    expect(panel.getByRole("button", { name: "Tentar novamente" })).toBeVisible();
   });
   it("says the recurrence lookup failed instead of 'no recurrence nearby', and offers a retry", async () => {
     const user = userEvent.setup();
@@ -120,13 +123,14 @@ describe("TransactionsPage", () => {
 
     renderPage();
     await user.click(await screen.findByRole("button", { name: /Ver detalhes de Mercado/ }));
-    const row = await screen.findByRole("button", { name: /Conciliar com recorrência/ });
+    const panel = within(await screen.findByRole("dialog"));
+    const row = await panel.findByRole("button", { name: /Conciliar com recorrência/ });
     await waitFor(() => expect(row).toHaveTextContent("Não foi possível consultar"));
     expect(row).not.toHaveTextContent("Nenhuma recorrência por perto");
 
     await user.click(row);
-    expect(await screen.findByText("Não foi possível consultar as recorrências")).toBeVisible();
-    expect(screen.getByRole("button", { name: "Tentar novamente" })).toBeVisible();
+    expect(await panel.findByText("Não foi possível consultar as recorrências")).toBeVisible();
+    expect(panel.getByRole("button", { name: "Tentar novamente" })).toBeVisible();
   });
 
   it("marks and focuses the first invalid field of the new-transaction form", async () => {
@@ -139,7 +143,8 @@ describe("TransactionsPage", () => {
     renderPage();
     await screen.findByRole("button", { name: /Ver detalhes de Mercado/ });
     await user.click(screen.getAllByRole("button", { name: /Nova/ })[0]!);
-    await user.click(await screen.findByRole("button", { name: "Salvar" }));
+    const form = within(await screen.findByRole("dialog"));
+    await user.click(form.getByRole("button", { name: "Salvar" }));
 
     await screen.findByText("Informe uma descrição.");
     const description = document.getElementById("manual-transaction-description")!;

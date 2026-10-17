@@ -1,27 +1,63 @@
 import { decimal, isRecord, isValidDate, requiredRecord } from "./shared";
 
-export interface Valuation {
-  reference_currency: "BRL";
-  valued_at: string;
-  rate_policy: string;
-  rates: Record<string, { value: string; observed_at: string; source: string }>;
+export interface FXRate {
+  base: string;
+  quote: string;
+  value: string;
+  inverted: boolean;
+  as_of: string;
+  effective_on: string;
+  source: string;
+  fetched_at: string;
+  stale: boolean;
 }
 
-export function parseValuation(value: unknown): Valuation {
-  const item = requiredRecord(value, ["reference_currency", "valued_at", "rate_policy", "rates"], "Avaliação inválida.");
-  if (item.reference_currency !== "BRL" || !isValidDate(item.valued_at) ||
-      item.rate_policy !== "latest_observed_at_or_before_v1" || !isRecord(item.rates)) {
-    throw new TypeError("Avaliação inválida.");
-  }
-  const rates: Valuation["rates"] = {};
-  for (const [currency, value] of Object.entries(item.rates)) {
-    const rate = requiredRecord(value, ["value", "observed_at", "source"], "Câmbio inválido.");
-    const amount = decimal(rate.value);
-    if (!/^[A-Z]{3}$/.test(currency) || Number(amount) <= 0 || !isValidDate(rate.observed_at) ||
-        typeof rate.source !== "string" || rate.source.trim() === "" || Date.parse(rate.observed_at) > Date.parse(item.valued_at)) {
-      throw new TypeError("Câmbio inválido.");
+export interface ReportValuation {
+  currency_code?: string;
+  fx?: FXRate;
+}
+
+export function parseValuation(value: Record<string, unknown>): ReportValuation {
+  const result: ReportValuation = {};
+  if (value.currency_code !== undefined) {
+    if (typeof value.currency_code !== "string" || !/^[A-Z]{3}$/.test(value.currency_code)) {
+      throw new TypeError("Moeda de avaliação inválida.");
     }
-    rates[currency] = { value: amount, observed_at: rate.observed_at, source: rate.source };
+    result.currency_code = value.currency_code;
   }
-  return { reference_currency: "BRL", valued_at: item.valued_at, rate_policy: item.rate_policy, rates };
+  if (value.fx !== undefined) {
+    const fx = requiredRecord(
+      value.fx,
+      ["base", "quote", "value", "inverted", "as_of", "effective_on", "source", "fetched_at", "stale"],
+      "Cotação inválida.",
+    );
+    if (
+      !isRecord(fx) ||
+      typeof fx.base !== "string" ||
+      typeof fx.quote !== "string" ||
+      typeof fx.source !== "string" ||
+      typeof fx.inverted !== "boolean" ||
+      typeof fx.stale !== "boolean" ||
+      !isValidDate(fx.as_of) ||
+      !isValidDate(fx.effective_on) ||
+      !isValidDate(fx.fetched_at)
+    ) {
+      throw new TypeError("Cotação inválida.");
+    }
+    const rate = decimal(fx.value);
+    if (/^-|^0(?:\.0*)?$/.test(rate) || fx.quote !== result.currency_code)
+      throw new TypeError("Cotação inválida.");
+    result.fx = {
+      base: fx.base,
+      quote: fx.quote,
+      value: rate,
+      inverted: fx.inverted,
+      as_of: fx.as_of,
+      effective_on: fx.effective_on,
+      source: fx.source,
+      fetched_at: fx.fetched_at,
+      stale: fx.stale,
+    };
+  }
+  return result;
 }

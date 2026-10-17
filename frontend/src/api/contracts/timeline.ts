@@ -1,4 +1,6 @@
-import { dateOnlyPattern, decimal, isUuid, requiredRecord, requiredRecordWithOptionalKeys } from "./shared";
+import { parseValuation, type ReportValuation } from "./valuation";
+import { parseReportingSummary, type ReportingSummary } from "./reporting";
+import { dateOnlyPattern, decimal, isUuid, parseCurrencyTotals, type CurrencyTotals, requiredRecord, requiredRecordWithOptionalKeys } from "./shared";
 
 export const certaintyTiers = ["realizado", "confirmado", "projetado", "hipotetico"] as const;
 
@@ -41,6 +43,9 @@ export interface TimelineDayPoint {
 }
 
 export interface TimelineSeries {
+ balance_reporting?: ReportingSummary;
+ reporting?: ReportingSummary;
+ totals?: CurrencyTotals[];
   points: TimelineDayPoint[];
   entries: TimelineEntry[];
   starting_balance: string;
@@ -56,12 +61,14 @@ export interface ScenarioImpact {
 
 /** Income/expense/result over the whole window — see PeriodTotals in internal/timeline/aggregate.go. */
 export interface PeriodTotals {
+ reporting?: ReportingSummary;
+ totals?: CurrencyTotals[];
   income: string;
   expense: string;
   result: string;
 }
 
-export interface TimelineResponse {
+export interface TimelineResponse extends ReportValuation {
   base: TimelineSeries;
   period_totals: PeriodTotals;
   simulation: TimelineSeries | null;
@@ -69,6 +76,7 @@ export interface TimelineResponse {
 }
 
 export interface TimelineParams {
+  timezone?: string;
   /** Balance anchor — always today. Never the month being browsed. */
   referenceDate: string;
   from: string;
@@ -153,19 +161,24 @@ function parseTimelineDayPoint(value: unknown): TimelineDayPoint {
 }
 
 function parseTimelineSeries(value: unknown): TimelineSeries {
-  const series = requiredRecord(
+  const series = requiredRecordWithOptionalKeys(
     value,
     ["points", "entries", "starting_balance", "lowest_balance", "first_negative"],
+ ["reporting", "totals", "balance_reporting"],
     "Série da linha do tempo inválida.",
   );
   if (
     !Array.isArray(series.points) ||
     !Array.isArray(series.entries) ||
+    (series.totals !== undefined && !Array.isArray(series.totals)) ||
     !(series.first_negative === null || dateOnlyPattern.test(series.first_negative as string))
   ) {
     throw new TypeError("Série da linha do tempo inválida.");
   }
   return {
+    ...(Array.isArray(series.totals) ? { totals: series.totals.map(parseCurrencyTotals) } : {}),
+    ...(series.reporting === undefined ? {} : { reporting: parseReportingSummary(series.reporting) }),
+    ...(series.balance_reporting === undefined ? {} : { balance_reporting: parseReportingSummary(series.balance_reporting) }),
     points: series.points.map(parseTimelineDayPoint),
     entries: series.entries.map(parseTimelineEntry),
     starting_balance: decimal(series.starting_balance),
@@ -175,8 +188,11 @@ function parseTimelineSeries(value: unknown): TimelineSeries {
 }
 
 function parsePeriodTotals(value: unknown): PeriodTotals {
-  const totals = requiredRecord(value, ["income", "expense", "result"], "Totais do período inválidos.");
+  const totals = requiredRecordWithOptionalKeys(value, ["income", "expense", "result"], ["reporting", "totals"], "Totais do período inválidos.");
+  if (totals.totals !== undefined && !Array.isArray(totals.totals)) throw new TypeError("Totais por moeda inválidos.");
   return {
+    ...(Array.isArray(totals.totals) ? { totals: totals.totals.map(parseCurrencyTotals) } : {}),
+    ...(totals.reporting === undefined ? {} : { reporting: parseReportingSummary(totals.reporting) }),
     income: decimal(totals.income),
     expense: decimal(totals.expense),
     result: decimal(totals.result),
@@ -204,15 +220,17 @@ function parseScenarioImpact(value: unknown): ScenarioImpact {
 }
 
 export function parseTimelineResponse(value: unknown): TimelineResponse {
-  const response = requiredRecord(
+  const response = requiredRecordWithOptionalKeys(
     value,
     ["base", "period_totals", "simulation", "scenario_impacts"],
+    ["currency_code", "fx"],
     "Resposta da linha do tempo inválida.",
   );
   if (!Array.isArray(response.scenario_impacts)) {
     throw new TypeError("Resposta da linha do tempo inválida.");
   }
   return {
+    ...parseValuation(response),
     base: parseTimelineSeries(response.base),
     period_totals: parsePeriodTotals(response.period_totals),
     simulation: response.simulation === null ? null : parseTimelineSeries(response.simulation),

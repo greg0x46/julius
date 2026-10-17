@@ -9,7 +9,6 @@ import {
   netContributed,
   yieldUnavailable,
 } from "../../presentation/investmentLabels";
-import { formatMoney } from "../../presentation/money";
 import { Section, SummaryStrip } from "../layout";
 import { Money } from "../shared/Money";
 
@@ -26,7 +25,6 @@ export function InvestmentHeaderCard({
   investment: Investment;
   transactions: InvestmentTransaction[];
 }) {
-  const currency = investment.currency_code ?? "BRL";
   const yieldEstimate = investmentYield(investment);
   const unavailable = yieldUnavailable(investment);
   // A history the backend judged too partial to net is too partial to show a
@@ -54,13 +52,13 @@ export function InvestmentHeaderCard({
       ? [{ label: "Instituição", value: investment.source_display_name }]
       : []),
     ...(investment.amount_original !== null
-      ? [{ label: "Valor aplicado", value: (currency !== "BRL" ? <span className="money">{formatMoney(investment.amount_original, currency)}</span> : <Money value={investment.amount_original} tone="neutral" />) }]
+      ? [{ label: "Valor aplicado", value: <Money value={investment.amount_original} tone="neutral" /> }]
       : []),
     ...(investment.taxes !== null
-      ? [{ label: "IR retido", value: (currency !== "BRL" ? <span className="money">{formatMoney(investment.taxes, currency)}</span> : <Money value={investment.taxes} tone="neutral" />) }]
+      ? [{ label: "IR retido", value: <Money value={investment.taxes} tone="neutral" /> }]
       : []),
     ...(investment.taxes2 !== null
-      ? [{ label: "IOF retido", value: (currency !== "BRL" ? <span className="money">{formatMoney(investment.taxes2, currency)}</span> : <Money value={investment.taxes2} tone="neutral" />) }]
+      ? [{ label: "IOF retido", value: <Money value={investment.taxes2} tone="neutral" /> }]
       : []),
     ...(investment.annual_rate !== null ? [{ label: "Taxa anual", value: `${formatDecimal(investment.annual_rate)}%` }] : []),
     ...(investment.last_twelve_months_rate !== null
@@ -85,19 +83,19 @@ export function InvestmentHeaderCard({
       <SummaryStrip
         label="Saldo"
         value={
-          investment.balance !== null ? (currency !== "BRL" ? <span className="money money-size-hero">{formatMoney(investment.balance, currency)}</span> : <Money value={investment.balance} tone="balance" size="hero" />) : "—"
+          investment.balance !== null ? <Money value={investment.balance} tone="balance" size="hero" /> : "—"
         }
         items={[
           {
             label: "Rendimento",
-            value: yieldEstimate !== null ? (currency !== "BRL" ? <span className="money">{formatMoney(yieldEstimate.value, currency)}</span> : <Money value={yieldEstimate.value} tone="result" />) : unavailable.label,
+            value: yieldEstimate !== null ? <Money value={yieldEstimate.value} tone="result" /> : unavailable.label,
           },
           ...(contributed !== null
-            ? [{ label: "Aportes líquidos", value: (currency !== "BRL" ? <span className="money">{formatMoney(contributed, currency)}</span> : <Money value={contributed} tone="neutral" />) }]
+            ? [{ label: "Aportes líquidos", value: <Money value={contributed} tone="neutral" /> }]
             : []),
           { label: "Atualizado em", value: formatOptionalDay(investment.as_of_date) },
         ]}
-        note={currency === "BRL" ? yieldNote : `${yieldNote ?? ""} Valores deste investimento em ${currency}.`.trim()}
+        note={yieldNote}
       />
       <Section title="Dados do investimento">
         <dl className="investment-facts">

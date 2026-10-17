@@ -12,8 +12,7 @@ import (
 
 	"github.com/greg0x46/julius/internal/categories"
 	"github.com/greg0x46/julius/internal/dates"
-	"github.com/greg0x46/julius/internal/db"
-	"github.com/greg0x46/julius/internal/fx"
+	dbtypes "github.com/greg0x46/julius/internal/db/types"
 	"github.com/greg0x46/julius/internal/money"
 )
 
@@ -60,7 +59,7 @@ func creditCardTransactionTotalAt(ctx context.Context, q Querier, currencyCode s
 	accounts := make([]string, 0)
 	for rows.Next() {
 		var accountID string
-		if err := rows.Scan(&accountID); err != nil {
+		if err := rows.Scan(dbtypes.ID(&accountID)); err != nil {
 			return decimal.Zero, err
 		}
 		accounts = append(accounts, accountID)
@@ -108,23 +107,15 @@ func fetchCardBillClosingDates(ctx context.Context, q Querier, loc *time.Locatio
 
 	for rows.Next() {
 		var accountID, internalID, externalID string
-		var closingDateRaw sql.NullString
-		if err := rows.Scan(&accountID, &internalID, &externalID, &closingDateRaw); err != nil {
+		var closingDate *time.Time
+		if err := rows.Scan(dbtypes.ID(&accountID), dbtypes.ID(&internalID), dbtypes.ID(&externalID), dbtypes.Date(&closingDate)); err != nil {
 			return cardBillClosingDates{}, err
 		}
 
-		var closingDate *time.Time
-		if closingDateRaw.Valid {
-			parsed, err := db.ParseNullTime(closingDateRaw)
-			if err != nil {
-				return cardBillClosingDates{}, err
-			}
-			// closing_date is a provider calendar date stored in the
-			// canonical UTC timestamp format. Preserve that date before
-			// creating the boundary in the application's location; converting
-			// midnight UTC directly to a negative-offset local date would move
-			// the closing day backward.
-			utcDate := parsed.UTC()
+		if closingDate != nil {
+			// Preserve the provider calendar day before creating the boundary
+			// in the application's location.
+			utcDate := closingDate.UTC()
 			boundary := time.Date(utcDate.Year(), utcDate.Month(), utcDate.Day(), 0, 0, 0, 0, loc)
 			closingDate = &boundary
 			result.byAccount[accountID] = append(result.byAccount[accountID], boundary)
@@ -255,10 +246,6 @@ func consideredCardTransactionTotal(
 	loc *time.Location,
 	selected map[string]bool,
 ) (decimal.Decimal, error) {
-	return consideredCardTransactionTotalValued(ctx, q, accountID, currencyCode, bills, now, loc, selected, nil)
-}
-
-func consideredCardTransactionTotalValued(ctx context.Context, q Querier, accountID, currencyCode string, bills cardBillClosingDates, now time.Time, loc *time.Location, selected map[string]bool, valuation *fx.Valuation) (decimal.Decimal, error) {
 	cycle, ok := currentCreditCardCycle(bills, accountID, now, loc)
 	if !ok {
 		// Without a reliable historical closing and a next boundary, the
@@ -295,24 +282,17 @@ func consideredCardTransactionTotalValued(ctx context.Context, q Querier, accoun
 		// inflate what the card is owed. The ignored decision was already
 		// applied above; Considered is passed for the same reason.
 		included, _ := money.Eligibility(classification, transaction.providerStatus, effective, money.Considered, "")
-		if !included || effective == nil || (valuation == nil && effective.CurrencyCode != currencyCode) {
+		if !included || effective == nil || effective.CurrencyCode != currencyCode {
 			continue
 		}
 		if selected != nil {
 			selected[transaction.id] = true
 		}
-		value := effective.Value.Abs()
-		if valuation != nil {
-			value, err = valuation.Convert(ctx, q, value, effective.CurrencyCode)
-			if err != nil {
-				return decimal.Zero, err
-			}
-		}
 		switch classification {
 		case money.Outflow:
-			total = total.Add(value)
+			total = total.Add(effective.Value.Abs())
 		case money.Inflow:
-			total = total.Sub(value)
+			total = total.Sub(effective.Value.Abs())
 		}
 	}
 	return total, nil
@@ -409,10 +389,10 @@ func fetchCardDebtTransactions(ctx context.Context, q Querier, accountID string)
 		var sourceCategoryRaw, sourceCategoryIDRaw, additionalInfoRaw sql.NullString
 		var metadataRaw, inclusionStateRaw sql.NullString
 		if err := rows.Scan(
-			&transactionID, &amountRaw, &amountInAccountCurrencyRaw, &currencyCodeRaw,
-			&occurredAtRaw,
+			dbtypes.ID(&transactionID), dbtypes.Decimal(&amountRaw), dbtypes.Decimal(&amountInAccountCurrencyRaw), &currencyCodeRaw,
+			dbtypes.Time(&occurredAtRaw),
 			&providerStatusRaw, &movementTypeRaw,
-			&sourceCategoryRaw, &sourceCategoryIDRaw, &additionalInfoRaw,
+			&sourceCategoryRaw, dbtypes.ID(&sourceCategoryIDRaw), &additionalInfoRaw,
 			&metadataRaw, &inclusionStateRaw,
 		); err != nil {
 			return nil, err
@@ -425,7 +405,7 @@ func fetchCardDebtTransactions(ctx context.Context, q Querier, accountID string)
 		if err != nil {
 			return nil, err
 		}
-		occurredAt, err := db.ParseNullTime(occurredAtRaw)
+		occurredAt, err := dbtypes.ParseNullTime(occurredAtRaw)
 		if err != nil {
 			return nil, err
 		}
@@ -466,44 +446,4 @@ func stringFromNullString(value sql.NullString) *string {
 		return nil
 	}
 	return &value.String
-}
-
-// CreditCardBalanceValued converts each eligible cycle transaction exactly once.
-func CreditCardBalanceValued(ctx context.Context, q Querier, at time.Time, loc *time.Location, valuation *fx.Valuation) (decimal.Decimal, error) {
-	if loc == nil {
-		return decimal.Zero, fmt.Errorf("credit card cycle timezone is nil")
-	}
-	bills, err := fetchCardBillClosingDates(ctx, q, loc)
-	if err != nil {
-		return decimal.Zero, err
-	}
-	rows, err := q.QueryContext(ctx, `SELECT id, currency_code FROM financial_accounts WHERE account_type = 'CREDIT'`)
-	if err != nil {
-		return decimal.Zero, err
-	}
-	type account struct{ id, currency string }
-	var accounts []account
-	for rows.Next() {
-		var id string
-		var currency sql.NullString
-		if err := rows.Scan(&id, &currency); err != nil {
-			rows.Close()
-			return decimal.Zero, err
-		}
-		accounts = append(accounts, account{id, fx.Currency(&currency.String)})
-	}
-	err = rows.Err()
-	rows.Close()
-	if err != nil {
-		return decimal.Zero, err
-	}
-	total := decimal.Zero
-	for _, account := range accounts {
-		value, err := consideredCardTransactionTotalValued(ctx, q, account.id, account.currency, bills, at, loc, nil, valuation)
-		if err != nil {
-			return decimal.Zero, err
-		}
-		total = total.Add(value)
-	}
-	return total, nil
 }

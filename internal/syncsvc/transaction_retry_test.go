@@ -31,11 +31,12 @@ type retryFixture struct {
 func newRetryFixture(t *testing.T, conn *sql.DB) retryFixture {
 	t.Helper()
 	sourceID, runID := newSyncRun(t, conn)
-	insertRawImport(t, conn, "raw-accounts", runID, sourceID)
+	rawID := uuid.NewString()
+	insertRawImport(t, conn, rawID, runID, sourceID)
 	provider := &fakeProvider{
 		source: defaultSource(),
 		accountsPage: pluggy.AccountsPage{
-			RawImportID: "raw-accounts",
+			RawImportID: rawID,
 			Accounts:    []pluggy.AccountSnapshot{{ExternalID: "acc-1", CurrencyCode: strp("BRL")}},
 		},
 		transactionPages: make(map[string][]pluggy.TransactionsPage),

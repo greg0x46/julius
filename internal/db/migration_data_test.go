@@ -32,7 +32,7 @@ func TestPayablesMigrationPreservesData(t *testing.T) {
 		t.Fatalf("enable foreign keys: %v", err)
 	}
 
-	migrations, err := fs.Sub(sqliteMigrationsFS, "migrations/sqlite")
+	migrations, err := fs.Sub(legacyMigrationsFS, "migrations/archive/sqlite")
 	if err != nil {
 		t.Fatalf("root migrations fs: %v", err)
 	}
@@ -144,7 +144,7 @@ func seedLegacyFixture(t *testing.T) (*sql.DB, *goose.Provider, legacyFixture) {
 	if _, err := conn.Exec("PRAGMA foreign_keys = ON"); err != nil {
 		t.Fatalf("enable foreign keys: %v", err)
 	}
-	migrations, err := fs.Sub(sqliteMigrationsFS, "migrations/sqlite")
+	migrations, err := fs.Sub(legacyMigrationsFS, "migrations/archive/sqlite")
 	if err != nil {
 		t.Fatalf("root migrations fs: %v", err)
 	}
@@ -481,7 +481,7 @@ func migrationProviderAt(t *testing.T, version int64) (*sql.DB, *goose.Provider)
 		t.Fatalf("enable foreign keys: %v", err)
 	}
 
-	migrations, err := fs.Sub(sqliteMigrationsFS, "migrations/sqlite")
+	migrations, err := fs.Sub(legacyMigrationsFS, "migrations/archive/sqlite")
 	if err != nil {
 		t.Fatalf("root migrations fs: %v", err)
 	}
