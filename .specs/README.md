@@ -61,6 +61,11 @@ renamed. Frontend routes and UI labels are also Portuguese.
 | `investimentos` | Investments, quotes, reconciliation | `investments`, `quotes`, `marketdata` |
 | `configuracoes-autenticacao` | Settings, authentication | `auth`, `settings` |
 
+## Financial API contracts
+
+- [`contratos-api.md`](contratos-api.md) — wire precision, date/state/nullability
+  semantics, calculation ownership and shared Go/TypeScript contract checks.
+
 ## Shared database read boundary
 
 `internal/db/types` decodes timestamps, calendar dates, booleans, identifiers

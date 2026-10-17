@@ -65,6 +65,7 @@ const manualPosition = {
   asset_type: "Fundo",
   quantity: "10",
   average_cost: "100.00",
+  total_cost: "1000.00",
   current_value: "1200.00",
   linked_investment_id: null,
   valuation_basis: "manual_valuation",
