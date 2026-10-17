@@ -222,8 +222,8 @@ keep their money in the balance. Creating USD 10 on a USD account stores USD
 For synced accounts, manual entries still never change provider balances or
 historical reconstruction. Credit-card totals remain the deliberate exception:
 they sum eligible entries, so manual entries count toward the open bill.
-`CashOnHandIn(..., BRL)` (Net Worth) remains a BRL aggregate and excludes foreign
-accounts; Timeline converts native balances separately for its reference-date anchor. Net-worth history reverses posted manual-account movements and
+Net Worth values the same native balances in BRL (`CashOnHandValued`) at the valuation
+day's rate, as Timeline does for its reference-date anchor. Net-worth history reverses posted manual-account movements and
 adjustment deltas, using opening balance as its historical baseline; existing
 snapshots are never rewritten.
 

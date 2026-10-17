@@ -10,6 +10,7 @@ import (
 	"github.com/greg0x46/julius/internal/db"
 	dbtypes "github.com/greg0x46/julius/internal/db/types"
 	"github.com/greg0x46/julius/internal/money"
+	"github.com/greg0x46/julius/internal/valuation"
 )
 
 // CashOnHandByCurrency is how much cash sits in the user's non-credit
@@ -119,4 +120,22 @@ func CashOnHandIn(ctx context.Context, q Querier, accountIDs []string, currency 
 		return decimal.Decimal{}, err
 	}
 	return totals.Get(code), nil
+}
+
+// CashOnHandValued is CashOnHandByCurrency valued in the BRL base: one
+// conversion per currency, and a currency without a rate fails the call.
+func CashOnHandValued(ctx context.Context, q Querier, accountIDs []string, valued *valuation.Valuation) (decimal.Decimal, error) {
+	balances, err := CashOnHandByCurrency(ctx, q, accountIDs)
+	if err != nil {
+		return decimal.Zero, err
+	}
+	total := decimal.Zero
+	for _, currency := range balances.Currencies() {
+		value, err := valued.Convert(ctx, balances.Get(currency), currency)
+		if err != nil {
+			return decimal.Zero, err
+		}
+		total = total.Add(value)
+	}
+	return total, nil
 }

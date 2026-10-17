@@ -3,7 +3,7 @@ import { parseNetWorthSeries } from "./netWorth";
 import { parseValuation } from "./valuation";
 
 const snapshot = {
-  captured_at: "2026-10-12T00:00:00Z", is_backfilled: false,
+  captured_at: "2026-10-12T00:00:00Z", is_backfilled: false, valuation_version: 0, valuation_status: "legacy",
   cash_balance: "100", investment_balance: "0", credit_card_balance: "0", payables_debt: "0",
   total_assets: "100", total_liabilities: "0", net_worth: "100",
 };

@@ -326,7 +326,7 @@ export function InvestmentsPage() {
               showIcon
               style={{ marginBottom: 16 }}
               message={`Totais em ${workspace.summary?.currency_code ?? "BRL"}`}
-              description="Posições fora da base em BRL são exibidas na moeda original e continuam fora dos totais e metas. A moeda de referência altera a avaliação dos totais consolidados."
+              description="Posições em outras moedas aparecem na moeda original. O valor total, o caixa e as metas as incluem convertidas com o câmbio do dia; rendimento, aportes e custo somam apenas posições em reais."
             />
           )}
           {/* Each view's hero is its own scope: the workspace total for the
