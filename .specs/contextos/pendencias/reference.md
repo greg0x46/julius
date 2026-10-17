@@ -39,6 +39,9 @@ moment.
 
 Also includes link eligibility (`eligibility.go`, which today derives the
 accepted flow direction from the debt/receivable `Kind`).
+The ignored/direction/effective-BRL checks are owned by
+`money.BRLLinkIneligibility`, shared with recurring reconciliation. The
+already-linked check remains here, after those checks.
 
 The card debt / bill due-date helpers **moved out of here** to
 `internal/transactions` (Ledger engine) — see Transactions. The "payables debt
