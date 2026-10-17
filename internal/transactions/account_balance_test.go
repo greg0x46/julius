@@ -8,6 +8,7 @@ import (
 
 	"github.com/greg0x46/julius/internal/db"
 	"github.com/greg0x46/julius/internal/db/dbtest"
+	"github.com/greg0x46/julius/internal/money"
 	"github.com/greg0x46/julius/internal/transactions"
 	"github.com/shopspring/decimal"
 )
@@ -40,14 +41,14 @@ func TestManualAccountBalanceBothDialects(t *testing.T) {
 		if err != nil || *balance != "105" {
 			t.Fatalf("adjusted balance %v: %v", balance, err)
 		}
-		cash, err := transactions.CashOnHand(ctx, conn, nil)
+		cash, err := transactions.CashOnHandIn(ctx, conn, nil, money.BRL)
 		if err != nil || !cash.IsZero() {
 			t.Fatalf("foreign cash mixed into BRL: %v %v", cash, err)
 		}
 		if _, err := conn.Exec(`UPDATE financial_accounts SET currency_code='BRL' WHERE id='052e2a8b-6b4c-5c1d-90c3-2f8654bcd27c'`); err != nil {
 			t.Fatal(err)
 		}
-		cash, err = transactions.CashOnHand(ctx, conn, nil)
+		cash, err = transactions.CashOnHandIn(ctx, conn, nil, money.BRL)
 		if err != nil || cash.String() != "105" {
 			t.Fatalf("manual cash: %v %v", cash, err)
 		}

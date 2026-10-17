@@ -1,7 +1,8 @@
+import { ReportValuation } from "../shared/ReportValuation";
 import { Skeleton } from "antd";
 import { useMemo } from "react";
 
-import { reportingError } from "../../presentation/reporting";
+import { problemMessage, reportingError } from "../../presentation/reporting";
 import { useTimeline } from "../../hooks/useTimeline";
 import { useToday } from "../../hooks/useToday";
 import { dailyAllowance } from "../../presentation/dailyAllowance";
@@ -44,7 +45,7 @@ export function DailyAllowanceCard() {
         )}
         {!timeline.isLoading && (
           <UnavailableState onRetry={() => timeline.refetch()}>
-            {reportingError(timeline.error)?.message ?? "Não foi possível calcular o gasto diário disponível."}
+            {problemMessage(timeline.error) ?? "Não foi possível calcular o gasto diário disponível."}
           </UnavailableState>
         )}
       </Section>
@@ -52,6 +53,7 @@ export function DailyAllowanceCard() {
   }
 
   return (
+    <ReportValuation valuation={timeline.valuation}>
     <Section title={title}>
       {base.balance_reporting?.status === "stale" && <p role="status">Saldo convertido com cotações desatualizadas.</p>}
       <p className="daily-allowance-value">
@@ -60,5 +62,6 @@ export function DailyAllowanceCard() {
       </p>
       <p className="daily-allowance-note">Disponível para gastar até o fim do mês</p>
     </Section>
+    </ReportValuation>
   );
 }

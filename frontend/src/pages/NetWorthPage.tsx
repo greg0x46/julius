@@ -1,3 +1,5 @@
+import { ApiError } from "../api/problems";
+import { ReportValuation } from "../components/shared/ReportValuation";
 import { Skeleton } from "antd";
 
 import { UnavailableState } from "../components/AsyncState";
@@ -12,13 +14,14 @@ export function NetWorthPage() {
   // reads as broken, not "just started". Wait for at least two days of
   // history before showing the chart.
   const hasSeries = netWorth.series.length > 1;
+  const hasStaleRates = netWorth.series.some((snapshot) => snapshot.fx?.stale);
   const hasBackfilledPoints = netWorth.series.some((s) => s.is_backfilled);
 
   // One footnote, under the chart it qualifies, for what used to be a
   // paragraph above the figures plus an info Alert below the chart.
   const footnote = `Dias sem registro são reconstruídos a partir das transações, então a série pode não cobrir todo o passado.${
     hasBackfilledPoints ? " Esses dias não incluem investimentos: não há como saber quanto deles já existia." : ""
-  }`;
+  }${hasStaleRates ? " Há dias avaliados com cotações desatualizadas." : ""}`;
 
   return (
     <Page title="Patrimônio líquido" description="Ativos menos passivos ao longo do tempo" compactMobileHeader>
@@ -33,7 +36,9 @@ export function NetWorthPage() {
       )}
       {netWorth.error && !netWorth.isLoading && (
         <UnavailableState onRetry={() => netWorth.refetch()}>
-          Não foi possível carregar o patrimônio líquido
+          {netWorth.error instanceof ApiError
+            ? netWorth.error.message
+            : "Não foi possível carregar o patrimônio líquido"}
         </UnavailableState>
       )}
 
@@ -45,19 +50,24 @@ export function NetWorthPage() {
       )}
 
       {!netWorth.isLoading && !netWorth.error && netWorth.latest && (
-        <div className="net-worth-page">
-          <NetWorthBreakdownCard snapshot={netWorth.latest} />
-          {hasSeries ? (
-            <NetWorthChart snapshots={netWorth.series} footnote={footnote} />
-          ) : (
-            <Section title="Evolução do patrimônio líquido">
-              <EmptyState
-                title="Ainda não há histórico para mostrar"
-                hint="O gráfico aparece a partir do segundo dia com dados registrados."
+        <ReportValuation valuation={netWorth.latest}>
+          <div className="net-worth-page">
+            <NetWorthBreakdownCard snapshot={netWorth.latest} />
+            {hasSeries ? (
+              <NetWorthChart
+                snapshots={netWorth.series}
+                footnote={`Valores em ${netWorth.latest.currency_code ?? "BRL"}, com câmbio de cada dia. ${footnote}`}
               />
-            </Section>
-          )}
-        </div>
+            ) : (
+              <Section title="Evolução do patrimônio líquido">
+                <EmptyState
+                  title="Ainda não há histórico para mostrar"
+                  hint="O gráfico aparece a partir do segundo dia com dados registrados."
+                />
+              </Section>
+            )}
+          </div>
+        </ReportValuation>
       )}
     </Page>
   );

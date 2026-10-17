@@ -4,6 +4,18 @@ Notable changes per release. A section is added by `scripts/update-changelog.sh`
 only when a release is prepared, and the release job publishes that same text as
 the GitHub release notes. Newest release first.
 
+## v0.8.0 — 2026-10-13
+
+### Features
+
+- **settings:** Manage automatic quotations from the UI ([#77](https://github.com/greg0x46/julius/pull/77))
+- **reporting:** Consolidate multi-currency cash flows in reference currency ([#80](https://github.com/greg0x46/julius/pull/80))
+- **ui:** Show build version in the bottom-right footer ([#117](https://github.com/greg0x46/julius/pull/117))
+
+### Fixes
+
+- **deps:** Bump the go-minor-patch group with 3 updates
+
 ## v0.7.0 — 2026-10-12
 
 ### Breaking changes

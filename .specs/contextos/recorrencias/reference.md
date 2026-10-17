@@ -123,3 +123,9 @@ Desconciliar / Voltar ao automático.
 `/automacoes` — a reconcile automation can also apply a category using the same
 conditions. New rules default that optional action to the commitment's
 category; it is editable and clearable. Reconciliation eligibility is unchanged.
+
+## Monetary precision
+
+Commitment and occurrence amounts, including transaction reconciliation options,
+use exact decimal strings in HTTP responses. Fractional cents are preserved;
+the UI rounds only read-only BRL display ([policy](../../precisao-monetaria.md)).

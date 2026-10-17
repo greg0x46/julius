@@ -180,6 +180,22 @@ func TestComputeSumsCashInvestmentsAndPayables(t *testing.T) {
 	assertDecimalEqual(t, "NetWorth", b.NetWorth, "1300")
 }
 
+// TestComputeCashExcludesNonBRLAccounts pins that a USD account's balance is
+// not added to the BRL cash figure; there is no conversion.
+func TestComputeCashExcludesNonBRLAccounts(t *testing.T) {
+	f := newFixture(t)
+	f.addAccount("", "200.00")
+	usd := f.addAccount("", "100.00")
+	f.exec(`UPDATE financial_accounts SET currency_code = 'USD' WHERE id = ?`, usd)
+
+	b, err := networth.Compute(context.Background(), f.conn)
+	if err != nil {
+		t.Fatalf("Compute: %v", err)
+	}
+	assertDecimalEqual(t, "CashBalance", b.CashBalance, "200")
+	assertDecimalEqual(t, "NetWorth", b.NetWorth, "200")
+}
+
 // TestComputeCreditCardIgnoresRawAccountBalance guards the bug the homepage
 // mismatch surfaced: CreditCardBalance must come from
 // transactions.CreditCardTransactionTotal's bill-cycle transaction total, not

@@ -68,8 +68,10 @@ and exact decimals returned by SQLite and Postgres. Stores and SQL-backed HTTP
 handlers use its scan adapters, including nullable columns; native driver values
 are normalized there before domain logic runs. Opaque provider and legacy IDs
 remain intact; `ParseUUID` is available for UUID values. Decimal reads accept
-text and integers and reject floating-point values. Postgres uses native exact
-numeric, temporal, UUID and boolean types; SQLite keeps text decimals, UTC
+text and integers and reject floating-point values. Schema and write formats
+are unchanged (`internal/db.FormatTime` retains fixed-width UTC timestamps).
+
+Postgres uses native exact numeric, temporal, UUID and boolean types; SQLite keeps text decimals, UTC
 instants, calendar dates and integer flags. Both start at `0001_initial.sql`.
 `db.Open` automatically converts final legacy Postgres version 46 in one transaction,
 retaining the original tables in a backup schema; it rejects legacy SQLite and
@@ -79,6 +81,11 @@ is embedded only in historical tests. See
 `cmd/migrate-legacy` replaces the generic copier: a raw read-only final legacy
 SQLite source converts into a fresh SQLite/Postgres baseline. It provides
 aggregated dry-run errors, rollback, FK-ordered copy and count/balance validation.
+
+## Monetary boundaries
+
+[`precisao-monetaria.md`](precisao-monetaria.md) defines exact money input/output,
+operation-specific rounding and native-currency display.
 
 ## Schema conversion contract
 

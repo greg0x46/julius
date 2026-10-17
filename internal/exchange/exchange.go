@@ -34,21 +34,21 @@ const DivisionPrecision = 12
 
 // Rate converts Base into Quote for the day AsOf.
 type Rate struct {
-	Base  string
-	Quote string
+	Base  string `json:"base"`
+	Quote string `json:"quote"`
 	// Value is the persisted figure. Normally 1 Base = Value Quote; when
 	// Inverted, the row was stored the other way round (1 Quote = Value
 	// Base), and Convert divides instead of rounding Value into a reciprocal.
-	Value    decimal.Decimal
-	Inverted bool
+	Value    decimal.Decimal `json:"value"`
+	Inverted bool            `json:"inverted"`
 	// AsOf is the day asked for; EffectiveOn is the day the rate refers to.
-	AsOf        time.Time
-	EffectiveOn time.Time
-	Source      string
-	FetchedAt   time.Time
+	AsOf        time.Time `json:"as_of"`
+	EffectiveOn time.Time `json:"effective_on"`
+	Source      string    `json:"source"`
+	FetchedAt   time.Time `json:"fetched_at"`
 	// Stale is set when the rate could not be refreshed or is older than
 	// MaxLag. Consumers should disclose it rather than hide it.
-	Stale bool
+	Stale bool `json:"stale"`
 }
 
 // Convert turns amount in Base into Quote.

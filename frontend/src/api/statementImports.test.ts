@@ -36,7 +36,9 @@ it("sends the selected decision for an ambiguous statement line", async () => {
   const preview = {
     format: "flash_csv", format_version: "1", sha256: "other-file", preview_fingerprint: "reviewed", filename: "other.csv",
     currency: "BRL", counts: { total: 1, new: 0, duplicate: 0, ambiguous: 1, invalid: 0 }, warnings: [],
-    rows: [{ line_number: 7, status: "ambiguous", errors: [], warnings: ["movimentação idêntica"] }],
+    rows: [{ line_number: 7, status: "ambiguous", errors: [], warnings: ["saldo difere da importação anterior"] }],
+    conflicts: { 7: { id: "existing", occurred_at: "2026-09-09T15:00:00Z", description: "Café", amount: "-10.00",
+      currency: "BRL", payment_method: "Cartão", balance: "90.00", filename: "anterior.csv" } },
   };
   const fetchMock = vi.fn()
     .mockResolvedValueOnce(new Response(JSON.stringify(preview), { status: 200 }))
@@ -45,6 +47,7 @@ it("sends the selected decision for an ambiguous statement line", async () => {
   const file = new File(["synthetic"], "other.csv", { type: "text/csv" });
   const parsed = await previewStatement(file, "acc");
   expect(parsed.rows[0].status).toBe("ambiguous");
+  expect(parsed.conflicts?.[7]).toEqual(preview.conflicts[7]);
   await confirmStatement(file, parsed, { accountId: "acc" }, false, { 7: "import" });
   const body = fetchMock.mock.calls[1][1].body as FormData;
   expect(body.get("ambiguous_line_7")).toBe("import");

@@ -48,7 +48,7 @@ func optionDTO(commitment recurrences.RecurringCommitment, resolved recurrences.
 		CommitmentName: commitment.Name,
 		Kind:           string(commitment.Kind),
 		OccurrenceDate: resolved.Occurrence.Date.Format(dateOnlyLayout),
-		ExpectedAmount: resolved.Occurrence.ExpectedAmount.StringFixed(2),
+		ExpectedAmount: money.CanonicalDecimal(resolved.Occurrence.ExpectedAmount),
 	}
 }
 

@@ -173,6 +173,14 @@ func replayAccount(ctx context.Context, q Querier, accountID string) (accountLed
 // retroactive operation can read the book as it stood on its own date rather
 // than as it stands today. A nil day replays the whole history.
 func replayAccountUntil(ctx context.Context, q Querier, accountID string, until *time.Time) (accountLedger, error) {
+	return replayAccountObserving(ctx, q, accountID, until, nil)
+}
+
+// replayAccountObserving is replayAccountUntil that also reports, for every
+// sale it replays, the cost basis the sale wrote off. That is exactly the
+// drop in the position's total cost, so the figures still add up to what the
+// ledger carries after any number of partial sales.
+func replayAccountObserving(ctx context.Context, q Querier, accountID string, until *time.Time, onSale func(op Operation, writtenOff decimal.Decimal)) (accountLedger, error) {
 	account, err := getRawAccount(ctx, q, accountID)
 	if err != nil {
 		return accountLedger{}, err
@@ -201,8 +209,16 @@ func replayAccountUntil(ctx context.Context, q Querier, accountID string, until 
 		if err != nil {
 			return accountLedger{}, err
 		}
+		sale := onSale != nil && op.Kind == OperationSell && op.PositionID != nil
+		var costBefore decimal.Decimal
+		if sale {
+			costBefore = ledger.position(*op.PositionID).totalCost
+		}
 		if err := applyOperation(&ledger, op); err != nil {
 			return accountLedger{}, err
+		}
+		if sale {
+			onSale(op, costBefore.Sub(ledger.position(*op.PositionID).totalCost))
 		}
 	}
 	if err := rows.Err(); err != nil {

@@ -62,3 +62,9 @@ Scenarios).
 `/pendencias` — combined list of debts/receivables.
 `/pendencias/:id` — detail, including the timeline and the associated payment
 plan (scenario).
+
+## Monetary precision
+
+Money forms and plan allocations submit decimal strings; remaining amounts,
+minimums and comparisons preserve fractional cents. Read-only BRL figures round
+half away from zero ([policy](../../precisao-monetaria.md)).

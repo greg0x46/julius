@@ -121,8 +121,8 @@ export function PayablesPage() {
 
   const submit = async (write: {
     name: string;
-    total_amount: number;
-    initial_remaining_amount: number | null;
+    total_amount: string;
+    initial_remaining_amount: string | null;
   }) => {
     setSaveError(null);
     try {

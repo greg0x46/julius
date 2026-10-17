@@ -29,12 +29,12 @@ const dateLayout = "2006-01-02"
 
 func formatDate(t time.Time) string { return t.UTC().Format(dateLayout) }
 
-// cashBalance is the asset side's cash figure: the same
-// transactions.CashOnHand the timeline anchors on, so the two views can
-// never disagree. Credit card accounts are excluded there — their balance
-// is owed debt, handled by creditCardBalance below.
+// cashBalance is the asset side's cash figure: BRL cash from
+// transactions.CashOnHandIn; other currencies are not converted into it.
+// Credit card accounts are excluded there — their balance is owed debt,
+// handled by creditCardBalance below.
 func cashBalance(ctx context.Context, q Querier) (decimal.Decimal, error) {
-	return transactions.CashOnHand(ctx, q, nil)
+	return transactions.CashOnHandIn(ctx, q, nil, money.BRL)
 }
 
 // creditCardBalance is what's currently owed across every credit card,
@@ -161,7 +161,7 @@ func scanSnapshotRow(scan func(...any) error) (SnapshotRow, error) {
 	)
 	if err := scan(dbtypes.ID(&s.ID), dbtypes.Date(&capturedAtRaw), dbtypes.Decimal(&totalAssetsRaw), dbtypes.Decimal(&totalLiabilitiesRaw), dbtypes.Decimal(&netWorthRaw),
 		dbtypes.Decimal(&cashRaw), dbtypes.Decimal(&investmentRaw), dbtypes.Decimal(&creditCardRaw), dbtypes.Decimal(&payablesDebtRaw), dbtypes.Bool(&isBackfilledRaw),
-		dbtypes.Time(&createdAtRaw), dbtypes.Time(&updatedAtRaw)); err != nil {
+		dbtypes.Time(&createdAtRaw), dbtypes.Time(&updatedAtRaw), &s.CurrencyCode); err != nil {
 		return SnapshotRow{}, err
 	}
 	s.IsBackfilled = isBackfilledRaw != 0
@@ -198,7 +198,7 @@ func scanSnapshotRow(scan func(...any) error) (SnapshotRow, error) {
 
 const snapshotColumns = `id, captured_at, total_assets, total_liabilities, net_worth,
 	cash_balance, investment_balance, credit_card_balance, payables_debt, is_backfilled,
-	created_at, updated_at`
+	created_at, updated_at, valuation_currency`
 
 func getByCapturedAt(ctx context.Context, q Querier, capturedAt string) (SnapshotRow, error) {
 	row := q.QueryRowContext(ctx, `SELECT `+snapshotColumns+` FROM net_worth_snapshots WHERE captured_at = ?`, capturedAt)
