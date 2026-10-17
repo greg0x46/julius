@@ -1,8 +1,10 @@
+import { ReportValuation } from "../shared/ReportValuation";
 import { QuestionCircleOutlined } from "@ant-design/icons";
 import { Popover, Skeleton } from "antd";
 import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 
+import { problemMessage } from "../../presentation/reporting";
 import type { TimelineDayPoint } from "../../api/contracts";
 import { UnavailableState } from "../AsyncState";
 import type { Period } from "../../hooks/usePeriod";
@@ -12,7 +14,7 @@ import { useHomePeriodBounds } from "../../hooks/useHomePeriodBounds";
 import { useTimeline } from "../../hooks/useTimeline";
 import { useToday } from "../../hooks/useToday";
 import { formatDateOnly } from "../../presentation/dates";
-import { formatBRL } from "../../presentation/money";
+import { formatReportMoney } from "../../presentation/money";
 import { EmptyState, Section } from "../layout";
 import { Money } from "../shared/Money";
 
@@ -127,15 +129,16 @@ export function ProjectionSummaryCard({ period }: { period: Period }) {
     ? Math.max(
         ...[base.starting_balance, lowest?.balance, finalPoint?.balance]
           .filter((value): value is string => value !== undefined)
-          .map((value) => formatBRL(value).length),
+          .map((value) => formatReportMoney(value, timeline.currencyCode).length),
       )
     : 0;
 
   return (
+    <ReportValuation valuation={timeline.valuation}>
     <Section title="Evolução do saldo" trailing={<ChartHelp />}>
       {isLoading && <ProjectionSkeleton />}
       {error && !isLoading && (
-        <UnavailableState onRetry={retry}>Não foi possível carregar o saldo.</UnavailableState>
+        <UnavailableState onRetry={retry}>{problemMessage(error) ?? "Não foi possível carregar o saldo."}</UnavailableState>
       )}
 
       {!isLoading && !error && base && bounds && hasNoActivity(base) && (
@@ -147,6 +150,7 @@ export function ProjectionSummaryCard({ period }: { period: Period }) {
 
       {!isLoading && !error && base && bounds && !hasNoActivity(base) && (
         <div className="projection-summary">
+          {base.balance_reporting?.status === "stale" && <p role="status">Saldo convertido com cotações desatualizadas.</p>}
           {/* The global control already names the chosen window, so spelling it
               out again would only repeat it — except under "todo o
               período", where the bounds come from the database and are
@@ -170,5 +174,6 @@ export function ProjectionSummaryCard({ period }: { period: Period }) {
         </div>
       )}
     </Section>
+    </ReportValuation>
   );
 }

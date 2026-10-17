@@ -1,3 +1,4 @@
+import { isPositiveDecimal } from "../../presentation/decimal";
 import { DatePicker, Input } from "antd";
 import dayjs, { type Dayjs } from "dayjs";
 import { useEffect, useState } from "react";
@@ -55,7 +56,7 @@ export function InvestmentPortfolioForm({
       setError("Informe o nome do objetivo.");
       return;
     }
-    if (draft.targetAmount !== null && Number(draft.targetAmount) <= 0) {
+    if (draft.targetAmount !== null && !isPositiveDecimal(draft.targetAmount)) {
       setError("A meta precisa ser maior que zero.");
       return;
     }
@@ -89,7 +90,7 @@ export function InvestmentPortfolioForm({
       <FormField label="Meta (opcional)" htmlFor="investment-portfolio-target">
         <MoneyInput
           id="investment-portfolio-target"
-          min={0.01}
+          min="0"
           value={toMoneyInput(draft.targetAmount)}
           onChange={(value) => setDraft((current) => ({ ...current, targetAmount: fromMoneyInput(value) }))}
         />

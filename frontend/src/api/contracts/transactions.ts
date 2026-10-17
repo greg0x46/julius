@@ -1,3 +1,5 @@
+import { parseValuation, type ReportValuation } from "./valuation";
+import { parseReportingSummary, type ReportingSummary } from "./reporting";
 import { categoryKinds, categoryOrigins } from "./categories";
 import type { CategoryKind, CategoryOrigin } from "./categories";
 import { dateOnlyPattern, decimal, isCount, isNullableString, isUuid, isValidDate, nullableDecimal, nullableText, parseCurrencyTotals, positiveCount, requiredRecord, requiredRecordWithOptionalKeys } from "./shared";
@@ -114,6 +116,7 @@ export interface TransactionItem {
     reason:
       | "ignored"
       | "transfer_category"
+      | "linked_transfer"
       | "unclassified"
       | "ineligible_status"
       | "missing_money_pair"
@@ -150,6 +153,7 @@ export interface ManualTransactionWrite {
 }
 
 export interface TransactionGroup {
+ reporting?: ReportingSummary;
   key: string;
   kind: TransactionGrouping | "undated";
   start_date: string | null;
@@ -170,7 +174,8 @@ export interface CategoryOption {
   color: string;
 }
 
-export interface TransactionQueryResult {
+export interface TransactionQueryResult extends ReportValuation {
+ reporting?: ReportingSummary;
   confirmed_at: string;
   stored_total: number;
   page: { number: number; size: number; total_items: number; total_pages: number };
@@ -270,6 +275,7 @@ export function parseTransactionItem(value: unknown): TransactionItem {
   const reasons = [
     "ignored",
     "transfer_category",
+    "linked_transfer",
     "unclassified",
     "ineligible_status",
     "missing_money_pair",
@@ -410,7 +416,7 @@ export function parseTransactionInclusionResult(value: unknown): TransactionIncl
 }
 
 function parseTransactionGroup(value: unknown): TransactionGroup {
-  const group = requiredRecord(value, [
+  const group = requiredRecordWithOptionalKeys(value, [
     "key",
     "kind",
     "start_date",
@@ -420,7 +426,7 @@ function parseTransactionGroup(value: unknown): TransactionGroup {
     "has_items_before",
     "has_items_after",
     "totals",
-  ]);
+  ], ["reporting"]);
   const kinds = [...transactionGroupings, "undated"];
   if (
     typeof group.key !== "string" ||
@@ -449,11 +455,12 @@ function parseTransactionGroup(value: unknown): TransactionGroup {
     has_items_before: group.has_items_before,
     has_items_after: group.has_items_after,
     totals: group.totals.map(parseCurrencyTotals),
+    ...(group.reporting === undefined ? {} : { reporting: parseReportingSummary(group.reporting) }),
   };
 }
 
 export function parseTransactionQueryResult(value: unknown): TransactionQueryResult {
-  const result = requiredRecord(value, [
+  const result = requiredRecordWithOptionalKeys(value, [
     "confirmed_at",
     "stored_total",
     "page",
@@ -461,7 +468,7 @@ export function parseTransactionQueryResult(value: unknown): TransactionQueryRes
     "totals",
     "groups",
     "available_filters",
-  ]);
+  ], ["reporting", "currency_code", "fx"]);
   const page = requiredRecord(result.page, ["number", "size", "total_items", "total_pages"]);
   const filters = requiredRecord(result.available_filters, [
     "accounts",
@@ -530,6 +537,8 @@ export function parseTransactionQueryResult(value: unknown): TransactionQueryRes
     page: { number, size, total_items: totalItems, total_pages: totalPages },
     items: result.items.map(parseTransactionItem),
     totals: result.totals.map(parseCurrencyTotals),
+    ...parseValuation(result),
+    ...(result.reporting === undefined ? {} : { reporting: parseReportingSummary(result.reporting) }),
     groups: result.groups.map(parseTransactionGroup),
     available_filters: {
       accounts,

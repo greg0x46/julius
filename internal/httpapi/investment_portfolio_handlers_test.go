@@ -40,7 +40,7 @@ var (
 		"financial_investment_transaction_id", "amount", "created_at",
 	}
 	investmentSummaryResponseKeys = []string{
-		"currency_code", "total_value", "manual_value", "synced_value", "cash_balance",
+		"currency_code", "fx", "total_value", "manual_value", "synced_value", "cash_balance",
 		"unrealized_gain", "portfolios", "accounts",
 	}
 	investmentSummaryPortfolioKeys = []string{"portfolio_id", "name", "current_value", "target_amount", "progress"}
@@ -680,6 +680,73 @@ func TestIntegratedInvestmentRecordsAreReadOnlyOverHTTP(t *testing.T) {
 	}, http.StatusConflict); slug != "investment-not-manual" {
 		t.Errorf("operation on synced holding slug = %q", slug)
 	}
+}
+
+func TestInvestmentMonthlyMovementsOverHTTP(t *testing.T) {
+	srv, _ := newTestServer(t)
+	account := investmentID(t, createCustodyAccount(t, srv, "Corretora"))
+	for _, op := range []map[string]any{
+		{"kind": "deposit", "occurred_on": "2026-01-10", "amount": "1000.00"},
+		{"kind": "deposit", "occurred_on": "2026-01-20", "amount": "500.00"},
+		{"kind": "withdrawal", "occurred_on": "2026-02-05", "amount": "200.00"},
+		{"kind": "fee", "occurred_on": "2026-02-06", "amount": "3.50"},
+	} {
+		op["account_id"], op["position_id"] = account, nil
+		investmentCall(t, srv, http.MethodPost, "/api/investment-operations", op, http.StatusCreated)
+	}
+
+	out := investmentCall(t, srv, http.MethodGet, "/api/investment-monthly-movements?account_id="+account, nil, http.StatusOK)
+	items, ok := out["items"].([]any)
+	if !ok || len(items) != 2 {
+		t.Fatalf("items = %+v, want two months", out["items"])
+	}
+	jan, feb := items[0].(map[string]any), items[1].(map[string]any)
+	assertInvestmentKeys(t, "movement", jan, []string{"month", "contributions", "withdrawals", "income", "fees", "taxes", "realized_gain"})
+	if jan["month"] != "2026-01" || feb["month"] != "2026-02" {
+		t.Errorf("months = %v, %v", jan["month"], feb["month"])
+	}
+	assertMoney(t, "contributions", jan["contributions"], "1500.00")
+	assertMoney(t, "withdrawals", feb["withdrawals"], "200.00")
+	assertMoney(t, "fees", feb["fees"], "3.50")
+	assertMoney(t, "realized_gain", feb["realized_gain"], "0")
+	// The rows cover local operations only, whatever their amount.
+	if out["source"] != "manual" {
+		t.Errorf("source = %v, want manual", out["source"])
+	}
+}
+
+func TestInvestmentMonthlyMovementsReportRealizedGainOverHTTP(t *testing.T) {
+	srv, _ := newTestServer(t)
+	account := investmentID(t, createCustodyAccount(t, srv, "Corretora"))
+	position := investmentID(t, investmentCall(t, srv, http.MethodPost, "/api/investment-positions", map[string]any{
+		"account_id": account, "name": "Ações", "asset_type": "Ação",
+	}, http.StatusCreated))
+	for _, op := range []map[string]any{
+		{"kind": "deposit", "occurred_on": "2026-01-10", "amount": "1000.00"},
+		// 6 units for 600.00 plus 12.00 of fees: a basis of 612.00.
+		{"kind": "buy", "occurred_on": "2026-01-11", "amount": "600.00", "quantity": "6", "fees": "12.00", "position_id": position},
+		// 2 units write off 204.00 of it and net 260.00 − 3.00 − 1.00 = 256.00.
+		{"kind": "sell", "occurred_on": "2026-02-05", "amount": "260.00", "quantity": "2", "fees": "3.00", "taxes": "1.00", "position_id": position},
+		// The other 4 go for less than the 408.00 they cost.
+		{"kind": "sell", "occurred_on": "2026-03-05", "amount": "400.00", "quantity": "4", "position_id": position},
+	} {
+		op["account_id"] = account
+		investmentCall(t, srv, http.MethodPost, "/api/investment-operations", op, http.StatusCreated)
+	}
+
+	out := investmentCall(t, srv, http.MethodGet, "/api/investment-monthly-movements?account_id="+account, nil, http.StatusOK)
+	items, ok := out["items"].([]any)
+	if !ok || len(items) != 3 {
+		t.Fatalf("items = %+v, want three months", out["items"])
+	}
+	jan, feb, mar := items[0].(map[string]any), items[1].(map[string]any), items[2].(map[string]any)
+	assertMoney(t, "january fees", jan["fees"], "12")
+	assertMoney(t, "january realized_gain", jan["realized_gain"], "0")
+	assertMoney(t, "february realized_gain", feb["realized_gain"], "52")
+	assertMoney(t, "february fees", feb["fees"], "3")
+	assertMoney(t, "february taxes", feb["taxes"], "1")
+	assertMoney(t, "february income", feb["income"], "0")
+	assertMoney(t, "march realized_gain", mar["realized_gain"], "-8")
 }
 
 func TestManualHoldingInIntegratedAccountOverHTTP(t *testing.T) {

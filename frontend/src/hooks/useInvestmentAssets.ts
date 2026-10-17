@@ -13,16 +13,18 @@ import { invalidateAfterInvestmentAssetChange, queryKeys } from "../api/queryKey
 export const investmentAssetsQueryKey = queryKeys.investmentAssets;
 const emptyClassification: InvestmentAssetClassDefinition[] = [];
 
-export function useInvestmentAssets() {
+export function useInvestmentAssets({ enabled = true }: { enabled?: boolean } = {}) {
   const queryClient = useQueryClient();
   const assetsQuery = useQuery({
     queryKey: investmentAssetsQueryKey,
     queryFn: ({ signal }) => listInvestmentAssets(signal),
+    enabled,
   });
   const classificationQuery = useQuery({
     queryKey: queryKeys.investmentAssetClassification,
     queryFn: ({ signal }) => listInvestmentAssetClassification(signal),
     staleTime: Infinity,
+    enabled,
   });
 
   const refresh = async () => {

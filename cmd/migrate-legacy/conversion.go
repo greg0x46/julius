@@ -10,6 +10,10 @@ import (
 
 // Logical types from the native baseline; opaque IDs and payloads copy unchanged.
 var columnKinds = map[string]string{
+	"transfer_links.id":                                              "uuid",
+	"transfer_links.created_at":                                      "timestamptz",
+	"transfer_transaction_links.transaction_id":                      "uuid",
+	"transfer_transaction_links.transfer_id":                         "uuid",
 	"account_balance_adjustments.account_id":                         "uuid",
 	"account_balance_adjustments.amount":                             "numeric",
 	"account_balance_adjustments.created_at":                         "timestamptz",
@@ -176,6 +180,7 @@ var columnKinds = map[string]string{
 	"net_worth_snapshots.total_assets":                               "numeric",
 	"net_worth_snapshots.total_liabilities":                          "numeric",
 	"net_worth_snapshots.updated_at":                                 "timestamptz",
+	"net_worth_snapshots.valued_at":                                  "timestamptz",
 	"normalization_events.account_id":                                "uuid",
 	"normalization_events.bill_id":                                   "uuid",
 	"normalization_events.created_at":                                "timestamptz",

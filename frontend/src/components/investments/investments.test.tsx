@@ -170,8 +170,8 @@ describe("InvestmentFigures", () => {
 
 describe("moneyDraft", () => {
   it("round-trips a decimal string through the money field without drifting", () => {
-    expect(toMoneyInput("1234.50")).toBe(1234.5);
-    expect(fromMoneyInput(1234.5)).toBe("1234.50");
+    expect(toMoneyInput("1234.50")).toBe("1234.50");
+    expect(fromMoneyInput("1234.5")).toBe("1234.50");
     expect(toMoneyInput(null)).toBeNull();
     expect(fromMoneyInput(null)).toBeNull();
   });

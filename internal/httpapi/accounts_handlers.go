@@ -89,8 +89,6 @@ func accountNotFoundProblem(w http.ResponseWriter) {
 func scanAccount(row interface{ Scan(...any) error }) (accountDTO, error) {
 	var (
 		d              accountDTO
-		closeRaw       sql.NullString
-		dueRaw         sql.NullString
 		manualClosing  sql.NullInt64
 		providerUpdRaw sql.NullString
 		updatedRaw     sql.NullString
@@ -98,8 +96,8 @@ func scanAccount(row interface{ Scan(...any) error }) (accountDTO, error) {
 	)
 	if err := row.Scan(dbtypes.ID(&d.ID), dbtypes.ID(&d.ExternalID), &d.SourceDisplayName, &d.Institution, &d.Name, &d.Number,
 		&d.AccountType, &d.AccountSubtype, dbtypes.Decimal(&d.Balance), dbtypes.Decimal(&d.CreditLimit),
-		dbtypes.Decimal(&d.AvailableCreditLimit), &d.CurrencyCode, dbtypes.Time(&closeRaw),
-		dbtypes.Time(&dueRaw), &manualClosing, dbtypes.Time(&providerUpdRaw), dbtypes.Time(&updatedRaw), &connectionLbl, &d.Origin, dbtypes.Decimal(&d.OpeningBalance), dbtypes.Time(&d.ArchivedAt), dbtypes.Bool(&d.HasMovements)); err != nil {
+		dbtypes.Decimal(&d.AvailableCreditLimit), &d.CurrencyCode, dbtypes.Date(&d.BalanceCloseDate),
+		dbtypes.Date(&d.BalanceDueDate), &manualClosing, dbtypes.Time(&providerUpdRaw), dbtypes.Time(&updatedRaw), &connectionLbl, &d.Origin, dbtypes.Decimal(&d.OpeningBalance), dbtypes.Time(&d.ArchivedAt), dbtypes.Bool(&d.HasMovements)); err != nil {
 		return accountDTO{}, err
 	}
 	if manualClosing.Valid {
@@ -111,12 +109,6 @@ func scanAccount(row interface{ Scan(...any) error }) (accountDTO, error) {
 	}
 	applyInstitutionName(&d)
 	var err error
-	if d.BalanceCloseDate, err = dbtypes.ParseNullTime(closeRaw); err != nil {
-		return accountDTO{}, err
-	}
-	if d.BalanceDueDate, err = dbtypes.ParseNullTime(dueRaw); err != nil {
-		return accountDTO{}, err
-	}
 	if d.ProviderUpdatedAt, err = dbtypes.ParseNullTime(providerUpdRaw); err != nil {
 		return accountDTO{}, err
 	}
@@ -208,12 +200,11 @@ func latestBillClosingDay(ctx context.Context, conn *sql.DB, accountIDs []string
 	newest := map[string]time.Time{}
 	for rows.Next() {
 		var accountID string
-		var closingRaw sql.NullString
-		if err := rows.Scan(dbtypes.ID(&accountID), dbtypes.Time(&closingRaw)); err != nil {
+		var closing *time.Time
+		if err := rows.Scan(dbtypes.ID(&accountID), dbtypes.Date(&closing)); err != nil {
 			return nil, err
 		}
-		closing, err := dbtypes.ParseNullTime(closingRaw)
-		if err != nil || closing == nil {
+		if closing == nil {
 			continue
 		}
 		if seen, ok := newest[accountID]; !ok || closing.After(seen) {
@@ -563,21 +554,9 @@ func handleListAccountBills(conn *sql.DB) http.HandlerFunc {
 
 		result := []accountBillDTO{}
 		for rows.Next() {
-			var (
-				d          accountBillDTO
-				dueRaw     sql.NullString
-				closingRaw sql.NullString
-			)
-			if err := rows.Scan(dbtypes.ID(&d.ID), dbtypes.ID(&d.ExternalID), dbtypes.Time(&dueRaw), dbtypes.Time(&closingRaw),
+			var d accountBillDTO
+			if err := rows.Scan(dbtypes.ID(&d.ID), dbtypes.ID(&d.ExternalID), dbtypes.Date(&d.DueDate), dbtypes.Date(&d.ClosingDate),
 				dbtypes.Decimal(&d.TotalAmount), &d.CurrencyCode, dbtypes.Decimal(&d.MinimumPaymentAmount)); err != nil {
-				accountsUnavailableProblem(w)
-				return
-			}
-			if d.DueDate, err = dbtypes.ParseNullTime(dueRaw); err != nil {
-				accountsUnavailableProblem(w)
-				return
-			}
-			if d.ClosingDate, err = dbtypes.ParseNullTime(closingRaw); err != nil {
 				accountsUnavailableProblem(w)
 				return
 			}

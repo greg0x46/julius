@@ -1,4 +1,15 @@
-import { dateOnlyPattern, decimal, isNullableString, isNullableUuid, isUuid, isValidDate, nullableDecimal, requiredRecord, requiredRecordWithOptionalKeys } from "./shared";
+import { parseValuation, type ReportValuation } from "./valuation";
+import {
+  dateOnlyPattern,
+  decimal,
+  isNullableString,
+  isNullableUuid,
+  isUuid,
+  isValidDate,
+  nullableDecimal,
+  requiredRecord,
+  requiredRecordWithOptionalKeys,
+} from "./shared";
 
 // Investment workspace ----------------------------------------------------
 //
@@ -590,8 +601,8 @@ export interface InvestmentSummaryAccount {
   cash_balance: string;
 }
 
-export interface InvestmentSummary {
-  currency_code: "BRL";
+export interface InvestmentSummary extends ReportValuation {
+  currency_code: string;
   total_value: string;
   manual_value: string;
   synced_value: string;
@@ -643,7 +654,7 @@ function parseInvestmentSummaryAccount(value: unknown): InvestmentSummaryAccount
 }
 
 export function parseInvestmentSummary(value: unknown): InvestmentSummary {
-  const item = requiredRecord(
+  const item = requiredRecordWithOptionalKeys(
     value,
     [
       "currency_code",
@@ -655,13 +666,19 @@ export function parseInvestmentSummary(value: unknown): InvestmentSummary {
       "portfolios",
       "accounts",
     ],
+    ["fx"],
     "Resumo de investimentos inválido.",
   );
-  if (item.currency_code !== "BRL" || !Array.isArray(item.portfolios) || !Array.isArray(item.accounts)) {
+  if (
+    typeof item.currency_code !== "string" ||
+    !Array.isArray(item.portfolios) ||
+    !Array.isArray(item.accounts)
+  ) {
     throw new TypeError("Resumo de investimentos inválido.");
   }
   return {
-    currency_code: "BRL",
+    ...parseValuation(item),
+    currency_code: item.currency_code,
     total_value: decimal(item.total_value),
     manual_value: decimal(item.manual_value),
     synced_value: decimal(item.synced_value),

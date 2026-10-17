@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/shopspring/decimal"
+
+	"github.com/greg0x46/julius/internal/valuation"
 )
 
 // Querier is implemented by *sql.DB and *sql.Tx. Keeping this package on the
@@ -278,6 +280,8 @@ type SummaryPortfolio struct {
 }
 
 type Summary struct {
+	// Valuation records the rates that converted foreign holdings into CurrencyCode.
+	Valuation      valuation.Metadata
 	CurrencyCode   string
 	TotalValue     decimal.Decimal
 	ManualValue    decimal.Decimal
@@ -300,6 +304,22 @@ type ManualReportingEntry struct {
 	Amount     decimal.Decimal
 }
 
+// MonthlyMovement is one calendar month (YYYY-MM) of gross local investment flows.
+// Contributions and Withdrawals are principal, never income or expense.
+// RealizedGain (negative for a loss) is the net proceeds of local sales minus
+// the all-in cost basis written off, so it is net of purchase and sale fees
+// and taxes and is not part of Income. Synced holdings have no cost basis:
+// their sales are not covered and a zero is not "no gain".
+type MonthlyMovement struct {
+	Month         string
+	Contributions decimal.Decimal
+	Withdrawals   decimal.Decimal
+	Income        decimal.Decimal
+	Fees          decimal.Decimal
+	Taxes         decimal.Decimal
+	RealizedGain  decimal.Decimal
+}
+
 type ManualReporting struct {
 	Income decimal.Decimal
 	Fees   decimal.Decimal
@@ -319,6 +339,7 @@ var (
 	ErrOperationNotFound         = errors.New("investment operation not found")
 	ErrReconciliationNotFound    = errors.New("investment reconciliation not found")
 	ErrInvalidInput              = errors.New("invalid investment input")
+	ErrUnsupportedCurrency       = errors.New("manual investment records are in reais")
 	ErrIntegratedReadOnly        = errors.New("integrated investment data is read-only")
 	ErrNotManual                 = errors.New("investment record is not manual")
 	ErrNegativeCash              = errors.New("investment operation would make cash negative")

@@ -91,6 +91,12 @@ check("notes step is conditional on a version", notes_step["if"] == "steps.versi
 check("notes come from scripts/changelog-section.sh and fail on mismatch",
       "scripts/changelog-section.sh --latest" in notes_step["run"] and "exit 1" in notes_step["run"] and 'scripts/changelog-section.sh "$TAG"' in notes_step["run"])
 check("release notes are not recomputed with next-version.sh --notes", "--notes" not in raw.replace("--notes-file", ""))
+build_step = next(s for s in steps if s.get("name") == "Build")
+check("release frontend metadata uses selected tag and exact build commit",
+      build_step.get("env") == {"VITE_APP_VERSION": "${{ steps.version.outputs.tag }}", "VITE_APP_COMMIT": "${{ github.sha }}"})
+frontend_build = next(s for s in jobs["frontend"]["steps"] if s.get("run") == "npm run build")
+check("stage frontend build is explicit; other check builds say dev",
+      frontend_build.get("env") == {"VITE_APP_VERSION": "${{ github.ref == 'refs/heads/stage' && 'stage' || 'dev' }}", "VITE_APP_COMMIT": "${{ github.sha }}"})
 publish = run["Publish release"]
 check("publish uses the notes file", "--notes-file notes.md" in publish)
 check("publish keeps target, title and latest", '--target "$GITHUB_SHA"' in publish and '--title "$TAG"' in publish and "--latest" in publish)

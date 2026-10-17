@@ -3,11 +3,14 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 
+import { ReportValuation } from "../shared/ReportValuation";
+import { ReportingDetails } from "../shared/ReportingDetails";
+import { reportingLabel } from "../../presentation/reporting";
 import type { CategoryBreakdown, CategoryDirection, CategorySpendingItem } from "../../api/contracts";
 import { useCategoryBreakdown } from "../../hooks/useCategoryBreakdown";
 import type { Period } from "../../hooks/usePeriod";
 import { categoryPalette, otherCategoriesColor, uncategorizedColor } from "../../presentation/chartColors";
-import { formatBRL, sumBRL } from "../../presentation/money";
+import { formatReportMoney, sumBRL } from "../../presentation/money";
 import { UnavailableState } from "../AsyncState";
 import { filtersToSearchParams } from "../filters/filterUrl";
 import { PageTabs, Section } from "../layout";
@@ -101,13 +104,14 @@ function Breakdown({ data, period, direction }: { data: CategoryBreakdown; perio
   const navigate = useNavigate();
   const total = Number(data.total);
   const label = direction === "outflow" ? "saídas" : "entradas";
+  const format = (value: string) => formatReportMoney(value, data.currency_code);
   const slices = toSlices(data.items);
   const linkFor = (slice: Slice) => transactionLink(period, direction, slice.item);
 
   if (total <= 0 || slices.length === 0) {
     return (
       <div className="category-empty">
-        <strong>{formatBRL("0.00")}</strong>
+        <strong>{format("0.00")}</strong>
         <p>Nenhuma {direction === "outflow" ? "saída" : "entrada"} neste período.</p>
       </div>
     );
@@ -118,8 +122,8 @@ function Breakdown({ data, period, direction }: { data: CategoryBreakdown; perio
       <div className="category-donut">
         <div className="category-donut-total">
           <span>Total de {label}</span>
-          <strong title={formatBRL(data.total)} style={{ fontSize: donutFigureSize(formatBRL(data.total)) }}>
-            {formatBRL(data.total)}
+          <strong title={format(data.total ?? "0")} style={{ fontSize: donutFigureSize(format(data.total ?? "0")) }}>
+            {format(data.total ?? "0")}
           </strong>
         </div>
         <ResponsiveContainer width="100%" height={200}>
@@ -153,7 +157,7 @@ function Breakdown({ data, period, direction }: { data: CategoryBreakdown; perio
                   <div className="timeline-chart-tooltip">
                     <strong>{slice.name}</strong>
                     <div>
-                      {formatBRL(slice.amount)} · {percent(slice.value, total)}
+                      {format(slice.amount)} · {percent(slice.value, total)}
                     </div>
                   </div>
                 ) : null;
@@ -175,7 +179,7 @@ function Breakdown({ data, period, direction }: { data: CategoryBreakdown; perio
               <span className="category-breakdown-swatch" style={{ background: slice.color }} aria-hidden="true" />
               <span className="category-breakdown-name">{slice.name}</span>
               <span className="category-breakdown-amount">
-                <strong>{formatBRL(slice.amount)}</strong>
+                <strong>{format(slice.amount)}</strong>
                 <span>{percent(slice.value, total)}</span>
               </span>
             </Link>
@@ -215,8 +219,10 @@ export function SpendingByCategoryCard({ period }: { period: Period }) {
           <CategorySkeleton />
         ) : error || !data ? (
           <UnavailableState onRetry={() => void refetch()}>Não foi possível carregar as categorias.</UnavailableState>
+        ) : data.total === null ? (
+          <div role="status"><p>{data.reporting ? reportingLabel(data.reporting) : "Total indisponível"}</p><ReportingDetails report={data.reporting} totals={data.totals} /></div>
         ) : (
-          <Breakdown key={`${period.from}-${period.to}-${direction}`} data={data} period={period} direction={direction} />
+          <ReportValuation valuation={data}><ReportingDetails report={data.reporting} totals={data.totals} /><Breakdown key={`${period.from}-${period.to}-${direction}`} data={data} period={period} direction={direction} /></ReportValuation>
         )}
       </div>
     </Section>

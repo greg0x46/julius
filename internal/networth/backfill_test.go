@@ -88,6 +88,68 @@ func TestBackfillReconstructsCashWalkingEligibleTransactionsBackward(t *testing.
 	assertDecimalEqual(t, "twoDaysAgo.TotalAssets", snapTwoDaysAgo.Breakdown.TotalAssets, "10949")
 }
 
+// TestBackfillReversesForeignTransactionsInTheirOwnCurrency pins that a USD
+// account is walked back in USD and only then valued, with the day's rate.
+func TestBackfillReversesForeignTransactionsInTheirOwnCurrency(t *testing.T) {
+	f := newFixture(t)
+	brl := f.addAccount("", "200.00")
+	usd := f.addAccount("", "100.00")
+	f.exec(`UPDATE financial_accounts SET currency_code = 'USD' WHERE id = ?`, usd)
+
+	today := time.Date(2024, 6, 15, 0, 0, 0, 0, time.UTC)
+	fourDaysAgo := today.AddDate(0, 0, -4)
+	threeDaysAgo := today.AddDate(0, 0, -3)
+	twoDaysAgo := today.AddDate(0, 0, -2)
+	f.addCardTransaction(brl, fourDaysAgo, "10.00", "CREDIT") // opens the backfill window before the USD movement
+	f.addCardTransaction(usd, twoDaysAgo, "40.00", "CREDIT")
+
+	if err := networth.BackfillWith(context.Background(), f.conn, today, f.fx(map[string]string{"USD/BRL": "5"})); err != nil {
+		t.Fatalf("Backfill: %v", err)
+	}
+	snap, ok := snapshotFor(t, f, threeDaysAgo)
+	if !ok {
+		t.Fatalf("no snapshot for threeDaysAgo")
+	}
+	// 200 BRL + (100 - 40) USD * 5
+	assertDecimalEqual(t, "threeDaysAgo.CashBalance", snap.Breakdown.CashBalance, "500")
+}
+
+// TestBackfillMarksDaysBeforeAnIrreversibleForeignMovementUnavailable pins that
+// a USD account's transaction with no account-currency amount cannot be
+// reversed, so the days before it carry no figures instead of a wrong or zero one.
+func TestBackfillMarksDaysBeforeAnIrreversibleForeignMovementUnavailable(t *testing.T) {
+	f := newFixture(t)
+	brl := f.addAccount("", "200.00")
+	usd := f.addAccount("", "100.00")
+	f.exec(`UPDATE financial_accounts SET currency_code = 'USD' WHERE id = ?`, usd)
+
+	today := time.Date(2024, 6, 15, 0, 0, 0, 0, time.UTC)
+	fourDaysAgo := today.AddDate(0, 0, -4)
+	threeDaysAgo := today.AddDate(0, 0, -3)
+	twoDaysAgo := today.AddDate(0, 0, -2)
+	f.addCardTransaction(brl, fourDaysAgo, "10.00", "CREDIT") // opens the backfill window before the USD movement
+	id := f.addCardTransaction(usd, twoDaysAgo, "100.00", "CREDIT")
+	f.exec(`UPDATE financial_transactions SET amount_in_account_currency = NULL WHERE id = ?`, id)
+
+	rates := f.fx(map[string]string{"USD/BRL": "5"})
+	for range 2 { // the second run must not overwrite or duplicate it
+		if err := networth.BackfillWith(context.Background(), f.conn, today, rates); err != nil {
+			t.Fatalf("Backfill: %v", err)
+		}
+	}
+	snap, ok := snapshotFor(t, f, threeDaysAgo)
+	if !ok {
+		t.Fatalf("no snapshot for threeDaysAgo")
+	}
+	if snap.ValuationStatus != networth.ValuationUnavailable || !snap.IsBackfilled {
+		t.Fatalf("status = %q backfilled = %v", snap.ValuationStatus, snap.IsBackfilled)
+	}
+	assertDecimalEqual(t, "unavailable day carries no figures", snap.Breakdown.NetWorth, "0")
+	if after, ok := snapshotFor(t, f, twoDaysAgo); !ok || after.ValuationStatus != networth.ValuationReconstructed {
+		t.Fatalf("the day after the movement is still reconstructable: %+v %v", after, ok)
+	}
+}
+
 // TestBackfillSkipsDaysBeforeTheEarliestKnownTransaction proves Backfill
 // never invents a day it has no transaction coverage for: with a single
 // cash transaction three days back, only that day and days after it (up to
@@ -350,15 +412,16 @@ func TestBackfillManualAccountMovementsAndAdjustments(t *testing.T) {
 	foreign := f.addAccount("BANK", "10000")
 	f.exec(`UPDATE financial_accounts SET currency_code='USD' WHERE id=?`, foreign)
 	f.addCardTransaction(foreign, today.AddDate(0, 0, -1), "1000", "CREDIT")
-	if err := networth.Backfill(context.Background(), f.conn, today); err != nil {
+	if err := networth.BackfillWith(context.Background(), f.conn, today, f.fx(map[string]string{"USD/BRL": "2"})); err != nil {
 		t.Fatal(err)
 	}
+	// The USD account held 9000 before yesterday's 1000 credit: 18000 BRL at 2.
 	day, ok := snapshotFor(t, f, today.AddDate(0, 0, -2))
-	if !ok || !day.Breakdown.CashBalance.Equal(decimal.RequireFromString("110")) {
+	if !ok || !day.Breakdown.CashBalance.Equal(decimal.RequireFromString("18110")) {
 		t.Fatalf("first day: %+v %v", day, ok)
 	}
 	day, ok = snapshotFor(t, f, today.AddDate(0, 0, -1))
-	if !ok || !day.Breakdown.CashBalance.Equal(decimal.RequireFromString("115")) {
+	if !ok || !day.Breakdown.CashBalance.Equal(decimal.RequireFromString("20115")) {
 		t.Fatalf("adjustment day: %+v %v", day, ok)
 	}
 }

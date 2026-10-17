@@ -1,3 +1,4 @@
+import { ApiError } from "../../api/problems";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -36,7 +37,12 @@ function response(balances: string | string[], startingBalance = "5000.00"): Tim
   } as unknown as TimelineResponse;
 }
 
-const params = { referenceDate: "2026-10-22", from: "2026-10-22", to: "2026-10-31" };
+const params = {
+  referenceDate: "2026-10-22",
+  from: "2026-10-22",
+  to: "2026-10-31",
+  timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+};
 
 function renderCard() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -139,4 +145,11 @@ describe("DailyAllowanceCard", () => {
     expect(setItem).not.toHaveBeenCalled();
     setItem.mockRestore();
   });
+  it("explains an unavailable FX rate instead of showing a zero allowance", async () => {
+    vi.mocked(timelineApi.getTimeline).mockRejectedValue(new ApiError("response", "Falta cotação de BRL para USD."));
+    renderCard();
+    expect(await screen.findByText("Falta cotação de BRL para USD.")).toBeVisible();
+    expect(screen.queryByText(/R\$ 0,00/)).toBeNull();
+  });
+
 });

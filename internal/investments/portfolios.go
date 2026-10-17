@@ -12,6 +12,8 @@ import (
 
 	"github.com/greg0x46/julius/internal/db"
 	dbtypes "github.com/greg0x46/julius/internal/db/types"
+	"github.com/greg0x46/julius/internal/exchange"
+	"github.com/greg0x46/julius/internal/valuation"
 )
 
 const portfolioColumns = `id, name, target_amount, target_date, notes, created_at, updated_at`
@@ -83,7 +85,7 @@ func getRawPortfolio(ctx context.Context, q Querier, id string) (Portfolio, erro
 func portfolioValues(positions []Position) map[string]decimal.Decimal {
 	values := map[string]decimal.Decimal{}
 	for _, position := range positions {
-		if position.PortfolioID == nil || (position.CurrencyCode != nil && *position.CurrencyCode != "BRL") {
+		if position.PortfolioID == nil {
 			continue
 		}
 		values[*position.PortfolioID] = values[*position.PortfolioID].Add(position.CurrentValue)
@@ -115,7 +117,10 @@ func ListPortfolios(ctx context.Context, q Querier) ([]Portfolio, error) {
 	if err != nil {
 		return nil, err
 	}
-	values := portfolioValues(positions)
+	values, err := valuedPortfolioValues(ctx, q, positions)
+	if err != nil {
+		return nil, err
+	}
 	for i := range portfolios {
 		applyPortfolioValue(&portfolios[i], values[portfolios[i].ID])
 	}
@@ -131,7 +136,11 @@ func GetPortfolio(ctx context.Context, q Querier, id string) (Portfolio, error) 
 	if err != nil {
 		return Portfolio{}, err
 	}
-	applyPortfolioValue(&portfolio, portfolioValues(positions)[id])
+	values, err := valuedPortfolioValues(ctx, q, positions)
+	if err != nil {
+		return Portfolio{}, err
+	}
+	applyPortfolioValue(&portfolio, values[id])
 	return portfolio, nil
 }
 
@@ -186,4 +195,23 @@ func DeletePortfolio(ctx context.Context, q Querier, id string) error {
 	}
 	_, err := q.ExecContext(ctx, `DELETE FROM investment_portfolios WHERE id = ?`, id)
 	return err
+}
+
+// valuedPortfolioValues groups holdings by goal in BRL, valuing foreign
+// holdings at today's rate.
+func valuedPortfolioValues(ctx context.Context, q Querier, positions []Position) (map[string]decimal.Decimal, error) {
+	valued := valuation.New(exchange.New(q, nil), time.Now())
+	converted := make([]Position, 0, len(positions))
+	for _, position := range positions {
+		if position.PortfolioID == nil {
+			continue
+		}
+		value, err := valued.Convert(ctx, position.CurrentValue, valuation.Currency(position.CurrencyCode))
+		if err != nil {
+			return nil, err
+		}
+		position.CurrentValue = value
+		converted = append(converted, position)
+	}
+	return portfolioValues(converted), nil
 }

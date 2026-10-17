@@ -1,16 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { clampBRLAtZero, divideBRLFloor, minBRL, roundBRL } from "./money";
+import vectors from "../../../testdata/money_precision.json";
+import { roundDecimal } from "./decimal";
 
-describe("roundBRL", () => {
-  it("rounds exact costs to cents without converting them to floating point", () => {
-    expect(roundBRL("66.6666666666666667")).toBe("66.67");
-    expect(roundBRL("-66.665")).toBe("-66.67");
-    expect(roundBRL("66.6649")).toBe("66.66");
-    expect(roundBRL("99999999999999999999.995")).toBe("100000000000000000000.00");
-    expect(roundBRL("0")).toBe("0.00");
-  });
-});
+import { clampBRLAtZero, divideBRLFloor, minBRL, formatBRL, formatMoney, formatToneBRL, moneyTone, subtractBRL, sumBRL } from "./money";
 
 describe("divideBRLFloor", () => {
   it("drops the leftover fraction of a cent", () => {
@@ -59,5 +52,43 @@ describe("minBRL", () => {
 
   it("needs at least one amount", () => {
     expect(() => minBRL([])).toThrow(RangeError);
+  });
+});
+
+describe("shared monetary precision policy", () => {
+  it.each(vectors.rounding)("rounds $value to $rounded", ({ value, rounded }) => {
+    expect(roundDecimal(value, 2)).toBe(rounded);
+    const [whole, fraction] = rounded.replace(/^-/, "").split(".");
+    expect(formatBRL(value)).toBe(`${rounded.startsWith("-") ? "-" : ""}R$\u00a0${whole.replace(/\B(?=(\d{3})+(?!\d))/g, ".")},${fraction}`);
+  });
+
+  it.each(vectors.sums)("sums $values exactly", ({ values, total }) => {
+    expect(sumBRL(values)).toBe(total);
+  });
+
+  it.each(vectors.shares)("floors $value / $divisor", ({ value, divisor, share }) => {
+    expect(divideBRLFloor(value, divisor)).toBe(share);
+  });
+
+  it("preserves precision in subtraction, minimum and clamping", () => {
+    expect(subtractBRL("9007199254740993.005", "9007199254740993.004")).toBe("0.001");
+    expect(minBRL(["0.005", "0.004"])).toBe("0.004");
+    expect(clampBRLAtZero("0.004")).toBe("0.004");
+    expect(() => divideBRLFloor("-0.001", 2)).toThrow(RangeError);
+  });
+
+  it.each(["BRL", "USD", "EUR", "JPY", "KWD"])("normalizes signed zero in %s", (code) => {
+    expect(formatMoney("-0.00", code)).not.toMatch(/^-/);
+  });
+
+  it("keeps foreign currency precision without imposing minor-unit rules", () => {
+    expect(formatMoney("-9007199254740993.005", "USD")).toBe("-USD\u00a09.007.199.254.740.993,005");
+    expect(formatMoney("1.005", "KWD")).toBe("KWD\u00a01,005");
+    expect(formatMoney("100", "JPY")).toBe("JPY\u00a0100,00");
+  });
+
+  it("does not sign or tint a BRL value that displays as zero", () => {
+    expect(formatToneBRL("-0.004", "balance")).toBe("R$\u00a00,00");
+    expect(moneyTone("0.004", "flow", "inflow")).toEqual({ sign: "", color: "neutral" });
   });
 });
