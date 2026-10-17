@@ -11,11 +11,14 @@ import (
 
 	"github.com/shopspring/decimal"
 
+	"github.com/greg0x46/julius/internal/exchange"
 	"github.com/greg0x46/julius/internal/investments"
 	"github.com/greg0x46/julius/internal/money"
 	"github.com/greg0x46/julius/internal/networth"
+	"github.com/greg0x46/julius/internal/reporting"
 	"github.com/greg0x46/julius/internal/timeline"
 	"github.com/greg0x46/julius/internal/transactions"
+	"github.com/greg0x46/julius/internal/valuation"
 )
 
 var updateFinancialContracts = flag.Bool("update-financial-contracts", false, "rewrite the shared synthetic API fixture")
@@ -78,12 +81,24 @@ func financialContractPayloads() map[string]any {
 	ignoredReason := money.ReasonIgnored
 	ignored.TotalsEligibility = transactions.TotalsEligibility{Reason: &ignoredReason}
 	items = append(items, ignored)
+	reference := valuationDTO{CurrencyCode: "BRL", FX: exchange.Rate{Base: "BRL", Quote: "BRL", Value: decimal.NewFromInt(1), AsOf: day, EffectiveOn: day, Source: "identity", FetchedAt: instant}}
 	result := toResultDTO(transactions.Result{
 		ConfirmedAt: instant, StoredTotal: len(items), Items: items,
 		Page:             transactions.Page{Number: 1, Size: 50, TotalItems: len(items), TotalPages: 1},
 		Totals:           []transactions.CurrencyTotals{{CurrencyCode: brl, Inflow: "0", Outflow: moneyText, Balance: "-" + moneyText}},
 		AvailableFilters: transactions.AvailableFilters{Institutions: []string{}},
 	})
+
+	result.valuationDTO = reference
+	complete := func() reporting.Summary {
+		return reporting.Summary{Status: "complete", Totals: &reporting.Totals{Inflow: "0", Outflow: "0", Balance: "0"}}
+	}
+	result.Reporting = complete()
+	reference.summary(&result.Reporting)
+	for i := range result.Groups {
+		result.Groups[i].Reporting = complete()
+		reference.summary(&result.Groups[i].Reporting)
+	}
 
 	positions := []investmentPositionDTO{}
 	for _, basis := range []investments.ValuationBasis{investments.ValuationBasisCostBasis, investments.ValuationBasisManualValuation, investments.ValuationBasisMarketQuote, investments.ValuationBasisProviderBalance} {
@@ -116,9 +131,19 @@ func financialContractPayloads() map[string]any {
 		}
 	}
 	series := timelineSeriesToDTO(timeline.Series{Points: []timeline.DayPoint{point}, Entries: entries, StartingBalance: amount, LowestBalance: point})
+	series.Totals = []reporting.Totals{{CurrencyCode: brl, Inflow: "0", Outflow: moneyText, Balance: "-" + moneyText}}
+	series.Reporting, series.BalanceReporting = complete(), complete()
+	reference.series(&series)
 	simulation := series
 	simulation.FirstNegative = text("2026-07-30")
-	snapshot := netWorthSnapshotDTO{CapturedAt: instant, netWorthBreakdownDTO: toNetWorthBreakdownDTO(networth.Breakdown{CashBalance: amount, InvestmentBalance: small, TotalAssets: amount.Add(small), NetWorth: amount.Add(small)})}
+	breakdown := toNetWorthBreakdownDTO(networth.Breakdown{CashBalance: amount, InvestmentBalance: small, TotalAssets: amount.Add(small), NetWorth: amount.Add(small)})
+	snapshot := netWorthSnapshotDTO{
+		CurrencyCode: "BRL", StoredCurrency: "BRL", CapturedAt: instant, ValuationVersion: 1, ValuationStatus: networth.ValuationComplete,
+		FX:                   &exchange.Rate{Base: "BRL", Quote: "BRL", Value: decimal.NewFromInt(1), AsOf: day, EffectiveOn: day, Source: "identity", FetchedAt: instant},
+		Valuation:            &valuation.Metadata{BaseCurrency: "BRL", ValuedAt: day, RatePolicy: "synthetic", Rates: map[string]valuation.Rate{"USD": {Value: small, EffectiveOn: day, Source: "synthetic"}}},
+		netWorthBreakdownDTO: &breakdown,
+	}
+	unavailable := netWorthSnapshotDTO{CurrencyCode: "BRL", StoredCurrency: "BRL", CapturedAt: instant, ValuationVersion: 1, ValuationStatus: networth.ValuationUnavailable}
 
 	return map[string]any{
 		"accounts":     accounts,
@@ -140,9 +165,9 @@ func financialContractPayloads() map[string]any {
 				{Name: "Sem objetivo", CurrentValue: small},
 			},
 		}),
-		"timeline":            timelineResponseDTO{Base: series, PeriodTotals: periodTotalsToDTO(timeline.PeriodTotals{Income: small, Expense: amount, Result: small.Sub(amount)}), ScenarioImpacts: []scenarioImpactDTO{}},
-		"timeline_simulation": timelineResponseDTO{Base: series, PeriodTotals: periodTotalsDTO{Income: "0", Expense: "0", Result: "0"}, Simulation: &simulation, ScenarioImpacts: []scenarioImpactDTO{{ScenarioID: id, ScenarioName: "Synthetic scenario", Delta: moneyText}}},
-		"net_worth":           netWorthResponseDTO{Latest: snapshot, Series: []netWorthSnapshotDTO{snapshot}},
+		"timeline":            timelineResponseDTO{valuationDTO: reference, Base: series, PeriodTotals: periodTotalsToDTO(timeline.PeriodTotals{Income: small, Expense: amount, Result: small.Sub(amount)}), ScenarioImpacts: []scenarioImpactDTO{}},
+		"timeline_simulation": timelineResponseDTO{valuationDTO: reference, Base: series, PeriodTotals: periodTotalsDTO{Income: "0", Expense: "0", Result: "0"}, Simulation: &simulation, ScenarioImpacts: []scenarioImpactDTO{{ScenarioID: id, ScenarioName: "Synthetic scenario", Delta: moneyText}}},
+		"net_worth":           netWorthResponseDTO{Latest: snapshot, Series: []netWorthSnapshotDTO{unavailable, snapshot}},
 		"money":               []string{moneyText, money.CanonicalDecimal(small), "-123.4500", "0.00", "123.4500"},
 	}
 }

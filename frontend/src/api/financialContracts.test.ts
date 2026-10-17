@@ -105,7 +105,11 @@ describe("shared Go/TypeScript financial contracts", () => {
     expect(parseTimelineResponse(payloads.timeline_simulation).simulation?.first_negative).toBe("2026-07-30");
     const netWorth = parseNetWorthSeries(payloads.net_worth);
     expect(netWorth.latest.captured_at).toBe("2026-07-30T12:34:56.123456789Z");
-    expectTypeOf(netWorth.latest.net_worth).toEqualTypeOf<string>();
+    expectTypeOf(netWorth.latest.net_worth).toEqualTypeOf<string | undefined>();
+    // An unvaluable day omits every figure instead of reporting zero.
+    expect(netWorth.series[0]).toMatchObject({ valuation_status: "unavailable" });
+    expect(netWorth.series[0].net_worth).toBeUndefined();
+    expect(netWorth.latest.valuation_status).toBe("complete");
     const positions = parseInvestmentPositionList(payloads.positions);
     expect(positions[0].valued_on).toBe("2026-07-30");
     expect(positions.at(-1)?.average_cost).toBeNull();

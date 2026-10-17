@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { InvestmentPosition } from "../../api/contracts";
+import { formatBRL } from "../../presentation/money";
 import { positionYield } from "./investmentMath";
 
 const position: InvestmentPosition = {
@@ -34,8 +35,8 @@ describe("positionYield", () => {
     expect(quoted).toEqual(typed);
     if (!quoted.known) return;
     // 44.180,21 over 3,2 × 10.000,00.
-    expect(quoted.basis).toBe("32000.000");
-    expect(quoted.value).toBe("12180.210");
+    expect(quoted.basis).toBe("32000.00");
+    expect(quoted.value).toBe("12180.21");
     expect(quoted.percent).toBeCloseTo(38.0631, 3);
   });
 
@@ -51,21 +52,22 @@ describe("positionYield", () => {
     expect(estimate).toMatchObject({ known: false, short: "Sem custo de aquisição" });
   });
 
-  it("rounds the proportional acquisition cost remaining after a partial sale", () => {
+  it("keeps the proportional acquisition cost exact after a partial sale and rounds only for display", () => {
     const estimate = positionYield({
       ...position, quantity: "2", average_cost: "33.3333333333333334",
       total_cost: "66.6666666666666667", current_value: "80.00",
     }, new Map());
-    expect(estimate).toMatchObject({ known: true, basis: "66.6666666666666667", gross: "13.33", value: "13.33" });
+    expect(estimate).toMatchObject({ known: true, basis: "66.6666666666666667", gross: "13.3333333333333333", value: "13.3333333333333333" });
+    expect(estimate.known && formatBRL(estimate.value)).toBe("R$\u00a013,33");
   });
 
   it("deducts the position's costs from a market-quoted gain", () => {
     const estimate = positionYield(position, new Map(), "180.21");
-    expect(estimate.known && estimate.value).toBe("12000.000");
+    expect(estimate.known && estimate.value).toBe("12000.00");
   });
 
   it("subtracts fractional acquisition cost before rounding gain for display", () => {
-    const estimate = positionYield({ ...position, average_cost: "0.331", quantity: "3", current_value: "1.00" }, new Map(), "0.003");
+    const estimate = positionYield({ ...position, average_cost: "0.331", total_cost: "0.993", quantity: "3", current_value: "1.00" }, new Map(), "0.003");
     expect(estimate.known && estimate.basis).toBe("0.993");
     expect(estimate.known && estimate.value).toBe("0.004");
   });

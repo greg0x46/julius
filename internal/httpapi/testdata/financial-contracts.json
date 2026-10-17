@@ -272,7 +272,44 @@
   "net_worth": {
     "series": [
       {
+        "currency_code": "BRL",
+        "stored_currency": "BRL",
         "captured_at": "2026-07-30T12:34:56.123456789Z",
+        "valuation_version": 1,
+        "valuation_status": "unavailable",
+        "is_backfilled": false
+      },
+      {
+        "currency_code": "BRL",
+        "fx": {
+          "base": "BRL",
+          "quote": "BRL",
+          "value": "1",
+          "inverted": false,
+          "as_of": "2026-07-30T00:00:00Z",
+          "effective_on": "2026-07-30T00:00:00Z",
+          "source": "identity",
+          "fetched_at": "2026-07-30T12:34:56.123456789Z",
+          "stale": false
+        },
+        "stored_currency": "BRL",
+        "captured_at": "2026-07-30T12:34:56.123456789Z",
+        "valuation_version": 1,
+        "valuation_status": "complete",
+        "valuation": {
+          "base_currency": "BRL",
+          "valued_at": "2026-07-30T00:00:00Z",
+          "rate_policy": "synthetic",
+          "rates": {
+            "USD": {
+              "value": "0.000000000000000001",
+              "inverted": false,
+              "effective_on": "2026-07-30T00:00:00Z",
+              "source": "synthetic",
+              "stale": false
+            }
+          }
+        },
         "cash_balance": "9007199254740993.123456789012345678",
         "investment_balance": "0.000000000000000001",
         "credit_card_balance": "0",
@@ -284,7 +321,36 @@
       }
     ],
     "latest": {
+      "currency_code": "BRL",
+      "fx": {
+        "base": "BRL",
+        "quote": "BRL",
+        "value": "1",
+        "inverted": false,
+        "as_of": "2026-07-30T00:00:00Z",
+        "effective_on": "2026-07-30T00:00:00Z",
+        "source": "identity",
+        "fetched_at": "2026-07-30T12:34:56.123456789Z",
+        "stale": false
+      },
+      "stored_currency": "BRL",
       "captured_at": "2026-07-30T12:34:56.123456789Z",
+      "valuation_version": 1,
+      "valuation_status": "complete",
+      "valuation": {
+        "base_currency": "BRL",
+        "valued_at": "2026-07-30T00:00:00Z",
+        "rate_policy": "synthetic",
+        "rates": {
+          "USD": {
+            "value": "0.000000000000000001",
+            "inverted": false,
+            "effective_on": "2026-07-30T00:00:00Z",
+            "source": "synthetic",
+            "stale": false
+          }
+        }
+      },
       "cash_balance": "9007199254740993.123456789012345678",
       "investment_balance": "0.000000000000000001",
       "credit_card_balance": "0",
@@ -625,7 +691,55 @@
     ]
   },
   "timeline": {
+    "currency_code": "BRL",
+    "fx": {
+      "base": "BRL",
+      "quote": "BRL",
+      "value": "1",
+      "inverted": false,
+      "as_of": "2026-07-30T00:00:00Z",
+      "effective_on": "2026-07-30T00:00:00Z",
+      "source": "identity",
+      "fetched_at": "2026-07-30T12:34:56.123456789Z",
+      "stale": false
+    },
     "base": {
+      "totals": [
+        {
+          "currency_code": "BRL",
+          "inflow": "0",
+          "outflow": "9007199254740993.123456789012345678",
+          "balance": "-9007199254740993.123456789012345678"
+        }
+      ],
+      "reporting": {
+        "currency_code": "BRL",
+        "status": "complete",
+        "eligible": 0,
+        "converted": 0,
+        "missing": 0,
+        "stale": 0,
+        "totals": {
+          "currency_code": "BRL",
+          "inflow": "0",
+          "outflow": "0",
+          "balance": "0"
+        }
+      },
+      "balance_reporting": {
+        "currency_code": "BRL",
+        "status": "complete",
+        "eligible": 0,
+        "converted": 0,
+        "missing": 0,
+        "stale": 0,
+        "totals": {
+          "currency_code": "BRL",
+          "inflow": "0",
+          "outflow": "0",
+          "balance": "0"
+        }
+      },
       "points": [
         {
           "date": "2026-07-30",
@@ -896,7 +1010,55 @@
     "scenario_impacts": []
   },
   "timeline_simulation": {
+    "currency_code": "BRL",
+    "fx": {
+      "base": "BRL",
+      "quote": "BRL",
+      "value": "1",
+      "inverted": false,
+      "as_of": "2026-07-30T00:00:00Z",
+      "effective_on": "2026-07-30T00:00:00Z",
+      "source": "identity",
+      "fetched_at": "2026-07-30T12:34:56.123456789Z",
+      "stale": false
+    },
     "base": {
+      "totals": [
+        {
+          "currency_code": "BRL",
+          "inflow": "0",
+          "outflow": "9007199254740993.123456789012345678",
+          "balance": "-9007199254740993.123456789012345678"
+        }
+      ],
+      "reporting": {
+        "currency_code": "BRL",
+        "status": "complete",
+        "eligible": 0,
+        "converted": 0,
+        "missing": 0,
+        "stale": 0,
+        "totals": {
+          "currency_code": "BRL",
+          "inflow": "0",
+          "outflow": "0",
+          "balance": "0"
+        }
+      },
+      "balance_reporting": {
+        "currency_code": "BRL",
+        "status": "complete",
+        "eligible": 0,
+        "converted": 0,
+        "missing": 0,
+        "stale": 0,
+        "totals": {
+          "currency_code": "BRL",
+          "inflow": "0",
+          "outflow": "0",
+          "balance": "0"
+        }
+      },
       "points": [
         {
           "date": "2026-07-30",
@@ -1164,6 +1326,42 @@
       "result": "0"
     },
     "simulation": {
+      "totals": [
+        {
+          "currency_code": "BRL",
+          "inflow": "0",
+          "outflow": "9007199254740993.123456789012345678",
+          "balance": "-9007199254740993.123456789012345678"
+        }
+      ],
+      "reporting": {
+        "currency_code": "BRL",
+        "status": "complete",
+        "eligible": 0,
+        "converted": 0,
+        "missing": 0,
+        "stale": 0,
+        "totals": {
+          "currency_code": "BRL",
+          "inflow": "0",
+          "outflow": "0",
+          "balance": "0"
+        }
+      },
+      "balance_reporting": {
+        "currency_code": "BRL",
+        "status": "complete",
+        "eligible": 0,
+        "converted": 0,
+        "missing": 0,
+        "stale": 0,
+        "totals": {
+          "currency_code": "BRL",
+          "inflow": "0",
+          "outflow": "0",
+          "balance": "0"
+        }
+      },
       "points": [
         {
           "date": "2026-07-30",
@@ -1434,6 +1632,32 @@
     ]
   },
   "transactions": {
+    "currency_code": "BRL",
+    "fx": {
+      "base": "BRL",
+      "quote": "BRL",
+      "value": "1",
+      "inverted": false,
+      "as_of": "2026-07-30T00:00:00Z",
+      "effective_on": "2026-07-30T00:00:00Z",
+      "source": "identity",
+      "fetched_at": "2026-07-30T12:34:56.123456789Z",
+      "stale": false
+    },
+    "reporting": {
+      "currency_code": "BRL",
+      "status": "complete",
+      "eligible": 0,
+      "converted": 0,
+      "missing": 0,
+      "stale": 0,
+      "totals": {
+        "currency_code": "BRL",
+        "inflow": "0",
+        "outflow": "0",
+        "balance": "0"
+      }
+    },
     "confirmed_at": "2026-07-30T12:34:56.123456789Z",
     "stored_total": 5,
     "page": {
