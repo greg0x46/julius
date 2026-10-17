@@ -151,3 +151,23 @@ func TestMatchesDayRangeNilDayNeverMatches(t *testing.T) {
 		t.Error("a nil candidate day should never match")
 	}
 }
+
+func TestWithinPercentExactBoundary(t *testing.T) {
+	for _, tc := range []struct {
+		amount, condition string
+		want              bool
+	}{
+		{"9007199254740993.01", "9007199254740993.01:0", true},
+		{"9007199254740993.02", "9007199254740993.01:0", false},
+		{"1.01000000000000000101", "1.000000000000000001:1", true},
+		{"1.01000000000000000102", "1.000000000000000001:1", false},
+		{"-1.01", "-1:1", true},
+		{"1", "NaN:1", false},
+	} {
+		amount := decimal.RequireFromString(tc.amount)
+		condition := rules.Condition{Field: rules.FieldAmount, Operator: rules.OperatorWithinPercent, Value: tc.condition}
+		if got := rules.Matches(rules.MatchCandidate{Amount: &amount}, []rules.Condition{condition}, rules.LogicAnd); got != tc.want {
+			t.Errorf("%s within %s = %v, want %v", tc.amount, tc.condition, got, tc.want)
+		}
+	}
+}

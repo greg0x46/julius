@@ -263,6 +263,35 @@
   }
 }
 
+/* ---- Position form: inline new asset ----------------------------------- */
+
+.investment-new-asset-link {
+  justify-self: start;
+  padding-inline: 0;
+}
+
+.investment-new-asset {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+.investment-new-asset-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.investment-new-asset-header h3 {
+  margin: 0;
+  font-size: var(--fs-row);
+  font-weight: 600;
+}
+
 /* ---- Detail page: facts as a plain label / value list -------------------- */
 
 .investment-facts {

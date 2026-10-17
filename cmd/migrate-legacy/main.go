@@ -180,6 +180,22 @@ func migrateLegacy(src, dst *sql.DB, dry bool, out io.Writer) error {
 	if err != nil {
 		return err
 	}
+	// Transfer annotations were introduced after the final legacy schema.
+	legacyTables := make([]string, 0, len(tables))
+	for _, table := range tables {
+		if table != "transfer_links" && table != "transfer_transaction_links" {
+			legacyTables = append(legacyTables, table)
+			continue
+		}
+		var count int
+		if err := dst.QueryRow("SELECT COUNT(*) FROM " + quote(table)).Scan(&count); err != nil {
+			return err
+		}
+		if count != 0 {
+			return fmt.Errorf("target table %s is not empty", table)
+		}
+	}
+	tables = legacyTables
 	sourceTables, err := orderedTables(src)
 	if err != nil {
 		return err
@@ -438,6 +454,16 @@ func copyTable(src *sql.Tx, tx *sql.Tx, table string, meta []column, postgres, d
 
 func validate(ctx context.Context, src, dst transactions.Querier, tables []string, out io.Writer) error {
 	for _, table := range tables {
+		if table == "transfer_links" || table == "transfer_transaction_links" {
+			var count int
+			if err := dst.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+quote(table)).Scan(&count); err != nil {
+				return err
+			}
+			if count != 0 {
+				return fmt.Errorf("target table %s is not empty", table)
+			}
+			continue
+		}
 		if table == "goose_db_version" || table == "julius_schema_version" {
 			continue
 		}

@@ -1,3 +1,4 @@
+import { compareDecimals, isPositiveDecimal } from "../../presentation/decimal";
 import { Alert, Checkbox, DatePicker, Flex, Input, InputNumber, Select } from "antd";
 import dayjs, { type Dayjs } from "dayjs";
 import { useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
@@ -88,11 +89,11 @@ const kindOptions = (Object.keys(investmentOperationKindLabel) as InvestmentOper
 }));
 
 function greaterThanZero(value: string | null): boolean {
-  return value !== null && Number(value) > 0;
+  return value !== null && isPositiveDecimal(value);
 }
 
 function isNegative(value: string | null): boolean {
-  return value !== null && Number(value) < 0;
+  return value !== null && compareDecimals(value, "0") < 0;
 }
 
 type FieldsProps = {
@@ -177,7 +178,7 @@ export function InvestmentOperationFields({
       label: [position.ticker, position.name].filter(Boolean).join(" · "),
     }));
 
-  const setMoney = (field: "amount" | "fees" | "taxes", value: number | null) =>
+  const setMoney = (field: "amount" | "fees" | "taxes", value: string | null) =>
     setDecimal(field, fromMoneyInput(value));
 
   const setDecimal = (
@@ -207,7 +208,7 @@ export function InvestmentOperationFields({
       setError("Informe um valor maior que zero.");
       return;
     }
-    if (draft.kind === "valuation" && (draft.amount === null || Number(draft.amount) < 0)) {
+    if (draft.kind === "valuation" && (draft.amount === null || compareDecimals(draft.amount, "0") < 0)) {
       setError("Informe o valor total atual da posição.");
       return;
     }
@@ -340,7 +341,7 @@ export function InvestmentOperationFields({
           >
             <MoneyInput
               id="investment-operation-amount"
-              min={0}
+              min="0"
               value={toMoneyInput(draft.amount)}
               onChange={(value) => setMoney("amount", value)}
             />
@@ -349,7 +350,7 @@ export function InvestmentOperationFields({
             <FormField label="Taxas (opcional)" htmlFor="investment-operation-fees">
               <MoneyInput
                 id="investment-operation-fees"
-                min={0}
+                min="0"
                 value={toMoneyInput(draft.fees)}
                 onChange={(value) => setMoney("fees", value)}
               />
@@ -357,7 +358,7 @@ export function InvestmentOperationFields({
             <FormField label="Impostos (opcional)" htmlFor="investment-operation-taxes">
               <MoneyInput
                 id="investment-operation-taxes"
-                min={0}
+                min="0"
                 value={toMoneyInput(draft.taxes)}
                 onChange={(value) => setMoney("taxes", value)}
               />
@@ -371,7 +372,7 @@ export function InvestmentOperationFields({
         >
           <MoneyInput
             id="investment-operation-amount"
-            min={draft.kind === "valuation" ? 0 : 0.01}
+            min="0"
             value={toMoneyInput(draft.amount)}
             onChange={(value) => setMoney("amount", value)}
           />

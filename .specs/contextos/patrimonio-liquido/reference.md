@@ -29,7 +29,9 @@ cost. The backfill still does not invent historical appreciation of
 investments.
 
 Cash is a BRL aggregate: foreign account balances and movements are excluded
-without FX rates. Manual bank-account balances derive from opening balance,
+without FX rates. A cash account with a balance but a missing or invalid
+`currency_code` fails the computation with an error naming the account instead of
+being treated as BRL. Manual bank-account balances derive from opening balance,
 posted undeleted transactions and adjustment deltas. Their movements and dated
 adjustments enter historical reconstruction; opening balance is the baseline.
 Manual transactions on synced accounts still never enter reconstruction,

@@ -27,6 +27,7 @@ import {
   type ManualDraft,
 } from "./manualTransactionDraft";
 import { TransactionDetailsScreen, TransactionTechnicalScreen } from "./TransactionInfoScreens";
+import { TransactionTransferScreen } from "./TransactionTransferScreen";
 import { TransactionOverviewScreen } from "./TransactionOverviewScreen";
 import { TransactionReconcileScreen } from "./TransactionReconcileScreen";
 import type { WriteIssue } from "./useTransactionPanelWrites";
@@ -43,6 +44,7 @@ export type TransactionScreen =
   | { kind: "recurrence" }
   | { kind: "reconcile" }
   | { kind: "investment" }
+  | { kind: "transfer" }
   | { kind: "investment-new"; amount: string | null }
   | { kind: "edit-manual" };
 
@@ -53,6 +55,7 @@ const screenTitle: Record<TransactionScreen["kind"], string> = {
   recurrence: "Criar recorrência",
   reconcile: "Conciliar com recorrência",
   investment: "Vincular a investimento",
+  transfer: "Transferência entre contas",
   "investment-new": "Nova movimentação",
   "edit-manual": "Editar transação",
 };
@@ -177,6 +180,7 @@ function TransactionStack({
         <CreateRecurrenceScreen item={item} categories={categories} onDone={stack.reset} />
       )}
       {current.kind === "reconcile" && <TransactionReconcileScreen item={item} onDone={stack.reset} />}
+      {current.kind === "transfer" && <TransactionTransferScreen item={item} />}
       {current.kind === "investment" && (
         <InvestmentLinkScreen
           transaction={item}
