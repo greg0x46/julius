@@ -16,7 +16,7 @@ import (
 )
 
 func reportingCashBalance(ctx context.Context, q Querier, accountIDs []string, reference time.Time) (decimal.Decimal, reporting.Summary, error) {
-	query := `SELECT id, currency_code FROM financial_accounts WHERE (balance IS NOT NULL OR origin = 'manual') AND (account_type IS NULL OR account_type != 'CREDIT')`
+	query := `SELECT id, name, currency_code FROM financial_accounts WHERE (balance IS NOT NULL OR origin = 'manual') AND (account_type IS NULL OR account_type != 'CREDIT')`
 	in, args := db.InClause(accountIDs)
 	if in != "" {
 		query += ` AND id IN (` + in + `)`
@@ -27,21 +27,23 @@ func reportingCashBalance(ctx context.Context, q Querier, accountIDs []string, r
 	}
 	type accountMoney struct {
 		id       string
+		name     string
 		amount   decimal.Decimal
 		currency string
 	}
 	var accounts []accountMoney
 	for rows.Next() {
 		var id string
+		var name sql.NullString
 		var currency sql.NullString
-		if err := rows.Scan(dbtypes.ID(&id), &currency); err != nil {
+		if err := rows.Scan(dbtypes.ID(&id), &name, &currency); err != nil {
 			rows.Close()
 			return decimal.Zero, reporting.Summary{}, err
 		}
 		if !currency.Valid {
 			currency.String = reporting.ReferenceCurrency
 		}
-		accounts = append(accounts, accountMoney{id: id, currency: currency.String})
+		accounts = append(accounts, accountMoney{id: id, name: name.String, currency: currency.String})
 	}
 	err = rows.Err()
 	rows.Close()
@@ -67,6 +69,12 @@ func reportingCashBalance(ctx context.Context, q Querier, accountIDs []string, r
 			continue
 		}
 		converted := reporting.Convert(ctx, rates, account.amount, account.currency, &reference)
+		if converted.Issue != nil {
+			converted.Issue.Account = account.name
+			if converted.Issue.Account == "" {
+				converted.Issue.Account = account.id
+			}
+		}
 		direction := money.Inflow
 		if account.amount.IsNegative() {
 			direction = money.Outflow

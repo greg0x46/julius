@@ -1,3 +1,4 @@
+import { requiredRecord, requiredRecordWithOptionalKeys, dateOnlyPattern } from "./contracts/shared";
 import { apiFetch } from "./transport";
 import {
   parseAccount,
@@ -122,11 +123,29 @@ export function adjustManualAccount(accountId: string, amount: string, descripti
   }, 200, parseAccount);
 }
 
-export function listAccountCurrencies(signal?: AbortSignal): Promise<string[]> {
+export interface AccountCurrency {
+  code: string;
+  start_date?: string;
+  end_date?: string;
+}
+
+export interface AccountCurrencyCoverage {
+  currencies: AccountCurrency[];
+  status: "complete" | "stale" | "unavailable";
+  source: string;
+}
+
+export function listAccountCurrencies(signal?: AbortSignal): Promise<AccountCurrencyCoverage> {
   return send("/api/accounts/currencies", { ...get, signal }, 200, (value) => {
-    if (!Array.isArray(value) || !value.every((code) => typeof code === "string" && /^[A-Z]{3}$/.test(code))) {
-      throw new TypeError("Lista de moedas inválida.");
-    }
-    return value as string[];
+    const item = requiredRecord(value, ["currencies", "status", "source"]);
+    if (!Array.isArray(item.currencies) || !["complete", "stale", "unavailable"].includes(item.status as string) || typeof item.source !== "string") throw new TypeError("Lista de moedas inválida.");
+    const currencies = item.currencies.map((value) => {
+      const currency = requiredRecordWithOptionalKeys(value, ["code"], ["start_date", "end_date"]);
+      if (typeof currency.code !== "string" || !/^[A-Z]{3}$/.test(currency.code) ||
+        [currency.start_date, currency.end_date].some((date) => date !== undefined && (typeof date !== "string" || !dateOnlyPattern.test(date)))) throw new TypeError("Moeda inválida.");
+      return currency as unknown as AccountCurrency;
+    });
+    if (!currencies.some((currency) => currency.code === "BRL") || new Set(currencies.map((currency) => currency.code)).size !== currencies.length) throw new TypeError("Lista de moedas inválida.");
+    return { currencies, status: item.status as AccountCurrencyCoverage["status"], source: item.source };
   });
 }

@@ -18,4 +18,10 @@ describe("reporting coverage contracts", () => {
     const body = { type: "/problems/reporting-fx-unavailable", title: "Total indisponível", status: 503, reporting: missing };
     expect(parseProblem(body)).toEqual(body);
   });
+  it("retains failure reasons and rejects malformed diagnostics", () => {
+    const body = { ...missing, issues: [{ currency: "XTS", reason: "unsupported", account: "Conta sintética", date: "2024-05-18" }] };
+    expect(parseReportingSummary(body)).toEqual(body);
+    expect(() => parseReportingSummary({ ...body, issues: [{ currency: "XTS", reason: "complete" }] })).toThrow();
+  });
+
 });
