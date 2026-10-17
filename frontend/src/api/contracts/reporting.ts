@@ -12,7 +12,7 @@ export interface ReportingSummary {
 
 export function parseReportingSummary(value: unknown): ReportingSummary {
   const item = requiredRecord(value, ["currency_code", "status", "eligible", "converted", "missing", "stale", "totals"]);
-  if (item.currency_code !== "BRL" || !["complete", "stale", "incomplete", "unavailable"].includes(item.status as string) ||
+  if (typeof item.currency_code !== "string" || !/^[A-Z]{3}$/.test(item.currency_code) || !["complete", "stale", "incomplete", "unavailable"].includes(item.status as string) ||
     ![item.eligible, item.converted, item.missing, item.stale].every(isCount)) {
     throw new TypeError("Conversão do relatório inválida.");
   }

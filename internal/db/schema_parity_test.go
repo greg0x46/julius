@@ -24,8 +24,8 @@ func TestBaselineSchemaParity(t *testing.T) {
 	postgres := dbtest.OpenPostgres(t)
 	a := schemaSnapshot(t, sqlite, false)
 	b := schemaSnapshot(t, postgres, true)
-	if len(a) != 43 {
-		t.Fatalf("got %d tables, want 42 application tables and a generation marker", len(a))
+	if len(a) != 45 {
+		t.Fatalf("got %d tables, want 44 application tables and a generation marker", len(a))
 	}
 	for name, table := range a {
 		other, ok := b[name]

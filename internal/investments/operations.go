@@ -116,8 +116,11 @@ func requirePositionOfAccount(ctx context.Context, q Querier, accountID string, 
 	if positionID == nil || *positionID == "" {
 		return nil
 	}
-	var owner string
-	err := q.QueryRowContext(ctx, `SELECT account_id FROM investment_positions WHERE id = ?`, *positionID).Scan(dbtypes.ID(&owner))
+	var owner, currency string
+	err := q.QueryRowContext(ctx, `
+		SELECT p.account_id, a.currency_code
+		FROM investment_positions p JOIN investment_assets a ON a.id = p.asset_id
+		WHERE p.id = ?`, *positionID).Scan(dbtypes.ID(&owner), &currency)
 	if errors.Is(err, sql.ErrNoRows) {
 		var synced bool
 		if err := q.QueryRowContext(ctx,
@@ -135,7 +138,7 @@ func requirePositionOfAccount(ctx context.Context, q Querier, accountID string, 
 	if owner != accountID {
 		return ErrInvalidInput
 	}
-	return nil
+	return requireBRLAsset(currency)
 }
 
 // mutateLedger applies one write and replays every account it touched in the
@@ -204,6 +207,13 @@ func CreateTransfer(ctx context.Context, conn *sql.DB, in TransferInput) ([]Oper
 		}
 		if sourceAsset != destinationAsset || sourceAccount == destinationAccount {
 			return nil, ErrInvalidInput
+		}
+		asset, err := GetAsset(ctx, tx, sourceAsset)
+		if err != nil {
+			return nil, err
+		}
+		if err := requireBRLAsset(asset.CurrencyCode); err != nil {
+			return nil, err
 		}
 		if _, err := requireManualAccount(ctx, tx, sourceAccount); err != nil {
 			return nil, err

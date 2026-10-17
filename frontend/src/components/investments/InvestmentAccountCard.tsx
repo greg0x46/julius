@@ -1,3 +1,5 @@
+import { valueInReferenceCurrency } from "../../presentation/valuation";
+import type { ReportValuation } from "../../api/contracts/valuation";
 import { Button, Collapse } from "antd";
 
 import type {
@@ -9,6 +11,7 @@ import type {
 } from "../../api/contracts";
 import { investmentAccountKindLabel } from "../../presentation/investmentWorkspaceLabels";
 import { sumBRL } from "../../presentation/money";
+import { sumDecimals } from "../../presentation/decimal";
 import { Section } from "../layout";
 import { Money } from "../shared/Money";
 import { RecordMenu, type RecordMenuItem } from "../shared/RecordMenu";
@@ -35,6 +38,7 @@ import {
 export function InvestmentAccountCard({
   account,
   summary,
+  valuation,
   positions,
   allPositions,
   operations,
@@ -52,6 +56,7 @@ export function InvestmentAccountCard({
   busy,
 }: {
   account: InvestmentAccount;
+  valuation?: ReportValuation;
   summary: InvestmentSummaryAccount | undefined;
   /** Rows of the positions table (closed ones hidden unless asked for). */
   positions: InvestmentPosition[];
@@ -77,7 +82,17 @@ export function InvestmentAccountCard({
   const movements = accountMovements(operations);
   // The server already nets the account's value; positions alone would miss
   // the cash sitting in the investment account.
-  const currentValue = sumBRL([summary?.current_value ?? sumBRL(positions.filter((position) => position.currency_code === "BRL").map((position) => position.current_value)), summary?.cash_balance ?? account.cash_balance]);
+  const convert = (value: string) => valueInReferenceCurrency(value, valuation?.fx);
+  const currencyCode = valuation?.currency_code ?? "BRL";
+  const currentValue = sumDecimals([
+    summary?.current_value ??
+      sumBRL(
+        positions
+          .filter((position) => position.currency_code === "BRL")
+          .map((position) => position.current_value),
+      ),
+    summary?.cash_balance ?? account.cash_balance,
+  ]);
   const updatedOn = latestDate([
     account.updated_at,
     ...positions.map((position) => position.valued_on),
@@ -88,7 +103,7 @@ export function InvestmentAccountCard({
   // included: hiding a sold position's row must not change what it cost.
   const costs = costsByPosition(operations, allPositions, linked);
   const yieldAggregate = aggregateYield(positions, linked, costs);
-  const cost = groupCost(operations, allPositions, linked);
+  const cost = groupCost(operations, allPositions.filter((position) => position.currency_code === "BRL"), linked);
 
   const menuItems: RecordMenuItem[] = [
     { key: "operation", label: "Registrar movimentação", onClick: () => onNewOperation(account) },
@@ -138,30 +153,48 @@ export function InvestmentAccountCard({
 
       <InvestmentFigures
         figures={[
-          { label: "Valor atual", value: <Money value={currentValue} tone="balance" /> },
+          {
+            label: "Valor atual",
+            value: <Money report currencyCode={currencyCode} value={currentValue} tone="balance" />,
+          },
           {
             label: "Rendimento líquido",
-            value: <InvestmentYieldValue gain={yieldAggregate.gain} percent={yieldAggregate.percent} />,
+            value: (
+              <InvestmentYieldValue
+                currencyCode={currencyCode}
+                gain={convert(yieldAggregate.gain)}
+                percent={yieldAggregate.percent}
+              />
+            ),
             hint: "Já descontados IR, IOF e taxas das posições que têm rendimento conhecido.",
           },
           {
             label: "IR/Taxas",
-            value: <Money value={cost} tone="neutral" />,
+            value: <Money report currencyCode={currencyCode} value={convert(cost)} tone="neutral" />,
             hint: "Taxas e impostos das movimentações, mais IR e IOF informados pela instituição.",
           },
           {
             label: "Aportes",
-            value: <Money value={movements.deposits} tone="neutral" />,
+            value: <Money report currencyCode={currencyCode} value={convert(movements.deposits)} tone="neutral" />,
             hint: "Dinheiro que entrou nesta conta de investimento, vindo do seu caixa, desde o início.",
           },
           {
             label: "Resgates",
-            value: <Money value={movements.withdrawals} tone="neutral" />,
+            value: (
+              <Money report currencyCode={currencyCode} value={convert(movements.withdrawals)} tone="neutral" />
+            ),
             hint: "Dinheiro que saiu desta conta de investimento de volta para o seu caixa, desde o início.",
           },
           {
             label: "Saldo para investir",
-            value: <Money value={summary?.cash_balance ?? account.cash_balance} tone="neutral" />,
+            value: (
+              <Money
+                report
+                currencyCode={currencyCode}
+                value={summary?.cash_balance ?? account.cash_balance}
+                tone="neutral"
+              />
+            ),
             hint: "Valor já aportado que ainda não foi aplicado em nenhuma posição.",
           },
         ]}

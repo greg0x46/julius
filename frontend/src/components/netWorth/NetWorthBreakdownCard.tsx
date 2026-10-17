@@ -1,4 +1,4 @@
-import type { NetWorthSnapshot } from "../../api/contracts";
+import type { NetWorthBreakdown, NetWorthSnapshot } from "../../api/contracts";
 import { SummaryStrip } from "../layout";
 import { Money } from "../shared/Money";
 
@@ -29,12 +29,25 @@ function Liability({ value }: { value: string }) {
   );
 }
 
-export function NetWorthBreakdownCard({ snapshot }: { snapshot: NetWorthSnapshot }) {
+function valuationNote(snapshot: NetWorthSnapshot): string {
+  const rates = Object.keys(snapshot.valuation?.rates ?? {});
+  const parts = [snapshot.is_backfilled ? "Estimativa reconstruída a partir das transações; não inclui investimentos históricos." : ""];
+  if (snapshot.valuation_status === "legacy") {
+    parts.push("Registro anterior à avaliação de outras moedas: cobre apenas contas e investimentos em reais.");
+  } else if (rates.length > 0) {
+    parts.push(`Saldos em ${rates.join(", ")} convertidos para reais com o câmbio de ${new Date(snapshot.valuation!.valued_at).toLocaleDateString("pt-BR", { timeZone: "UTC" })}.`);
+  }
+  if (snapshot.valuation_status === "stale") parts.push("Há cotações desatualizadas nesta avaliação.");
+  return parts.filter(Boolean).join(" ");
+}
+
+export function NetWorthBreakdownCard({ snapshot }: { snapshot: NetWorthSnapshot & NetWorthBreakdown }) {
+  const extra = valuationNote(snapshot);
   return (
     <SummaryStrip
       label="Hoje"
       value={<Money value={snapshot.net_worth} tone="balance" size="hero" />}
-      note="Caixa + Investimentos − Cartão de crédito − Dívidas. Valores a receber não entram."
+      note={`Caixa + Investimentos − Cartão de crédito − Dívidas. Valores a receber não entram.${extra ? ` ${extra}` : ""}`}
       items={[
         { label: "Caixa", value: <Money value={snapshot.cash_balance} tone="balance" /> },
         { label: "Investimentos", value: <Money value={snapshot.investment_balance} tone="balance" /> },

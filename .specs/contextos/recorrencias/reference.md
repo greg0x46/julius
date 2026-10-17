@@ -48,6 +48,12 @@ reads, updates, activation and uncategorized schedule reads on both dialects.
 
 ### Manual reconciliation
 
+Manual link eligibility shares `money.BRLLinkIneligibility` with payables:
+ignored inclusion, required direction and effective BRL money, in that order.
+Recurrences still maps income/expense to direction and checks whether the
+transaction is already reconciled afterward. Status and category do not gate
+manual links.
+
 On top of that automatic resolution sits a layer of **user decision**, and only
 it is persisted (`scenario_realizations` with `relation_type = 'reconciliation'`,
 one row per occurrence, unique by `(scenario_id, occurrence_date)` and by
@@ -117,3 +123,9 @@ Desconciliar / Voltar ao automático.
 `/automacoes` — a reconcile automation can also apply a category using the same
 conditions. New rules default that optional action to the commitment's
 category; it is editable and clearable. Reconciliation eligibility is unchanged.
+
+## Monetary precision
+
+Commitment and occurrence amounts, including transaction reconciliation options,
+use exact decimal strings in HTTP responses. Fractional cents are preserved;
+the UI rounds only read-only BRL display ([policy](../../precisao-monetaria.md)).

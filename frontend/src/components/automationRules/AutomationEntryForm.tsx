@@ -1,3 +1,4 @@
+import { isPositiveDecimal, sumDecimals } from "../../presentation/decimal";
 import { Button, Checkbox, DatePicker, Divider, Input, InputNumber, Popconfirm, Segmented, Select, Switch } from "antd";
 import dayjs, { type Dayjs } from "dayjs";
 import { useEffect, useState } from "react";
@@ -114,7 +115,7 @@ function ruleDraftFrom(rule: AutomationRule | null, actionTypes: AutomationActio
 type CommitmentDraft = {
   name: string;
   kind: RecurringCommitmentKind;
-  amount: number | null;
+  amount: string | null;
   categoryId: string | null;
   accountId: string;
   cadence: RecurringCommitmentCadence;
@@ -144,7 +145,7 @@ function commitmentDraftFrom(commitment: RecurringCommitment | null): Commitment
   return {
     name: commitment.name,
     kind: commitment.kind,
-    amount: Number(commitment.amount),
+    amount: commitment.amount,
     categoryId: commitment.category_id,
     accountId: commitment.account_id ?? "",
     cadence: commitment.cadence,
@@ -366,7 +367,7 @@ export function AutomationEntryForm({
         setError("Informe um nome para a recorrência.");
         return;
       }
-      if (commitmentDraft.amount === null || commitmentDraft.amount <= 0) {
+      if (commitmentDraft.amount === null || !isPositiveDecimal(commitmentDraft.amount)) {
         setError("Informe um valor maior que zero.");
         return;
       }
@@ -392,7 +393,7 @@ export function AutomationEntryForm({
         commitment: {
           name: commitmentDraft.name.trim(),
           kind: commitmentDraft.kind,
-          amount: commitmentDraft.amount.toFixed(2),
+          amount: sumDecimals([commitmentDraft.amount]),
           category_id: commitmentDraft.categoryId,
           account_id: commitmentDraft.accountId.trim() === "" ? null : commitmentDraft.accountId.trim(),
           cadence: commitmentDraft.cadence,
@@ -567,7 +568,7 @@ export function AutomationEntryForm({
           <FormField label="Valor" htmlFor="recurring-commitment-amount">
             <MoneyInput
               id="recurring-commitment-amount"
-              min={0.01}
+              min="0"
               value={commitmentDraft.amount}
               onChange={(value) => setCommitmentDraft((current) => ({ ...current, amount: value }))}
             />

@@ -13,6 +13,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/greg0x46/julius/internal/categories"
+	"github.com/greg0x46/julius/internal/exchange"
 	"github.com/greg0x46/julius/internal/ledger"
 	"github.com/greg0x46/julius/internal/money"
 	"github.com/greg0x46/julius/internal/reporting"
@@ -376,6 +377,7 @@ type availableFiltersDTO struct {
 }
 
 type transactionQueryResultDTO struct {
+	valuationDTO
 	Reporting        reporting.Summary    `json:"reporting"`
 	ConfirmedAt      time.Time            `json:"confirmed_at"`
 	StoredTotal      int                  `json:"stored_total"`
@@ -454,7 +456,17 @@ func handleQueryTransactions(db *sql.DB) http.HandlerFunc {
 			writeProblem(w, 503, "transaction-query-unavailable", "Consulta temporariamente indisponível", "Tente novamente em instantes.")
 			return
 		}
-		writeJSON(w, http.StatusOK, toResultDTO(result))
+		valuation, ok := reportValuation(w, r, db, time.Now().UTC())
+		if !ok {
+			return
+		}
+		dto := toResultDTO(result)
+		dto.valuationDTO = valuation
+		valuation.summary(&dto.Reporting)
+		for i := range dto.Groups {
+			valuation.summary(&dto.Groups[i].Reporting)
+		}
+		writeJSON(w, http.StatusOK, dto)
 	}
 }
 
@@ -468,6 +480,7 @@ type categorySpendingItemDTO struct {
 }
 
 type spendingByCategoryDTO struct {
+	FX           *exchange.Rate                `json:"fx,omitempty"`
 	Month        string                        `json:"month"`
 	CurrencyCode string                        `json:"currency_code"`
 	Total        string                        `json:"total"`
@@ -635,9 +648,20 @@ func handleSpendingByCategory(db *sql.DB) http.HandlerFunc {
 		report.Reporting.Totals.Outflow = money.CanonicalDecimal(total)
 		report.Reporting.Totals.Balance = money.CanonicalDecimal(total.Neg())
 
+		valuation, ok := reportValuation(w, r, db, time.Now().UTC())
+		if !ok {
+			return
+		}
+		for i := range dtoItems {
+			valuation.fields(&dtoItems[i].Amount)
+		}
+		total = valuation.amount(total)
+		valuation.summary(&report.Reporting)
+
 		writeJSON(w, http.StatusOK, spendingByCategoryDTO{
+			FX:           &valuation.FX,
 			Month:        fmt.Sprintf("%04d-%02d", year, int(month)),
-			CurrencyCode: "BRL",
+			CurrencyCode: valuation.CurrencyCode,
 			Total:        money.CanonicalDecimal(total),
 			Items:        dtoItems,
 			Reporting:    report.Reporting,
@@ -785,6 +809,8 @@ func transactionNotFoundProblem(w http.ResponseWriter) {
 // category, which is a server-side 503, not a 422 about input the client never sent.
 func writeManualTransactionError(w http.ResponseWriter, err error, explicitCategory bool, investmentLinkedDetail, notManualDetail string) {
 	switch {
+	case errors.Is(err, transactions.ErrTransferLinked):
+		writeProblem(w, 409, "transfer-linked-transaction", "Lançamento vinculado a transferência", "Desvincule a transferência antes de editar o lançamento.")
 	case errors.Is(err, transactions.ErrInvestmentLinked):
 		writeProblem(w, 409, "investment-linked-transaction", "Lançamento vinculado a investimento", investmentLinkedDetail)
 	case errors.Is(err, transactions.ErrTransactionNotFound):
@@ -961,12 +987,21 @@ func handleCategoryBreakdown(db *sql.DB) http.HandlerFunc {
 			total = total.Add(amount)
 			result = append(result, categorySpendingItemDTO{CategoryID: item.CategoryID, CategoryName: item.CategoryName, CategoryIcon: item.CategoryIcon, CategoryColor: item.CategoryColor, Amount: item.Amount, Source: "real"})
 		}
+		valuation, ok := reportValuation(w, r, db, time.Now().UTC())
+		if !ok {
+			return
+		}
+		for i := range result {
+			valuation.fields(&result[i].Amount)
+		}
+		total = valuation.amount(total)
+		valuation.summary(&report.Reporting)
 		var totalValue *string
 		if report.Reporting.Totals != nil {
 			value := money.CanonicalDecimal(total)
 			totalValue = &value
 		}
-		payload := map[string]any{"currency_code": "BRL", "total": totalValue, "items": result, "classification": classification, "reporting": report.Reporting, "totals": report.Totals}
+		payload := map[string]any{"currency_code": valuation.CurrencyCode, "fx": valuation.FX, "total": totalValue, "items": result, "classification": classification, "reporting": report.Reporting, "totals": report.Totals}
 		if monthLabel != "" {
 			payload["month"] = monthLabel
 		} else {

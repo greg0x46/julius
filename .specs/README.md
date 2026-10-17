@@ -19,6 +19,9 @@ before changing code. Agent rules and commands: [`/AGENTS.md`](../AGENTS.md).
 
 ## Doc types
 
+- [`auditoria-decisoes-financeiras.md`](auditoria-decisoes-financeiras.md) —
+  ARCH-03 audit evidence, shared decision owners and intentionally distinct rules.
+
 - **`motores-de-dominio.md`** — architecture, not features. Describes the domain
   at the ideal level; where code diverges, the divergence is stated explicitly.
 - **`invariantes-financeiros.md`** — cross-cutting, living matrix: balance,
@@ -58,6 +61,11 @@ renamed. Frontend routes and UI labels are also Portuguese.
 | `investimentos` | Investments, quotes, reconciliation | `investments`, `quotes`, `marketdata` |
 | `configuracoes-autenticacao` | Settings, authentication | `auth`, `settings` |
 
+## Financial API contracts
+
+- [`contratos-api.md`](contratos-api.md) — wire precision, date/state/nullability
+  semantics, calculation ownership and shared Go/TypeScript contract checks.
+
 ## Shared database read boundary
 
 `internal/db/types` decodes timestamps, calendar dates, booleans, identifiers
@@ -79,23 +87,10 @@ is embedded only in historical tests. See
 SQLite source converts into a fresh SQLite/Postgres baseline. It provides
 aggregated dry-run errors, rollback, FK-ordered copy and count/balance validation.
 
-## Schema conversion contract
+## Monetary boundaries
 
-- [`reorganizacao-schema/inventario.md`](reorganizacao-schema/inventario.md) —
-  final legacy schema snapshots, complete column inventory, data/auth scope
-  decisions and the changed-column conversion map implemented by `cmd/migrate-legacy`.
-  Both the native baseline and the temporary legacy converter are implemented.
-text and integers and reject floating-point values. Postgres uses native exact
-numeric, temporal, UUID and boolean types; SQLite keeps text decimals, UTC
-instants, calendar dates and integer flags. Both start at `0001_initial.sql`.
-`db.Open` automatically converts final legacy Postgres version 46 in one transaction,
-retaining the original tables in a backup schema; it rejects legacy SQLite and
-incomplete Postgres schemas. The archived history
-is embedded only in historical tests. See
-[`migrations/README.md`](../internal/db/migrations/README.md) for the contract.
-`cmd/migrate-legacy` replaces the generic copier: a raw read-only final legacy
-SQLite source converts into a fresh SQLite/Postgres baseline. It provides
-aggregated dry-run errors, rollback, FK-ordered copy and count/balance validation.
+[`precisao-monetaria.md`](precisao-monetaria.md) defines exact money input/output,
+operation-specific rounding and native-currency display.
 
 ## Schema conversion contract
 

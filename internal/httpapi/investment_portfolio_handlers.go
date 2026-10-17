@@ -12,6 +12,7 @@ import (
 
 	"github.com/shopspring/decimal"
 
+	"github.com/greg0x46/julius/internal/exchange"
 	"github.com/greg0x46/julius/internal/investments"
 	"github.com/greg0x46/julius/internal/marketdata"
 	"github.com/greg0x46/julius/internal/money"
@@ -237,6 +238,7 @@ type investmentPositionDTO struct {
 	AssetType          string  `json:"asset_type"`
 	Quantity           string  `json:"quantity"`
 	AverageCost        *string `json:"average_cost"`
+	TotalCost          *string `json:"total_cost"`
 	CurrentValue       string  `json:"current_value"`
 	CurrentUnitPrice   *string `json:"current_unit_price"`
 	ValuedOn           *string `json:"valued_on"`
@@ -262,6 +264,7 @@ func investmentPositionToDTO(p investments.Position) investmentPositionDTO {
 		AssetType:          p.AssetType,
 		Quantity:           money.CanonicalDecimal(p.Quantity),
 		AverageCost:        optionalMoney(p.AverageCost),
+		TotalCost:          optionalMoney(p.TotalCost),
 		CurrentValue:       money.CanonicalDecimal(p.CurrentValue),
 		CurrentUnitPrice:   optionalMoney(p.CurrentUnitPrice),
 		ValuedOn:           optionalDay(p.ValuedOn),
@@ -352,6 +355,7 @@ type investmentSummaryAccountDTO struct {
 }
 
 type investmentSummaryDTO struct {
+	FX             *exchange.Rate                  `json:"fx,omitempty"`
 	CurrencyCode   string                          `json:"currency_code"`
 	TotalValue     string                          `json:"total_value"`
 	ManualValue    string                          `json:"manual_value"`
@@ -461,6 +465,10 @@ func writeInvestmentProblem(w http.ResponseWriter, err error) {
 			"Registro de investimento não encontrado", "O registro informado não existe.")
 	case errors.Is(err, investments.ErrInvalidInput):
 		writeInvestmentInvalid(w, "Revise os campos enviados.")
+	case errors.Is(err, investments.ErrUnsupportedCurrency):
+		writeProblem(w, http.StatusBadRequest, "investment-unsupported-currency",
+			"Moeda não suportada",
+			"Posições e movimentações manuais são em reais: este ativo está cadastrado em outra moeda.")
 	case errors.Is(err, investments.ErrIntegratedReadOnly):
 		writeProblem(w, http.StatusConflict, "investment-integrated-read-only",
 			"Registro integrado é somente leitura",
@@ -1298,7 +1306,58 @@ func handleGetInvestmentSummary(conn *sql.DB) http.HandlerFunc {
 			writeInvestmentProblem(w, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, investmentSummaryToDTO(summary))
+		valuation, ok := reportValuation(w, r, conn, time.Now().UTC())
+		if !ok {
+			return
+		}
+		dto := investmentSummaryToDTO(summary)
+		dto.CurrencyCode, dto.FX = valuation.CurrencyCode, &valuation.FX
+		valuation.fields(&dto.TotalValue, &dto.ManualValue, &dto.SyncedValue, &dto.CashBalance, &dto.UnrealizedGain)
+		for i := range dto.Accounts {
+			valuation.fields(&dto.Accounts[i].CurrentValue, &dto.Accounts[i].CashBalance)
+		}
+		for i := range dto.Portfolios {
+			valuation.fields(&dto.Portfolios[i].CurrentValue)
+			if dto.Portfolios[i].TargetAmount != nil {
+				valuation.fields(dto.Portfolios[i].TargetAmount)
+			}
+		}
+		writeJSON(w, http.StatusOK, dto)
+	}
+}
+
+type investmentMonthlyMovementDTO struct {
+	Month         string `json:"month"`
+	Contributions string `json:"contributions"`
+	Withdrawals   string `json:"withdrawals"`
+	Income        string `json:"income"`
+	Fees          string `json:"fees"`
+	Taxes         string `json:"taxes"`
+	RealizedGain  string `json:"realized_gain"`
+}
+
+func handleListInvestmentMonthlyMovements(conn *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		movements, err := investments.MonthlyMovements(r.Context(), conn, investmentQueryFilter(r, "account_id"))
+		if err != nil {
+			writeInvestmentProblem(w, err)
+			return
+		}
+		items := make([]investmentMonthlyMovementDTO, 0, len(movements))
+		for _, m := range movements {
+			items = append(items, investmentMonthlyMovementDTO{
+				Month:         m.Month,
+				Contributions: money.CanonicalDecimal(m.Contributions),
+				Withdrawals:   money.CanonicalDecimal(m.Withdrawals),
+				Income:        money.CanonicalDecimal(m.Income),
+				Fees:          money.CanonicalDecimal(m.Fees),
+				Taxes:         money.CanonicalDecimal(m.Taxes),
+				RealizedGain:  money.CanonicalDecimal(m.RealizedGain),
+			})
+		}
+		// source says what the rows cover: only local operations. A synced
+		// holding has no cost basis here, so its sales are not a zero gain.
+		writeJSON(w, http.StatusOK, map[string]any{"items": items, "source": "manual"})
 	}
 }
 

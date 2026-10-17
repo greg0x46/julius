@@ -1,3 +1,4 @@
+import { isPositiveDecimal, sumDecimals } from "../../presentation/decimal";
 import dayjs, { type Dayjs } from "dayjs";
 
 import type { Category, ManualTransactionWrite, TransactionItem } from "../../api/contracts";
@@ -11,7 +12,7 @@ export type ManualDraft = {
   accountId: string;
   description: string;
   direction: Direction;
-  amount: number | null;
+  amount: string | null;
   date: Dayjs;
   categoryId: string | null;
 };
@@ -27,7 +28,7 @@ export function manualDraftFrom(transaction: TransactionItem | null, defaultAcco
     accountId: transaction.account.id,
     description: transaction.description ?? "",
     direction: transaction.classification === "inflow" ? "inflow" : "outflow",
-    amount: transaction.amount === null ? null : Math.abs(Number(transaction.amount)),
+    amount: transaction.amount === null ? null : transaction.amount.replace(/^-/, ""),
     date: transaction.occurred_at ? dayjs(transaction.occurred_at) : dayjs(),
     categoryId: transaction.internal_category?.id ?? null,
   };
@@ -39,7 +40,7 @@ export type ManualField = "account" | "description" | "amount";
 export function manualDraftIssue(draft: ManualDraft): { field: ManualField; message: string } | null {
   if (draft.accountId === "") return { field: "account", message: "Selecione uma conta." };
   if (draft.description.trim() === "") return { field: "description", message: "Informe uma descrição." };
-  if (draft.amount === null || draft.amount <= 0) {
+  if (draft.amount === null || !isPositiveDecimal(draft.amount)) {
     return { field: "amount", message: "Informe um valor maior que zero." };
   }
   return null;
@@ -61,12 +62,12 @@ export const manualFieldId = (field: ManualField) => `manual-transaction-${field
 
 /** The API body: the amount carries the sign the direction implies. Only call on a valid draft. */
 export function manualDraftToWrite(draft: ManualDraft): ManualTransactionWrite {
-  const amount = draft.amount ?? 0;
-  const signed = draft.direction === "outflow" ? -amount : amount;
+  const amount = draft.amount ?? "0";
+  const signed = draft.direction === "outflow" ? `-${amount}` : amount;
   return {
     account_id: draft.accountId,
     description: draft.description.trim(),
-    amount: signed.toFixed(2),
+    amount: sumDecimals([signed]),
     occurred_at: draft.date.format(dateFormat),
     category_id: draft.categoryId,
   };

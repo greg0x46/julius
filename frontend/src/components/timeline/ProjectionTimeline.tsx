@@ -12,7 +12,7 @@ import {
 } from "recharts";
 
 import type { TimelineEntry, TimelineSeries } from "../../api/contracts";
-import { formatBRL } from "../../presentation/money";
+import { useReportFormat } from "../../hooks/useReportCurrency";
 import { formatAxisMoney } from "../../presentation/chartAxis";
 import { yAxisWidth } from "../../presentation/chartAxisWidth";
 import { balanceChartColor } from "../../presentation/chartColors";
@@ -54,6 +54,7 @@ function tooltipRows(payload: { value: number; name: string }[]): { value: numbe
 const maxTooltipEntries = 4;
 
 function DayEntries({ entries }: { entries: TimelineEntry[] }) {
+  const format = useReportFormat();
   if (entries.length === 0) return null;
   const ranked = [...entries].sort((a, b) => Math.abs(Number(b.amount)) - Math.abs(Number(a.amount)));
   const shown = ranked.slice(0, maxTooltipEntries);
@@ -63,8 +64,12 @@ function DayEntries({ entries }: { entries: TimelineEntry[] }) {
       {shown.map((entry) => (
         <li key={`${entry.source}-${entry.source_ref_id}-${entry.description}-${entry.amount}`}>
           <span>{entry.description}</span>
-          <span style={{ color: Number(entry.amount) < 0 ? colors.error : undefined }}>
-            {formatBRL(entry.amount)}
+          <span
+            style={{
+              color: Number(entry.amount) < 0 ? colors.error : undefined,
+            }}
+          >
+            {format(entry.amount)}
           </span>
         </li>
       ))}
@@ -84,6 +89,7 @@ function TooltipContent({
   label?: string;
   entriesByDate?: Map<string, TimelineEntry[]>;
 }) {
+  const format = useReportFormat();
   if (!active || !payload || payload.length === 0 || !label) return null;
   const rows = tooltipRows(payload);
   if (rows.length === 0) return null;
@@ -92,7 +98,7 @@ function TooltipContent({
       <strong>{formatDate(label)}</strong>
       {rows.map((entry) => (
         <div key={entry.name}>
-          {entry.name}: {formatBRL(String(entry.value))}
+          {entry.name}: {format(String(entry.value))}
         </div>
       ))}
       <DayEntries entries={entriesByDate?.get(label) ?? []} />
@@ -110,7 +116,12 @@ function tickFormatterFor(pointCount: number): (value: string) => string {
   };
 }
 
-type LegendItem = { key: string; label: string; color: string; kind: "solid" | "dashed" | "dot" };
+type LegendItem = {
+  key: string;
+  label: string;
+  color: string;
+  kind: "solid" | "dashed" | "dot";
+};
 
 /**
  * The legend is HTML rather than recharts' own: its swatches have to show the

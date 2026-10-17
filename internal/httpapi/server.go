@@ -72,6 +72,9 @@ func NewServer(db *sql.DB, frontend fs.FS, secrets *settings.Secrets, config aut
 	mux.HandleFunc("GET /api/transactions/spending-by-category", handleSpendingByCategory(db))
 	mux.HandleFunc("GET /api/transactions/category-breakdown", handleCategoryBreakdown(db))
 	manual := &ledger.Service{DB: db, OnIgnored: onIgnoredHook}
+	mux.HandleFunc("POST /api/transfers", handleCreateTransfer(manual))
+	mux.HandleFunc("DELETE /api/transfers/{id}", handleDeleteTransfer(db))
+	mux.HandleFunc("GET /api/transactions/{id}/transfer", handleGetTransactionTransfer(db))
 	mux.HandleFunc("POST /api/transactions", handleCreateManualTransaction(manual))
 	mux.HandleFunc("PUT /api/transactions/{id}", handleUpdateManualTransaction(manual))
 	mux.HandleFunc("DELETE /api/transactions/{id}", handleDeleteManualTransaction(manual))
@@ -149,6 +152,7 @@ func NewServer(db *sql.DB, frontend fs.FS, secrets *settings.Secrets, config aut
 	mux.HandleFunc("DELETE /api/investment-reconciliations/{id}", handleDeleteInvestmentReconciliation(db))
 
 	mux.HandleFunc("GET /api/investment-summary", handleGetInvestmentSummary(db))
+	mux.HandleFunc("GET /api/investment-monthly-movements", handleListInvestmentMonthlyMovements(db))
 
 	mux.HandleFunc("GET /api/automation-rules/condition-options", handleListConditionOptions(db))
 	mux.HandleFunc("GET /api/automation-rules", handleListAutomationRules(db))

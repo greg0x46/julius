@@ -42,6 +42,7 @@ const position: InvestmentPosition = {
   asset_type: "Tesouro",
   quantity: "3.2",
   average_cost: "10000.00",
+  total_cost: "32000.00",
   current_value: "44180.21",
   current_unit_price: null,
   valued_on: "2026-09-30",
@@ -169,8 +170,8 @@ describe("InvestmentFigures", () => {
 
 describe("moneyDraft", () => {
   it("round-trips a decimal string through the money field without drifting", () => {
-    expect(toMoneyInput("1234.50")).toBe(1234.5);
-    expect(fromMoneyInput(1234.5)).toBe("1234.50");
+    expect(toMoneyInput("1234.50")).toBe("1234.50");
+    expect(fromMoneyInput("1234.5")).toBe("1234.50");
     expect(toMoneyInput(null)).toBeNull();
     expect(fromMoneyInput(null)).toBeNull();
   });

@@ -39,6 +39,9 @@ moment.
 
 Also includes link eligibility (`eligibility.go`, which today derives the
 accepted flow direction from the debt/receivable `Kind`).
+The ignored/direction/effective-BRL checks are owned by
+`money.BRLLinkIneligibility`, shared with recurring reconciliation. The
+already-linked check remains here, after those checks.
 
 The card debt / bill due-date helpers **moved out of here** to
 `internal/transactions` (Ledger engine) — see Transactions. The "payables debt
@@ -59,3 +62,9 @@ Scenarios).
 `/pendencias` — combined list of debts/receivables.
 `/pendencias/:id` — detail, including the timeline and the associated payment
 plan (scenario).
+
+## Monetary precision
+
+Money forms and plan allocations submit decimal strings; remaining amounts,
+minimums and comparisons preserve fractional cents. Read-only BRL figures round
+half away from zero ([policy](../../precisao-monetaria.md)).

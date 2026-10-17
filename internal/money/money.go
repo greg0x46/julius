@@ -114,6 +114,7 @@ const (
 	// see the ordering note there and MovedCash below.
 	ReasonTransferCategory   EligibilityReason = "transfer_category"
 	ReasonInvestmentTransfer EligibilityReason = "investment_transfer"
+	ReasonLinkedTransfer     EligibilityReason = "linked_transfer"
 )
 
 var eligibleProviderStatuses = map[string]bool{"POSTED": true, "PENDING": true}
@@ -197,7 +198,7 @@ func Eligibility(
 // or one the user declared should not be here at all (ignored: a reversal, a
 // duplicate — a row that is not a distinct movement of the account's reported
 // balance either, which is why dropping it does not contradict
-// transactions.CashOnHand's refusal to back ignored rows *out* of that
+// transactions.CashOnHandByCurrency's refusal to back ignored rows *out* of that
 // balance). A transfer is the odd one out precisely because it is real —
 // it is excluded from income/expense totals only to stop the same money
 // being counted on both legs, and the money still left the origin account.
@@ -212,7 +213,7 @@ func Eligibility(
 // callers in networth/backfill.go and transactions/cardtotal.go sidestep by
 // passing an empty categoryKind.
 func MovedCash(reason *EligibilityReason) bool {
-	return reason != nil && (*reason == ReasonTransferCategory || *reason == ReasonInvestmentTransfer)
+	return reason != nil && (*reason == ReasonTransferCategory || *reason == ReasonInvestmentTransfer || *reason == ReasonLinkedTransfer)
 }
 
 // CanonicalDecimal renders value the way the reference API does: fixed-point

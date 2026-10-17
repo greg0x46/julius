@@ -1,4 +1,15 @@
-import { dateOnlyPattern, decimal, isNullableString, isNullableUuid, isUuid, isValidDate, nullableDecimal, requiredRecord } from "./shared";
+import { parseValuation, type ReportValuation } from "./valuation";
+import {
+  dateOnlyPattern,
+  decimal,
+  isNullableString,
+  isNullableUuid,
+  isUuid,
+  isValidDate,
+  nullableDecimal,
+  requiredRecord,
+  requiredRecordWithOptionalKeys,
+} from "./shared";
 
 // Investment workspace ----------------------------------------------------
 //
@@ -302,6 +313,8 @@ export interface InvestmentPosition {
   asset_type: string;
   quantity: string;
   average_cost: string | null;
+  /** Exact backend acquisition cost; absent only in older responses. */
+  total_cost?: string | null;
   current_value: string;
   current_unit_price: string | null;
   valued_on: string | null;
@@ -356,7 +369,7 @@ const investmentPositionKeys = [
 ] as const;
 
 export function parseInvestmentPosition(value: unknown): InvestmentPosition {
-  const item = requiredRecord(value, investmentPositionKeys, "Posição de investimento inválida.");
+  const item = requiredRecordWithOptionalKeys(value, investmentPositionKeys, ["total_cost"], "Posição de investimento inválida.");
   if (
     typeof item.id !== "string" ||
     !isUuid(item.id) ||
@@ -389,6 +402,7 @@ export function parseInvestmentPosition(value: unknown): InvestmentPosition {
     asset_type: item.asset_type,
     quantity: decimal(item.quantity),
     average_cost: nullableDecimal(item.average_cost),
+    ...(item.total_cost === undefined ? {} : { total_cost: nullableDecimal(item.total_cost) }),
     current_value: decimal(item.current_value),
     current_unit_price: nullableDecimal(item.current_unit_price),
     valued_on: item.valued_on as string | null,
@@ -587,8 +601,8 @@ export interface InvestmentSummaryAccount {
   cash_balance: string;
 }
 
-export interface InvestmentSummary {
-  currency_code: "BRL";
+export interface InvestmentSummary extends ReportValuation {
+  currency_code: string;
   total_value: string;
   manual_value: string;
   synced_value: string;
@@ -640,7 +654,7 @@ function parseInvestmentSummaryAccount(value: unknown): InvestmentSummaryAccount
 }
 
 export function parseInvestmentSummary(value: unknown): InvestmentSummary {
-  const item = requiredRecord(
+  const item = requiredRecordWithOptionalKeys(
     value,
     [
       "currency_code",
@@ -652,13 +666,19 @@ export function parseInvestmentSummary(value: unknown): InvestmentSummary {
       "portfolios",
       "accounts",
     ],
+    ["fx"],
     "Resumo de investimentos inválido.",
   );
-  if (item.currency_code !== "BRL" || !Array.isArray(item.portfolios) || !Array.isArray(item.accounts)) {
+  if (
+    typeof item.currency_code !== "string" ||
+    !Array.isArray(item.portfolios) ||
+    !Array.isArray(item.accounts)
+  ) {
     throw new TypeError("Resumo de investimentos inválido.");
   }
   return {
-    currency_code: "BRL",
+    ...parseValuation(item),
+    currency_code: item.currency_code,
     total_value: decimal(item.total_value),
     manual_value: decimal(item.manual_value),
     synced_value: decimal(item.synced_value),

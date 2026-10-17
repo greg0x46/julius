@@ -64,3 +64,9 @@ from the same form. The list displays both action descriptions.
 Automatic reconciliation retains its existing eligibility checks, including
 the commitment's category; selecting a different action category does not
 relax those checks.
+
+## Monetary precision
+
+Amount references and percentage tolerances are parsed and compared as exact
+decimals, without floating-point conversion. Comparison is inclusive and does
+not round either side ([policy](../../precisao-monetaria.md)).

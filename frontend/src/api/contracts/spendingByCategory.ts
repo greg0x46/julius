@@ -1,3 +1,4 @@
+import { parseValuation, type ReportValuation } from "./valuation";
 import { parseReportingSummary, type ReportingSummary } from "./reporting";
 import { decimal, isRecord, requiredRecord, requiredRecordWithOptionalKeys, parseCurrencyTotals, type CurrencyTotals } from "./shared";
 
@@ -14,7 +15,7 @@ export interface CategorySpendingItem {
   source: CategorySpendingSource;
 }
 
-export interface SpendingByCategory {
+export interface SpendingByCategory extends ReportValuation {
   month: string;
   currency_code: string;
   total: string;
@@ -57,7 +58,7 @@ export function parseSpendingByCategory(value: unknown): SpendingByCategory {
   const item = requiredRecordWithOptionalKeys(
     value,
     ["month", "currency_code", "total", "items"],
-    ["reporting", "totals"],
+    ["reporting", "totals", "fx"],
     "Gastos por categoria inválidos.",
   );
   if (typeof item.month !== "string" || !monthOnlyPattern.test(item.month)) {
@@ -73,6 +74,7 @@ export function parseSpendingByCategory(value: unknown): SpendingByCategory {
   if (reporting?.totals === null) throw new TypeError("Gastos por categoria inválidos.");
   if (item.totals !== undefined && !Array.isArray(item.totals)) throw new TypeError("Totais por moeda inválidos.");
   return {
+    ...parseValuation({ currency_code: item.currency_code, ...(item.fx ? { fx: item.fx } : {}) }),
     ...(reporting ? { reporting } : {}),
     ...(Array.isArray(item.totals) ? { totals: item.totals.map(parseCurrencyTotals) } : {}),
     month: item.month,
@@ -93,13 +95,13 @@ export type CategoryBreakdown = Omit<SpendingByCategory, "month" | "total"> & {
 
 export function parseCategoryBreakdown(value: unknown): CategoryBreakdown {
   const periodKeys = isRecord(value) && "month" in value ? ["month"] : ["date_from", "date_to"];
-  const item = requiredRecordWithOptionalKeys(value, [...periodKeys, "currency_code", "total", "items", "classification"], ["reporting", "totals"], "Distribuição por categoria inválida.");
+  const item = requiredRecordWithOptionalKeys(value, [...periodKeys, "currency_code", "total", "items", "classification"], ["reporting", "totals", "fx"], "Distribuição por categoria inválida.");
   if (item.classification !== "inflow" && item.classification !== "outflow") {
     throw new TypeError("Distribuição por categoria inválida.");
   }
   const reporting = item.reporting === undefined ? undefined : parseReportingSummary(item.reporting);
   if (item.totals !== undefined && !Array.isArray(item.totals)) throw new TypeError("Totais por moeda inválidos.");
-  const extras = { ...(reporting ? { reporting } : {}), ...(Array.isArray(item.totals) ? { totals: item.totals.map(parseCurrencyTotals) } : {}) };
+  const extras = { ...parseValuation({ currency_code: item.currency_code, ...(item.fx ? { fx: item.fx } : {}) }), ...(reporting ? { reporting } : {}), ...(Array.isArray(item.totals) ? { totals: item.totals.map(parseCurrencyTotals) } : {}) };
   const total = item.total === null && reporting?.totals === null ? null : decimal(item.total);
   if (reporting && (reporting.totals === null) !== (total === null)) throw new TypeError("Distribuição por categoria inválida.");
   if ("month" in item) {
