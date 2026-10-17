@@ -80,7 +80,8 @@ authentication configuration that does not depend on the host:
   is opening balance + posted movements + explicit adjustments. Edit, archive
   and reactivate accounts in **Contas e cartões**; currency and opening balance
   lock after movements. Foreign amounts stay in their original currency and
-  remain excluded from Net Worth BRL aggregates without rates.
+  are valued in BRL in Net Worth and the investment summary with the day's
+  exchange rate; a missing rate makes the figure unavailable.
 - **Reference currency** — choose the currency for consolidated Home, category,
   investment and net-worth figures in **Configurações → Geral** (BRL by default).
   Current reports use current FX; net-worth history uses each snapshot day’s FX.

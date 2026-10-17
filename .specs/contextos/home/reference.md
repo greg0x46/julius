@@ -162,16 +162,3 @@ exclusions are unchanged. Responses include `currency_code` and full `fx`
 provenance; missing FX makes the report unavailable and stale FX is disclosed.
 Home money figures, daily allowance, accessible links and chart tooltips read
 that response currency. Category reports use the same current-rate policy.
-
-## Reference valuation
-
-`/api/timeline` values its consolidated BRL series in the persisted financial
-reference currency (BRL by default). One current FX rate applies to the base,
-simulation, entries, daily balances, period totals and scenario deltas; past
-and projected points are current-rate equivalents, not an FX forecast or a
-historical-rate cash reconstruction. This keeps the balance walk and all Home
-figures on the same basis. The original BRL eligibility and foreign-currency
-exclusions are unchanged. Responses include `currency_code` and full `fx`
-provenance; missing FX makes the report unavailable and stale FX is disclosed.
-Home money figures, daily allowance, accessible links and chart tooltips read
-that response currency. Category reports use the same current-rate policy.

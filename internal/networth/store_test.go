@@ -13,6 +13,7 @@ import (
 	"github.com/greg0x46/julius/internal/db"
 	"github.com/greg0x46/julius/internal/networth"
 	"github.com/greg0x46/julius/internal/payables"
+	"github.com/greg0x46/julius/internal/valuation"
 )
 
 type fixture struct {
@@ -180,20 +181,20 @@ func TestComputeSumsCashInvestmentsAndPayables(t *testing.T) {
 	assertDecimalEqual(t, "NetWorth", b.NetWorth, "1300")
 }
 
-// TestComputeCashExcludesNonBRLAccounts pins that a USD account's balance is
-// not added to the BRL cash figure; there is no conversion.
-func TestComputeCashExcludesNonBRLAccounts(t *testing.T) {
+// TestComputeValuesForeignAccountsInBRL pins that a USD account is valued at
+// the explicit rate, never added unqualified or left out.
+func TestComputeValuesForeignAccountsInBRL(t *testing.T) {
 	f := newFixture(t)
-	f.addAccount("", "200.00")
+	f.addAccount("", "2000.00")
 	usd := f.addAccount("", "100.00")
 	f.exec(`UPDATE financial_accounts SET currency_code = 'USD' WHERE id = ?`, usd)
 
-	b, err := networth.Compute(context.Background(), f.conn)
+	b, err := networth.ComputeValued(context.Background(), f.conn, valuation.New(f.fx(map[string]string{"USD/BRL": "5"}), time.Now()))
 	if err != nil {
 		t.Fatalf("Compute: %v", err)
 	}
-	assertDecimalEqual(t, "CashBalance", b.CashBalance, "200")
-	assertDecimalEqual(t, "NetWorth", b.NetWorth, "200")
+	assertDecimalEqual(t, "CashBalance", b.CashBalance, "2500")
+	assertDecimalEqual(t, "NetWorth", b.NetWorth, "2500")
 }
 
 // TestComputeCreditCardIgnoresRawAccountBalance guards the bug the homepage
