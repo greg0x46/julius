@@ -411,6 +411,41 @@ func TestStatementIgnoredReplayPreservesUnsetBalanceAnchor(t *testing.T) {
 	})
 }
 
+func TestStatementExplicitImportReplayPreservesUnsetBalanceAnchor(t *testing.T) {
+	dbtest.Each(t, func(t *testing.T, conn *sql.DB) {
+		accountID, _ := importStatementFile(t, conn, flashFile(rowCafe, rowCafe), map[string]string{"new_account_name": "Flash refeições"})
+		balance, asOf := accountBalance(t, conn, accountID)
+		if asOf.Valid {
+			t.Fatalf("simultaneous rows set balance anchor: %v", asOf)
+		}
+		file := flashFile(`09/09/2026,12:00,Café,"-R$ 10,00",Cartão,"R$ 80,00"`)
+		fields := map[string]string{"account_id": accountID, "ambiguous_line_2": "import"}
+		if _, counts := importStatementFile(t, conn, file, fields); counts.New != 1 || counts.Duplicate != 0 {
+			t.Fatalf("explicit import: %+v", counts)
+		}
+		if b, a := accountBalance(t, conn, accountID); b != balance || a != asOf {
+			t.Fatalf("conflicting import changed balance %v as of %v", b, a)
+		}
+		delete(fields, "ambiguous_line_2")
+		before := statementCounts(t, conn)
+		for _, replay := range []string{file, strings.Replace(file, "Café", "  CAFÉ  ", 1)} {
+			preview := previewStatementFile(t, conn, replay, fields)
+			if preview.Counts.Ambiguous != 0 || preview.Counts.Duplicate != 1 {
+				t.Fatalf("explicit import replay preview: %+v", preview)
+			}
+			if _, counts := importStatementFile(t, conn, replay, fields); counts.New != 0 || counts.Duplicate != 1 {
+				t.Fatalf("replay: %+v", counts)
+			}
+			if b, a := accountBalance(t, conn, accountID); b != balance || a != asOf {
+				t.Fatalf("explicit import replay changed balance %v as of %v, want %v as of %v", b, a, balance, asOf)
+			}
+			if got := statementCounts(t, conn); got["transactions"] != before["transactions"] || got["normalization"] != before["normalization"] {
+				t.Fatalf("explicit import replay wrote transaction or decision: %v, before %v", got, before)
+			}
+		}
+	})
+}
+
 func TestStatementPriorIdentitiesDeduplicateAcrossFiles(t *testing.T) {
 	for _, version := range []string{"statement-v1", "statement-v3"} {
 		t.Run(version, func(t *testing.T) {

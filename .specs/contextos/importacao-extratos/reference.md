@@ -49,8 +49,8 @@ fields, spaces after commas). The file name never determines the period.
   line number for its distinct identity; an ignore choice records an unchanged
   normalization event linked to the existing transaction. Re-uploading after
   either choice is automatically skipped, without another decision.
-  An ignored row's balance remains ineligible for the account balance anchor
-  on replay, including when the account has no balance timestamp yet.
+  Duplicate rows remain ineligible for the account balance anchor on replay
+  after either choice, including when the account has no balance timestamp yet.
   The preview fingerprint includes the compared existing data; changing that
   data or the classification before confirmation requires a new preview.
 - Identical rows within the same file are distinct movements (ordinal 1, 2, ...).
@@ -59,8 +59,8 @@ fields, spaces after commas). The file name never determines the period.
 - The identity includes the account: the same file in two accounts yields
   independent entries.
 - The account balance advances only with a row later than the current balance
-  and with an unambiguous final balance. When importing only the valid rows, an
-  invalid row with an unreadable date or one not older than the last valid row
+  and with an unambiguous final balance from a new row. When importing only
+  the valid rows, an invalid row with an unreadable date or one not older than the last valid row
   prevents the balance update (the valid movements are still imported), because
   the balance could end up stale; older invalid rows do not interfere.
   Continuity gaps are shown as warnings; the system never creates movements to

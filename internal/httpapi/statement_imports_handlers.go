@@ -638,7 +638,7 @@ func importFailure(w http.ResponseWriter, err error) {
 // empty strings, meaning "leave the account balance alone", whenever the
 // figure could be stale or ambiguous:
 //   - several rows share the newest instant, so their order is unknown;
-//   - the newest row is a duplicate whose stored balance differs from the file's;
+//   - the newest row is a duplicate or has a conflicting balance;
 //   - an invalid row (only imported under allow_partial) may be newer: its date
 //     is unreadable, or it is not older than the newest valid row.
 //
@@ -653,7 +653,7 @@ func latestStatementBalance(rows []statementimport.Row) (asOf, balance string) {
 		switch {
 		case row.OccurredAt > asOf:
 			asOf, balance, newest = row.OccurredAt, row.Balance, 1
-			if slices.Contains(row.Warnings, warnBalanceDiffers) {
+			if row.Status == "duplicate" || slices.Contains(row.Warnings, warnBalanceDiffers) {
 				balance = ""
 			}
 		case row.OccurredAt == asOf:

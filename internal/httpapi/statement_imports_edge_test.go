@@ -673,6 +673,7 @@ func TestLatestStatementBalance(t *testing.T) {
 			"2026-09-03T10:00:00.000000000Z", "70.00"},
 		{"several rows at the newest instant", []statementimport.Row{row("new", "2026-09-03T10:00:00.000000000Z", "70.00"), row("new", "2026-09-03T10:00:00.000000000Z", "60.00")}, "", ""},
 		{"newest duplicate with a differing balance", []statementimport.Row{row("duplicate", "2026-09-03T10:00:00.000000000Z", "70.00", warnBalanceDiffers), row("new", "2026-09-01T10:00:00.000000000Z", "50.00")}, "", ""},
+		{"newest exact duplicate preserves the anchor", []statementimport.Row{row("duplicate", "2026-09-03T10:00:00.000000000Z", "70.00"), row("new", "2026-09-01T10:00:00.000000000Z", "50.00")}, "", ""},
 		{"older duplicate with a differing balance does not matter", []statementimport.Row{row("new", "2026-09-03T10:00:00.000000000Z", "70.00"), row("duplicate", "2026-09-01T10:00:00.000000000Z", "50.00", warnBalanceDiffers)},
 			"2026-09-03T10:00:00.000000000Z", "70.00"},
 		{"invalid row without a date", []statementimport.Row{row("new", "2026-09-03T10:00:00.000000000Z", "70.00"), row("invalid", "", "")}, "", ""},
