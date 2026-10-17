@@ -4,7 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/greg0x46/julius/internal/automation"
@@ -46,21 +48,16 @@ func TestStatementImportReplayIsIdempotent(t *testing.T) {
 		balance, asOf := accountBalance(t, conn, accountID)
 		fields := map[string]string{"account_id": accountID}
 		for _, c := range []struct {
-			name     string
-			file     string
-			dups     int
-			decision string
+			name string
+			file string
+			dups int
 		}{
-			{"same file", validFlash, 2, ""},
-			{"same file again", validFlash, 2, ""},
-			{"overlapping period", flashFile(rowCafe), 1, "ignore"},
+			{"same file", validFlash, 2},
+			{"same file again", validFlash, 2},
+			{"overlapping period", flashFile(rowCafe), 1},
 		} {
 			before := statementCounts(t, conn)
-			if c.decision != "" {
-				fields["ambiguous_line_2"] = c.decision
-			}
 			_, counts := importStatementFile(t, conn, c.file, fields)
-			delete(fields, "ambiguous_line_2")
 			if counts.New != 0 || counts.Duplicate != c.dups {
 				t.Fatalf("%s: counts %+v", c.name, counts)
 			}
@@ -98,8 +95,6 @@ func TestStatementIdenticalLinesAreNotCollapsed(t *testing.T) {
 		if _, counts = importStatementFile(t, conn, twice, fields); counts.New != 0 || counts.Duplicate != 2 {
 			t.Fatalf("reimport %+v", counts)
 		}
-		fields["ambiguous_line_2"] = "ignore"
-		fields["ambiguous_line_3"] = "ignore"
 		if _, counts = importStatementFile(t, conn, flashFile(rowCafe, rowCafe, rowCafe), fields); counts.New != 1 || counts.Duplicate != 2 {
 			t.Fatalf("three identical lines %+v", counts)
 		}
@@ -125,15 +120,25 @@ func TestStatementSameTextDifferentBalanceIsNotSilentlyDeduplicated(t *testing.T
 		if preview.Counts.Ambiguous != 1 || preview.Counts.Duplicate != 0 || !preview.hasWarning(warnBalanceDiffers) {
 			t.Fatalf("same-looking purchase with different balance: %+v", preview)
 		}
+		match, ok := preview.Conflicts[2]
+		if !ok || match.ID == "" || match.Description != "Café" || match.PaymentMethod != "Cartão" || match.OccurredAt != cafeOccurredAt || match.Amount != "-10.00" || match.Balance == nil || *match.Balance != "90.00" || match.Filename == "" {
+			t.Fatalf("missing conflict details: %+v", match)
+		}
+		before := statementCounts(t, conn)
+		requireProblem(t, confirmStatementFile(t, conn, secondFile, preview, fields), 422, "ambiguous-row")
+		if got := statementCounts(t, conn); !reflect.DeepEqual(got, before) {
+			t.Fatalf("missing decision wrote rows: %v", got)
+		}
 		fields["ambiguous_line_2"] = "import"
 		if _, counts = importStatementFile(t, conn, secondFile, fields); counts.New != 1 || counts.Duplicate != 0 {
 			t.Fatalf("second purchase %+v", counts)
 		}
 		delete(fields, "ambiguous_line_2")
+		requireProblem(t, confirmStatementFile(t, conn, secondFile, preview, fields), 409, "preview-changed")
 		if n := countWhere(t, conn, `SELECT COUNT(DISTINCT external_id) FROM financial_transactions WHERE account_id=? AND description='Café'`, accountID); n != 2 {
 			t.Fatalf("%d distinct purchases, want 2", n)
 		}
-		for _, file := range []string{firstFile, secondFile} {
+		for _, file := range []string{firstFile, secondFile, strings.ReplaceAll(secondFile, "Café", "CAFÉ")} {
 			if _, counts = importStatementFile(t, conn, file, fields); counts.New != 0 || counts.Duplicate != 1 {
 				t.Fatalf("replay %+v", counts)
 			}
@@ -144,38 +149,20 @@ func TestStatementSameTextDifferentBalanceIsNotSilentlyDeduplicated(t *testing.T
 	})
 }
 
-func TestStatementSameBalanceFromAnotherFileNeedsLineDecision(t *testing.T) {
+func TestStatementSameBalanceFromAnotherFileIsDuplicate(t *testing.T) {
 	dbtest.Each(t, func(t *testing.T, conn *sql.DB) {
-		accountID, counts := importStatementFile(t, conn, validFlash, map[string]string{"new_account_name": "Flash refeições"})
-		if counts.New != 2 {
-			t.Fatalf("first import %+v", counts)
-		}
-		file := flashFile(rowCafe)
+		accountID, _ := importStatementFile(t, conn, validFlash, map[string]string{"new_account_name": "Flash refeições"})
 		fields := map[string]string{"account_id": accountID}
+		file := flashFile(rowCafe)
 		preview := previewStatementFile(t, conn, file, fields)
-		if preview.Counts.Ambiguous != 1 || preview.Counts.Duplicate != 0 || !preview.hasWarning(warnOtherFileMatch) {
+		if preview.Counts.Duplicate != 1 || preview.Counts.Ambiguous != 0 || len(preview.Conflicts) != 0 {
 			t.Fatalf("cross-file preview %+v", preview)
 		}
-		requireProblem(t, confirmStatementFile(t, conn, file, preview, fields), 422, "ambiguous-row")
+		if _, counts := importStatementFile(t, conn, file, fields); counts.New != 0 || counts.Duplicate != 1 {
+			t.Fatalf("cross-file import %+v", counts)
+		}
 		if n := countWhere(t, conn, `SELECT COUNT(*) FROM financial_transactions WHERE account_id=?`, accountID); n != 2 {
-			t.Fatalf("missing decision changed %d rows", n)
-		}
-		fields["ambiguous_line_2"] = "ignore"
-		if _, counts = importStatementFile(t, conn, file, fields); counts.New != 0 || counts.Duplicate != 1 {
-			t.Fatalf("ignored match %+v", counts)
-		}
-		fields["ambiguous_line_2"] = "import"
-		stale := previewStatementFile(t, conn, file, map[string]string{"account_id": accountID})
-		if _, counts = importStatementFile(t, conn, file, fields); counts.New != 1 || counts.Duplicate != 0 {
-			t.Fatalf("distinct same-balance purchase %+v", counts)
-		}
-		requireProblem(t, confirmStatementFile(t, conn, file, stale, fields), 409, "preview-changed")
-		if n := countWhere(t, conn, `SELECT COUNT(*) FROM financial_transactions WHERE account_id=?`, accountID); n != 3 {
-			t.Fatalf("%d rows after explicit import, want 3", n)
-		}
-		delete(fields, "ambiguous_line_2")
-		if _, counts = importStatementFile(t, conn, file, fields); counts.New != 0 || counts.Duplicate != 1 {
-			t.Fatalf("replay of explicitly imported file %+v", counts)
+			t.Fatalf("%d rows, want 2", n)
 		}
 	})
 }
@@ -344,6 +331,150 @@ func TestStatementConfirmFailureLeavesNothingAndRetrySucceeds(t *testing.T) {
 				}
 				if _, counts := importStatementFile(t, conn, file, map[string]string{"account_id": out.AccountID}); counts.New != 0 || counts.Duplicate != 2 {
 					t.Fatalf("replay after retry %+v", counts)
+				}
+			})
+		})
+	}
+}
+
+func TestStatementBalanceConflictIgnoreAndReplay(t *testing.T) {
+	dbtest.Each(t, func(t *testing.T, conn *sql.DB) {
+		accountID, _ := importStatementFile(t, conn, flashFile(rowCafe), map[string]string{"new_account_name": "Flash refeições"})
+		file := flashFile(`09/09/2026,12:00,Café,"-R$ 10,00",Cartão,"R$ 80,00"`)
+		fields := map[string]string{"account_id": accountID}
+		preview := previewStatementFile(t, conn, file, fields)
+		match := preview.Conflicts[2]
+		if _, err := conn.Exec(`UPDATE financial_transactions SET balance_after='85.00' WHERE id=?`, match.ID); err != nil {
+			t.Fatal(err)
+		}
+		fields["ambiguous_line_2"] = "ignore"
+		requireProblem(t, confirmStatementFile(t, conn, file, preview, fields), 409, "preview-changed")
+		if _, err := conn.Exec(`UPDATE financial_transactions SET balance_after='90.00' WHERE id=?`, match.ID); err != nil {
+			t.Fatal(err)
+		}
+		before := statementCounts(t, conn)
+		balance, asOf := accountBalance(t, conn, accountID)
+		if _, counts := importStatementFile(t, conn, file, fields); counts.New != 0 || counts.Duplicate != 1 {
+			t.Fatalf("ignore: %+v", counts)
+		}
+		var existing string
+		if err := conn.QueryRow(`SELECT balance_after FROM financial_transactions WHERE id=?`, match.ID).Scan(&existing); err != nil || existing != "90.00" {
+			t.Fatalf("existing balance %s: %v", existing, err)
+		}
+		if got := countWhere(t, conn, `SELECT COUNT(*) FROM financial_transactions`); got != before["transactions"] {
+			t.Fatalf("ignore added transaction: %d", got)
+		}
+		if b, a := accountBalance(t, conn, accountID); b != balance || a != asOf {
+			t.Fatal("ignore changed account balance")
+		}
+		delete(fields, "ambiguous_line_2")
+		after := statementCounts(t, conn)
+		if _, counts := importStatementFile(t, conn, file, fields); counts.New != 0 || counts.Duplicate != 1 || counts.Ambiguous != 0 {
+			t.Fatalf("replay: %+v", counts)
+		}
+		if n := countWhere(t, conn, `SELECT COUNT(*) FROM normalization_events`); n != after["normalization"] {
+			t.Fatalf("replay wrote decision: %d", n)
+		}
+	})
+}
+
+func TestStatementIgnoredReplayPreservesUnsetBalanceAnchor(t *testing.T) {
+	dbtest.Each(t, func(t *testing.T, conn *sql.DB) {
+		accountID, _ := importStatementFile(t, conn, flashFile(rowCafe, rowCafe), map[string]string{"new_account_name": "Flash refeições"})
+		balance, asOf := accountBalance(t, conn, accountID)
+		if asOf.Valid {
+			t.Fatalf("simultaneous rows set balance anchor: %v", asOf)
+		}
+		file := flashFile(`09/09/2026,12:00,Café,"-R$ 10,00",Cartão,"R$ 80,00"`)
+		fields := map[string]string{"account_id": accountID, "ambiguous_line_2": "ignore"}
+		if _, counts := importStatementFile(t, conn, file, fields); counts.New != 0 || counts.Duplicate != 1 {
+			t.Fatalf("ignore: %+v", counts)
+		}
+		if b, a := accountBalance(t, conn, accountID); b != balance || a != asOf {
+			t.Fatalf("ignore changed balance %v as of %v", b, a)
+		}
+		delete(fields, "ambiguous_line_2")
+		before := statementCounts(t, conn)
+		preview := previewStatementFile(t, conn, file, fields)
+		if preview.Counts.Ambiguous != 0 || preview.Counts.Duplicate != 1 || !preview.hasWarning(warnBalanceDiffers) {
+			t.Fatalf("ignored replay preview: %+v", preview)
+		}
+		if _, counts := importStatementFile(t, conn, file, fields); counts.New != 0 || counts.Duplicate != 1 {
+			t.Fatalf("replay: %+v", counts)
+		}
+		if b, a := accountBalance(t, conn, accountID); b != balance || a != asOf {
+			t.Fatalf("ignored replay changed balance %v as of %v, want %v as of %v", b, a, balance, asOf)
+		}
+		if got := statementCounts(t, conn); got["transactions"] != before["transactions"] || got["normalization"] != before["normalization"] {
+			t.Fatalf("ignored replay wrote transaction or decision: %v, before %v", got, before)
+		}
+	})
+}
+
+func TestStatementExplicitImportReplayPreservesUnsetBalanceAnchor(t *testing.T) {
+	dbtest.Each(t, func(t *testing.T, conn *sql.DB) {
+		accountID, _ := importStatementFile(t, conn, flashFile(rowCafe, rowCafe), map[string]string{"new_account_name": "Flash refeições"})
+		balance, asOf := accountBalance(t, conn, accountID)
+		if asOf.Valid {
+			t.Fatalf("simultaneous rows set balance anchor: %v", asOf)
+		}
+		file := flashFile(`09/09/2026,12:00,Café,"-R$ 10,00",Cartão,"R$ 80,00"`)
+		fields := map[string]string{"account_id": accountID, "ambiguous_line_2": "import"}
+		if _, counts := importStatementFile(t, conn, file, fields); counts.New != 1 || counts.Duplicate != 0 {
+			t.Fatalf("explicit import: %+v", counts)
+		}
+		if b, a := accountBalance(t, conn, accountID); b != balance || a != asOf {
+			t.Fatalf("conflicting import changed balance %v as of %v", b, a)
+		}
+		delete(fields, "ambiguous_line_2")
+		before := statementCounts(t, conn)
+		for _, replay := range []string{file, strings.Replace(file, "Café", "  CAFÉ  ", 1)} {
+			preview := previewStatementFile(t, conn, replay, fields)
+			if preview.Counts.Ambiguous != 0 || preview.Counts.Duplicate != 1 {
+				t.Fatalf("explicit import replay preview: %+v", preview)
+			}
+			if _, counts := importStatementFile(t, conn, replay, fields); counts.New != 0 || counts.Duplicate != 1 {
+				t.Fatalf("replay: %+v", counts)
+			}
+			if b, a := accountBalance(t, conn, accountID); b != balance || a != asOf {
+				t.Fatalf("explicit import replay changed balance %v as of %v, want %v as of %v", b, a, balance, asOf)
+			}
+			if got := statementCounts(t, conn); got["transactions"] != before["transactions"] || got["normalization"] != before["normalization"] {
+				t.Fatalf("explicit import replay wrote transaction or decision: %v, before %v", got, before)
+			}
+		}
+	})
+}
+
+func TestStatementPriorIdentitiesDeduplicateAcrossFiles(t *testing.T) {
+	for _, version := range []string{"statement-v1", "statement-v3"} {
+		t.Run(version, func(t *testing.T) {
+			dbtest.Each(t, func(t *testing.T, conn *sql.DB) {
+				first := flashFile(rowCafe, rowCafe)
+				accountID, _ := importStatementFile(t, conn, first, map[string]string{"new_account_name": "Flash refeições"})
+				base := digest(cafeOccurredAt, "café", "-10.00", "cartão")
+				key := digest(base, "90.00")
+				for i := 1; i <= 2; i++ {
+					canonical := digest("statement-v2", accountID, key, fmt.Sprint(i))
+					prior := digest("statement-v1", accountID, base, fmt.Sprint(i))
+					if version == "statement-v3" {
+						prior = digest(version, accountID, digest(first), fmt.Sprint(i+1))
+					}
+					if _, err := conn.Exec(`UPDATE financial_transactions SET external_id=? WHERE account_id=? AND external_id=?`, prior, accountID, canonical); err != nil {
+						t.Fatal(err)
+					}
+				}
+				fields := map[string]string{"account_id": accountID}
+				overlapping := strings.ReplaceAll(flashFile(rowCafe, rowCafe, rowCafe), "Café", "  CAFÉ  ")
+				preview := previewStatementFile(t, conn, overlapping, fields)
+				if preview.Counts.Duplicate != 2 || preview.Counts.New != 1 || preview.Counts.Ambiguous != 0 {
+					t.Fatalf("prior identity multiplicity: %+v", preview.Counts)
+				}
+				if _, counts := importStatementFile(t, conn, overlapping, fields); counts.New != 1 || counts.Duplicate != 2 {
+					t.Fatalf("import: %+v", counts)
+				}
+				if _, counts := importStatementFile(t, conn, overlapping, fields); counts.New != 0 || counts.Duplicate != 3 {
+					t.Fatalf("replay: %+v", counts)
 				}
 			})
 		})

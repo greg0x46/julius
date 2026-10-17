@@ -22,6 +22,17 @@ export interface ImportRow {
   warnings: string[];
 }
 
+export interface ImportConflict {
+  id: string;
+  occurred_at: string;
+  description: string;
+  amount: string;
+  currency: string;
+  payment_method: string;
+  balance: string | null;
+  filename: string | null;
+}
+
 export interface ImportPreview {
   format: string;
   format_version: string;
@@ -33,6 +44,7 @@ export interface ImportPreview {
   currency: string;
   counts: ImportCounts;
   rows: ImportRow[];
+  conflicts?: Record<number, ImportConflict>;
   warnings: string[];
 }
 
@@ -80,6 +92,15 @@ function parsePreview(value: unknown): ImportPreview {
     filename: str(item.filename), period_start: optionalStr(item.period_start),
     period_end: optionalStr(item.period_end), currency: str(item.currency), counts: counts(item.counts),
     warnings: strings(item.warnings),
+    conflicts: Object.fromEntries(Object.entries(record(item.conflicts ?? {})).map(([line, value]) => {
+      const match = record(value);
+      if (!/^\d+$/.test(line)) throw new Error("Invalid response");
+      return [line, {
+        id: str(match.id), occurred_at: str(match.occurred_at), description: str(match.description),
+        amount: str(match.amount), currency: str(match.currency), payment_method: str(match.payment_method),
+        balance: optionalStr(match.balance), filename: optionalStr(match.filename),
+      }];
+    })),
     rows: item.rows.map((value): ImportRow => {
       const row = record(value);
       if (!Number.isInteger(row.line_number) || !["new", "duplicate", "ambiguous", "invalid"].includes(String(row.status))) throw new Error("Invalid response");
