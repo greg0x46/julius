@@ -226,12 +226,13 @@ async function sendManualTransaction(
   url: string,
   write: ManualTransactionWrite,
   failure: string,
+  idempotencyKey?: string,
 ): Promise<TransactionItem> {
   let response: Response;
   try {
     response = await apiFetch(url, {
       method,
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}) },
       body: JSON.stringify(write),
     });
   } catch (error) {
@@ -271,8 +272,8 @@ async function sendManualTransaction(
   }
 }
 
-export function createManualTransaction(write: ManualTransactionWrite): Promise<TransactionItem> {
-  return sendManualTransaction("POST", "/api/transactions", write, "Não foi possível criar a transação manual.");
+export function createManualTransaction(write: ManualTransactionWrite, idempotencyKey: string = crypto.randomUUID()): Promise<TransactionItem> {
+  return sendManualTransaction("POST", "/api/transactions", write, "Não foi possível criar a transação manual.", idempotencyKey);
 }
 
 export function updateManualTransaction(

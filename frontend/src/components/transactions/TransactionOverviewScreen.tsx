@@ -1,12 +1,15 @@
 import { LinkOutlined, RedoOutlined, SwapOutlined } from "@ant-design/icons";
 import { Alert, Button, Switch, Typography } from "antd";
+import { useQuery } from "@tanstack/react-query";
+import { getTransactionTransfer } from "../../api/transfers";
+import { queryKeys } from "../../api/queryKeys";
 import { useMemo } from "react";
 
 import type { Category, TransactionInclusionState, TransactionItem } from "../../api/contracts";
 import { useTransactionReconciliation } from "../../hooks/useTransactionReconciliation";
 import { internalCategoryOriginLabel } from "../../presentation/categoryLabels";
 import { formatDay } from "../../presentation/dates";
-import { formatBRL } from "../../presentation/money";
+import { formatBRL, formatMoney } from "../../presentation/money";
 import {
   allowsInvestmentLink,
   categoryChoices,
@@ -55,6 +58,15 @@ export function TransactionOverviewScreen({
   navigate: (screen: TransactionScreen) => void;
 }) {
   const ignored = item.inclusion.state === "ignored";
+  const transfer = useQuery({ queryKey: queryKeys.transactionTransfer(item.id), queryFn: ({ signal }) => getTransactionTransfer(item.id, signal), retry: false });
+  const linked = !!transfer.data || item.totals_eligibility.reason === "linked_transfer";
+  const linkedPrincipal = linked && transfer.data?.fee?.transaction_id !== item.id;
+  const otherMovement = transfer.data
+    ? (transfer.data.source.transaction_id === item.id ? transfer.data.destination : transfer.data.source)
+    : null;
+  const transferHint = otherMovement
+    ? `${otherMovement.account_name} · ${(otherMovement.amount === null ? "Valor indisponível" : formatMoney(otherMovement.amount.replace(/^-/, ""), otherMovement.currency_code))}`
+    : transfer.isLoading ? "Carregando…" : transfer.isError ? "Não foi possível consultar" : linked ? "Transferência vinculada" : "Nenhum vínculo";
   const choices = useMemo(() => categoryChoices(categories, item), [categories, item]);
   const suggestion = suggestedCategory(item, choices);
   const split = investmentSplit(item);
@@ -142,10 +154,11 @@ export function TransactionOverviewScreen({
             id="transaction-considered"
             checked={!ignored}
             loading={inclusionPending}
-            disabled={!onInclusion}
+            disabled={!onInclusion || linkedPrincipal}
             onChange={(checked) => onInclusion?.(item.id, checked ? "considered" : "ignored")}
           />
         </div>
+        {linkedPrincipal && <Typography.Text type="secondary">Transferência vinculada: fora das receitas e despesas. Desvincule para alterar a inclusão.</Typography.Text>}
         {ignored && (
           <Typography.Text type="secondary" className="transaction-field-hint">
             Fora dos totais: esta transação não entra nos relatórios e cálculos do período.
@@ -155,6 +168,7 @@ export function TransactionOverviewScreen({
       </PanelSection>
 
       <PanelSection title="Ações" className="panel-section-rows">
+        <PanelNavRow icon={<SwapOutlined />} label="Transferência entre contas" hint={transferHint} disabled={!linked && (ignored || item.classification === "unclassified")} onClick={() => navigate({ kind: "transfer" })} />
         {prefill && (
           <PanelNavRow
             icon={<RedoOutlined />}

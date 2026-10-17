@@ -1,96 +1,125 @@
-# `.specs/` — guia de navegação
+# `.specs/` — navigation guide
 
-Ponto de entrada para quem (humano ou LLM) chega neste repositório sem
-contexto e precisa entender o domínio antes de mexer em código.
+Entry point for anyone (human or LLM) who needs to understand the domain
+before changing code. Agent rules and commands: [`/AGENTS.md`](../AGENTS.md).
 
-## Ordem de leitura sugerida
+## Reading order
 
-1. **`/README.md`** (raiz) — o que é o Julius, como rodar, stack.
-2. **Este arquivo** — o mapa do que tem aqui dentro.
-3. **`motores-de-dominio.md`** — as abstrações de domínio reutilizáveis
-   (nível ideal/arquitetura), e os princípios que as conectam.
-4. **`contextos/<contexto>/reference.md`** — o que existe e funciona hoje,
-   feature por feature. Comece pelo contexto que você vai tocar.
-5. O spec de design daquele contexto, se existir (linkado a partir do
-   `reference.md`) — o racional/histórico da decisão, não repetido aqui.
-   Hoje nenhum contexto tem um; ver convenção abaixo para quando criar um.
+1. [`/README.md`](../README.md) — what Julius is, how to run it, stack.
+2. This file — map of the folder.
+3. [`motores-de-dominio.md`](motores-de-dominio.md) — reusable domain
+   abstractions ("domain engines") and the principles connecting them.
+4. [`invariantes-financeiros.md`](invariantes-financeiros.md) — the core
+   financial rules as they are today, with the owning module and the test that
+   pins each one.
+5. `contextos/<context>/reference.md` — what exists and works today, feature by
+   feature. Start with the context you will touch.
+6. A design spec for that context, if one exists (linked from its
+   `reference.md`). Currently only [`importacao-extratos.md`](importacao-extratos.md).
 
-## Os tipos de doc nesta pasta
+## Doc types
 
-### `motores-de-dominio.md`
+- **`motores-de-dominio.md`** — architecture, not features. Describes the domain
+  at the ideal level; where code diverges, the divergence is stated explicitly.
+- **`invariantes-financeiros.md`** — cross-cutting, living matrix: balance,
+  income/expense, transfer, obligations, investments, hypotheticals and
+  reprocessing — each rule's current behavior, owning module and pinning test
+  (cross-engine tests live in `internal/invariants`). Found-but-undecided
+  divergences are listed at its end. Update in the same PR that changes any of
+  these rules.
+- **`contextos/<context>/reference.md`** — living docs of the *current, literal*
+  state: packages, HTTP routes, frontend pages. The source of truth for "is
+  this implemented?". Update in the same PR as the change; a stale reference
+  is worse than none.
+- **`<feature>.md`** (optionally `<feature>/mN-*.md`) — design specs for work
+  in progress: motivation, rejected alternatives, decisions, milestone plan.
+  State at the top whether it is implemented. When the feature ships, move the
+  relevant content into the context's `reference.md` and delete the spec, so
+  two documents never describe the same state.
+- **`backlog/`** — ideas, explicitly not to be implemented yet.
 
-Doc único, guarda-chuva de **arquitetura**, não de feature. Descreve o
-domínio no nível ideal — onde o código diverge disso, a divergência é dita
-explicitamente ali, ou apontada a partir do `reference.md` do contexto
-correspondente.
+## Context glossary
 
-### `contextos/<contexto>/reference.md`
+Folder names are Portuguese and referenced from Go comments; they are not
+renamed. Frontend routes and UI labels are also Portuguese.
 
-Um arquivo por contexto/feature (`contextos/pendencias/`,
-`contextos/home/`, etc.), descrevendo o **estado atual,
-literal**: o que o backend/frontend fazem hoje, pacotes envolvidos, rotas
-HTTP, páginas do frontend. É a fonte de verdade para "isso já foi
-implementado?".
+| Folder | Topic | Main packages |
+|---|---|---|
+| `sincronizacao-open-banking` | Pluggy sync, connections | `pluggy`, `syncsvc`, `worker`, `datasources` |
+| `importacao-extratos` | CSV statement import | `statementimport` |
+| `transacoes` | Ledger, manual entries, accounts/cards | `transactions`, `money`, `ledger` |
+| `categorias` | Categories, categorization origin/precedence | `categories` |
+| `automacao` | Automation rules | `rules`, `automation` |
+| `pendencias` | Payables (debts, receivables) | `payables` |
+| `cenarios` | Scenarios (hypothetical layer) | `scenarios`, `projections` |
+| `recorrencias` | Recurring commitments + reconciliation | `recurrences` |
+| `home` | Home dashboard, projection | `timeline` |
+| `patrimonio-liquido` | Net worth | `networth` |
+| `investimentos` | Investments, quotes, reconciliation | `investments`, `quotes`, `marketdata` |
+| `configuracoes-autenticacao` | Settings, authentication | `auth`, `settings` |
 
-Diferente dos specs de design (próxima seção), estes são **docs vivos** —
-devem ser atualizados sempre que a feature correspondente muda, no mesmo
-commit/PR da mudança. Um `reference.md` desatualizado é pior que nenhum.
+## Shared database read boundary
 
-Contextos existentes hoje: `sincronizacao-open-banking`, `importacao-extratos`, `transacoes`,
-`categorias`, `automacao`, `pendencias`, `cenarios`, `recorrencias`,
-`home`, `patrimonio-liquido`, `configuracoes-autenticacao`.
+`internal/db/types` decodes timestamps, calendar dates, booleans, identifiers
+and exact decimals returned by SQLite and Postgres. Stores and SQL-backed HTTP
+handlers use its scan adapters, including nullable columns; native driver values
+are normalized there before domain logic runs. Opaque provider and legacy IDs
+remain intact; `ParseUUID` is available for UUID values. Decimal reads accept
+text and integers and reject floating-point values. Schema and write formats
+are unchanged (`internal/db.FormatTime` retains fixed-width UTC timestamps).
 
-`investimentos` documenta contas de custódia, carteiras por objetivo, operações
-manuais e conciliação de aportes/resgates com o extrato.
+Postgres uses native exact numeric, temporal, UUID and boolean types; SQLite keeps text decimals, UTC
+instants, calendar dates and integer flags. Both start at `0001_initial.sql`.
+`db.Open` automatically converts final legacy Postgres version 46 in one transaction,
+retaining the original tables in a backup schema; it rejects legacy SQLite and
+incomplete Postgres schemas. The archived history
+is embedded only in historical tests. See
+[`migrations/README.md`](../internal/db/migrations/README.md) for the contract.
+`cmd/migrate-legacy` replaces the generic copier: a raw read-only final legacy
+SQLite source converts into a fresh SQLite/Postgres baseline. It provides
+aggregated dry-run errors, rollback, FK-ordered copy and count/balance validation.
 
-### Specs de design soltos em `.specs/` (`<feature>.md` [+ `<feature>/mN-*.md`])
+## Monetary boundaries
 
-O plano de [importação de extratos](importacao-extratos.md) está em aberto.
-Os specs de feature anteriores
-(`relatorio-financeiro.md` e milestones, `plano-pagamento-e-cenarios-
-projecao.md`) foram removidos por já estarem cobertos pelos `reference.md`
-correspondentes (`contextos/home/`, `contextos/pendencias/`,
-`contextos/cenarios/`). O formato continua sendo a convenção para a
-**próxima** feature de escopo razoável, quando fizer sentido registrar o
-racional de uma decisão de design num momento específico — motivação,
-alternativas descartadas, decisões de arquitetura, plano de execução por
-milestone. Enquanto um spec desses está em aberto (feature ainda não
-implementada, ou parcialmente), ele é a referência; assim que a feature é
-concluída, o conteúdo relevante migra para o `reference.md` do contexto e o
-spec de design é removido — evita manter dois documentos que podem
-divergir sobre o mesmo estado atual.
+[`precisao-monetaria.md`](precisao-monetaria.md) defines exact money input/output,
+operation-specific rounding and native-currency display.
 
-## Blocos transversais do frontend
+## Schema conversion contract
 
-Não pertencem a um contexto específico — reaproveitados por vários:
+- [`reorganizacao-schema/inventario.md`](reorganizacao-schema/inventario.md) —
+  final legacy schema snapshots, complete column inventory, data/auth scope
+  decisions and the changed-column conversion map implemented by `cmd/migrate-legacy`.
+  Both the native baseline and the temporary legacy converter are implemented.
 
-- `frontend/src/components/shared/WidgetCard.tsx` + `SummaryCard.tsx` —
-  shell padrão de card com loading/erro/vazio.
-- `frontend/src/theme/tokens.ts` — cores/fonte/spacing/tema antd.
-- `frontend/src/components/filters/filterUrl.ts` — serialização de filtros
-  para `URLSearchParams` (filtros de transações, seleção de cenários).
-- `frontend/src/presentation/money.ts` — formatação/aritmética de dinheiro
-  sobre strings decimais.
-- Recharts é a biblioteca de gráficos (projeção da Home, Patrimônio
-  Líquido).
+## Shared frontend building blocks
 
-Testes: Vitest + Testing Library cobrem o frontend hoje (colocalizados,
-`*.test.ts(x)`). Playwright está scaffolded no `package.json`
-(`test:e2e`) mas sem `playwright.config.*` nem testes — não rode
-`npm run test:e2e` esperando que funcione.
+Not tied to a single context:
 
-## Convenção para trabalho novo
+- `frontend/src/components/shared/` — `Money`, `StatusTag`, `RecordMenu`,
+  `BottomSheet`, `PanelStack`, `ConditionListEditor`; `components/AsyncState.tsx`
+  for loading/error/empty states.
+- `frontend/src/theme/tokens.ts` — colors, font, spacing, antd theme.
+- `frontend/src/components/filters/filterUrl.ts` — filter ⇄ `URLSearchParams`
+  (transaction filters, scenario selection).
+- `frontend/src/presentation/money.ts` — money formatting/arithmetic on decimal
+  strings.
+- Recharts is the chart library (Home projection, net worth).
 
-- **Feature nova de escopo razoável, com decisões de design a registrar**:
-  crie `.specs/<feature>.md` (quebre em `.specs/<feature>/mN-*.md` se for
-  grande o bastante para ter milestones independentes). Declare no topo se
-  já foi implementado ou não.
-- **Ao concluir a implementação de qualquer feature** (nova ou existente):
-  atualize (ou crie) `contextos/<contexto>/reference.md` no mesmo PR, e
-  remova o spec de design que tiver sido usado para planejá-la (ver seção
-  acima). Se a feature for visível o bastante para entrar na lista de
-  funcionalidades da raiz, atualize também a seção "Funcionalidades" do
-  `/README.md`.
-- **Mudança pequena/local dentro de um contexto já documentado**: só
-  atualize o `reference.md` existente — não precisa de spec de design novo
-  para toda alteração.
+Tests: Vitest + Testing Library, colocated `*.test.ts(x)`. Vitest runs two
+projects with 2 workers: `dom` (jsdom + `src/test/setup.dom.ts`) for
+`*.test.tsx` and the `.ts` files listed in `domTsTests` in `vite.config.ts`, and
+`node` (no DOM) for the other `*.test.ts`. A new `.ts` test that needs the DOM
+must be added to `domTsTests` (or become `.tsx`); details in
+`frontend/TESTING.md`. Playwright is scaffolded (`test:e2e`) without config or
+tests — don't expect it to work.
+
+## Workflow for new work
+
+- **New feature with design decisions worth recording:** create
+  `.specs/<feature>.md` (split into `.specs/<feature>/mN-*.md` for independent
+  milestones). State at the top whether it is implemented.
+- **When a feature ships (new or changed):** update or create the context's
+  `reference.md` in the same PR, delete the design spec that planned it, and
+  update the "Features" section of `/README.md` if it is user-visible.
+- **Small, local change inside a documented context:** just update the existing
+  `reference.md`.

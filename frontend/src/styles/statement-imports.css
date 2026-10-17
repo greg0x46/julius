@@ -252,6 +252,17 @@
   min-width: 0;
 }
 
+.statement-row-review .ant-radio-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.75rem;
+  width: 100%;
+}
+
+.statement-row-review .ant-radio-wrapper {
+  margin-inline-end: 0;
+}
+
 .statement-row-notes {
   display: flex;
   flex-direction: column;

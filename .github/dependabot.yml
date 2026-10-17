@@ -1,8 +1,21 @@
+# Version updates are integrated through `stage` (the rolling integration
+# branch) like any other change, and reach `main` only inside a release
+# promotion PR. Their squash titles are Conventional Commits that drive the
+# release version:
+#   - Go modules and npm production dependencies ship in the binary, so they use
+#     `fix(deps)` and produce a patch release;
+#   - npm dev dependencies and workflow actions do not change the binary, so
+#     they use `build(deps-dev)` / `build(ci)` and produce no release.
+#
+# `target-branch` applies to VERSION updates only. Dependabot SECURITY updates
+# are not redirected by it and keep targeting the default branch (`main`); see
+# "Dependabot" in AGENTS.md for the controlled procedure.
 version: 2
 
 updates:
   - package-ecosystem: github-actions
     directory: /
+    target-branch: stage
     schedule:
       interval: weekly
       day: monday
@@ -10,8 +23,7 @@ updates:
       timezone: America/Sao_Paulo
     open-pull-requests-limit: 5
     commit-message:
-      prefix: build
-      include: scope
+      prefix: "build(ci)"
     groups:
       actions-minor-patch:
         patterns: ["*"]
@@ -19,6 +31,7 @@ updates:
 
   - package-ecosystem: gomod
     directory: /
+    target-branch: stage
     schedule:
       interval: weekly
       day: monday
@@ -26,7 +39,7 @@ updates:
       timezone: America/Sao_Paulo
     open-pull-requests-limit: 5
     commit-message:
-      prefix: build
+      prefix: fix
       include: scope
     groups:
       go-minor-patch:
@@ -35,6 +48,7 @@ updates:
 
   - package-ecosystem: npm
     directory: /frontend
+    target-branch: stage
     schedule:
       interval: weekly
       day: monday
@@ -42,7 +56,8 @@ updates:
       timezone: America/Sao_Paulo
     open-pull-requests-limit: 5
     commit-message:
-      prefix: build
+      prefix: fix
+      prefix-development: build
       include: scope
     groups:
       npm-production-minor-patch:

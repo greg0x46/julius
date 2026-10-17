@@ -134,9 +134,7 @@ func TestCashOnHandFailsOnMissingOrInvalidAccountCurrency(t *testing.T) {
 		want     error
 	}{
 		{"null", nil, money.ErrMissingCurrency},
-		{"empty", strp(""), money.ErrMissingCurrency},
-		{"lowercase", strp("brl"), money.ErrInvalidCurrency},
-		{"short", strp("XX"), money.ErrInvalidCurrency},
+		{"unknown", strp("ABC"), money.ErrInvalidCurrency},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -172,7 +170,7 @@ func TestCashOnHandSkipsCurrencyCheckForExcludedAccounts(t *testing.T) {
 		t.Fatalf("CashOnHandIn = %s, %v; want 10", total, err)
 	}
 
-	f.addAccount(account{AccountType: strp("BANK"), CurrencyCode: strp("brl"), Balance: strp("99")})
+	f.addAccount(account{AccountType: strp("BANK"), CurrencyCode: strp("ABC"), Balance: strp("99")})
 	total, err = transactions.CashOnHandIn(context.Background(), f.conn, []string{wanted}, "BRL")
 	if err != nil || total.String() != "10" {
 		t.Fatalf("scoped CashOnHandIn = %s, %v; want 10 (bad account is out of scope)", total, err)

@@ -5,7 +5,7 @@ import { expect, it, vi } from "vitest";
 
 import type { InvestmentAsset } from "../../api/contracts";
 import { listInvestmentAssets } from "../../api/investmentPortfolio";
-import { manualAccount } from "../../test/investmentWorkspaceFixtures";
+import { integratedAccount, manualAccount } from "../../test/investmentWorkspaceFixtures";
 import { InvestmentPositionForm } from "./InvestmentPositionForm";
 
 vi.mock("../../api/investmentPortfolio", () => ({ listInvestmentAssets: vi.fn() }));
@@ -26,6 +26,7 @@ it("creates a position from the catalog even when the asset has no positions", a
         submitting={false} submitError={null} onCreate={onCreate} onUpdate={vi.fn()} onCancel={vi.fn()} />
     </QueryClientProvider>,
   );
+  await screen.findByText("Ativo existente (opcional)");
   fireEvent.mouseDown(await screen.findByRole("combobox", { name: "Ativo existente (opcional)" }));
   await userEvent.click(await screen.findByText("BTC · Bitcoin", { selector: ".ant-select-item-option-content" }));
   expect(screen.getByRole("textbox", { name: "Nome" })).toHaveValue("Bitcoin");
@@ -33,5 +34,19 @@ it("creates a position from the catalog even when the asset has no positions", a
   await waitFor(() => expect(onCreate).toHaveBeenCalledWith(expect.objectContaining({
     account_id: manualAccount.id, asset_id: asset.id, name: "Bitcoin", ticker: "BTC", asset_type: "Criptomoeda",
   })));
+  client.clear();
+});
+
+it("offers integrated accounts too, so a manual holding can sit next to the provider's", async () => {
+  vi.mocked(listInvestmentAssets).mockResolvedValue([]);
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={client}>
+      <InvestmentPositionForm open position={null} accounts={[manualAccount, integratedAccount]} positions={[]} portfolios={[]}
+        submitting={false} submitError={null} onCreate={vi.fn()} onUpdate={vi.fn()} onCancel={vi.fn()} />
+    </QueryClientProvider>,
+  );
+  fireEvent.mouseDown(await screen.findByRole("combobox", { name: "Conta de investimento" }));
+  expect(await screen.findByText(integratedAccount.name, { selector: ".ant-select-item-option-content" })).toBeInTheDocument();
   client.clear();
 });

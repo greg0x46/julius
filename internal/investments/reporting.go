@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sort"
 
+	dbtypes "github.com/greg0x46/julius/internal/db/types"
 	"github.com/shopspring/decimal"
 )
 
@@ -28,7 +29,7 @@ func ReconciledTransactionAmounts(ctx context.Context, q Querier) (map[string]de
 	result := map[string]decimal.Decimal{}
 	for rows.Next() {
 		var id, raw string
-		if err := rows.Scan(&id, &raw); err != nil {
+		if err := rows.Scan(dbtypes.ID(&id), dbtypes.Decimal(&raw)); err != nil {
 			return nil, err
 		}
 		amount, err := decimal.NewFromString(raw)
@@ -57,7 +58,7 @@ func ReconciledTransactionAmount(ctx context.Context, q Querier, financialTransa
 	total := decimal.Zero
 	for rows.Next() {
 		var raw string
-		if err := rows.Scan(&raw); err != nil {
+		if err := rows.Scan(dbtypes.Decimal(&raw)); err != nil {
 			return decimal.Zero, err
 		}
 		amount, err := decimal.NewFromString(raw)
@@ -125,8 +126,8 @@ func ManualReportingEntries(ctx context.Context, q Querier) ([]ManualReportingEn
 	for rows.Next() {
 		var op reportOperation
 		var financialTransactionID, linkedRaw sql.NullString
-		if err := rows.Scan(&op.id, &op.accountID, &op.kindRaw, &op.occurredRaw, &op.amountRaw, &op.feesRaw, &op.taxesRaw,
-			&financialTransactionID, &linkedRaw); err != nil {
+		if err := rows.Scan(dbtypes.ID(&op.id), dbtypes.ID(&op.accountID), &op.kindRaw, dbtypes.Date(&op.occurredRaw), dbtypes.Decimal(&op.amountRaw), dbtypes.Decimal(&op.feesRaw), dbtypes.Decimal(&op.taxesRaw),
+			dbtypes.ID(&financialTransactionID), dbtypes.Decimal(&linkedRaw)); err != nil {
 			return nil, err
 		}
 		if !seen[op.id] {
@@ -214,5 +215,142 @@ func ManualOperationReporting(ctx context.Context, q Querier) (ManualReporting, 
 			result.Taxes = result.Taxes.Add(entry.Amount.Abs())
 		}
 	}
+	return result, nil
+}
+
+// realizedSaleGains maps every local sale to its net proceeds (principal minus
+// the sale's fees and taxes, as the ledger credits the cash) minus the cost
+// basis it wrote off in the ledger replay (purchase fees and taxes included, a
+// transfer's frozen cost carried).
+func realizedSaleGains(ctx context.Context, q Querier, accountID *string) (map[string]decimal.Decimal, error) {
+	query := `SELECT DISTINCT account_id FROM investment_operations WHERE source = 'manual' AND kind = 'sell'`
+	args := []any{}
+	if accountID != nil {
+		query += ` AND account_id = ?`
+		args = append(args, *accountID)
+	}
+	rows, err := q.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	accounts := []string{}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(dbtypes.ID(&id)); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		accounts = append(accounts, id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	gains := map[string]decimal.Decimal{}
+	for _, id := range accounts {
+		_, err := replayAccountObserving(ctx, q, id, nil, func(op Operation, writtenOff decimal.Decimal) {
+			if op.Source == "manual" {
+				gains[op.ID] = op.Amount.Sub(op.Fees).Sub(op.Taxes).Sub(writtenOff)
+			}
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
+	return gains, nil
+}
+
+// MonthlyMovements sums gross local principal flows, realized income and costs
+// per month, including local entries in integrated accounts. Reconciliation
+// never changes these totals; derived provider pivots are excluded.
+// RealizedGain stays out of Income and is already net of every purchase and
+// sale fee and tax, which Fees and Taxes keep itemizing (the timeline books
+// them as costs): it must not be reduced by them again. It exists only for
+// local sales, where the ledger knows the cost basis; synced holdings have
+// none, so a zero there means "not computed", not "no gain".
+func MonthlyMovements(ctx context.Context, q Querier, accountID *string) ([]MonthlyMovement, error) {
+	gains, err := realizedSaleGains(ctx, q, accountID)
+	if err != nil {
+		return nil, err
+	}
+	query := `
+		SELECT id, kind, occurred_on, amount, fees, taxes
+		FROM investment_operations
+		WHERE source = 'manual'
+		  AND kind IN ('deposit', 'withdrawal', 'income', 'fee', 'tax', 'buy', 'sell')`
+	args := []any{}
+	if accountID != nil {
+		query += ` AND account_id = ?`
+		args = append(args, *accountID)
+	}
+	rows, err := q.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	byMonth := map[string]*MonthlyMovement{}
+	for rows.Next() {
+		var idRaw, kindRaw, occurredRaw, amountRaw, feesRaw, taxesRaw string
+		if err := rows.Scan(dbtypes.ID(&idRaw), &kindRaw, dbtypes.Date(&occurredRaw), dbtypes.Decimal(&amountRaw),
+			dbtypes.Decimal(&feesRaw), dbtypes.Decimal(&taxesRaw)); err != nil {
+			return nil, err
+		}
+		occurredOn, err := parseDate(occurredRaw)
+		if err != nil {
+			return nil, err
+		}
+		amount, err := decimal.NewFromString(amountRaw)
+		if err != nil {
+			return nil, fmt.Errorf("parse operation amount: %w", err)
+		}
+		fees, err := decimal.NewFromString(feesRaw)
+		if err != nil {
+			return nil, fmt.Errorf("parse operation fees: %w", err)
+		}
+		taxes, err := decimal.NewFromString(taxesRaw)
+		if err != nil {
+			return nil, fmt.Errorf("parse operation taxes: %w", err)
+		}
+		month := occurredOn.Format("2006-01")
+		movement := byMonth[month]
+		if movement == nil {
+			movement = &MonthlyMovement{Month: month}
+			byMonth[month] = movement
+		}
+		switch OperationKind(kindRaw) {
+		case OperationDeposit:
+			movement.Contributions = movement.Contributions.Add(amount)
+		case OperationWithdrawal:
+			movement.Withdrawals = movement.Withdrawals.Add(amount)
+		case OperationIncome:
+			movement.Income = movement.Income.Add(amount)
+		case OperationFee:
+			movement.Fees = movement.Fees.Add(amount)
+		case OperationTax:
+			movement.Taxes = movement.Taxes.Add(amount)
+		case OperationBuy, OperationSell:
+			movement.Fees = movement.Fees.Add(fees)
+			movement.Taxes = movement.Taxes.Add(taxes)
+			movement.RealizedGain = movement.RealizedGain.Add(gains[idRaw]) // sales only
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	result := make([]MonthlyMovement, 0, len(byMonth))
+	for _, movement := range byMonth {
+		// A month with only cost-free trades that realized nothing has nothing to report.
+		if movement.Contributions.IsZero() && movement.Withdrawals.IsZero() && movement.Income.IsZero() &&
+			movement.Fees.IsZero() && movement.Taxes.IsZero() && movement.RealizedGain.IsZero() {
+			continue
+		}
+		result = append(result, *movement)
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].Month < result[j].Month })
 	return result, nil
 }

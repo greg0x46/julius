@@ -6,7 +6,10 @@ package httpapi
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
+
+	"github.com/greg0x46/julius/internal/reporting"
 )
 
 // Problem mirrors web/schemas.py's ProblemResponse (RFC 7807-flavored error
@@ -28,4 +31,19 @@ func writeProblem(w http.ResponseWriter, status int, kind, title, detail string)
 		Status: status,
 		Detail: detail,
 	})
+}
+
+func writeReportingProblem(w http.ResponseWriter, err error) bool {
+	var incomplete *reporting.IncompleteError
+	if !errors.As(err, &incomplete) {
+		return false
+	}
+	w.Header().Set("Content-Type", "application/problem+json")
+	w.WriteHeader(http.StatusServiceUnavailable)
+	_ = json.NewEncoder(w).Encode(struct {
+		Problem
+		Reporting reporting.Summary  `json:"reporting"`
+		Totals    []reporting.Totals `json:"totals"`
+	}{Problem{Type: "/problems/reporting-fx-unavailable", Title: "Total indisponível", Status: 503, Detail: incomplete.Error()}, incomplete.Coverage, incomplete.Totals})
+	return true
 }

@@ -92,22 +92,25 @@ func TestBackfillReconstructsCashWalkingEligibleTransactionsBackward(t *testing.
 // subtracted from the BRL cash anchor when reconstructing earlier days.
 func TestBackfillDoesNotReverseNonBRLTransactions(t *testing.T) {
 	f := newFixture(t)
-	f.addAccount("", "200.00")
+	brl := f.addAccount("", "200.00")
 	usd := f.addAccount("", "100.00")
 	f.exec(`UPDATE financial_accounts SET currency_code = 'USD' WHERE id = ?`, usd)
 
 	today := time.Date(2024, 6, 15, 0, 0, 0, 0, time.UTC)
+	fourDaysAgo := today.AddDate(0, 0, -4)
+	threeDaysAgo := today.AddDate(0, 0, -3)
 	twoDaysAgo := today.AddDate(0, 0, -2)
+	f.addCardTransaction(brl, fourDaysAgo, "10.00", "CREDIT") // opens the backfill window before the USD movement
 	f.addCardTransaction(usd, twoDaysAgo, "100.00", "CREDIT")
 
 	if err := networth.Backfill(context.Background(), f.conn, today); err != nil {
 		t.Fatalf("Backfill: %v", err)
 	}
-	snap, ok := snapshotFor(t, f, twoDaysAgo)
+	snap, ok := snapshotFor(t, f, threeDaysAgo)
 	if !ok {
-		t.Fatalf("no snapshot for twoDaysAgo")
+		t.Fatalf("no snapshot for threeDaysAgo")
 	}
-	assertDecimalEqual(t, "twoDaysAgo.CashBalance", snap.Breakdown.CashBalance, "200")
+	assertDecimalEqual(t, "threeDaysAgo.CashBalance", snap.Breakdown.CashBalance, "200")
 }
 
 // TestBackfillDoesNotReverseForeignAccountWithoutAccountAmount pins that a
@@ -115,23 +118,26 @@ func TestBackfillDoesNotReverseNonBRLTransactions(t *testing.T) {
 // to its BRL transaction amount) is not subtracted from the BRL cash anchor.
 func TestBackfillDoesNotReverseForeignAccountWithoutAccountAmount(t *testing.T) {
 	f := newFixture(t)
-	f.addAccount("", "200.00")
+	brl := f.addAccount("", "200.00")
 	usd := f.addAccount("", "100.00")
 	f.exec(`UPDATE financial_accounts SET currency_code = 'USD' WHERE id = ?`, usd)
 
 	today := time.Date(2024, 6, 15, 0, 0, 0, 0, time.UTC)
+	fourDaysAgo := today.AddDate(0, 0, -4)
+	threeDaysAgo := today.AddDate(0, 0, -3)
 	twoDaysAgo := today.AddDate(0, 0, -2)
+	f.addCardTransaction(brl, fourDaysAgo, "10.00", "CREDIT") // opens the backfill window before the USD movement
 	id := f.addCardTransaction(usd, twoDaysAgo, "100.00", "CREDIT")
 	f.exec(`UPDATE financial_transactions SET amount_in_account_currency = NULL WHERE id = ?`, id)
 
 	if err := networth.Backfill(context.Background(), f.conn, today); err != nil {
 		t.Fatalf("Backfill: %v", err)
 	}
-	snap, ok := snapshotFor(t, f, twoDaysAgo)
+	snap, ok := snapshotFor(t, f, threeDaysAgo)
 	if !ok {
-		t.Fatalf("no snapshot for twoDaysAgo")
+		t.Fatalf("no snapshot for threeDaysAgo")
 	}
-	assertDecimalEqual(t, "twoDaysAgo.CashBalance", snap.Breakdown.CashBalance, "200")
+	assertDecimalEqual(t, "threeDaysAgo.CashBalance", snap.Breakdown.CashBalance, "200")
 }
 
 // TestBackfillSkipsDaysBeforeTheEarliestKnownTransaction proves Backfill
@@ -231,7 +237,7 @@ func TestBackfillNeverOverwritesAnExistingSnapshot(t *testing.T) {
 	if !ok {
 		t.Fatalf("no snapshot for yesterday")
 	}
-	assertDecimalEqual(t, "yesterday.CashBalance", snap.Breakdown.CashBalance, "1")
+	assertDecimalEqual(t, "yesterday.Breakdown.CashBalance", snap.Breakdown.CashBalance, "1")
 	if snap.IsBackfilled {
 		t.Errorf("IsBackfilled = true, want the pre-existing live row untouched")
 	}
@@ -381,4 +387,30 @@ func TestBackfillIgnoresManualTransactions(t *testing.T) {
 	// 10999 (1000 + 9999 reversed back out). It must not shift at all: the
 	// manual entry never touched the real balance to begin with.
 	assertDecimalEqual(t, "twoDaysAgo.CashBalance", snap.Breakdown.CashBalance, "1000")
+}
+
+func TestBackfillManualAccountMovementsAndAdjustments(t *testing.T) {
+	f := newFixture(t)
+	today := time.Date(2026, 10, 10, 0, 0, 0, 0, time.UTC)
+	first := db.FormatTime(today.AddDate(0, 0, -2))
+	f.exec(`INSERT INTO financial_accounts(id,origin,name,account_type,currency_code,opening_balance,created_at,updated_at) VALUES('manual','manual','Cash','BANK','BRL','100',?,?)`, first, first)
+	_, err := transactions.CreateManual(context.Background(), f.conn, transactions.ManualInput{AccountID: "manual", Description: "Deposit", Amount: decimal.RequireFromString("10"), OccurredAt: today.AddDate(0, 0, -2)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f.exec(`INSERT INTO account_balance_adjustments(id,account_id,amount,description,created_at) VALUES('adjust','manual','5','Correction',?)`, db.FormatTime(today.AddDate(0, 0, -1)))
+	foreign := f.addAccount("BANK", "10000")
+	f.exec(`UPDATE financial_accounts SET currency_code='USD' WHERE id=?`, foreign)
+	f.addCardTransaction(foreign, today.AddDate(0, 0, -1), "1000", "CREDIT")
+	if err := networth.Backfill(context.Background(), f.conn, today); err != nil {
+		t.Fatal(err)
+	}
+	day, ok := snapshotFor(t, f, today.AddDate(0, 0, -2))
+	if !ok || !day.Breakdown.CashBalance.Equal(decimal.RequireFromString("110")) {
+		t.Fatalf("first day: %+v %v", day, ok)
+	}
+	day, ok = snapshotFor(t, f, today.AddDate(0, 0, -1))
+	if !ok || !day.Breakdown.CashBalance.Equal(decimal.RequireFromString("115")) {
+		t.Fatalf("adjustment day: %+v %v", day, ok)
+	}
 }

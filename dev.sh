@@ -20,17 +20,17 @@ backend_url="http://${backend_addr}"
 export JULIUS_PUBLIC_URL="${JULIUS_PUBLIC_URL:-http://${frontend_host}:${frontend_port}}"
 
 if ! command -v go >/dev/null 2>&1; then
-  echo "Erro: Go não está instalado ou não está no PATH." >&2
+  echo "Error: Go is not installed or not in PATH." >&2
   exit 1
 fi
 
 if ! command -v npm >/dev/null 2>&1; then
-  echo "Erro: npm não está instalado ou não está no PATH." >&2
+  echo "Error: npm is not installed or not in PATH." >&2
   exit 1
 fi
 
 if [[ ! -d "$repo_dir/frontend/node_modules" ]]; then
-  echo "Dependências do frontend não encontradas. Execute: (cd frontend && npm install)" >&2
+  echo "Frontend dependencies not found. Run: (cd frontend && npm install)" >&2
   exit 1
 fi
 
@@ -81,7 +81,7 @@ trap 'exit 143' TERM
 
 echo "Backend:  http://${backend_addr}"
 echo "Frontend: ${JULIUS_PUBLIC_URL}"
-echo "Pressione Ctrl-C para encerrar os dois processos."
+echo "Press Ctrl-C to stop both processes."
 
 start_process go run ./cmd/julius -addr "$backend_addr"
 backend_pid="$last_pid"

@@ -120,6 +120,7 @@ func TestEligibility(t *testing.T) {
 		{"missing money excluded", money.Outflow, strp("POSTED"), nil, money.Considered, "", false, money.ReasonMissingMoneyPair},
 		{"zero value excluded", money.Outflow, strp("POSTED"), zero, money.Considered, "", false, money.ReasonZeroValue},
 		{"eligible", money.Outflow, strp("POSTED"), brl, money.Considered, "", true, ""},
+		{"pending expense is eligible", money.Outflow, strp("PENDING"), brl, money.Considered, money.Expense, true, ""},
 		{"pending status is eligible", money.Inflow, strp("PENDING"), brl, money.Considered, "", true, ""},
 
 		// The transfer category excludes on its own, in both directions —
@@ -163,6 +164,77 @@ func TestEligibility(t *testing.T) {
 				t.Errorf("reason = %v, want %v", reason, tc.wantReason)
 			}
 		})
+	}
+}
+
+// TestEligibilityPrecedenceMatrix checks the full ordering pairwise: when two
+// checks fail at once, the earlier one is the reported reason. It also pins
+// which reasons MovedCash reads as real cash movement.
+func TestEligibilityPrecedenceMatrix(t *testing.T) {
+	type input struct {
+		classification money.Classification
+		status         *string
+		money          *money.EffectiveMoney
+		inclusion      money.InclusionState
+		kind           money.CategoryKind
+	}
+	failures := []struct {
+		reason    money.EligibilityReason
+		field     string
+		apply     func(*input)
+		movedCash bool
+	}{
+		{money.ReasonIgnored, "inclusion", func(in *input) { in.inclusion = money.Ignored }, false},
+		{money.ReasonUnclassified, "classification", func(in *input) { in.classification = money.Unclassified }, false},
+		{money.ReasonIneligibleStatus, "status", func(in *input) { in.status = strp("PROCESSING") }, false},
+		{money.ReasonMissingMoneyPair, "money", func(in *input) { in.money = nil }, false},
+		{money.ReasonZeroValue, "money", func(in *input) {
+			in.money = &money.EffectiveMoney{Value: dec("0"), CurrencyCode: "BRL", Source: money.AccountCurrency}
+		}, false},
+		{money.ReasonTransferCategory, "kind", func(in *input) { in.kind = money.Transfer }, true},
+	}
+	base := func() input {
+		return input{
+			classification: money.Outflow, status: strp("POSTED"), inclusion: money.Considered,
+			money: &money.EffectiveMoney{Value: dec("10.00"), CurrencyCode: "BRL", Source: money.AccountCurrency},
+		}
+	}
+	eligibility := func(in input) (bool, *money.EligibilityReason) {
+		return money.Eligibility(in.classification, in.status, in.money, in.inclusion, in.kind)
+	}
+
+	for _, failure := range failures {
+		in := base()
+		failure.apply(&in)
+		_, reason := eligibility(in)
+		if reason == nil || *reason != failure.reason {
+			t.Errorf("alone: reason = %v, want %s", reason, failure.reason)
+			continue
+		}
+		if got := money.MovedCash(reason); got != failure.movedCash {
+			t.Errorf("MovedCash(%s) = %v, want %v", failure.reason, got, failure.movedCash)
+		}
+	}
+	for i, earlier := range failures {
+		for _, later := range failures[i+1:] {
+			if earlier.field == later.field {
+				continue // missing and zero money cannot both hold
+			}
+			in := base()
+			later.apply(&in)
+			earlier.apply(&in)
+			if included, reason := eligibility(in); included || reason == nil || *reason != earlier.reason {
+				t.Errorf("%s + %s: reason = %v, want %s", earlier.reason, later.reason, reason, earlier.reason)
+			}
+		}
+	}
+
+	investment := money.ReasonInvestmentTransfer
+	if !money.MovedCash(&investment) {
+		t.Errorf("MovedCash(investment_transfer) = false, want true")
+	}
+	if money.MovedCash(nil) {
+		t.Errorf("MovedCash(nil) = true, want false")
 	}
 }
 

@@ -10,14 +10,13 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/greg0x46/julius/internal/db"
+	dbtypes "github.com/greg0x46/julius/internal/db/types"
 	"github.com/greg0x46/julius/internal/money"
 )
 
-// ErrAccountNotFound is returned by CreateManual when AccountID names no
-// financial_accounts row — the one account this app supports today is
-// whatever the last Pluggy sync produced, so a manual lançamento can only
-// attach to one that already exists (see .specs/lancamentos-manuais.md).
+// ErrAccountNotFound also covers archived accounts, which reject new movements.
 var ErrAccountNotFound = errors.New("account not found")
+var ErrAccountArchived = errors.New("account archived")
 
 // ErrNotManual is returned by UpdateManual/DeleteManual when transactionID
 // names a row whose origin is "synced" — editing or deleting a lançamento
@@ -29,7 +28,7 @@ var ErrInvestmentLinked = errors.New("transaction has investment reconciliations
 
 func requireNoInvestmentLinks(ctx context.Context, q Querier, id string) error {
 	var linked bool
-	if err := q.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM investment_reconciliations WHERE financial_transaction_id = ?)`, id).Scan(&linked); err != nil {
+	if err := q.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM investment_reconciliations WHERE financial_transaction_id = ?)`, id).Scan(dbtypes.Bool(&linked)); err != nil {
 		return err
 	}
 	if linked {
@@ -61,6 +60,9 @@ type ManualInput struct {
 // explicit category choice afterward, exactly like a sync does for its own
 // insert — this function only owns the base row.
 func CreateManual(ctx context.Context, conn Querier, in ManualInput) (string, error) {
+	if err := LockAccount(ctx, conn, in.AccountID); err != nil {
+		return "", err
+	}
 	var currencyCode sql.NullString
 	err := conn.QueryRowContext(ctx,
 		`SELECT currency_code FROM financial_accounts WHERE id = ?`, in.AccountID,
@@ -120,13 +122,33 @@ func requireManual(ctx context.Context, q Querier, transactionID string) error {
 // through their own existing endpoints (categories.AssignManual,
 // SetInclusion), which are already agnostic of origin and need no change.
 func UpdateManual(ctx context.Context, conn Querier, transactionID string, in ManualInput) error {
+	if dbConn, ok := conn.(*sql.DB); ok {
+		tx, err := dbConn.BeginTx(ctx, nil)
+		if err != nil {
+			return err
+		}
+		defer tx.Rollback()
+		if err := UpdateManual(ctx, tx, transactionID, in); err != nil {
+			return err
+		}
+		return tx.Commit()
+	}
+	if _, err := conn.ExecContext(ctx, `UPDATE financial_transactions SET id = id WHERE id = ?`, transactionID); err != nil {
+		return err
+	}
 	if err := requireManual(ctx, conn, transactionID); err != nil {
+		return err
+	}
+	if err := RequireNoTransferLink(ctx, conn, transactionID); err != nil {
 		return err
 	}
 	if err := requireNoInvestmentLinks(ctx, conn, transactionID); err != nil {
 		return err
 	}
 
+	if err := LockAccount(ctx, conn, in.AccountID); err != nil {
+		return err
+	}
 	var currencyCode sql.NullString
 	err := conn.QueryRowContext(ctx,
 		`SELECT currency_code FROM financial_accounts WHERE id = ?`, in.AccountID,
@@ -183,10 +205,16 @@ func DeleteManual(ctx context.Context, conn *sql.DB, transactionID string, onIgn
 		return err
 	}
 	defer tx.Rollback()
+	if _, err := tx.ExecContext(ctx, `UPDATE financial_transactions SET id = id WHERE id = ?`, transactionID); err != nil {
+		return err
+	}
 	if err := requireNoInvestmentLinks(ctx, tx, transactionID); err != nil {
 		return err
 	}
 
+	if err := UnlinkTransferForTransaction(ctx, tx, transactionID); err != nil {
+		return err
+	}
 	if onIgnored != nil {
 		if err := onIgnored(ctx, tx, transactionID); err != nil {
 			return err

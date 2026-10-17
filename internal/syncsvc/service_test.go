@@ -121,8 +121,8 @@ func insertRawImport(t *testing.T, conn *sql.DB, id, syncRunID, sourceID string)
 			id, sync_run_id, source_id, scope, page_sequence, request_attempt,
 			request_method, request_path, http_status, response_headers, payload,
 			payload_sha256, received_at
-		) VALUES (?, ?, ?, 'item', ?, 1, 'GET', '/x', 200, '{}', x'00', 'sha', ?)`,
-		id, syncRunID, sourceID, rawImportSequence, now)
+		) VALUES (?, ?, ?, 'item', ?, 1, 'GET', '/x', 200, '{}', ?, 'sha', ?)`,
+		id, syncRunID, sourceID, rawImportSequence, []byte{0}, now)
 	if err != nil {
 		t.Fatalf("insert raw_import %s: %v", id, err)
 	}
@@ -238,7 +238,7 @@ func TestExecutePersistsCreditAccountLimitsAndDates(t *testing.T) {
 	if available != "3765.44" {
 		t.Errorf("available_credit_limit = %s", available)
 	}
-	if closeRaw != db.FormatTime(closeDate) || dueRaw != db.FormatTime(dueDate) {
+	if closeRaw != closeDate.UTC().Format("2006-01-02") || dueRaw != dueDate.UTC().Format("2006-01-02") {
 		t.Errorf("close=%s due=%s", closeRaw, dueRaw)
 	}
 }

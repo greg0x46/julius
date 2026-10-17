@@ -1,4 +1,4 @@
-import { Button } from "antd";
+import { Button, Radio } from "antd";
 import { useState } from "react";
 
 import type { ImportRow } from "../../api/statementImports";
@@ -9,10 +9,11 @@ import { StatusTag } from "../shared/StatusTag";
 
 const pageSize = 20;
 
-// A new row is the default and carries no tag: only the rows that will not be
-// imported as they are (already there, or invalid) say so.
+// A new row is the default and carries no tag. Rows needing a decision,
+// already imported rows and invalid rows say so explicitly.
 const statusTag = {
   duplicate: { tone: "neutral", label: "Já importada" },
+  ambiguous: { tone: "warning", label: "Precisa de decisão" },
   invalid: { tone: "danger", label: "Inválida" },
 } as const;
 
@@ -21,7 +22,11 @@ const statusTag = {
  * amount and the running balance on the right, then its status and review
  * notes. Errors keep the error color; warnings stay plain but visible.
  */
-function StatementPreviewRow({ row }: { row: ImportRow }) {
+function StatementPreviewRow({ row, decision, onDecision }: {
+  row: ImportRow;
+  decision?: "import" | "ignore";
+  onDecision?: (line: number, decision: "import" | "ignore") => void;
+}) {
   const currency = row.currency ?? "BRL";
   const tag = row.status === "new" ? null : statusTag[row.status];
   const hasNotes = row.errors.length > 0 || row.warnings.length > 0;
@@ -48,6 +53,11 @@ function StatementPreviewRow({ row }: { row: ImportRow }) {
               {row.warnings.map((value, index) => <li key={`w-${index}`}>{value}</li>)}
             </ul>
           )}
+          {row.status === "ambiguous" && <Radio.Group aria-label={`Decisão da linha ${row.line_number}`} value={decision}
+            onChange={(event) => onDecision?.(row.line_number, event.target.value)}>
+            <Radio value="import">Importar como outra compra</Radio>
+            <Radio value="ignore">Ignorar como repetição</Radio>
+          </Radio.Group>}
         </div>
       )}
     </li>
@@ -59,7 +69,11 @@ function StatementPreviewRow({ row }: { row: ImportRow }) {
  * a phone), 20 to a page: a file can carry thousands of lines. The footer is
  * the same Exibindo/Anterior/Próxima one the transactions list uses.
  */
-export function StatementPreviewRows({ rows }: { rows: ImportRow[] }) {
+export function StatementPreviewRows({ rows, ambiguousDecisions, onAmbiguousDecision }: {
+  rows: ImportRow[];
+  ambiguousDecisions?: Record<number, "import" | "ignore">;
+  onAmbiguousDecision?: (line: number, decision: "import" | "ignore") => void;
+}) {
   const [page, setPage] = useState(1);
 
   if (rows.length === 0) return <EmptyState title="Nenhuma linha para mostrar" />;
@@ -72,7 +86,8 @@ export function StatementPreviewRows({ rows }: { rows: ImportRow[] }) {
   return (
     <>
       <ul className="statement-row-list" aria-label="Linhas do arquivo">
-        {visible.map((row) => <StatementPreviewRow key={row.line_number} row={row} />)}
+        {visible.map((row) => <StatementPreviewRow key={row.line_number} row={row}
+          decision={ambiguousDecisions?.[row.line_number]} onDecision={onAmbiguousDecision} />)}
       </ul>
       {totalPages > 1 && (
         <footer className="statement-import-pagination">

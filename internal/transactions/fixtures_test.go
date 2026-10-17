@@ -30,6 +30,11 @@ func newFixture(t *testing.T) *fixture {
 	}
 	t.Cleanup(func() { conn.Close() })
 
+	return newFixtureWithConn(t, conn)
+}
+
+func newFixtureWithConn(t *testing.T, conn *sql.DB) *fixture {
+	t.Helper()
 	f := &fixture{t: t, conn: conn, sourceID: uuid.NewString(), rawImportID: uuid.NewString()}
 	now := db.FormatTime(time.Now())
 	f.exec(`INSERT INTO data_sources (id, provider, external_item_id, created_at, updated_at)
@@ -41,8 +46,8 @@ func newFixture(t *testing.T) *fixture {
 			id, sync_run_id, source_id, scope, page_sequence, request_attempt,
 			request_method, request_path, http_status, response_headers, payload,
 			payload_sha256, received_at
-		) VALUES (?, ?, ?, 'transactions', 1, 1, 'GET', '/x', 200, '{}', x'00', 'sha', ?)`,
-		f.rawImportID, syncRunID, f.sourceID, now)
+		) VALUES (?, ?, ?, 'transactions', 1, 1, 'GET', '/x', 200, '{}', ?, 'sha', ?)`,
+		f.rawImportID, syncRunID, f.sourceID, []byte{0}, now)
 	return f
 }
 
@@ -91,14 +96,14 @@ func (f *fixture) addBill(b bill) string {
 	now := db.FormatTime(time.Now())
 	var closing *string
 	if !b.ClosingDate.IsZero() {
-		formatted := db.FormatTime(b.ClosingDate)
+		formatted := b.ClosingDate.Format("2006-01-02")
 		closing = &formatted
 	}
 	f.exec(`INSERT INTO financial_bills (
 			id, source_id, account_id, external_id, due_date, closing_date,
 			current_raw_import_id, normalized_hash, created_at, updated_at
 		) VALUES (?, ?, ?, ?, ?, ?, ?, 'hash', ?, ?)`,
-		id, f.sourceID, b.AccountID, b.ExternalID, db.FormatTime(b.DueDate), closing, f.rawImportID, now, now)
+		id, f.sourceID, b.AccountID, b.ExternalID, b.DueDate.Format("2006-01-02"), closing, f.rawImportID, now, now)
 	return id
 }
 
@@ -108,7 +113,7 @@ func (f *fixture) addBill(b bill) string {
 func (f *fixture) setPreference(key, value string) {
 	f.t.Helper()
 	now := db.FormatTime(time.Now())
-	f.exec(`INSERT INTO settings (key, value, is_encrypted, updated_at) VALUES (?, ?, 0, ?)`, key, value, now)
+	f.exec(`INSERT INTO settings (key, value, is_encrypted, updated_at) VALUES (?, ?, FALSE, ?)`, key, value, now)
 }
 
 // txn is the input to addTransaction; nil pointers stay NULL, matching a
@@ -158,7 +163,7 @@ func (f *fixture) addAutomationRule(name string) string {
 	id := uuid.NewString()
 	now := db.FormatTime(time.Now())
 	f.exec(`INSERT INTO automation_rules (id, name, is_active, logic_operator, created_at, updated_at)
-		VALUES (?, ?, 1, 'and', ?, ?)`, id, name, now, now)
+		VALUES (?, ?, TRUE, 'and', ?, ?)`, id, name, now, now)
 	return id
 }
 

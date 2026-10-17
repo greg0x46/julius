@@ -35,6 +35,10 @@ export function StatementPreviewSummary({ preview }: { preview: ImportPreview })
             <dt>Já importadas</dt>
             <dd>{preview.counts.duplicate}</dd>
           </div>
+          {(preview.counts.ambiguous ?? 0) > 0 && <div>
+            <dt>Para decidir</dt>
+            <dd>{preview.counts.ambiguous}</dd>
+          </div>}
           <div className={preview.counts.invalid > 0 ? "is-invalid" : undefined}>
             <dt>Inválidas</dt>
             <dd>{preview.counts.invalid}</dd>

@@ -461,6 +461,10 @@ func writeInvestmentProblem(w http.ResponseWriter, err error) {
 			"Registro de investimento não encontrado", "O registro informado não existe.")
 	case errors.Is(err, investments.ErrInvalidInput):
 		writeInvestmentInvalid(w, "Revise os campos enviados.")
+	case errors.Is(err, investments.ErrUnsupportedCurrency):
+		writeProblem(w, http.StatusBadRequest, "investment-unsupported-currency",
+			"Moeda não suportada",
+			"Posições e movimentações manuais são em reais: este ativo está cadastrado em outra moeda.")
 	case errors.Is(err, investments.ErrIntegratedReadOnly):
 		writeProblem(w, http.StatusConflict, "investment-integrated-read-only",
 			"Registro integrado é somente leitura",
@@ -1299,6 +1303,41 @@ func handleGetInvestmentSummary(conn *sql.DB) http.HandlerFunc {
 			return
 		}
 		writeJSON(w, http.StatusOK, investmentSummaryToDTO(summary))
+	}
+}
+
+type investmentMonthlyMovementDTO struct {
+	Month         string `json:"month"`
+	Contributions string `json:"contributions"`
+	Withdrawals   string `json:"withdrawals"`
+	Income        string `json:"income"`
+	Fees          string `json:"fees"`
+	Taxes         string `json:"taxes"`
+	RealizedGain  string `json:"realized_gain"`
+}
+
+func handleListInvestmentMonthlyMovements(conn *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		movements, err := investments.MonthlyMovements(r.Context(), conn, investmentQueryFilter(r, "account_id"))
+		if err != nil {
+			writeInvestmentProblem(w, err)
+			return
+		}
+		items := make([]investmentMonthlyMovementDTO, 0, len(movements))
+		for _, m := range movements {
+			items = append(items, investmentMonthlyMovementDTO{
+				Month:         m.Month,
+				Contributions: money.CanonicalDecimal(m.Contributions),
+				Withdrawals:   money.CanonicalDecimal(m.Withdrawals),
+				Income:        money.CanonicalDecimal(m.Income),
+				Fees:          money.CanonicalDecimal(m.Fees),
+				Taxes:         money.CanonicalDecimal(m.Taxes),
+				RealizedGain:  money.CanonicalDecimal(m.RealizedGain),
+			})
+		}
+		// source says what the rows cover: only local operations. A synced
+		// holding has no cost basis here, so its sales are not a zero gain.
+		writeJSON(w, http.StatusOK, map[string]any{"items": items, "source": "manual"})
 	}
 }
 

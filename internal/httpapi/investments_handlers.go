@@ -12,6 +12,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/greg0x46/julius/internal/db"
+	dbtypes "github.com/greg0x46/julius/internal/db/types"
 	"github.com/greg0x46/julius/internal/investments"
 	"github.com/greg0x46/julius/internal/money"
 )
@@ -66,24 +67,20 @@ const investmentSelectColumns = `
 func scanInvestment(row interface{ Scan(...any) error }) (investmentDTO, error) {
 	var (
 		d              investmentDTO
-		dueDateRaw     sql.NullString
 		asOfDateRaw    sql.NullString
 		providerUpdRaw sql.NullString
 	)
-	if err := row.Scan(&d.ID, &d.ExternalID, &d.SourceDisplayName, &d.InvestmentType, &d.Subtype, &d.Name,
-		&d.Balance, &d.CurrencyCode, &d.Quantity, &d.Value, &d.Amount, &d.AmountProfit,
-		&d.AmountWithdrawal, &d.AmountOriginal, &d.Taxes, &d.Taxes2, &d.Rate, &d.RateType, &d.FixedAnnualRate, &d.AnnualRate,
-		&d.LastTwelveMonthsRate, &d.Issuer, &dueDateRaw, &asOfDateRaw, &providerUpdRaw); err != nil {
+	if err := row.Scan(dbtypes.ID(&d.ID), dbtypes.ID(&d.ExternalID), &d.SourceDisplayName, &d.InvestmentType, &d.Subtype, &d.Name,
+		dbtypes.Decimal(&d.Balance), &d.CurrencyCode, dbtypes.Decimal(&d.Quantity), dbtypes.Decimal(&d.Value), dbtypes.Decimal(&d.Amount), dbtypes.Decimal(&d.AmountProfit),
+		dbtypes.Decimal(&d.AmountWithdrawal), dbtypes.Decimal(&d.AmountOriginal), dbtypes.Decimal(&d.Taxes), dbtypes.Decimal(&d.Taxes2), dbtypes.Decimal(&d.Rate), &d.RateType, dbtypes.Decimal(&d.FixedAnnualRate), dbtypes.Decimal(&d.AnnualRate),
+		dbtypes.Decimal(&d.LastTwelveMonthsRate), &d.Issuer, dbtypes.Date(&d.DueDate), dbtypes.Time(&asOfDateRaw), dbtypes.Time(&providerUpdRaw)); err != nil {
 		return investmentDTO{}, err
 	}
 	var err error
-	if d.DueDate, err = db.ParseNullTime(dueDateRaw); err != nil {
+	if d.AsOfDate, err = dbtypes.ParseNullTime(asOfDateRaw); err != nil {
 		return investmentDTO{}, err
 	}
-	if d.AsOfDate, err = db.ParseNullTime(asOfDateRaw); err != nil {
-		return investmentDTO{}, err
-	}
-	if d.ProviderUpdatedAt, err = db.ParseNullTime(providerUpdRaw); err != nil {
+	if d.ProviderUpdatedAt, err = dbtypes.ParseNullTime(providerUpdRaw); err != nil {
 		return investmentDTO{}, err
 	}
 	return d, nil
@@ -138,7 +135,7 @@ func netContributed(ctx context.Context, conn *sql.DB, investmentIDs []string) (
 	for rows.Next() {
 		var investmentID string
 		var direction, quantityRaw, amountRaw sql.NullString
-		if err := rows.Scan(&investmentID, &direction, &quantityRaw, &amountRaw); err != nil {
+		if err := rows.Scan(dbtypes.ID(&investmentID), &direction, dbtypes.Decimal(&quantityRaw), dbtypes.Decimal(&amountRaw)); err != nil {
 			return nil, err
 		}
 		info := result[investmentID]
@@ -379,7 +376,7 @@ func handleListInvestmentTransactions(conn *sql.DB) http.HandlerFunc {
 		var exists bool
 		if err := conn.QueryRowContext(r.Context(),
 			`SELECT EXISTS(SELECT 1 FROM financial_investments WHERE id = ?)`, investmentID,
-		).Scan(&exists); err != nil {
+		).Scan(dbtypes.Bool(&exists)); err != nil {
 			writeProblem(w, 503, "investments-unavailable", "Investimentos temporariamente indisponíveis", "Tente novamente em instantes.")
 			return
 		}
@@ -404,17 +401,13 @@ func handleListInvestmentTransactions(conn *sql.DB) http.HandlerFunc {
 			var (
 				t             investmentTransactionDTO
 				occurredAtRaw sql.NullString
-				tradeDateRaw  sql.NullString
 			)
-			if err := rows.Scan(&t.ID, &t.ExternalID, &t.MovementType, &t.Direction, &t.Quantity, &t.Value, &t.Amount,
-				&occurredAtRaw, &tradeDateRaw); err != nil {
+			if err := rows.Scan(dbtypes.ID(&t.ID), dbtypes.ID(&t.ExternalID), &t.MovementType, &t.Direction, dbtypes.Decimal(&t.Quantity), dbtypes.Decimal(&t.Value), dbtypes.Decimal(&t.Amount),
+				dbtypes.Time(&occurredAtRaw), dbtypes.Date(&t.TradeDate)); err != nil {
 				writeProblem(w, 503, "investments-unavailable", "Investimentos temporariamente indisponíveis", "Tente novamente em instantes.")
 				return
 			}
-			if t.OccurredAt, err = db.ParseNullTime(occurredAtRaw); err != nil {
-				continue
-			}
-			if t.TradeDate, err = db.ParseNullTime(tradeDateRaw); err != nil {
+			if t.OccurredAt, err = dbtypes.ParseNullTime(occurredAtRaw); err != nil {
 				continue
 			}
 			result = append(result, t)

@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/greg0x46/julius/internal/db"
+	dbtypes "github.com/greg0x46/julius/internal/db/types"
 	"github.com/greg0x46/julius/internal/money"
 )
 
@@ -76,14 +77,14 @@ func getInclusionDecision(ctx context.Context, q Querier, transactionID string) 
 		`SELECT state, revision, changed_at, origin, rule_id, rule_name
 		 FROM transaction_inclusion_decisions WHERE transaction_id = ?`,
 		transactionID,
-	).Scan(&d.state, &d.revision, &changedAtRaw, &d.origin, &ruleID, &ruleName)
+	).Scan(&d.state, &d.revision, dbtypes.Time(&changedAtRaw), &d.origin, dbtypes.ID(&ruleID), &ruleName)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
-	if d.changedAt, err = db.ParseTime(changedAtRaw); err != nil {
+	if d.changedAt, err = dbtypes.ParseTime(changedAtRaw); err != nil {
 		return nil, err
 	}
 	d.ruleID = nullString(ruleID)
@@ -180,6 +181,11 @@ func applyInclusion(
 		return InclusionConfirmation{}, err
 	}
 
+	if target == money.Ignored {
+		if err := UnlinkTransferForTransaction(ctx, q, transactionID); err != nil {
+			return InclusionConfirmation{}, err
+		}
+	}
 	if target == money.Ignored && onIgnored != nil {
 		if err := onIgnored(ctx, q, transactionID); err != nil {
 			return InclusionConfirmation{}, err
@@ -202,6 +208,24 @@ func SetInclusion(
 	ctx context.Context, q Querier, transactionID string, target money.InclusionState,
 	origin InclusionOrigin, ruleID, ruleName *string, onIgnored OnIgnoredHook,
 ) (InclusionConfirmation, error) {
+	if conn, ok := q.(*sql.DB); ok {
+		tx, err := conn.BeginTx(ctx, nil)
+		if err != nil {
+			return InclusionConfirmation{}, err
+		}
+		defer tx.Rollback()
+		result, err := SetInclusion(ctx, tx, transactionID, target, origin, ruleID, ruleName, onIgnored)
+		if err != nil {
+			return InclusionConfirmation{}, err
+		}
+		if err := tx.Commit(); err != nil {
+			return InclusionConfirmation{}, err
+		}
+		return result, nil
+	}
+	if _, err := q.ExecContext(ctx, `UPDATE financial_transactions SET id = id WHERE id = ?`, transactionID); err != nil {
+		return InclusionConfirmation{}, err
+	}
 	var exists int
 	err := q.QueryRowContext(ctx, `SELECT 1 FROM financial_transactions WHERE id = ? AND deleted_at IS NULL`, transactionID).Scan(&exists)
 	if errors.Is(err, sql.ErrNoRows) {

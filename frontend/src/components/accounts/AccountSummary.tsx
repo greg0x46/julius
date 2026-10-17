@@ -67,7 +67,7 @@ export function AccountSummary({
           value: <ClosingDayField account={account} onSave={onSaveClosingDay} saving={savingClosingDay} />,
         },
       ]
-    : [];
+    : account.origin === "manual" ? [{ label: "Saldo inicial", value: <AccountMoney value={account.opening_balance} currencyCode={account.currency_code} tone="balance" /> }] : [];
 
   return (
     <SummaryStrip

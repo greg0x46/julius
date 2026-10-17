@@ -1,274 +1,259 @@
-# Motores de domínio (Domain Engines)
+# Domain Engines
 
-> Doc-guarda-chuva de arquitetura (não de feature): registra os motores de
-> domínio reutilizáveis que o Julius já usa como base para múltiplas
-> funcionalidades, e os princípios que os conectam. Fruto de uma conversa
-> (ago/2026) sobre como documentar isso como direcionamento. Descreve o
-> domínio no nível ideal, não necessariamente o estado literal do código
-> hoje — onde os dois divergem, isso é dito explicitamente. Para o estado
-> atual, literal, de cada feature, ver `.specs/contextos/<contexto>/
-> reference.md` (ver `.specs/README.md` para o índice).
+> Architecture umbrella doc (not a feature doc): the reusable domain engines
+> that several features build on, and the principles connecting them. It
+> describes the domain at the *ideal* level; where the code diverges, that is
+> stated explicitly. For the current, literal state of each feature see
+> `.specs/contextos/<context>/reference.md` (index: `.specs/README.md`).
 
-## Por que este doc existe
+## Why this doc exists
 
-O Julius cresceu por spec de feature, e cada spec documenta bem a
-própria feature. O que não estava registrado em nenhum lugar único é a
-camada **abaixo** das features: um punhado de motores de domínio genéricos
-que várias telas/endpoints reaproveitam. Sem esse mapa, é fácil (a)
-reinventar um motor que já existe generalizado em outro pacote, ou (b)
-generalizar demais algo que na verdade é específico de uma feature.
+Julius grew feature by feature, and each feature is documented well. What
+no single place recorded is the layer **below** the features: a handful of
+generic engines reused by many screens and endpoints. Without this map it is
+easy to (a) reinvent an engine that already exists, generalized, in another
+package, or (b) over-generalize something that is really feature-specific.
 
-## O que conta como "domain engine"
+## What counts as a domain engine
 
-Nem toda entidade ou pacote é um motor de domínio. O critério usado para
-aceitar ou rejeitar cada candidato nesta lista:
+A candidate is accepted only if it:
 
-1. **É reutilizado em múltiplos contextos** — não uma peça que só uma tela
-   ou um endpoint usa.
-2. **Processa/transforma, não só armazena** — um catálogo passivo
-   (categorias, por exemplo) não qualifica só por ser muito referenciado;
-   precisa ter comportamento (match, cálculo, fusão) que outros pilares
-   reaproveitam.
-3. **Não é amarrado a um provedor/implementação específica.** Pluggy é o
-   provedor de dados principal hoje, mas o sistema tende a evoluir para
-   lançamentos manuais também — um motor de domínio precisa fazer sentido
-   independente de qual provedor está por trás.
-4. **É descrito no nível ideal**, não no estado atual do código — quando os
-   dois divergem, a divergência é uma nota explícita, não um fato do motor.
+1. **Is reused across multiple contexts** — not used by a single screen or
+   endpoint.
+2. **Processes, not just stores.** A passive catalog (categories) does not
+   qualify just for being widely referenced; it needs behavior (matching,
+   computation, merging) that others reuse.
+3. **Is not tied to a specific provider.** Pluggy is the main data provider
+   today, but manual entries and CSV import already exist; an engine must make
+   sense whatever sits behind it.
+4. **Is described at the ideal level**, not the code's current state;
+   divergences are explicit notes, not facts about the engine.
 
-## Os motores
+## The engines
 
-### 1. Lançamentos
+### 1. Ledger (Portuguese: Lançamentos; name still provisional)
 
-*(nome provisório — ainda em aberto)*
+**Packages:** `internal/money`, `internal/transactions`, `internal/ledger`
 
-A entidade central de fluxo de caixa e as regras que decidem o que conta
-pra total: classificação de movimento, valor efetivo, inclusão/exclusão
-(`internal/money`: `Classify`, `SelectEffectiveMoney`, `Considered`/
-`Ignored`, `CategoryKind`). Agnóstico de origem — Pluggy e lançamento manual
-(`origin` em `financial_transactions`, ver `.specs/contextos/transacoes/
-reference.md`) povoam a mesma tabela e passam pelas mesmas regras; o motor
-em si não presume qual das duas. Ingestão (Pluggy, e lançamento manual) é
-provedor/entrada de dado, não parte do motor.
+The central cash-flow entity and the rules that decide what counts toward
+totals: movement classification, effective amount, inclusion/exclusion
+(`money`: `Classify`, `SelectEffectiveMoney`, `Considered`/`Ignored`,
+`CategoryKind`). Origin-agnostic: Pluggy, manual entries and statement imports
+(`origin` on `financial_transactions`, see `contextos/transacoes/reference.md`)
+fill the same table and go through the same rules. Ingestion is a data
+provider, not part of the engine.
 
-Duas vias tiram um lançamento dos totais, e elas afirmam coisas
-diferentes. **Ignorado** é "isso não deveria estar aqui" — um estorno, uma
-duplicata. **Categoria de kind `transfer`** é "isso está aqui, é real, mas
-é meu próprio dinheiro andando entre minhas contas": contá-lo somaria o
-mesmo dinheiro duas vezes, saindo de uma conta e entrando na outra. A
-categoria é a única cujo kind carrega regra junto; `expense`/`income`
-seguem sendo rótulo. Ignorado vence na precedência, por ser a declaração
-mais explícita do usuário (`money.Eligibility`).
+Reporting exclusions assert different things.
+**Ignored** means "this should not be here" — a chargeback, a duplicate.
+**A category of kind `transfer`** means "this is real, but it is my own money
+moving between my accounts": counting it would count the same money twice,
+leaving one account and entering the other. The category is the only one whose
+kind carries a rule; `expense`/`income` stay labels. Ignored wins on
+precedence, as the user's most explicit statement (`money.Eligibility`).
 
-A ordem dos testes em `money.Eligibility` é load-bearing e não é uma
-questão de estética de mensagem: `MovedCash` lê o motivo
-`transfer_category` como "o dinheiro saiu mesmo da conta", então esse
-motivo é verificado **por último**, depois de tudo que pergunta se houve
-movimento algum. Uma transferência ainda não liquidada pelo provedor, ou
-cujo tipo de movimento não dá pra classificar em direção, não moveu nada
-ainda — reportá-la como movimento de caixa fazia a timeline e o patrimônio
-revertê-la da âncora (a não classificada, com o sinal trocado).
+An explicit own-account transfer link makes the ownership decision independently
+of categories: both native movements remain intact, but linked principal gets
+`linked_transfer` after ordinary eligibility checks and stays outside reporting
+totals. The execution rate is recomputed from those actual native amounts;
+only an explicitly recorded separate fee enters expenses. Unlinking removes the
+annotation and resumes the existing decisions. Like transfer categories and
+investment principal, linked transfer principal still satisfies `MovedCash`.
 
-Nota sobre saldo: o saldo de conta reportado pelo provedor **é** a
-referência para dinheiro em conta, e **nenhuma** das duas vias acima o
-corrige — ambas são decisões de *relatório*, não afirmações de que o
-dinheiro não saiu do banco. O lançamento ignorado, e a transferência,
-moveram dinheiro de verdade, então continuam dentro do saldo; descontá-los
-reportaria um caixa que o usuário não tem. Pelo mesmo motivo, a
-reconstrução histórica de patrimônio reverte ambos ao caminhar para trás
-(`internal/networth` `cashDeltasDescending`), e a dívida de cartão
-continua abatendo o pagamento de fatura mesmo quando ele está categorizado
-como transferência (`transactions.consideredCardTransactionTotal`) — os
-dois passam `""` como kind para `money.Eligibility`, de propósito.
 
-Onde essas regras *decidem* o número é em outro lugar: nos totais de
-receita/despesa (as duas vias valem), e na dívida de cartão (só a via
-`ignored`) — ali a pergunta é "quanto esta
-fatura vai me cobrar", que uma decisão de inclusão legitimamente molda, e
-por isso o total sai dos lançamentos elegíveis do ciclo e não do saldo
-reportado (`transactions.CreditCardTransactionTotal`). O caixa em conta
-vem de `transactions.CashOnHandByCurrency`, uma implementação só, que a
-Timeline (âncora de hoje) e o Patrimônio Líquido leem via
-`transactions.CashOnHandIn(..., money.BRL)`.
+The order of checks in `money.Eligibility` is load-bearing, not cosmetic:
+`MovedCash` reads the `transfer_category` reason as an eligible cash-flow
+candidate, so that reason is checked **last**, after
+all other eligibility checks. An unsupported status (such as `PROCESSING`) or
+an unclassified movement must not acquire a cash effect merely by being
+categorized as a transfer.
 
-Valores com moeda usam `money.Amount` (valor + código) e `money.Balances`
-(um total por moeda): somar ou subtrair moedas diferentes é erro
-(`ErrCurrencyMismatch`), e não há conversão nesta camada.
-`money.ParseCurrency` aceita só códigos ISO 4217 em maiúsculas; código
-ausente, malformado ou desconhecido (`ABC`) é erro explícito, nunca vira BRL.
-A caminhada de saldo da Timeline e a reconstrução do backfill de patrimônio
-só consideram movimentos em BRL, coerentes com a âncora BRL.
+Both `PENDING` and `POSTED` pass the status check. A valid pending card purchase
+is already an expense even though its bill is not settled; status is neither
+report eligibility nor proof that bank cash moved. Period attribution and
+cash timing belong to the consumer's account/date rules, documented in
+[`transacoes/reference.md`](contextos/transacoes/reference.md#status-periods-and-settlement).
+Pending transfers also retain the current cash-flow treatment; there is no
+blanket pending exclusion.
 
-### 2. Motor de regras
+Balance note: on synced accounts, the provider-reported balance **is** the reference
+for money in accounts, and **neither** path above corrects it — both are
+*reporting* decisions, not claims that the money did not leave the bank. An
+ignored entry and a transfer really moved money, so they stay inside the
+balance; discounting them would report cash the user does not have. For the
+same reason historical net-worth reconstruction reverses both when walking
+backwards (`internal/networth` `cashDeltasDescending`), and card debt keeps
+being reduced by the bill payment even when it is categorized as a transfer
+(`transactions.consideredCardTransactionTotal`) — both pass `""` as the kind to
+`money.Eligibility`, on purpose.
 
-**Pacote:** `internal/rules`
+Where these rules *decide* a number: income/expense totals (both paths apply)
+and card debt (only the `ignored` path). There the question is "how much will
+this bill charge me", which an inclusion decision legitimately shapes, so the
+total comes from the cycle's eligible entries, not from the reported balance
+(`transactions.CreditCardTransactionTotal`). Manual bank accounts instead derive native balance from opening balance +
+posted undeleted transaction amounts + explicit adjustment deltas; their
+inclusion/category annotations do not alter cash either. Synced balances retain
+provider ownership. Cash on hand comes from `transactions.CashOnHandByCurrency`, one
+total per currency; Net Worth reads the BRL total via `CashOnHandIn`, without a rate source. Timeline reuses `AccountBalance` for native
+balance ownership, then converts its reference-date anchor and historical flows
+through `internal/reporting`, with explicit FX coverage.
 
-Núcleo de matching combinável (`Condition`/`Operator`/`LogicOperator`/
-`Matches`), puro e sem estado — testa um `MatchCandidate` contra condições
-de campo/operador/valor com lógica AND/OR. Consumido hoje por Automação
-(matching de regras aplicadas a lançamentos) e, indiretamente, por
-Recorrências via Automação (ver seção "Não são motores" abaixo).
+Currency-bearing values use `money.Amount` (value + code) and `money.Balances`
+(one total per currency): adding different currencies is `ErrCurrencyMismatch`,
+and this layer never converts. `money.ParseCurrency` accepts only uppercase ISO
+4217 codes; a missing, malformed or unknown code (`ABC`) is an explicit error,
+never BRL. Net-worth backfill reverses only BRL movements of BRL accounts, to
+match the BRL anchor.
 
-### 3. Automação
+The matrix of each of these rules, its owning module and the test that pins it
+is in [`invariantes-financeiros.md`](invariantes-financeiros.md).
 
-**Pacote:** `internal/automation`
+### 2. Rules engine
 
-Liga o resultado de uma regra a um efeito sobre lançamentos reais: uma
-`Rule` com condições (via Motor de regras) e uma ou mais ações (`ignore`,
-`set_category`, `reconcile`), aplicável a lançamentos novos ou
-retroativamente.
+**Package:** `internal/rules`
+
+Composable, pure, stateless matching core (`Condition`/`Operator`/
+`LogicOperator`/`Matches`): tests a `MatchCandidate` against field/operator/value
+conditions with AND/OR logic. Consumed by Automation and, indirectly, by
+Recurrences via Automation (see "Not engines" below).
+
+### 3. Automation
+
+**Package:** `internal/automation`
+
+Connects a rule's outcome to an effect on real entries: a `Rule` with
+conditions (via the rules engine) and one or more actions (`ignore`,
+`set_category`, `reconcile`), applicable to new entries or retroactively.
 
 ### 4. Payables
 
-**Pacote:** `internal/payables`
+**Package:** `internal/payables`
 
-Rastreia um **alvo real**: um total que existe (dívida, recebível, ou meta)
-e vai sendo abatido/atingido por lançamentos reais vinculados, com
-settled/remaining/status sempre recomputados na leitura, nunca persistidos.
+Tracks a **real target**: a total that exists (debt, receivable, or goal) and is
+paid down/reached by linked real entries, with settled/remaining/status always
+recomputed on read, never persisted.
 
-Escopo generalizado além do estado atual do código: hoje o `Kind` só cobre
-`debt`/`receivable`; a direção é generalizar para incluir metas (ex.:
-"juntar R$10.000 até dezembro") sob o mesmo motor — mesma mecânica de
-total + vínculo real + progresso recomputado, sem dívida real por trás.
-Isso exige estender `Kind` e a lógica de elegibilidade de vínculo
-(`eligibility.go`), que hoje deriva a direção de fluxo aceita a partir do
-`Kind` debt/receivable.
+Scope generalized beyond the current code: today `Kind` covers only
+`debt`/`receivable`; the direction is to include goals (e.g. "save R$10,000 by
+December") under the same engine — same total + real link + recomputed
+progress mechanics, with no real debt behind it. That requires extending `Kind`
+and the link-eligibility logic (`eligibility.go`), which today derives the
+accepted flow direction from the debt/receivable `Kind`.
 
-Nota de nome: "Payables" deixa de descrever bem o motor quando inclui
-metas (nem toda meta é um "a pagar"). Mantido por ora; nomes alternativos
-("Plano de pagamentos", "Compromisso", "Alvo financeiro") ficam para
-avaliação num refactor futuro.
+Name note: "Payables" stops describing the engine well once goals are included.
+Kept for now; alternatives ("Payment plan", "Commitment", "Financial target")
+are for a future refactor.
 
-### 5. Cenários
+### 5. Scenarios
 
-**Pacote:** `internal/scenarios`
+**Package:** `internal/scenarios` (read boundary: `internal/projections`)
 
-A **camada hipotética**: projeções autoradas pelo usuário, nunca por fato
-sincronizado. Duas formas, mesma entidade (`Scenario`/`ScenarioTransaction`):
+The **hypothetical layer**: projections authored by the user, never synced
+facts. One entity (`Scenario`/`ScenarioTransaction`), several kinds:
 
-- **Presa a um `Payable`**: plano de parcelas de um `Payable` específico —
-  `debt_plan`/`receivable_plan` hoje, e (seguindo a generalização do motor
-  4) um futuro `goal_plan` seria só mais um `Kind` nessa mesma família, sem
-  mudança estrutural em `scenarios`.
-- **Livre** (`standalone`): cenário "e se" sem `Payable` nenhum — "viagem",
-  "novo emprego".
+- **Attached to a `Payable`**: the installment plan of a specific payable —
+  `debt_plan`/`receivable_plan` today; following the generalization of engine 4,
+  a future `goal_plan` would be just another `Kind` of this family.
+- **Free** (`standalone`): a "what if" without any `Payable` — "trip", "new job".
+- **Recurring** (`recurring`): a recurring commitment (salary, rent); see
+  "Not engines".
 
-Princípio central: **nunca contamina totais reais por padrão.** Um cenário
-nunca é "ativado" como estado persistido — ele entra num relatório apenas
-quando o chamador passa `scenario_id` explicitamente, ou é incluído numa
-seleção de simulação — a "ativação" é um parâmetro de consulta, não uma
-flag gravada.
+Core principle: **never contaminates real totals by default.** A scenario is
+never "activated" as persisted state — it enters a report only when the caller
+passes `scenario_id` explicitly or includes it in a simulation selection.
+Activation is a query parameter, not a stored flag.
 
 ### 6. Timeline
 
-**Pacote:** `internal/timeline`
+**Package:** `internal/timeline`
 
-O motor de fusão: junta lançamentos reais e o fluxo unificado de projeção de
-cenários numa única `Series`, com um `CertaintyTier` explícito por `Entry`
-(Realizado / Confirmado / Projetado / Hipotético). Toda camada de
-apresentação (os cards e o gráfico da Home) lê dessa mesma `Series` — nunca
-recalcula localmente.
+The merge engine: joins real entries and the unified scenario projection flow
+into a single `Series`, with an explicit `CertaintyTier` per `Entry`
+(Realized / Confirmed / Projected / Hypothetical). Every presentation layer
+(Home cards and chart) reads this same `Series` and never recomputes locally.
 
-Fontes hoje: Lançamentos + Cenários (**2**). A nota de direção futura que
-esta seção trazia se concretizou: recorrência deixou de ser entidade
-paralela com motor de ocorrência próprio e virou `Scenario{Kind:
-recurring}`, então `BuildSeries` fala com uma fonte de planejamento só
-(`projections.List`). O motor **não** conhece Payables diretamente — o
-vínculo com um `Payable` fica encapsulado dentro de Cenários
-(`Scenario.PayableID`/`Kind`), e é isso que decide se uma
-`ScenarioTransaction` vira tier Confirmado (presa a um Payable) ou
-Hipotético (`standalone`).
+Sources: Ledger + Scenarios (**2**). Recurrences used to be a parallel entity
+with its own occurrence engine; they are now `Scenario{Kind: recurring}`, so
+`BuildSeries` talks to a single planning source (`projections.List`). The
+engine does **not** know Payables directly — the link to a `Payable` is
+encapsulated inside Scenarios (`Scenario.PayableID`/`Kind`), which decides
+whether a `ScenarioTransaction` becomes tier Confirmed (attached to a Payable)
+or Hypothetical (`standalone`).
 
-**Nota de divergência:** o `CertaintyTier` é produzido e transportado até a
-API, mas nenhuma tela o exibe hoje — ver
-`.specs/contextos/home/reference.md`, seção Notas. O
-princípio 4 abaixo continua valendo como régua de domínio; o que falta é a
-expressão dele na interface.
+**Divergence note:** `CertaintyTier` is produced and carried to the API, but no
+screen shows it today — see `contextos/home/reference.md`, Notes. Principle 4
+below still holds as a domain yardstick; what is missing is its UI expression.
 
-## Não são motores (features/entidades que compõem os motores acima)
+## Not engines (features/entities composed from the engines above)
 
-- **Recorrências** (`internal/recurrences`): feature, não motor —
-  compromisso de fluxo de caixa conhecido de antemão (salário, aluguel),
-  reconciliado contra lançamentos reais compondo Motor de regras +
-  Automação (uma `Rule` com ação `reconcile` aponta pro compromisso; sem
-  essa regra e sem decisão manual, ele nunca reconcilia). A decisão manual
-  do usuário vence a regra — ver `.specs/contextos/recorrencias/
-  reference.md`, seção "Conciliação manual". A concepção original —
-  recorrências construídas a partir de Cenários — é o que o código faz
-  hoje: um compromisso recorrente **é** um `Scenario{Kind: recurring}` mais
-  sua linha em `scenario_recurring_schedules`, e o id do cenário é a
-  identidade que projeção, alvo de automação e decisões de ocorrência
-  compartilham. O pacote `recurrences` continua existindo como o motor de
-  ocorrência e conciliação (calendário, `Reconciler`), não mais como uma
-  entidade paralela com tabela própria.
-- **Categorização** (`internal/categories`): catálogo de categorias +
-  histórico. Muito referenciado, mas é um catálogo passivo, sem lógica de
-  match/cálculo/fusão própria — não qualifica pelo critério 2.
-- **Net worth** (`internal/networth`): snapshots/histórico de patrimônio.
-  Não qualifica como motor — não investigado a fundo, mas não atende ao
-  critério 3 (não reutilizado em múltiplos contextos hoje).
-- **Sincronização/Pluggy** (`internal/pluggy`, `internal/syncsvc`,
-  `internal/worker`): provedor de ingestão, não motor de domínio — viola o
-  critério 3 diretamente. Alimenta o motor de Lançamentos junto com o
-  lançamento manual (`internal/transactions/manual.go`), que não tem nada a
-  ver com Pluggy — a segunda via de entrada previu essa divergência antes
-  de existir, e agora existe.
+- **Recurrences** (`internal/recurrences`): a feature, not an engine — a
+  cash-flow commitment known in advance (salary, rent), reconciled against real
+  entries by composing the rules engine + Automation (a `Rule` with a
+  `reconcile` action points at the commitment; without that rule and without a
+  manual decision it never reconciles). The user's manual decision beats the
+  rule — see `contextos/recorrencias/reference.md`, "Manual reconciliation". A
+  recurring commitment **is** a `Scenario{Kind: recurring}` plus its row in
+  `scenario_recurring_schedules`, and the scenario id is the identity that
+  projection, automation target and occurrence decisions share. The
+  `recurrences` package remains the occurrence and reconciliation engine
+  (calendar, `Reconciler`), no longer a parallel entity with its own table.
+- **Categorization** (`internal/categories`): category catalog + history.
+  Widely referenced but a passive catalog with no matching/computation/merging
+  logic of its own — fails criterion 2.
+- **Net worth** (`internal/networth`): net worth snapshots/history. Not
+  investigated in depth; fails criterion 3 (not reused across contexts today).
+- **Sync/Pluggy** (`internal/pluggy`, `internal/syncsvc`, `internal/worker`):
+  an ingestion provider, not a domain engine — violates criterion 3 directly.
+  It feeds the Ledger together with manual entries
+  (`internal/transactions/manual.go`) and statement import
+  (`internal/statementimport`), neither of which has anything to do with Pluggy. Ingestion never writes user
+  decisions (cross-cutting principle 2).
 
-## Princípios transversais (valem para todo motor novo)
+## Cross-cutting principles (apply to every new engine)
 
-1. **Recomputar na leitura, nunca persistir valor derivado.**
-   `Payable.SettledAmount/RemainingAmount/Status`,
-   `ScenarioTransaction.Status` — todos calculados a partir dos dados-fonte
-   a cada leitura.
-2. **Isolar dado externo de anotação local.** Nenhuma entidade de
-   planejamento (`ScenarioTransaction`, `RecurringCommitment`) tem FK dura
-   para lançamentos reais. O vínculo, quando existe, é uma tabela de
-   ligação explícita (`payable_transaction_links` e `scenario_realizations`,
-   esta última cobrindo as três formas — `settlement`, `allocation`,
-   `reconciliation`) — nunca o lançamento real "sabe" que está sendo usado
-   para planejamento. A linha `reconciliation` é o caso-limite que mostra o
-   princípio 1 junto: o que ela grava é a *decisão* do usuário sobre uma
-   ocorrência (conciliar com X, ou desconciliar), não o estado de
-   conciliação — esse segue recomputado a cada leitura, consultando a
-   decisão antes da regra de automação.
-3. **Hipotético é opt-in explícito, nunca ambiente global.** Cenário e
-   projeção só entram num relatório quando o parâmetro pede — nunca uma
-   flag "modo simulação" ligada globalmente.
-4. **Vocabulário de certeza compartilhado.** Os 4 tiers da Timeline
-   (Realizado/Confirmado/Projetado/Hipotético) são a régua comum — qualquer
-   motor novo que produza "algo que ainda vai acontecer" deveria se
-   encaixar num desses tiers em vez de inventar um novo grau de certeza.
-5. **Um dia é um dia só.** Todo motor que raciocina em dias de calendário
-   (entries da Timeline, parcelas de cenário, vencimento de fatura) trunca
-   por `internal/dates.Day` — meia-noite UTC, a partir do relógio de parede
-   de quem chama. Cada motor tinha crescido a própria cópia; uma definição
-   compartilhada é o que faz dois motores que não podem depender um do
-   outro compararem o mesmo dia com `==`. A exceção deliberada é a
-   matemática de ciclo de fatura (`transactions/cardtotal.go`), que fecha
-   em `time.Local` de propósito — outra convenção, não uma cópia.
+1. **Recompute on read; never persist a derived value.**
+   `Payable.SettledAmount/RemainingAmount/Status` and
+   `ScenarioTransaction.Status` are computed from source data on every read.
+2. **Isolate external data from local annotation.** No planning entity
+   (`ScenarioTransaction`) has a hard FK to real entries. Where a link exists
+   it is an explicit link table (`payable_transaction_links` and
+   `scenario_realizations`, the latter covering `settlement`, `allocation` and
+   `reconciliation`) — the real entry never "knows" it is used for planning.
+   The `reconciliation` row is the edge case that shows principle 1 too: what it
+   stores is the user's *decision* about an occurrence (reconcile with X, or
+   detach), not the reconciliation state — that is still recomputed on every
+   read, consulting the decision before the automation rule.
+3. **Hypothetical is explicit opt-in, never a global ambient.** Scenarios and
+   projections enter a report only when the parameter asks — never a globally
+   enabled "simulation mode" flag.
+4. **Shared certainty vocabulary.** The Timeline's 4 tiers
+   (Realized/Confirmed/Projected/Hypothetical) are the common yardstick — any
+   new engine that produces "something that will still happen" should fit one
+   of them instead of inventing a new degree of certainty.
+5. **A day is a day.** Every engine that reasons in calendar days (timeline
+   entries, scenario installments, bill due dates) truncates with
+   `internal/dates.Day` — UTC midnight, from the caller's wall clock. Each
+   engine had grown its own copy; one shared definition is what lets two engines
+   that cannot depend on each other compare the same day with `==`. The
+   deliberate exception is bill-cycle math (`transactions/cardtotal.go`), which
+   closes in `time.Local` on purpose — a different convention, not a copy.
 
-   `internal/dates.DaysInMonth` segue a mesma regra para a outra pergunta
-   de calendário que os motores compartilham: quantos dias tem um mês, para
-   encaixar uma cadência mensal num mês mais curto (fechamento no dia 31
-   cai no dia 30 em novembro, não no dia 1º de dezembro). Não recebe
-   `*time.Location` de propósito — a contagem é aritmética de calendário,
-   não um instante, então nenhum fuso a muda; as três cópias que ela
-   substituiu discordavam só na rota, nunca no número.
+   `internal/dates.DaysInMonth` follows the same rule for the other calendar
+   question engines share: how many days a month has, to fit a monthly cadence
+   into a shorter month (closing on the 31st lands on the 30th in November, not
+   on December 1st). It takes no `*time.Location` on purpose — the count is
+   calendar arithmetic, not an instant, so no time zone changes it; the three
+   copies it replaced disagreed only on route, never on the number.
 
-## Notas abertas (para avaliação futura, não decisões)
+## Open notes (for future evaluation, not decisions)
 
-1. Nome definitivo para o motor de Lançamentos.
-2. Nome definitivo para Payables generalizado (dívida/recebível/meta).
-3. ~~Se/quando Recorrências passa a se construir a partir de Cenários —
-   impacto direto: Timeline colapsa de 3 para 2 fontes.~~ **Resolvido:**
-   feito, e a Timeline colapsou. Ver seção Timeline.
-4. Se Payables generalizado exige `Kind` fechado crescendo (`goal` como
-   mais um valor) ou um modelo de elegibilidade de vínculo mais aberto —
-   não decidido nesta conversa.
-5. Sinal da parcela de plano: `scenarios.SignedAmount` **nega** o valor de
-   um `debt_plan` em vez de forçar a direção do fluxo, e nada hoje rejeita
-   uma parcela gravada com `Amount` negativo — que então leria como
-   entrada num plano de dívida. Comportamento preservado do código
-   anterior; decidir entre validar na escrita ou forçar o sinal na leitura
-   muda totais reais, então fica registrado aqui e não resolvido de
-   passagem num refactor.
+1. Final name for the Ledger engine.
+2. Final name for generalized Payables (debt/receivable/goal).
+3. Whether generalized Payables needs a growing closed `Kind` (`goal` as one more
+   value) or a more open link-eligibility model — undecided.
+4. Installment sign: `scenarios.SignedAmount` **negates** a `debt_plan` amount
+   instead of forcing the flow direction, and nothing rejects an installment
+   stored with a negative `Amount` — which would then read as an inflow in a
+   debt plan. Behavior preserved from earlier code; choosing between validating
+   on write or forcing the sign on read changes real totals, so it is recorded
+   here and not resolved in passing during a refactor.

@@ -8,14 +8,14 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/greg0x46/julius/internal/db"
+	dbtypes "github.com/greg0x46/julius/internal/db/types"
 	"github.com/greg0x46/julius/internal/money"
 )
 
 // CashOnHandByCurrency is how much cash sits in the user's non-credit
-// accounts: the sum of the providers' reported balances, one total per
-// currency. It is the one implementation every cash-side reader goes
-// through — the timeline's t=today anchor and net worth's asset side — so
-// those two views cannot drift apart.
+// accounts: provider-reported balances plus derived manual balances (see
+// AccountBalance), one total per currency. Net worth's asset side reads it
+// through CashOnHandIn.
 //
 // The reported balance is authoritative here, and deliberately so. A
 // transaction the user marked "ignored" still moved real money through the
@@ -50,8 +50,8 @@ func CashOnHandByCurrency(ctx context.Context, q Querier, accountIDs []string) (
 	// The OR must stay parenthesized: without it, `... IS NULL OR ... AND id
 	// IN (...)` binds as `... IS NULL OR (... AND id IN (...))`, letting
 	// every untyped account escape the accountIDs filter.
-	query := `SELECT id, balance, currency_code FROM financial_accounts
-	          WHERE balance IS NOT NULL AND (account_type IS NULL OR account_type != 'CREDIT')`
+	query := `SELECT id, currency_code FROM financial_accounts
+	          WHERE (balance IS NOT NULL OR origin = 'manual') AND (account_type IS NULL OR account_type != 'CREDIT')`
 	in, args := db.InClause(accountIDs)
 	if in != "" {
 		query += ` AND id IN (` + in + `)`
@@ -62,34 +62,47 @@ func CashOnHandByCurrency(ctx context.Context, q Querier, accountIDs []string) (
 	}
 	defer rows.Close()
 
-	totals := money.Balances{}
+	type account struct {
+		id       string
+		currency sql.NullString
+	}
+	var accounts []account
 	for rows.Next() {
-		// A plain string, not sql.NullString: the query already filters
-		// `balance IS NOT NULL`, so a NULL here would be a schema surprise
-		// worth surfacing as a scan error rather than silently summing "".
-		var id, balanceRaw string
-		var currencyRaw sql.NullString
-		if err := rows.Scan(&id, &balanceRaw, &currencyRaw); err != nil {
+		var a account
+		if err := rows.Scan(dbtypes.ID(&a.id), &a.currency); err != nil {
 			return nil, err
 		}
-		value, err := decimal.NewFromString(balanceRaw)
+		accounts = append(accounts, a)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	rows.Close()
+
+	totals := money.Balances{}
+	for _, a := range accounts {
+		raw, err := AccountBalance(ctx, q, a.id)
 		if err != nil {
-			return nil, fmt.Errorf("parse account balance %q: %w", balanceRaw, err)
+			return nil, err
+		}
+		if raw == nil {
+			continue
+		}
+		value, err := decimal.NewFromString(*raw)
+		if err != nil {
+			return nil, fmt.Errorf("parse account balance %q: %w", *raw, err)
 		}
 		var code *string
-		if currencyRaw.Valid {
-			code = &currencyRaw.String
+		if a.currency.Valid {
+			code = &a.currency.String
 		}
 		currency, err := money.ParseCurrency(code)
 		if err != nil {
-			return nil, fmt.Errorf("account %s: %w", id, err)
+			return nil, fmt.Errorf("account %s: %w", a.id, err)
 		}
 		if err := totals.Add(money.Amount{Value: value, Currency: currency}); err != nil {
 			return nil, err
 		}
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
 	}
 	return totals, nil
 }

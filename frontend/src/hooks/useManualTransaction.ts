@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useRef } from "react";
 
 import { createManualTransaction, deleteManualTransaction, updateManualTransaction } from "../api/transactions";
 import type { ManualTransactionWrite } from "../api/contracts";
@@ -13,10 +14,20 @@ import { invalidateAfterTransactionChange } from "../api/queryKeys";
 export function useManualTransaction() {
   const queryClient = useQueryClient();
   const invalidateAll = () => invalidateAfterTransactionChange(queryClient);
+  const pendingCreate = useRef<{ payload: string; key: string } | null>(null);
 
   const createMutation = useMutation({
-    mutationFn: (write: ManualTransactionWrite) => createManualTransaction(write),
-    onSuccess: invalidateAll,
+    mutationFn: (write: ManualTransactionWrite) => {
+      const payload = JSON.stringify(write);
+      if (pendingCreate.current?.payload !== payload) {
+        pendingCreate.current = { payload, key: crypto.randomUUID() };
+      }
+      return createManualTransaction(write, pendingCreate.current.key);
+    },
+    onSuccess: () => {
+      pendingCreate.current = null;
+      invalidateAll();
+    },
   });
 
   const updateMutation = useMutation({

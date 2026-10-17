@@ -3,7 +3,7 @@ import { Drawer, Input, Select, Spin, Tag, Typography } from "antd";
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 
 import { calendarParts, formatCompactDay } from "../../presentation/dates";
-import { formatBRL, formatSignedBRL } from "../../presentation/money";
+import { formatMoney, formatSignedBRL } from "../../presentation/money";
 import { readableName } from "../../presentation/readableName";
 import { useCompactScreen } from "./useCompactScreen";
 
@@ -18,6 +18,7 @@ export type PickerTransaction = {
   description: string;
   /** Unsigned decimal string; `direction` decides the sign shown. */
   amount: string;
+  currency_code?: string;
   direction: "inflow" | "outflow" | null;
   /** "YYYY-MM-DD" or an instant; null when unknown. */
   date: string | null;
@@ -77,7 +78,7 @@ function haystack(transaction: PickerTransaction): string {
     transaction.tag ?? "",
     ...(transaction.keywords ?? []),
   ];
-  const formatted = formatBRL(transaction.amount).replace(/^-?R\$\s/, "");
+  const formatted = formatMoney(transaction.amount, transaction.currency_code ?? "BRL").replace(/^-?R\$\s/, "");
   parts.push(formatted, formatted.replace(/\./g, ""), formatted.replace(/\./g, "").replace(",", "."), transaction.amount);
   if (transaction.date) {
     parts.push(formatCompactDay(transaction.date));
@@ -100,7 +101,7 @@ function matches(text: string, query: string): boolean {
 function Amount({ transaction }: { transaction: PickerTransaction }) {
   return (
     <span className={`txn-picker-amount is-${transaction.direction ?? "neutral"}`}>
-      {formatSignedBRL(transaction.amount, transaction.direction ?? "unclassified")}
+      {(transaction.currency_code && transaction.currency_code !== "BRL" ? `${transaction.direction === "outflow" ? "-" : transaction.direction === "inflow" ? "+" : ""}${formatMoney(transaction.amount, transaction.currency_code)}` : formatSignedBRL(transaction.amount, transaction.direction ?? "unclassified"))}
     </span>
   );
 }

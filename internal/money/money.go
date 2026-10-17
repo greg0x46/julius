@@ -114,14 +114,17 @@ const (
 	// see the ordering note there and MovedCash below.
 	ReasonTransferCategory   EligibilityReason = "transfer_category"
 	ReasonInvestmentTransfer EligibilityReason = "investment_transfer"
+	ReasonLinkedTransfer     EligibilityReason = "linked_transfer"
 )
 
 var eligibleProviderStatuses = map[string]bool{"POSTED": true, "PENDING": true}
 
-// Eligibility mirrors rules.eligibility: the checks run in a fixed order (an
-// ignored transaction is reported as "ignored" even if it would also fail a
-// later check), because only the first failing reason is ever shown to the
-// user.
+// Eligibility accepts POSTED and PENDING: an unsettled card purchase can
+// already be a valid expense. Status alone neither assigns a report period
+// nor proves bank cash moved; consumers apply account and date rules.
+//
+// Checks run in a fixed order: only the first failing reason is reported.
+// An ignored transaction reports "ignored" even if a later check also fails.
 //
 // Two things keep a transaction out of totals, and they are not the same
 // claim. An "ignored" inclusion decision means "this shouldn't be here at
@@ -133,11 +136,10 @@ var eligibleProviderStatuses = map[string]bool{"POSTED": true, "PENDING": true}
 // exactly "ignored" (see totals_eligibility in frontend/src/api/contracts.ts).
 //
 // The transfer check is deliberately *last*, after every check that asks
-// whether money moved at all. MovedCash reads ReasonTransferCategory as "the
-// money really did leave the account", so that reason must never be reached
-// by a transaction the later checks would have rejected: a transfer the
-// provider has not settled, or one whose movement type cannot be classified
-// into a direction, moved nothing yet, and reporting it as cash movement made
+// whether the entry is otherwise eligible. MovedCash reads
+// ReasonTransferCategory as a cash-flow candidate, so that reason must never
+// be reached by an unsupported status (such as PROCESSING) or an
+// unclassified movement. Reporting those as cash movement made
 // every day before it read wrong in the timeline and in net worth (a
 // PROCESSING transfer was reversed out of the anchor; an unclassified one was
 // reversed out with the sign flipped). Ordering it last makes
@@ -187,11 +189,12 @@ func Eligibility(
 }
 
 // MovedCash reports whether a transaction Eligibility excluded still moved
-// real money in or out of the account it sits on.
+// money in a cash-flow calculation. It is not proof of bank settlement;
+// PENDING is supported, and consumers still apply account and date rules.
 //
-// Only the transfer category does. Every other reason describes a
-// transaction that never moved cash in the first place (no amount, a zero
-// amount, an unclassified movement, a status the provider has not settled)
+// Transfer exclusions (category or investment principal) retain cash effect.
+// Other reasons describe an unusable movement (no amount, a zero
+// amount, an unclassified movement, an unsupported provider status)
 // or one the user declared should not be here at all (ignored: a reversal, a
 // duplicate — a row that is not a distinct movement of the account's reported
 // balance either, which is why dropping it does not contradict
@@ -210,7 +213,7 @@ func Eligibility(
 // callers in networth/backfill.go and transactions/cardtotal.go sidestep by
 // passing an empty categoryKind.
 func MovedCash(reason *EligibilityReason) bool {
-	return reason != nil && (*reason == ReasonTransferCategory || *reason == ReasonInvestmentTransfer)
+	return reason != nil && (*reason == ReasonTransferCategory || *reason == ReasonInvestmentTransfer || *reason == ReasonLinkedTransfer)
 }
 
 // CanonicalDecimal renders value the way the reference API does: fixed-point

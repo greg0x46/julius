@@ -15,7 +15,8 @@ as an option. For online access, the host must provide HTTPS.
 
 ## Domain documentation and contributing
 
-Contributions, new features and refactors are welcome. Before touching an area
+Contributions, new features and refactors are welcome. Coding agents: start at
+[`AGENTS.md`](AGENTS.md). Before touching an area
 of the domain, see [`.specs/README.md`](.specs/README.md) — the navigation hub
 of the `.specs/` folder, with the domain architecture
 (`motores-de-dominio.md`), the current state of each feature
@@ -24,6 +25,11 @@ decisions. When you finish a new feature or change an existing one, update the
 matching context's `reference.md` (and the "Features" section below, if it is
 relevant enough) in the same PR — stale specs hinder the next contributor as
 much as stale code does.
+
+Open pull requests against the **`stage`** branch (not `main`) and fill in the
+pull request template, including the *How to validate in dev* steps. See
+[Publish and install a version](#publish-and-install-a-version) for how changes
+reach a release.
 
 ## Why a single binary
 
@@ -45,19 +51,48 @@ authentication configuration that does not depend on the host:
 
 ## Features
 
+- **Exact money boundaries** — amounts stay decimal strings through entry,
+  editing, calculation and HTTP. BRL display rounds to cents with ties away
+  from zero; saved fractional cents and large values retain their precision.
+  See the [monetary precision policy](.specs/precisao-monetaria.md).
+
+- **Build identifier** — every signed-in page has a small footer showing the
+  release tag, `stage` or `dev`, with a link to the build commit when available.
+- **Typed database baseline** — a one-shot legacy converter preserves existing
+  data; both dialects share one migration sequence with native exact Postgres
+  types. Final legacy Postgres schemas convert at startup; legacy SQLite
+  databases need the separate converter. See
+  [Database schema generations](#database-schema-generations).
 - **Open Banking sync** — a background worker polls Pluggy periodically for
   new transactions and account data, recorded as auditable sync runs (history,
   metrics, failures) instead of a black-box import.
 - **Statement import** — upload a Flash CSV, review the per-row preview and
   import it into a file-based account. Re-uploads and overlapping periods are
   recognized, with an import history and warnings for inconsistent data.
+- **Transfers between own accounts** — link existing synced/manual outflows and
+  inflows, including different currencies, or create both movements together
+  in manual accounts. Native amounts and balances stay intact; principal stays
+  outside income/expense reports. Details show the effective execution rate
+  and an optional separate, explicitly recorded fee. No fee is inferred from
+  an FX spread. Unlinking keeps the movements and their prior reporting decisions.
+- **Manual bank accounts** — create standalone accounts in an ISO 4217 currency
+  (BRL by default), including USD/EUR, without a bank connection. Native balance
+  is opening balance + posted movements + explicit adjustments. Edit, archive
+  and reactivate accounts in **Contas e cartões**; currency and opening balance
+  lock after movements. Foreign amounts stay in their original currency and
+  remain excluded from Net Worth BRL aggregates without rates.
 - **Transactions** — searchable/filterable transaction list, manual
   inclusion/exclusion (e.g. ignoring a chargeback or a duplicate) and
   categorization. Entries can also be created by hand in an existing account —
   same categorization and automation rules as a synced entry, with editing and
   deletion limited to these manual entries.
+- **Multi-currency reporting** — transaction summaries, Home period totals,
+  categories and Timeline consolidate eligible flows to BRL using historical
+  exchange rates, retaining original values and per-currency drill-down.
+  Missing rates show explicit incomplete/unavailable states.
 - **Automation rules** — condition-based rules that categorize new
   transactions automatically and can be applied retroactively to existing ones.
+  A single rule can both categorize and reconcile a recurring commitment.
 - **Payables (debts and receivables)** — track a real total (debt, installment
   purchase, receivable) and link the transactions that settle it, with
   eligibility rules for which transactions can be linked.
@@ -65,7 +100,8 @@ authentication configuration that does not depend on the host:
   history.
 - **Recurrences** — register cash-flow commitments known in advance (salary,
   rent, subscriptions), reconciled against the real transactions that settle
-  them via an automation rule.
+  them via an automation rule, even when the transaction is uncategorized or
+  has a different category.
 - **Scenarios** — user-authored hypothetical projections ("what if I travel",
   "what if I change jobs"), or the installment plan of a debt/receivable —
   they never affect real totals unless explicitly included in a query.
@@ -76,9 +112,10 @@ authentication configuration that does not depend on the host:
   time.
 - **Investments** — integrated and manual investment accounts, goal-based
   portfolios, per-asset operations, manual valuations and optional automatic
-  quotes (B3 and crypto). Contributions and withdrawals reconciled with the
+  quotes (B3 and crypto), enabled by default with a persistent daily schedule. Contributions and withdrawals reconciled with the
   statement show up apart from spending, keeping their cash effect and avoiding
   double counting in net worth.
+  A curated starter asset catalog is populated automatically on startup.
 - **Browser authentication** — email and password login for the owner account,
   persisted sessions, logout and password change. No public sign-up.
 - **Secrets encrypted at rest** — Pluggy credentials protected with
@@ -101,7 +138,9 @@ the history with no period limit, without reclassifying it automatically.
 
 Integrated accounts keep the balances reported by the institution. Use
 **Vincular caixa da corretora** (link brokerage cash) when the imported
-financial account already represents the same cash. Goals group positions from
+financial account already represents the same cash. Manual holdings (such as
+crypto that Open Finance does not expose) can be added to an integrated account,
+next to the institution's positions, and are never overwritten by a sync. Goals group positions from
 any institution without changing their value. Manual quotes are dated;
 corrections to operations recompute subsequent costs and are rejected if they
 would produce negative cash or a negative position.
@@ -141,27 +180,86 @@ Contracts and limits are in the
 ./build.sh
 ```
 
+The frontend bakes build metadata into the binary. Release CI passes the selected
+release tag as `VITE_APP_VERSION` and the exact build SHA as `VITE_APP_COMMIT`;
+stage CI passes `stage` and its SHA. Local builds on the `stage` branch default
+to `stage`; other local builds and the dev server default to `dev`, using Git
+HEAD when available. Source archives without Git still show `dev` without a
+commit link. These optional build-time overrides also work with `./build.sh`;
+the frontend package version is never used as the application version.
+
 Before starting, configure the encryption key and create or migrate the
 account. The server refuses to start without prepared authentication or with
 an invalid key.
 
 ### Publish and install a version
 
-Every push to `main` that passes CI publishes a GitHub release with the
-`julius-linux-amd64` binary, `SHA256SUMS` and the provenance attestation
-(`julius-linux-amd64.sigstore.json`), as long as there is something to
-release. The version follows SemVer from the
+Changes flow `agent/*` or feature branch → **`stage`** → release PR → **`main`**
+→ published release → deployment:
+
+1. A pull request into `stage` is squashed into one Conventional Commit whose
+   subject ends in `(#PR)`. CI runs on every push and pull request for `stage`
+   and `main`, but `stage` never publishes anything. The `stage` build is what
+   the development instance runs, so each change is validated there by hand,
+   with the *How to validate in dev* steps of its pull request.
+2. A release candidate is cut automatically, not by hand. When Backend (Go) and
+   Frontend (Node) have passed on the exact `stage` head and there is something
+   to release, `release/vX.Y.Z` is cut from that commit. Its only extra commit
+   adds the `vX.Y.Z` section to [`CHANGELOG.md`](CHANGELOG.md)
+   (`scripts/update-changelog.sh`; the only place the changelog is written), and
+   a pull request `chore(release): vX.Y.Z` into `main` lists the original pull
+   requests and `Closes #N` for their issues. The candidate is frozen: pull
+   requests squashed into `stage` afterwards wait for the next release. If
+   `main` moves first, the candidate is closed, its branch is kept as
+   `stale/release-vX.Y.Z-<sha7>` and a new one is cut.
+3. Only the owner merges that pull request, with a **merge commit**, never
+   squash or rebase, so the individual commits stay reachable. The ruleset on
+   `main` allows no other method; it also requires a pull request, the
+   up-to-date Backend (Go) and Frontend (Node) checks and resolved
+   conversations, and forbids force-push and deletion. Merging closes the
+   issues. GitHub deletes `release/vX.Y.Z` on merge; the tag is the lasting
+   reference.
+4. A push to `main` that passes CI publishes a GitHub release with the
+   `julius-linux-amd64` binary, `SHA256SUMS` and the provenance attestation
+   (`julius-linux-amd64.sigstore.json`), as long as there is something to
+   release. The release notes are the committed `CHANGELOG.md` section of that
+   version; if the section is missing or is not the newest, the release job
+   fails instead of publishing. **Published is not deployed:** installing the
+   release is a separate step of your environment, and a release only counts
+   as deployed when that step reports it.
+5. Once the tag and the GitHub release exist, `main` is merged back into
+   `stage` (`chore(release): merge main into stage after vX.Y.Z`, a plain push,
+   no rebase or force-push), keeping the pull requests squashed into `stage`
+   in the meantime. Until `main` is inside `stage` no new candidate is cut.
+
+The version follows SemVer from the
 [Conventional Commits](https://www.conventionalcommits.org/) since the last
 tag: `feat` bumps the minor, `fix`/`perf` bump the patch, and a breaking change
 (`feat!:` or a `BREAKING CHANGE:` footer) bumps the major (the minor while on
 `0.x`). Other types (`docs`, `chore`, `refactor`…) and non-conventional commits
-do not create a release. To see locally what the next version would be, run
-`scripts/next-version.sh` (or `--notes` for the release notes) after
-`git fetch --tags`.
+do not create a release. A commit and the revert of that same commit cancel out;
+a revert that cannot be matched is listed under "Needs review" in the notes.
+To see locally what the next version and notes would be, run
+`scripts/next-version.sh` (or `--notes`) after `git fetch --tags`.
+`CHANGELOG.md` is written only when a release is prepared and starts after
+v0.3.0; the earlier releases are on the GitHub releases page.
 
 To install, download the binary from the release, verify the checksum and run
 it with the configuration described in the next sections; how to start it and
 keep it running (system service, container, etc.) depends on your environment.
+
+The scripts have shell tests that run against throwaway Git histories:
+`scripts/tests/run.sh`.
+
+Dependabot version updates open against `stage`. Security updates still open
+against `main`; see "Dependabot" in [`AGENTS.md`](AGENTS.md) for how they are
+handled.
+
+**Database.** Every change merged into `stage` is migrated on the persistent
+development database before it reaches production, and nothing restores that
+database automatically. Migrations must therefore be forward-only (never edit
+one that is already merged; add a new one) and safe on existing data. For the numbering rules see
+[`internal/db/migrations/README.md`](internal/db/migrations/README.md).
 
 ### Authentication and encryption key
 
@@ -250,6 +348,63 @@ is stored in the database; if it does not exist, protected mode is used, and if
 it cannot be read the API becomes unavailable — it never opens because of a
 configuration failure.
 
+### Database schema generations
+
+This binary initializes a new schema generation on empty databases. Postgres
+stores money as exact `NUMERIC`, instants as `TIMESTAMPTZ`, calendar days as
+`DATE`, flags as `BOOLEAN`, and UUID identities as `UUID`; SQLite retains exact
+text money and UTC timestamps. Both dialects use the same migration numbers.
+
+**Existing Postgres installations:** startup automatically converts the final
+legacy schema (version 46) into generation 1 in the same database. Stop old
+application instances before upgrading and retain an external database backup.
+The database role needs permission to create schemas. A transaction locks the
+legacy tables, builds the native baseline, copies and verifies every converted
+row, then activates it without changing the DSN. The original tables, migration
+history and append-only trigger function remain in a `julius_legacy_<id>` schema;
+the startup log identifies it. Concurrent startups serialize, and subsequent
+starts skip conversion. Any invalid value, schema mismatch or constraint failure
+rolls back the entire operation and prevents startup with the original intact.
+Older Postgres schemas must first reach version 46 using the legacy binary.
+The backup schema is retained indefinitely; do not delete it before acceptance.
+
+**Existing SQLite installations:** databases from the old migration sequence are
+rejected at startup, without applying migrations. Use the one-shot
+`cmd/migrate-legacy` tool with a separate target; it replaces
+`cmd/migrate-to-postgres`. Keep the old binary, database and external master key.
+Do not change the old database's migration version to bypass the guard.
+
+1. Stop Julius and make a consistent SQLite backup. The source must have reached
+   the final legacy schema (SQLite migration `00047_manual_bank_accounts`); if
+   necessary, upgrade it with the previous binary before taking the backup.
+2. Choose a new SQLite path or a fresh Postgres database. Keep both applications
+   stopped throughout conversion. The tool initializes the target schema and
+   refuses existing application data, except untouched baseline category seeds.
+3. Run a dry-run against the backup:
+
+   ```sh
+   go run ./cmd/migrate-legacy -sqlite legacy-backup.db -target converted.db -dry-run
+   # For Postgres, replace converted.db with a postgres:// DSN.
+   ```
+
+   It reports all malformed rows and constraint errors together, with table,
+   row identity and value. Require `zero errors` and matching row counts,
+   per-account balances and movement sums. Imported data and replaced category
+   seeds roll back; the new target schema remains initialized.
+4. Repeat the same command without `-dry-run`. Require `copy complete; counts
+   and balances match` before starting Julius with the target database and the
+   same master key. Check accounts, transactions, decisions and sign-in before
+   retiring the previous installation.
+
+The source opens read-only without applying migrations. IDs, encrypted settings,
+raw payloads, sessions and user decisions carry over; auth timestamps and calendar
+fields follow the documented [conversion contract](.specs/reorganizacao-schema/inventario.md).
+Postgres rejects legacy IDs that cannot fit its UUID columns; SQLite preserves
+opaque legacy IDs. No rounding or guessed values are used. An interrupted or
+failed real copy can leave earlier tables committed: discard only the separate
+target and retry with a fresh one. Keep the source untouched as the rollback
+backup. This tool is temporary and should be removed after cutover.
+
 ### Running with Postgres
 
 SQLite remains the default for local use. To run against a shared Postgres —
@@ -282,9 +437,15 @@ The Postgres connection pool can be tuned through environment variables
 An invalid value makes startup (and any `-db` command) fail with an error
 naming the variable, instead of silently falling back to the default.
 
-The background sync worker assumes only one instance runs it at a time — it
-does not currently coordinate claiming sync runs across multiple
-processes/instances.
+Several instances can share one Postgres database: each sync run is claimed
+atomically by exactly one instance, which heartbeats it while running. Only
+that owner can persist sync data or finish the run. A separate recovery loop
+continues while other runs execute. A run whose owner stops heartbeating for 90
+seconds is marked failed (`interrupted`) and not retried; the next scheduled
+or manual sync starts a new one. After a crash, an interrupted run is
+therefore recovered up to ~90 seconds after restart rather than immediately.
+SQLite supports a single process only; do not share a SQLite file between
+instances.
 
 #### Documenting the schema with SchemaSpy
 
@@ -322,28 +483,53 @@ Investment assets with automatic quotes enabled have the price of their manual
 positions fetched automatically and stored in the asset's price series. The
 position value is computed on every read (quantity × latest price); a manual
 valuation dated on or after the latest price takes precedence over it. Fetching
-is opt-in: set `JULIUS_QUOTES_SCHEDULE` (same format as the sync schedule)
-to run once a day and when the process starts. Providers are tried in order,
+is enabled by default at 19:00 America/Sao_Paulo. The backend persists
+`enabled`, `time` and `timezone` and applies changes without a restart.
+Startup and re-enabling fetch missing prices and history; disabling also stops
+backfill. The active spot batch may finish; disabling prevents the following
+history stage and later work cycles. Providers are tried in order,
 with automatic fallback; `JULIUS_QUOTES_PROVIDERS` sets the order
 (comma-separated; an omitted provider is disabled; an unknown name prevents
 startup):
 
 ```sh
-export JULIUS_QUOTES_SCHEDULE="19:00 America/Sao_Paulo"
+export JULIUS_QUOTES_SCHEDULE="19:00 America/Sao_Paulo" # first initialization only
 export JULIUS_QUOTES_PROVIDERS="yahoo,brapi,coingecko" # default
 ```
+
+An authenticated owner can read `GET /api/settings/quotes` and partially update
+`PUT /api/settings/quotes`, with the session cookie, configured `Origin` and
+`X-Julius-Request: 1`. Example JSON to change the schedule:
+
+```json
+{"enabled": true, "time": "20:30", "timezone": "America/Sao_Paulo"}
+```
+
+Send `{"enabled": false}` to disable it. Omitted fields are preserved;
+`brapi_token` stays write-only, and an explicit empty string clears it.
+`time` must be strict HH:MM and `timezone` must be loadable. Saved settings
+survive restarts and take precedence over `JULIUS_QUOTES_SCHEDULE`, which
+initializes only an absent configuration (HH:MM alone keeps process-local time).
+An unset or empty environment uses the enabled default. API changes wake the
+scheduler immediately; other persisted changes are checked every minute.
 
 By default Yahoo Finance is the primary source for both markets; brapi is the
 B3 fallback and CoinGecko the crypto one. The optional brapi token is
 configured in the UI. Details in the
-[investments reference](.specs/contextos/investimentos/reference.md#cotação-automática).
+[investments reference](.specs/contextos/investimentos/reference.md#automatic-quotes).
 
 Assets are registered with a financial class (fixed income, variable income,
 multi-market, currency, crypto assets or other) and an instrument type. The
 quote market is derived from the type; fixed-income and crypto ETFs can use B3
 prices.
 
-To load an optional starter catalog with 27 well-known assets:
+On every application startup, after database migrations, Julius inserts missing
+entries from a curated starter catalog of 27 well-known assets, including BTC,
+ETH, SOL, USDC and B3 instruments, and logs the number inserted. Existing assets,
+classification and quotation preferences are preserved. No positions, balances,
+operations, transactions or price requests are created by seeding.
+
+The manual command remains available:
 
 ```sh
 go run ./cmd/julius seed investment-assets
@@ -405,6 +591,13 @@ The Postgres integration tests are skipped unless
 `JULIUS_TEST_POSTGRES_DSN` points at a disposable database. They reset its
 `public` schema, so run them with `go test -p 1 ./...`, as CI does.
 
+The release scripts (`scripts/next-version.sh`, `update-changelog.sh`,
+`changelog-section.sh`) and the CI/Dependabot configuration are covered by
+`scripts/tests/run.sh`, which CI also runs.
+
+The frontend suite runs as two Vitest projects (jsdom and plain Node); see
+[`frontend/TESTING.md`](frontend/TESTING.md) for the split and worker count.
+
 `npm run test:e2e` (Playwright) is declared in `package.json` but has no
 `playwright.config.*` or tests yet — scaffolded, not implemented.
 
@@ -429,30 +622,6 @@ during setup.
 
 ## Project structure
 
-```
-cmd/julius/     entry point: wires the DB, HTTP server and background worker
-internal/
-  db/                SQLite/Postgres connection and migrations
-  pluggy/             Pluggy API client and data mapping
-  syncsvc/             sync run orchestration
-  worker/              background sync polling loop
-  money/                shared domain primitives (classification, effective amount)
-  transactions/           transaction queries and inclusion state
-  categories/              category catalog and categorization
-  rules/                     composable matching core (conditions/operators)
-  automation/                 automation rule engine, built on internal/rules
-  recurrences/                   recurring commitments, reconciled via automation
-  payables/                        debts/receivables and links to the transactions that settle them
-  scenarios/                         hypothetical projections and payment plans
-  timeline/                            merges entries + recurrences + scenarios into a single series
-  networth/                              net worth snapshots
-  auth/                                    owner account, passwords and browser sessions
-  settings/                                encrypted settings and migration of legacy secrets
-  httpapi/                                   HTTP handlers and routing
-  webui/                                       embeds the built frontend
-frontend/            React/TypeScript SPA (Vite)
-```
-
-For what each one does today (routes, pages, implementation status), see
-[`.specs/README.md`](.specs/README.md) and each context's `reference.md` under
-`.specs/contextos/`.
+Package map, commands and conventions: [`AGENTS.md`](AGENTS.md). What each area
+does today (routes, pages, implementation status): [`.specs/README.md`](.specs/README.md)
+and each context's `reference.md` under `.specs/contextos/`.

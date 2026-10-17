@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/greg0x46/julius/internal/datasources"
-	"github.com/greg0x46/julius/internal/db"
+	dbtypes "github.com/greg0x46/julius/internal/db/types"
 	"github.com/greg0x46/julius/internal/syncsvc"
 )
 
@@ -64,16 +64,16 @@ func scanSyncRun(row syncRunRowScanner) (syncRunDTO, error) {
 		startedAtRaw  string
 		finishedAtRaw sql.NullString
 	)
-	if err := row.Scan(&d.ID, &d.Status, &d.SourceID, &d.SourceName, &startedAtRaw, &finishedAtRaw,
+	if err := row.Scan(dbtypes.ID(&d.ID), &d.Status, dbtypes.ID(&d.SourceID), &d.SourceName, dbtypes.Time(&startedAtRaw), dbtypes.Time(&finishedAtRaw),
 		&d.AccountsProcessed, &d.TransactionsInserted, &d.TransactionsUpdated); err != nil {
 		return syncRunDTO{}, err
 	}
-	started, err := db.ParseTime(startedAtRaw)
+	started, err := dbtypes.ParseTime(startedAtRaw)
 	if err != nil {
 		return syncRunDTO{}, err
 	}
 	d.StartedAt = started
-	if d.FinishedAt, err = db.ParseNullTime(finishedAtRaw); err != nil {
+	if d.FinishedAt, err = dbtypes.ParseNullTime(finishedAtRaw); err != nil {
 		return syncRunDTO{}, err
 	}
 	d.ResultMessage = resultMessages[d.Status]
@@ -144,7 +144,7 @@ func handleCreateSyncRun(conn *sql.DB) http.HandlerFunc {
 				if !active.Valid {
 					_ = conn.QueryRowContext(r.Context(),
 						`SELECT id FROM sync_runs WHERE source_id = ? AND status = 'in_progress'`, target.ID,
-					).Scan(&active)
+					).Scan(dbtypes.ID(&active))
 				}
 				busy++
 				continue
@@ -319,10 +319,10 @@ func handleGetSyncRun(conn *sql.DB) http.HandlerFunc {
 		for rows.Next() {
 			var f syncFailureDTO
 			var occurredAtRaw string
-			if err := rows.Scan(&f.Stage, &f.Code, &f.Message, &f.ExternalAccountID, &f.ExternalTransactionID, &occurredAtRaw); err != nil {
+			if err := rows.Scan(&f.Stage, &f.Code, &f.Message, dbtypes.ID(&f.ExternalAccountID), dbtypes.ID(&f.ExternalTransactionID), dbtypes.Time(&occurredAtRaw)); err != nil {
 				continue
 			}
-			if f.OccurredAt, err = db.ParseTime(occurredAtRaw); err != nil {
+			if f.OccurredAt, err = dbtypes.ParseTime(occurredAtRaw); err != nil {
 				continue
 			}
 			failures = append(failures, f)

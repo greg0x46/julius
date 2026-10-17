@@ -99,3 +99,41 @@ func TestResolveOccurrencePicksEarliestMatchingCandidate(t *testing.T) {
 		t.Errorf("expected the earliest matching candidate, got %s", matched.ID)
 	}
 }
+
+func TestResolveOccurrenceMatchesSharedTextConditions(t *testing.T) {
+	description, name, institution := "ALUGUEL TESTE", "Conta corrente", "Banco teste"
+	item := itemAt(t, "2026-01-29", "-1500.00")
+	item.Description = &description
+	item.Account.Name, item.Account.Institution = &name, &institution
+	item.Card = &transactions.CardInfo{Number: "**** 1234"}
+	conditions := append(baseConditions(),
+		rules.Condition{Field: rules.FieldDescription, Operator: rules.OperatorContains, Value: "aluguel"},
+		rules.Condition{Field: rules.FieldAccount, Operator: rules.OperatorEquals, Value: "conta corrente"},
+		rules.Condition{Field: rules.FieldAccount, Operator: rules.OperatorContains, Value: "banco"},
+		rules.Condition{Field: rules.FieldCard, Operator: rules.OperatorContains, Value: "1234"},
+	)
+	if _, ok := recurrences.ResolveOccurrence(conditions, rules.LogicAnd, []transactions.Item{item}); !ok {
+		t.Fatal("expected all money, date and text conditions to match")
+	}
+	for _, field := range []string{"description", "account name", "institution", "card", "missing card"} {
+		t.Run(field, func(t *testing.T) {
+			candidate := item
+			other := "other"
+			switch field {
+			case "description":
+				candidate.Description = &other
+			case "account name":
+				candidate.Account.Name = &other
+			case "institution":
+				candidate.Account.Institution = &other
+			case "card":
+				candidate.Card = &transactions.CardInfo{Number: "5678"}
+			case "missing card":
+				candidate.Card = nil
+			}
+			if _, ok := recurrences.ResolveOccurrence(conditions, rules.LogicAnd, []transactions.Item{candidate}); ok {
+				t.Fatal("expected no match with an unsatisfied text condition")
+			}
+		})
+	}
+}

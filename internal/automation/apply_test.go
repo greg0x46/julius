@@ -13,6 +13,7 @@ import (
 	"github.com/greg0x46/julius/internal/categories"
 	"github.com/greg0x46/julius/internal/db"
 	"github.com/greg0x46/julius/internal/money"
+	"github.com/greg0x46/julius/internal/recurrences"
 	"github.com/greg0x46/julius/internal/transactions"
 )
 
@@ -505,5 +506,110 @@ func TestNewTransactionHookMatchesSyncNewTransactionHookSignature(t *testing.T) 
 	}
 	if !hookCalled {
 		t.Error("onIgnored hook should have been invoked when a rule ignores the transaction")
+	}
+}
+
+func TestCombinedCategoryAndReconcileApplication(t *testing.T) {
+	for _, mode := range []string{"new", "resynced", "retroactive"} {
+		t.Run(mode, func(t *testing.T) {
+			f := newFixture(t)
+			ctx := context.Background()
+			commitment := newCommitment(t, f.conn)
+			account := f.addAccount("Conta", "Banco")
+			f.exec(`UPDATE financial_accounts SET currency_code = 'BRL' WHERE id = ?`, account)
+			matching := f.addTransaction(account, "Aluguel", `{"cardNumber":"1234"}`)
+			manual := f.addTransaction(account, "Aluguel manual", `{"cardNumber":"1234"}`)
+			outside := f.addTransaction(account, "Aluguel outro dia", `{"cardNumber":"1234"}`)
+			wrongAmount := f.addTransaction(account, "Aluguel outro valor", `{"cardNumber":"1234"}`)
+			wrongDescription := f.addTransaction(account, "Supermercado", `{"cardNumber":"1234"}`)
+			for _, id := range []string{matching, manual, outside, wrongAmount, wrongDescription} {
+				f.exec(`UPDATE financial_transactions SET amount = '-300', currency_code = 'USD', amount_in_account_currency = '-1500', occurred_at = ? WHERE id = ?`, db.FormatTime(time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC)), id)
+			}
+			f.exec(`UPDATE financial_transactions SET occurred_at = ? WHERE id = ?`, db.FormatTime(time.Date(2026, 1, 20, 0, 0, 0, 0, time.UTC)), outside)
+			// Strictly earlier than the manual twin so the reconciler's earliest-wins pick is not a tie.
+			f.exec(`UPDATE financial_transactions SET occurred_at = ? WHERE id = ?`, db.FormatTime(time.Date(2026, 1, 4, 0, 0, 0, 0, time.UTC)), matching)
+			f.exec(`UPDATE financial_transactions SET amount_in_account_currency = '-2500' WHERE id = ?`, wrongAmount)
+			manualCategory, err := categories.Create(ctx, f.conn, "Manual", money.Expense, "icon", "#fff")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := categories.AssignManual(ctx, f.conn, manual, manualCategory.ID); err != nil {
+				t.Fatal(err)
+			}
+			write := reconcileWrite(commitment.ID)
+			write.Conditions = []automation.Condition{
+				{Field: automation.FieldAmount, Operator: automation.OperatorWithinPercent, Value: "1500:10"},
+				{Field: automation.FieldDayOfMonth, Operator: automation.OperatorDayRange, Value: "1:10"},
+				{Field: automation.FieldDescription, Operator: automation.OperatorContains, Value: "aluguel"},
+				{Field: automation.FieldAccount, Operator: automation.OperatorEquals, Value: "Conta"},
+				{Field: automation.FieldAccount, Operator: automation.OperatorEquals, Value: "Banco"},
+				{Field: automation.FieldCard, Operator: automation.OperatorEquals, Value: "1234"},
+			}
+			write.Actions = append(write.Actions, automation.ActionWrite{Type: automation.ActionSetCategory, CategoryID: &commitment.CategoryID})
+			rule, err := automation.Create(ctx, f.conn, write)
+			if err != nil {
+				t.Fatal(err)
+			}
+			loaded, err := automation.Get(ctx, f.conn, rule.ID)
+			if err != nil || len(loaded.Actions) != 2 {
+				t.Fatalf("round trip: %+v, %v", loaded, err)
+			}
+			if mode == "retroactive" {
+				result, err := automation.ApplyRetroactively(ctx, f.conn, rule.ID, nil)
+				if err != nil || result.Matched != 2 || result.Categorized != 1 || result.Ignored != 0 {
+					t.Fatalf("apply: %+v, %v", result, err)
+				}
+				again, err := automation.ApplyRetroactively(ctx, f.conn, rule.ID, nil)
+				if err != nil || again.Categorized != 0 {
+					t.Fatalf("repeat: %+v, %v", again, err)
+				}
+			} else {
+				if mode == "resynced" {
+					f.exec(`UPDATE financial_transactions SET amount_in_account_currency = '-2500' WHERE id = ?`, matching)
+					if err := automation.ApplyToNewTransaction(ctx, f.conn, matching, nil); err != nil {
+						t.Fatal(err)
+					}
+					f.exec(`UPDATE financial_transactions SET amount_in_account_currency = '-1500' WHERE id = ?`, matching)
+				}
+				for _, id := range []string{matching, manual, outside, wrongAmount, wrongDescription} {
+					for range 2 {
+						if err := automation.ApplyToNewTransaction(ctx, f.conn, id, nil); err != nil {
+							t.Fatal(err)
+						}
+					}
+				}
+			}
+			for id, expected := range map[string]string{matching: commitment.CategoryID, manual: manualCategory.ID} {
+				var categoryID, origin string
+				if err := f.conn.QueryRow(`SELECT category_id, origin FROM transaction_category_decisions WHERE transaction_id = ?`, id).Scan(&categoryID, &origin); err != nil {
+					t.Fatal(err)
+				}
+				wantOrigin := "rule"
+				if id == manual {
+					wantOrigin = "manual"
+				}
+				if categoryID != expected || origin != wantOrigin {
+					t.Fatalf("decision %s: %s/%s", id, categoryID, origin)
+				}
+			}
+			var count int
+			if err := f.conn.QueryRow(`SELECT COUNT(*) FROM transaction_category_decisions WHERE transaction_id IN (?, ?, ?)`, outside, wrongAmount, wrongDescription).Scan(&count); err != nil || count != 0 {
+				t.Fatalf("non-matches: %d, %v", count, err)
+			}
+			items, err := transactions.Query(ctx, f.conn, transactions.QueryRequest{Timezone: "UTC", GroupBy: money.GroupMonth, Page: 1, PageSize: 100})
+			if err != nil {
+				t.Fatal(err)
+			}
+			targets, err := automation.ListActiveReconcileTargets(ctx, f.conn)
+			if err != nil {
+				t.Fatal(err)
+			}
+			target := targets[commitment.ID]
+			reconciler := recurrences.NewReconciler(commitment, target.Conditions, target.LogicOperator, true, nil, items.Items)
+			resolved := reconciler.Resolve(recurrences.Occurrence{Date: time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC), ExpectedAmount: commitment.Amount})
+			if resolved.TransactionID == nil || *resolved.TransactionID != matching || resolved.Origin != recurrences.OriginRule {
+				t.Fatalf("reconciliation: %+v", resolved)
+			}
+		})
 	}
 }

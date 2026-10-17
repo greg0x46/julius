@@ -11,6 +11,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/greg0x46/julius/internal/db"
+	dbtypes "github.com/greg0x46/julius/internal/db/types"
 	"github.com/greg0x46/julius/internal/money"
 )
 
@@ -36,16 +37,9 @@ type Querier interface {
 const dateLayout = "2006-01-02"
 
 func formatDate(t time.Time) string         { return t.UTC().Format(dateLayout) }
-func parseDate(s string) (time.Time, error) { return time.Parse(dateLayout, s) }
+func parseDate(s string) (time.Time, error) { return dbtypes.ParseDate(s) }
 
 const scenarioColumns = `id, kind, name, payable_id, is_active, is_accounting_source, created_at, updated_at`
-
-func boolToInt(value bool) int {
-	if value {
-		return 1
-	}
-	return 0
-}
 
 // CreateScenario mirrors creating a Scenario row. Callers are responsible
 // for enforcing kind-specific rules (payableID required, and its kind must
@@ -75,7 +69,7 @@ func CreateScenario(ctx context.Context, q Querier, kind Kind, name string, paya
 		}
 		var count int
 		if err := q.QueryRowContext(ctx,
-			`SELECT COUNT(1) FROM scenarios WHERE payable_id = ? AND is_accounting_source = 1`, payableID,
+			`SELECT COUNT(1) FROM scenarios WHERE payable_id = ? AND is_accounting_source = TRUE`, payableID,
 		).Scan(&count); err != nil {
 			return Scenario{}, err
 		}
@@ -93,7 +87,7 @@ func CreateScenario(ctx context.Context, q Querier, kind Kind, name string, paya
 	_, err := q.ExecContext(ctx, `
 		INSERT INTO scenarios (id, kind, name, payable_id, is_active, is_accounting_source, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		s.ID, string(s.Kind), s.Name, s.PayableID, boolToInt(s.IsActive), boolToInt(s.IsAccountingSource),
+		s.ID, string(s.Kind), s.Name, s.PayableID, s.IsActive, s.IsAccountingSource,
 		db.FormatTime(now), db.FormatTime(now),
 	)
 	if err != nil {
@@ -133,7 +127,7 @@ func backfillAccountingSettlements(ctx context.Context, q Querier, s Scenario) e
 	var seeds []linkSeed
 	for rows.Next() {
 		var seed linkSeed
-		if err := rows.Scan(&seed.transactionID, &seed.amount, &seed.createdAt); err != nil {
+		if err := rows.Scan(dbtypes.ID(&seed.transactionID), dbtypes.Decimal(&seed.amount), dbtypes.Time(&seed.createdAt)); err != nil {
 			rows.Close()
 			return err
 		}
@@ -176,7 +170,7 @@ func scanScenario(row *sql.Row) (Scenario, error) {
 		isActive, isAccounting     int
 		createdAtRaw, updatedAtRaw string
 	)
-	if err := row.Scan(&s.ID, &kind, &s.Name, &payableID, &isActive, &isAccounting, &createdAtRaw, &updatedAtRaw); err != nil {
+	if err := row.Scan(dbtypes.ID(&s.ID), &kind, &s.Name, dbtypes.ID(&payableID), dbtypes.Bool(&isActive), dbtypes.Bool(&isAccounting), dbtypes.Time(&createdAtRaw), dbtypes.Time(&updatedAtRaw)); err != nil {
 		return Scenario{}, err
 	}
 	s.Kind = Kind(kind)
@@ -186,10 +180,10 @@ func scanScenario(row *sql.Row) (Scenario, error) {
 		s.PayableID = &payableID.String
 	}
 	var err error
-	if s.CreatedAt, err = db.ParseTime(createdAtRaw); err != nil {
+	if s.CreatedAt, err = dbtypes.ParseTime(createdAtRaw); err != nil {
 		return Scenario{}, err
 	}
-	if s.UpdatedAt, err = db.ParseTime(updatedAtRaw); err != nil {
+	if s.UpdatedAt, err = dbtypes.ParseTime(updatedAtRaw); err != nil {
 		return Scenario{}, err
 	}
 	return s, nil
@@ -272,7 +266,7 @@ func scanScenarioRows(rows *sql.Rows) ([]Scenario, error) {
 			isActive, isAccounting     int
 			createdAtRaw, updatedAtRaw string
 		)
-		if err := rows.Scan(&s.ID, &kind, &s.Name, &payableID, &isActive, &isAccounting, &createdAtRaw, &updatedAtRaw); err != nil {
+		if err := rows.Scan(dbtypes.ID(&s.ID), &kind, &s.Name, dbtypes.ID(&payableID), dbtypes.Bool(&isActive), dbtypes.Bool(&isAccounting), dbtypes.Time(&createdAtRaw), dbtypes.Time(&updatedAtRaw)); err != nil {
 			return nil, err
 		}
 		s.Kind = Kind(kind)
@@ -282,10 +276,10 @@ func scanScenarioRows(rows *sql.Rows) ([]Scenario, error) {
 			s.PayableID = &payableID.String
 		}
 		var err error
-		if s.CreatedAt, err = db.ParseTime(createdAtRaw); err != nil {
+		if s.CreatedAt, err = dbtypes.ParseTime(createdAtRaw); err != nil {
 			return nil, err
 		}
-		if s.UpdatedAt, err = db.ParseTime(updatedAtRaw); err != nil {
+		if s.UpdatedAt, err = dbtypes.ParseTime(updatedAtRaw); err != nil {
 			return nil, err
 		}
 		list = append(list, s)
@@ -300,7 +294,7 @@ func SetActive(ctx context.Context, q Querier, id string, active bool) (Scenario
 	now := db.FormatTime(time.Now().UTC())
 	result, err := q.ExecContext(ctx,
 		`UPDATE scenarios SET is_active = ?, updated_at = ? WHERE id = ?`,
-		boolToInt(active), now, id,
+		active, now, id,
 	)
 	if err != nil {
 		return Scenario{}, err
@@ -330,7 +324,7 @@ func ListScenarios(ctx context.Context, q Querier, filter ListFilter) ([]Scenari
 	}
 	if filter.IsActive != nil {
 		clauses = append(clauses, "is_active = ?")
-		args = append(args, boolToInt(*filter.IsActive))
+		args = append(args, *filter.IsActive)
 	}
 	if filter.PayableID != nil {
 		clauses = append(clauses, "payable_id = ?")
@@ -398,7 +392,7 @@ func scanScenarioTransaction(row *sql.Row) (ScenarioTransaction, error) {
 		category                   sql.NullString
 		createdAtRaw, updatedAtRaw string
 	)
-	if err := row.Scan(&st.ID, &st.ScenarioID, &st.Description, &amountRaw, &projectedAtRaw, &category, &createdAtRaw, &updatedAtRaw); err != nil {
+	if err := row.Scan(dbtypes.ID(&st.ID), dbtypes.ID(&st.ScenarioID), &st.Description, dbtypes.Decimal(&amountRaw), dbtypes.Date(&projectedAtRaw), dbtypes.ID(&category), dbtypes.Time(&createdAtRaw), dbtypes.Time(&updatedAtRaw)); err != nil {
 		return ScenarioTransaction{}, err
 	}
 	if category.Valid {
@@ -411,10 +405,10 @@ func scanScenarioTransaction(row *sql.Row) (ScenarioTransaction, error) {
 	if st.ProjectedAt, err = parseDate(projectedAtRaw); err != nil {
 		return ScenarioTransaction{}, err
 	}
-	if st.CreatedAt, err = db.ParseTime(createdAtRaw); err != nil {
+	if st.CreatedAt, err = dbtypes.ParseTime(createdAtRaw); err != nil {
 		return ScenarioTransaction{}, err
 	}
-	if st.UpdatedAt, err = db.ParseTime(updatedAtRaw); err != nil {
+	if st.UpdatedAt, err = dbtypes.ParseTime(updatedAtRaw); err != nil {
 		return ScenarioTransaction{}, err
 	}
 	return st, nil
@@ -472,7 +466,7 @@ func ListScenarioTransactionsFor(ctx context.Context, q Querier, scenarioIDs []s
 			category                   sql.NullString
 			createdAtRaw, updatedAtRaw string
 		)
-		if err := rows.Scan(&st.ID, &st.ScenarioID, &st.Description, &amountRaw, &projectedAtRaw, &category, &createdAtRaw, &updatedAtRaw); err != nil {
+		if err := rows.Scan(dbtypes.ID(&st.ID), dbtypes.ID(&st.ScenarioID), &st.Description, dbtypes.Decimal(&amountRaw), dbtypes.Date(&projectedAtRaw), dbtypes.ID(&category), dbtypes.Time(&createdAtRaw), dbtypes.Time(&updatedAtRaw)); err != nil {
 			return nil, err
 		}
 		if category.Valid {
@@ -484,10 +478,10 @@ func ListScenarioTransactionsFor(ctx context.Context, q Querier, scenarioIDs []s
 		if st.ProjectedAt, err = parseDate(projectedAtRaw); err != nil {
 			return nil, err
 		}
-		if st.CreatedAt, err = db.ParseTime(createdAtRaw); err != nil {
+		if st.CreatedAt, err = dbtypes.ParseTime(createdAtRaw); err != nil {
 			return nil, err
 		}
-		if st.UpdatedAt, err = db.ParseTime(updatedAtRaw); err != nil {
+		if st.UpdatedAt, err = dbtypes.ParseTime(updatedAtRaw); err != nil {
 			return nil, err
 		}
 		result[st.ScenarioID] = append(result[st.ScenarioID], st)

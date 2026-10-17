@@ -9,9 +9,11 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/greg0x46/julius/internal/dates"
+	"github.com/greg0x46/julius/internal/exchange"
 	"github.com/greg0x46/julius/internal/investments"
 	"github.com/greg0x46/julius/internal/money"
 	"github.com/greg0x46/julius/internal/projections"
+	"github.com/greg0x46/julius/internal/reporting"
 	"github.com/greg0x46/julius/internal/transactions"
 )
 
@@ -28,6 +30,7 @@ type Querier = transactions.Querier
 type BuildParams struct {
 	From, To      time.Time
 	ReferenceDate time.Time
+	Timezone      string
 	AccountIDs    []string
 	CategoryIDs   []string
 	CardNumbers   []string
@@ -68,12 +71,12 @@ func contains(list []string, value string) bool {
 // its amount. The anchor is unaffected — today's point is the reported
 // balance whatever the ledger says — so the error is confined to the shape of
 // the past, never to the balance the user is shown for today.
-func eligibleRealItems(ctx context.Context, q Querier, from, to time.Time, accountIDs, categoryIDs, cardNumbers []string) ([]transactions.Item, error) {
+func eligibleRealItems(ctx context.Context, q Querier, from, to time.Time, accountIDs, categoryIDs, cardNumbers []string, timezone string) ([]transactions.Item, error) {
 	fromDate := money.Date{Year: from.Year(), Month: from.Month(), Day: from.Day()}
 	toDate := money.Date{Year: to.Year(), Month: to.Month(), Day: to.Day()}
 
 	result, err := transactions.Query(ctx, q, transactions.QueryRequest{
-		Timezone: "UTC",
+		Timezone: timezone,
 		GroupBy:  money.GroupNone,
 		Page:     1,
 		PageSize: 1_000_000,
@@ -121,14 +124,12 @@ const noCategoryName = "Sem categoria"
 // it settles rather than the one still accruing, so it lands on the same
 // day as the purchases it cancels out instead of a full cycle later.
 //
-// The second return value is the set of EventKeys of the card entries whose
-// bill already fell due on or before reference — the past half of the
-// series, where the re-dating is a substitute for a payment that is no
-// longer hypothetical. buildPoints must not walk those; see cashEntries.
-func realEntries(ctx context.Context, q Querier, items []transactions.Item, reference time.Time) ([]Entry, map[string]bool, error) {
+// The second return value classifies the card entries by when their bill
+// falls due relative to reference; see billTiming.
+func realEntries(ctx context.Context, q Querier, items []transactions.Item, reference time.Time, loc *time.Location) ([]Entry, billTiming, error) {
 	creditAccounts, err := transactions.CreditAccountIDs(ctx, q)
 	if err != nil {
-		return nil, nil, err
+		return nil, billTiming{}, err
 	}
 	transactionIDs := make([]string, 0, len(items))
 	for _, item := range items {
@@ -138,22 +139,36 @@ func realEntries(ctx context.Context, q Querier, items []transactions.Item, refe
 	}
 	cardSignals, err := transactions.CardTransactionSignals(ctx, q, transactionIDs)
 	if err != nil {
-		return nil, nil, err
+		return nil, billTiming{}, err
 	}
 	var dueDates transactions.CardDueDates
 	if len(transactionIDs) > 0 {
 		dueDates, err = transactions.FetchCardDueDates(ctx, q)
 		if err != nil {
-			return nil, nil, err
+			return nil, billTiming{}, err
 		}
 	}
 
 	entries := make([]Entry, 0, len(items))
-	settled := map[string]bool{}
+	rates := exchange.New(q, nil)
+	bills := billTiming{settled: map[string]bool{}, dueOnReference: map[string]bool{}}
 	for _, item := range items {
 		amount, err := decimal.NewFromString(item.EffectiveMoney.Value)
 		if err != nil {
-			return nil, nil, fmt.Errorf("parse transaction amount %q: %w", item.EffectiveMoney.Value, err)
+			return nil, billTiming{}, fmt.Errorf("parse transaction amount %q: %w", item.EffectiveMoney.Value, err)
+		}
+		cash := item.Reporting
+		if cash.Status != "unavailable" {
+			reportingDate := item.ReportingDate
+			if reportingDate != nil {
+				local := reportingDate.In(loc)
+				reportingDate = &local
+			}
+			cash = reporting.Convert(ctx, rates, amount, item.EffectiveMoney.CurrencyCode, reportingDate)
+		}
+		amount = decimal.Zero
+		if cash.Amount != nil {
+			amount = *cash.Amount
 		}
 		// Classification, not the raw value's sign, decides direction —
 		// mirrors currencyTotalsFor's Value.Abs() in transactions/query.go.
@@ -165,7 +180,13 @@ func realEntries(ctx context.Context, q Querier, items []transactions.Item, refe
 		if item.ReportableAmount != nil {
 			value, err := decimal.NewFromString(*item.ReportableAmount)
 			if err != nil {
-				return nil, nil, err
+				return nil, billTiming{}, err
+			}
+			if item.TotalsEligibility.Included {
+				value = decimal.Zero
+				if item.Reporting.Amount != nil {
+					value = *item.Reporting.Amount
+				}
 			}
 			if item.Classification == money.Outflow {
 				value = value.Neg()
@@ -182,50 +203,73 @@ func realEntries(ctx context.Context, q Querier, items []transactions.Item, refe
 		if item.Description != nil {
 			description = *item.Description
 		}
-		date := dates.Day(*item.OccurredAt)
+		date := dates.Day(item.OccurredAt.In(loc))
 		tier := TierRealizado
 		eventKey := "transaction:" + item.ID
 		if creditAccounts[item.Account.ID] {
 			signal := cardSignals[item.ID]
 			date = dates.Day(dueDates.ProjectedEntryDate(item.Account.ID, *item.OccurredAt, signal.Metadata, signal.IsPaymentLeg))
 			tier = TierConfirmado
-			if !date.After(reference) {
-				settled[eventKey] = true
+			if date.Before(reference) {
+				bills.settled[eventKey] = true
+			} else if date.Equal(reference) {
+				bills.dueOnReference[eventKey] = true
 			}
 		}
-		// A foreign-currency account is outside the BRL anchor even when the
-		// transaction itself reports BRL (no amount_in_account_currency).
-		currency := item.EffectiveMoney.CurrencyCode
-		if account := item.Account.CurrencyCode; account != nil && *account != "" && *account != money.BRL {
-			currency = *account
+		originalReportable := decimal.Zero
+		if item.ReportableAmount != nil {
+			originalReportable, _ = decimal.NewFromString(*item.ReportableAmount)
+		}
+		if item.Classification == money.Outflow {
+			originalReportable = originalReportable.Neg()
 		}
 		entries = append(entries, Entry{
-			Date:             date,
-			Description:      description,
-			Amount:           amount,
-			ReportableAmount: reportable,
-			CategoryID:       categoryID,
-			CategoryName:     categoryName,
-			Tier:             tier,
-			Source:           SourceReal,
-			SourceRefID:      item.ID,
-			EventKey:         eventKey,
-			Currency:         currency,
+			OriginalCurrency:         item.EffectiveMoney.CurrencyCode,
+			OriginalReportableAmount: &originalReportable,
+			ReportingStatus:          cash.Status,
+			Date:                     date,
+			Description:              description,
+			Amount:                   amount,
+			ReportableAmount:         reportable,
+			CategoryID:               categoryID,
+			CategoryName:             categoryName,
+			Tier:                     tier,
+			Source:                   SourceReal,
+			SourceRefID:              item.ID,
+			EventKey:                 eventKey,
 		})
 	}
-	return entries, settled, nil
+	return entries, bills, nil
+}
+
+// billTiming holds the EventKeys of card entries by when their bill falls due.
+// settled: before reference — the past half of the series, where the re-dating
+// is a substitute for a payment that is no longer hypothetical; buildPoints
+// must not walk those (see cashEntries). dueOnReference: on reference itself —
+// whether it was paid yet is unknown here, so they are walked like any future
+// bill (a payment already made shows as a real bank leg in cash plus a card
+// leg that cancels the purchases) but anchored as not-yet-in-cash; see
+// awaitingCash.
+type billTiming struct {
+	settled, dueOnReference map[string]bool
 }
 
 // BuildSeries merges real transactions and the unified Scenario projection
 // stream into one Series. Scenario kinds, schedules, automation, links, and
 // realization precedence all stay behind projections.List.
 func BuildSeries(ctx context.Context, q Querier, params BuildParams) (Series, error) {
+	timezone := params.Timezone
+	if timezone == "" {
+		timezone = "UTC"
+	}
+	loc, err := time.LoadLocation(timezone)
+	if err != nil {
+		return Series{}, fmt.Errorf("invalid timeline timezone: %w", err)
+	}
 	from, to, reference := dates.Day(params.From), dates.Day(params.To), dates.Day(params.ReferenceDate)
 
-	// The t=today anchor: cash on hand, from the one implementation net
-	// worth's asset side also reads (see transactions.CashOnHandByCurrency).
-	// Non-BRL cash is not folded into the BRL anchor.
-	balance, err := transactions.CashOnHandIn(ctx, q, params.AccountIDs, money.BRL)
+	// Convert the cash anchor at the reference date, independently of period income/expense.
+	balance, balanceReporting, err := reportingCashBalance(ctx, q, params.AccountIDs, reference)
 	if err != nil {
 		return Series{}, err
 	}
@@ -242,11 +286,11 @@ func BuildSeries(ctx context.Context, q Querier, params BuildParams) (Series, er
 	// re-dated purchases are dropped from the walk by cashEntries either way.
 	// The two months stay because they cost one wider query and nothing else,
 	// and because the entries they bring in still belong in Series.Entries.
-	items, err := eligibleRealItems(ctx, q, from.AddDate(0, -2, 0), to, params.AccountIDs, params.CategoryIDs, params.CardNumbers)
+	items, err := eligibleRealItems(ctx, q, from.AddDate(0, -2, 0), to, params.AccountIDs, params.CategoryIDs, params.CardNumbers, timezone)
 	if err != nil {
 		return Series{}, err
 	}
-	entries, settled, err := realEntries(ctx, q, items, reference)
+	entries, bills, err := realEntries(ctx, q, items, reference, loc)
 	if err != nil {
 		return Series{}, err
 	}
@@ -300,6 +344,7 @@ func BuildSeries(ctx context.Context, q Querier, params BuildParams) (Series, er
 		}
 		scenarioID := event.ScenarioID
 		entries = append(entries, Entry{
+
 			Date: event.Date, Description: event.Description, Amount: event.Amount,
 			CategoryID: event.CategoryID, CategoryName: event.CategoryName,
 			Tier: CertaintyTier(event.Tier), Source: SourceKind(event.Source),
@@ -311,15 +356,78 @@ func BuildSeries(ctx context.Context, q Querier, params BuildParams) (Series, er
 
 	sort.SliceStable(entries, func(i, j int) bool { return entries[i].Date.Before(entries[j].Date) })
 
-	points := buildPoints(cashEntries(entries, settled), balance, from, to, reference)
+	manualCash, err := anchoredManualCash(ctx, q, params)
+	if err != nil {
+		return Series{}, err
+	}
+	anchored := make(map[string]bool, len(manualCash))
+	for _, entry := range manualCash {
+		anchored[entry.EventKey] = true
+	}
+	walk := make([]Entry, 0, len(entries)+len(manualCash))
+	for _, entry := range cashEntries(entries, bills.settled) {
+		if !anchored[entry.EventKey] {
+			walk = append(walk, entry)
+		}
+	}
+	walk = append(walk, manualCash...)
+	points := buildPoints(walk, balance, from, to, func(e Entry) bool {
+		return anchored[e.EventKey] || (!e.Date.After(reference) && !awaitingCash(e, reference, bills.dueOnReference))
+	})
 	lowest, firstNegative := lowestAndFirstNegative(points, reference)
 
+	var coverage reporting.Accumulator
+	raw := map[string]*reporting.Accumulator{}
+	for _, e := range entries {
+		original := reportingAmount(e)
+		currency := reporting.ReferenceCurrency
+		if e.OriginalReportableAmount != nil {
+			original = *e.OriginalReportableAmount
+			currency = e.OriginalCurrency
+		}
+		if !original.IsZero() {
+			if raw[currency] == nil {
+				raw[currency] = &reporting.Accumulator{}
+			}
+			direction := money.Inflow
+			if original.IsNegative() {
+				direction = money.Outflow
+			}
+			raw[currency].Add(reporting.Conversion{Amount: &original, Status: "complete"}, direction)
+		}
+		if e.ReportingStatus == "unavailable" {
+			coverage.Add(reporting.Conversion{Status: "unavailable"}, money.Unclassified)
+			continue
+		}
+		amount := reportingAmount(e)
+		if amount.IsZero() {
+			continue
+		}
+		direction := money.Inflow
+		if amount.IsNegative() {
+			direction = money.Outflow
+		}
+		coverage.Add(reporting.Conversion{Amount: &amount, Status: e.ReportingStatus}, direction)
+	}
+	rawTotals := make([]reporting.Totals, 0, len(raw))
+	for currency, a := range raw {
+		totals := *a.Summary().Totals
+		totals.CurrencyCode = currency
+		rawTotals = append(rawTotals, totals)
+	}
+	sort.Slice(rawTotals, func(i, j int) bool { return rawTotals[i].CurrencyCode < rawTotals[j].CurrencyCode })
+	if summary := coverage.Summary(); summary.Missing > 0 {
+		return Series{}, &reporting.IncompleteError{Coverage: summary, Totals: rawTotals}
+	}
 	return Series{
-		Points:          points,
-		Entries:         entries,
-		StartingBalance: balance,
-		LowestBalance:   lowest,
-		FirstNegative:   firstNegative,
+		Totals:           rawTotals,
+		Reporting:        coverage.Summary(),
+		BalanceReporting: balanceReporting,
+		Points:           points,
+		Entries:          entries,
+		StartingBalance:  balance,
+		LowestBalance:    lowest,
+		FirstNegative:    firstNegative,
 	}, nil
 }
 
@@ -370,15 +478,37 @@ func withinWindow(entries []Entry, from, to time.Time) []Entry {
 // Financeiro's breakdowns read them as a ledger of what was spent, a
 // question the anchor's cash-only definition does not govern.
 func cashEntries(entries []Entry, settled map[string]bool) []Entry {
+	if len(settled) == 0 {
+		return entries
+	}
 	kept := make([]Entry, 0, len(entries))
 	for _, e := range entries {
-		// The anchor is BRL cash only, so other currencies are not walked.
-		if settled[e.EventKey] || (e.Currency != "" && e.Currency != money.BRL) {
+		if settled[e.EventKey] {
 			continue
 		}
 		kept = append(kept, e)
 	}
 	return kept
+}
+
+// awaitingCash reports whether e is dated on reference without being in cash
+// on hand yet. The anchor is the bank's balance right now, so a real
+// transaction dated today is already in it, but an event that is only
+// projected for today (a recurrence, plan installment or scenario entry not
+// yet reconciled with a transaction) has not moved any money, and neither
+// has a card bill due today whose payment is not in the ledger.
+func awaitingCash(e Entry, reference time.Time, dueOnReference map[string]bool) bool {
+	if !e.Date.Equal(reference) {
+		return false
+	}
+	switch e.Source {
+	case SourceReal:
+		return dueOnReference[e.EventKey]
+	case SourceInvestment:
+		return false
+	default:
+		return true
+	}
 }
 
 // buildPoints produces one DayPoint per calendar day in [from, to] from the
@@ -390,10 +520,16 @@ func cashEntries(entries []Entry, settled map[string]bool) []Entry {
 // there — so a purely historical M3 series (all entries <= reference)
 // reads as "how did the balance get to what it is today", while future
 // entries (from M4 on) read as a forward projection from today.
-func buildPoints(entries []Entry, startingBalance decimal.Decimal, from, to, reference time.Time) []DayPoint {
+//
+// The exception is awaitingCash: entries dated on reference that cash on hand
+// does not include yet are walked as future ones, so the point for reference
+// is the balance at the end of the day, startingBalance minus what is still
+// due today, not startingBalance itself. Future-dated posted manual movements
+// already in startingBalance are also reversed before walking their dates.
+func buildPoints(entries []Entry, startingBalance decimal.Decimal, from, to time.Time, inAnchor func(Entry) bool) []DayPoint {
 	pastSum := decimal.Zero
 	for _, e := range entries {
-		if !e.Date.After(reference) {
+		if inAnchor(e) {
 			pastSum = pastSum.Add(e.Amount)
 		}
 	}
