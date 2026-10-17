@@ -238,6 +238,13 @@ boolean literals so query coverage runs against both typed baselines.
 `TestQueryTypedValuesBothDialects` pins exact large amounts, UTC instants,
 decision timestamps and absent values on SQLite and Postgres.
 
+## API contract verification
+
+Wire semantics and calculation ownership are inventoried in
+[`contratos-api.md`](../../contratos-api.md). Shared synthetic responses are
+checked against Go DTOs and the production TypeScript parsers by the existing
+backend/frontend CI tests.
+
 ## Monetary precision
 
 HTTP amounts retain fractional minor units and large values as decimal strings.

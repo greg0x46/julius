@@ -150,6 +150,13 @@ vocabulary (principle 4 of `.specs/motores-de-dominio.md`) lives only in the
 backend today. The badge that showed it (`EntryOriginBadge`) and its label map
 were removed with it.
 
+## API contract verification
+
+Wire semantics and calculation ownership are inventoried in
+[`contratos-api.md`](../../contratos-api.md). Shared synthetic responses are
+checked against Go DTOs and the production TypeScript parsers by the existing
+backend/frontend CI tests.
+
 ## Reference valuation
 
 `/api/timeline` values its consolidated BRL series in the persisted financial

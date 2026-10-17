@@ -467,6 +467,22 @@ date-only text as well as legacy timestamps. Integrated custody IDs remain opaqu
 `integrated:<source id>` text; records with UUID identities use native Postgres
 UUIDs. `db.Open` rejects the old schema generation; conversion is separate work.
 
+Position responses expose nullable `total_cost`, the exact acquisition cost
+from the backend ledger. The frontend uses it for manual yield instead of
+reconstructing quantity × average_cost; the gain is computed on the exact
+cost and rounded only for display (including proportional costs after partial
+sales). Older
+responses without it show the existing unknown-cost state. Workspace net
+yield/cost/movement aggregates still run locally and are inventoried as a
+migration gap in the API contract doc.
+
+## API contract verification
+
+Wire semantics and calculation ownership are inventoried in
+[`contratos-api.md`](../../contratos-api.md). Shared synthetic responses are
+checked against Go DTOs and the production TypeScript parsers by the existing
+backend/frontend CI tests.
+
 ## Monetary precision
 
 Investment cash fields and portfolio targets keep decimal strings through editing
