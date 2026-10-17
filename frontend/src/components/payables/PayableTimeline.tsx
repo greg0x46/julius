@@ -1,3 +1,4 @@
+import { isPositiveDecimal, isZeroDecimal } from "../../presentation/decimal";
 import { PlusOutlined } from "@ant-design/icons";
 import { Alert, Button, DatePicker, Flex, InputNumber, Radio, Skeleton, Typography } from "antd";
 import dayjs, { type Dayjs } from "dayjs";
@@ -94,7 +95,7 @@ function realizationLabel(realization: Realization, links: PayableLinkedTransact
 /** The plan's overall standing as one quiet line, coloured only when it matters. */
 function PlanNotice({ value, onTrackMessage }: { value: string; onTrackMessage: string }) {
   const isAhead = value.startsWith("-");
-  const isOnTrack = !isAhead && Number(value) === 0;
+  const isOnTrack = !isAhead && isZeroDecimal(value);
   const magnitude = formatBRL(isAhead ? value.slice(1) : value);
   const tone = isOnTrack || isAhead ? "good" : "late";
   const text = isOnTrack
@@ -117,7 +118,7 @@ function AllocateExistingLinkControl({
   link: PayableLinkedTransaction;
   kind: PayableKind;
   installments: ScenarioTransaction[];
-  onAllocate: (installmentId: string, amount: number) => Promise<void>;
+  onAllocate: (installmentId: string, amount: string) => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
   const [installmentId, setInstallmentId] = useState<string | null>(null);
@@ -135,7 +136,7 @@ function AllocateExistingLinkControl({
     if (installmentId === null) return;
     setSubmitting(true);
     try {
-      await onAllocate(installmentId, Number(link.current_amount));
+      await onAllocate(installmentId, link.current_amount);
       setOpen(false);
       setInstallmentId(null);
     } catch {
@@ -217,7 +218,7 @@ export function PayableTimeline({
   const [cadence, setCadence] = useState<Cadence>("mensal");
   const [generateBy, setGenerateBy] = useState<"months" | "amount">("months");
   const [months, setMonths] = useState<number | null>(6);
-  const [installmentAmount, setInstallmentAmount] = useState<number | null>(null);
+  const [installmentAmount, setInstallmentAmount] = useState<string | null>(null);
   const [startDate, setStartDate] = useState<Dayjs>(() => dayjs());
   const [actionError, setActionError] = useState<string | null>(null);
   const confirm = useConfirm();
@@ -260,7 +261,7 @@ export function PayableTimeline({
         "Parcelas geradas",
       );
     }
-    if (installmentAmount === null || installmentAmount <= 0) return;
+    if (installmentAmount === null || !isPositiveDecimal(installmentAmount)) return;
     return runAction(
       () => plan.generateInstallments({ cadence, installment_amount: installmentAmount, start_date }),
       "Não foi possível gerar as parcelas.",
@@ -292,7 +293,7 @@ export function PayableTimeline({
       "Transação desvinculada",
     );
 
-  const allocateExistingLink = async (linkId: string, installmentId: string, amount: number) => {
+  const allocateExistingLink = async (linkId: string, installmentId: string, amount: string) => {
     try {
       await plan.allocateRealization({
         transactionId: installmentId,
@@ -316,7 +317,7 @@ export function PayableTimeline({
       if (selectedInstallmentId !== null) {
         await plan.allocateRealization({
           transactionId: selectedInstallmentId,
-          write: { payable_link_id: link.id, allocated_amount: Number(link.linked_amount) },
+          write: { payable_link_id: link.id, allocated_amount: link.linked_amount },
         });
       }
       setSelectedCandidateId(null);
@@ -477,7 +478,7 @@ export function PayableTimeline({
               ) : (
                 <MoneyInput
                   aria-label="Valor de cada parcela"
-                  min={0.01}
+                  min="0"
                   value={installmentAmount}
                   onChange={(value) => setInstallmentAmount(value)}
                   style={{ width: "10rem" }}

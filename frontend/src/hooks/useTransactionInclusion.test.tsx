@@ -1,8 +1,9 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 
+import { queryKeys } from "../api/queryKeys";
 import * as transactionApi from "../api/transactions";
 import { transactionId } from "../test/transactionFixtures";
 import { useTransactionInclusion } from "./useTransactionInclusion";
@@ -44,7 +45,7 @@ describe("useTransactionInclusion", () => {
       expect(result.current.announcement).toBe("Transação ignorada. Totais atualizados."),
     );
 
-    expect(order).toEqual(["cancel", "put", "invalidate", "refetch"]);
+    expect(order).toEqual(["cancel", "put", "invalidate", "invalidate", "refetch", "refetch"]);
     expect(setData).not.toHaveBeenCalled();
     expect(client.invalidateQueries).toHaveBeenCalledWith({
       queryKey: ["transactions"],
@@ -57,6 +58,54 @@ describe("useTransactionInclusion", () => {
       },
       { throwOnError: true },
     );
+  });
+
+  it("clears active participant details and stales other participants when a fee is ignored", async () => {
+    const { client, wrapper } = setup();
+    const relationship = { id: "transfer" };
+    client.setQueryData(queryKeys.transactionTransfer("source"), relationship);
+    client.setQueryData(queryKeys.transactionTransfer("destination"), relationship);
+    client.setQueryData(queryKeys.transactionTransfer("fee"), relationship);
+    const readTransfer = vi.fn(async () => null);
+    vi.mocked(transactionApi.setTransactionInclusion).mockResolvedValue({
+      transaction_id: "fee", state: "ignored", changed_at: "2026-07-30T13:00:00Z",
+    });
+    const { result } = renderHook(() => ({
+      inclusion: useTransactionInclusion(),
+      source: useQuery({ queryKey: queryKeys.transactionTransfer("source"), queryFn: readTransfer, staleTime: Infinity }),
+      fee: useQuery({ queryKey: queryKeys.transactionTransfer("fee"), queryFn: readTransfer, staleTime: Infinity }),
+    }), { wrapper });
+    expect(result.current.source.data).toEqual(relationship);
+    expect(result.current.fee.data).toEqual(relationship);
+    expect(readTransfer).not.toHaveBeenCalled();
+
+    act(() => result.current.inclusion.setInclusion({ transactionId: "fee", state: "ignored" }));
+    await waitFor(() => expect(result.current.inclusion.isPending).toBe(false));
+    await waitFor(() => expect(result.current.source.data).toBeNull());
+    expect(result.current.fee.data).toBeNull();
+    expect(client.getQueryState(queryKeys.transactionTransfer("destination"))?.isInvalidated).toBe(true);
+  });
+
+  it("retries failed transfer-detail refresh without repeating the inclusion write", async () => {
+    const { client, wrapper } = setup();
+    client.setQueryData(queryKeys.transactionTransfer("source"), { id: "transfer" });
+    const readTransfer = vi.fn()
+      .mockRejectedValueOnce(new Error("transfer refresh failed"))
+      .mockResolvedValue(null);
+    vi.mocked(transactionApi.setTransactionInclusion).mockResolvedValue({
+      transaction_id: "fee", state: "ignored", changed_at: "2026-07-30T13:00:00Z",
+    });
+    const { result } = renderHook(() => ({
+      inclusion: useTransactionInclusion(),
+      source: useQuery({ queryKey: queryKeys.transactionTransfer("source"), queryFn: readTransfer, staleTime: Infinity }),
+    }), { wrapper });
+
+    act(() => result.current.inclusion.setInclusion({ transactionId: "fee", state: "ignored" }));
+    await waitFor(() => expect(result.current.inclusion.refreshError).toBe("transfer refresh failed"));
+    await act(() => result.current.inclusion.retryRefresh());
+    expect(result.current.source.data).toBeNull();
+    expect(result.current.inclusion.refreshError).toBeNull();
+    expect(transactionApi.setTransactionInclusion).toHaveBeenCalledTimes(1);
   });
 
   it("distinguishes a failed PUT retry from refresh-only recovery", async () => {

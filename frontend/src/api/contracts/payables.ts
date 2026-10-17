@@ -47,13 +47,13 @@ export interface EligibleTransaction {
 export interface PayableCreate {
   kind: PayableKind;
   name: string;
-  total_amount: number;
-  initial_remaining_amount?: number | null;
+  total_amount: string;
+  initial_remaining_amount?: string | null;
 }
 
 export interface PayableUpdate {
   name: string;
-  total_amount: number;
+  total_amount: string;
 }
 
 export interface PayableLinkCreate {

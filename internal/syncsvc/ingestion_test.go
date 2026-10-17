@@ -426,6 +426,7 @@ func TestSyncPendingToPostedKeepsIdentityAndUserDecisions(t *testing.T) {
 	dbtest.Each(t, func(t *testing.T, conn *sql.DB) {
 		ctx := context.Background()
 		f := newIngestion(t, conn, "item-1", "acc-1")
+		f.provider.accountsPage.Accounts[0].AccountType = strp("CREDIT")
 		pending := debit("tx-1", "acc-1", "Compra pendente", "-50.00", "PENDING")
 		f.run(t, map[string][]pluggy.TransactionSnapshot{"acc-1": {pending}})
 		txID := f.transactionID(t, "tx-1")
@@ -454,6 +455,29 @@ func TestSyncPendingToPostedKeepsIdentityAndUserDecisions(t *testing.T) {
 			}
 		}
 		before := userOwned()
+		assertExpense := func(want string) {
+			t.Helper()
+			result, err := transactions.Query(ctx, conn, transactions.QueryRequest{
+				Timezone: "UTC", GroupBy: money.GroupNone, Page: 1, PageSize: 50,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(result.Items) != 1 || result.Items[0].ID != txID || !result.Items[0].TotalsEligibility.Included ||
+				len(result.Totals) != 1 || result.Totals[0].Outflow != want || result.Totals[0].Inflow != "0" {
+				t.Fatalf("report = %+v, want one expense of %s on %s", result, want, txID)
+			}
+		}
+		assertExpense("50.00")
+		settled := pending
+		settled.ProviderStatus = strp("POSTED")
+		f.run(t, map[string][]pluggy.TransactionSnapshot{"acc-1": {settled}})
+		assertExpense("50.00")
+		if after := userOwned(); !reflect.DeepEqual(before, after) {
+			t.Fatalf("settlement changed user data: %v -> %v", before, after)
+		}
+		f.run(t, map[string][]pluggy.TransactionSnapshot{"acc-1": {settled}})
+		assertExpense("50.00")
 
 		posted := debit("tx-1", "acc-1", "Compra confirmada", "-55.00", "POSTED")
 		run := f.run(t, map[string][]pluggy.TransactionSnapshot{"acc-1": {posted}})
@@ -471,6 +495,7 @@ func TestSyncPendingToPostedKeepsIdentityAndUserDecisions(t *testing.T) {
 		if description != "Compra confirmada" || amount != "-55.00" || status != "POSTED" || hash != pluggy.TransactionHash(posted) {
 			t.Fatalf("provider fields not updated: %s %s %s", description, amount, status)
 		}
+		assertExpense("55.00")
 		if after := userOwned(); !reflect.DeepEqual(before, after) {
 			t.Fatalf("user-owned data changed:\nbefore %v\nafter  %v", before, after)
 		}
