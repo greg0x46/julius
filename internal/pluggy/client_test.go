@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strconv"
 	"testing"
 	"time"
@@ -342,5 +343,48 @@ func TestAdapterGetInvestmentTransactionsRefusesATruncatedHistory(t *testing.T) 
 	}
 	if providerErr.ExternalAccountID == nil || *providerErr.ExternalAccountID != "inv-1" {
 		t.Errorf("ExternalAccountID = %v, want the investment named so the cap can be raised knowingly", providerErr.ExternalAccountID)
+	}
+}
+
+// The cursor comes out of a decoded query string and must be re-encoded when
+// it is sent back, along with ids interpolated into paths and queries.
+func TestAdapterEscapesCursorAndIDsInRequests(t *testing.T) {
+	const cursor = "a+b&c=d"
+	const accountID = "acc/1 x"
+	var seenCursor, seenAccount string
+	mux := http.NewServeMux()
+	mux.HandleFunc("/auth", authHandler)
+	mux.HandleFunc("/v2/transactions", func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		if q.Get("after") == "" {
+			json.NewEncoder(w).Encode(map[string]any{
+				"results": []map[string]any{},
+				"next":    "https://api.pluggy.ai/v2/transactions?accountId=" + url.QueryEscape(accountID) + "&after=" + url.QueryEscape(cursor),
+			})
+			return
+		}
+		seenCursor, seenAccount = q.Get("after"), q.Get("accountId")
+		if len(q) != 2 {
+			t.Errorf("query = %v, want only accountId and after", q)
+		}
+		json.NewEncoder(w).Encode(map[string]any{"results": []map[string]any{}, "next": nil})
+	})
+	var itemPath string
+	mux.HandleFunc("/items/", func(w http.ResponseWriter, r *http.Request) {
+		itemPath = r.URL.EscapedPath()
+		w.WriteHeader(http.StatusNotFound)
+	})
+	adapter, _ := newTestAdapter(t, mux)
+	adapter.config.ItemID = "item/../x?y"
+
+	if err := adapter.IterTransactionPages(context.Background(), accountID, func(TransactionsPage) error { return nil }); err != nil {
+		t.Fatalf("IterTransactionPages: %v", err)
+	}
+	if seenCursor != cursor || seenAccount != accountID {
+		t.Errorf("server saw after=%q accountId=%q, want %q / %q", seenCursor, seenAccount, cursor, accountID)
+	}
+	_, _, _ = adapter.GetSource(context.Background())
+	if itemPath != "/items/item%2F..%2Fx%3Fy" {
+		t.Errorf("item path = %q, want the id escaped as one segment", itemPath)
 	}
 }

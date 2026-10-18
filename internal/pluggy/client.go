@@ -9,6 +9,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -235,7 +236,7 @@ func flattenHeader(h http.Header) map[string]string {
 // _interpret_item_status's checks that turn a login-error or
 // no-safely-updated-product item into a ProviderError instead of proceeding.
 func (a *Adapter) GetSource(ctx context.Context) (SourceSnapshot, string, error) {
-	payload, rawImportID, err := a.read(ctx, ScopeItem, "/items/"+a.config.ItemID, StageItem, 1, nil)
+	payload, rawImportID, err := a.read(ctx, ScopeItem, "/items/"+url.PathEscape(a.config.ItemID), StageItem, 1, nil)
 	if err != nil {
 		return SourceSnapshot{}, "", err
 	}
@@ -328,7 +329,7 @@ func isSuccessStatus(v any) bool {
 
 // GetAccounts mirrors PluggyAdapter.get_accounts.
 func (a *Adapter) GetAccounts(ctx context.Context) (AccountsPage, error) {
-	payload, rawImportID, err := a.read(ctx, ScopeAccounts, "/accounts?itemId="+a.config.ItemID, StageAccounts, 1, nil)
+	payload, rawImportID, err := a.read(ctx, ScopeAccounts, "/accounts?itemId="+url.QueryEscape(a.config.ItemID), StageAccounts, 1, nil)
 	if err != nil {
 		return AccountsPage{}, err
 	}
@@ -343,7 +344,7 @@ func (a *Adapter) GetAccounts(ctx context.Context) (AccountsPage, error) {
 
 // GetInvestments mirrors GetAccounts for the Investments product.
 func (a *Adapter) GetInvestments(ctx context.Context) (InvestmentsPage, error) {
-	payload, rawImportID, err := a.read(ctx, ScopeInvestments, "/investments?itemId="+a.config.ItemID, StageInvestments, 1, nil)
+	payload, rawImportID, err := a.read(ctx, ScopeInvestments, "/investments?itemId="+url.QueryEscape(a.config.ItemID), StageInvestments, 1, nil)
 	if err != nil {
 		return InvestmentsPage{}, err
 	}
@@ -392,7 +393,7 @@ func (a *Adapter) GetInvestmentTransactions(ctx context.Context, externalInvestm
 	var firstRawImportID string
 
 	for pageNumber := 1; pageNumber <= a.config.MaxPagesPerAccount; pageNumber++ {
-		path := "/investments/" + externalInvestmentID + "/transactions?page=" + strconv.Itoa(pageNumber)
+		path := "/investments/" + url.PathEscape(externalInvestmentID) + "/transactions?page=" + strconv.Itoa(pageNumber)
 		payload, rawImportID, err := a.read(ctx, ScopeInvestmentTransactions, path, StageInvestmentTransactions, pageNumber, &externalInvestmentID)
 		if err != nil {
 			return InvestmentTransactionsPage{}, err
@@ -431,7 +432,7 @@ func (a *Adapter) GetBills(ctx context.Context, externalAccountID string) (Bills
 	var firstRawImportID string
 
 	for pageNumber := 1; pageNumber <= a.config.MaxPagesPerAccount; pageNumber++ {
-		path := "/bills?accountId=" + externalAccountID + "&page=" + strconv.Itoa(pageNumber)
+		path := "/bills?accountId=" + url.QueryEscape(externalAccountID) + "&page=" + strconv.Itoa(pageNumber)
 		payload, rawImportID, err := a.read(ctx, ScopeBills, path, StageBills, pageNumber, &externalAccountID)
 		if err != nil {
 			return BillsPage{}, err
@@ -465,9 +466,9 @@ func (a *Adapter) IterTransactionPages(ctx context.Context, externalAccountID st
 	seenCursors := make(map[string]bool)
 
 	for pageSequence := 1; pageSequence <= a.config.MaxPagesPerAccount; pageSequence++ {
-		path := "/v2/transactions?accountId=" + externalAccountID
+		path := "/v2/transactions?accountId=" + url.QueryEscape(externalAccountID)
 		if cursor != nil {
-			path += "&after=" + *cursor
+			path += "&after=" + url.QueryEscape(*cursor)
 		}
 		payload, rawImportID, err := a.read(ctx, ScopeTransactions, path, StageTransactions, pageSequence, &externalAccountID)
 		if err != nil {
