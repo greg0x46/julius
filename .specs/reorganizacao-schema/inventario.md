@@ -932,7 +932,8 @@ replaced by metric goals with no data to carry over.
 | `target_amount` | TEXT | NUMERIC | money | Target in BRL, strictly positive |
 | `target_date` | TEXT | DATE | calendar date | Optional deadline |
 | `notes` | TEXT | TEXT | free text | Optional |
-| `created_at` / `updated_at` | TEXT | TIMESTAMPTZ | instant | Audit instants |
+| `created_at` | TEXT | TIMESTAMPTZ | instant | Creation time |
+| `updated_at` | TEXT | TIMESTAMPTZ | instant | Last update time |
 
 No current value or progress is stored; both are recomputed on read.
 
