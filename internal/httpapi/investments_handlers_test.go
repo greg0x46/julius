@@ -570,3 +570,20 @@ func TestInvestmentCalendarDates(t *testing.T) {
 		t.Fatalf("trade date = %+v", rows)
 	}
 }
+
+func TestInvestmentTransactionsWithCorruptTimestampReturn503(t *testing.T) {
+	srv, conn := newTestServer(t)
+	id := insertInvestment(t, conn)
+	insertInvestmentTransaction(t, conn, id, "BUY", "100")
+	if _, err := conn.Exec(`UPDATE financial_investment_transactions SET occurred_at = 'not-a-time' WHERE investment_id = ?`, id); err != nil {
+		t.Fatal(err)
+	}
+	resp, err := testGet(t, srv.URL+"/api/investments/"+id+"/transactions")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want 503", resp.StatusCode)
+	}
+}

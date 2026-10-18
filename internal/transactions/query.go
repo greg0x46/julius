@@ -450,6 +450,11 @@ func computeDateBounds(f Filters, timezone string) (*dateBounds, error) {
 	return &dateBounds{start: start, end: end}, nil
 }
 
+const (
+	MaxPage     = 1_000_000
+	MaxPageSize = 1_000_000
+)
+
 // Query mirrors query_transactions: it resolves every domain rule, filters,
 // sorts by occurred_at (the purchase date) descending, paginates, and
 // computes per-bucket and overall currency totals over eligible transactions
@@ -471,6 +476,10 @@ func Query(ctx context.Context, q Querier, query QueryRequest) (Result, error) {
 	if query.PageSize < 1 {
 		query.PageSize = 50
 	}
+	// Keeps (Page-1)*PageSize far from int overflow; the HTTP layer rejects
+	// values above these before they get here.
+	query.Page = min(query.Page, MaxPage)
+	query.PageSize = min(query.PageSize, MaxPageSize)
 
 	allViews, err := fetchAllViews(ctx, q, query)
 	if err != nil {

@@ -10,6 +10,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/greg0x46/julius/internal/dates"
+	"github.com/greg0x46/julius/internal/db"
 	"github.com/greg0x46/julius/internal/money"
 	"github.com/greg0x46/julius/internal/projections"
 	"github.com/greg0x46/julius/internal/scenarios"
@@ -195,7 +196,7 @@ func handlePutScenarioPlannedRealization(conn *sql.DB) http.HandlerFunc {
 		case errors.Is(err, scenarios.ErrInvalidEventKey), errors.Is(err, scenarios.ErrInvalidRealization):
 			invalidScenarioProblem(w, "O evento previsto ou a realização é inválido.")
 		case err != nil:
-			if strings.Contains(err.Error(), "UNIQUE") || strings.Contains(err.Error(), "unique") {
+			if db.IsUniqueViolationOn(err, db.ConstraintOneCompleteEventTransactionSQLite, db.ConstraintOneCompleteEventTransactionPostgres) {
 				writeProblem(w, http.StatusConflict, "transaction-already-realized", "Transação já utilizada", "Uma transação real não pode satisfazer dois eventos completos.")
 			} else {
 				scenariosUnavailableProblem(w)

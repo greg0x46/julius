@@ -1,6 +1,7 @@
 package httpapi_test
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -228,5 +229,38 @@ func TestQuoteRefreshNowWithoutMarketData(t *testing.T) {
 	resp.Body.Close()
 	if resp.StatusCode != 503 {
 		t.Fatalf("status = %d, want 503", resp.StatusCode)
+	}
+}
+
+func TestPluggySettingsAreIdempotentAndTrimItemID(t *testing.T) {
+	srv, conn := newTestServer(t)
+	body := map[string]any{"pluggy_client_id": "id", "pluggy_client_secret": "secret", "pluggy_item_id": " item-1 "}
+	put := func(want int) {
+		t.Helper()
+		resp := doJSON(t, "PUT", srv.URL+"/api/settings/pluggy", body)
+		resp.Body.Close()
+		if resp.StatusCode != want {
+			t.Fatalf("PUT: %d, want %d", resp.StatusCode, want)
+		}
+	}
+	put(200)
+	put(200)
+	var count int
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM data_sources WHERE external_item_id = 'item-1'`).Scan(&count); err != nil || count != 1 {
+		t.Fatalf("data sources: %d %v", count, err)
+	}
+
+	// Rotating credentials alongside an already-registered item still saves them.
+	body["pluggy_client_secret"] = "rotated"
+	put(200)
+	got, _, err := settings.Get(context.Background(), conn, "pluggy.client_secret", bytes.Repeat([]byte{42}, 32))
+	if err != nil || got != "rotated" {
+		t.Fatalf("secret: %q %v", got, err)
+	}
+
+	body["pluggy_item_id"] = "   "
+	put(422)
+	if err := conn.QueryRow(`SELECT COUNT(*) FROM data_sources`).Scan(&count); err != nil || count != 1 {
+		t.Fatalf("blank item created a data source: %d %v", count, err)
 	}
 }
