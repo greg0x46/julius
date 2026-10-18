@@ -271,6 +271,10 @@ func handleListSyncRuns(conn *sql.DB) http.HandlerFunc {
 			}
 			result = append(result, run)
 		}
+		if rows.Err() != nil {
+			writeProblem(w, 503, "sync-run-unavailable", "Sincronização temporariamente indisponível", "Tente novamente em instantes.")
+			return
+		}
 		writeJSON(w, http.StatusOK, result)
 	}
 }
@@ -320,12 +324,18 @@ func handleGetSyncRun(conn *sql.DB) http.HandlerFunc {
 			var f syncFailureDTO
 			var occurredAtRaw string
 			if err := rows.Scan(&f.Stage, &f.Code, &f.Message, dbtypes.ID(&f.ExternalAccountID), dbtypes.ID(&f.ExternalTransactionID), dbtypes.Time(&occurredAtRaw)); err != nil {
-				continue
+				writeProblem(w, 503, "sync-run-unavailable", "Sincronização temporariamente indisponível", "Tente novamente em instantes.")
+				return
 			}
 			if f.OccurredAt, err = dbtypes.ParseTime(occurredAtRaw); err != nil {
-				continue
+				writeProblem(w, 503, "sync-run-unavailable", "Sincronização temporariamente indisponível", "Tente novamente em instantes.")
+				return
 			}
 			failures = append(failures, f)
+		}
+		if rows.Err() != nil {
+			writeProblem(w, 503, "sync-run-unavailable", "Sincronização temporariamente indisponível", "Tente novamente em instantes.")
+			return
 		}
 		writeJSON(w, http.StatusOK, syncRunDetailDTO{syncRunDTO: run, Failures: failures})
 	}
