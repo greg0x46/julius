@@ -23,6 +23,7 @@ function goal(overrides: Partial<Goal> = {}): Goal {
     notes: null,
     current_value: "45210.50",
     progress: "0.452105",
+    projection: null,
     currency_code: "BRL",
     created_at: "2026-10-01T12:00:00Z",
     updated_at: "2026-10-01T12:00:00Z",
@@ -70,6 +71,94 @@ describe("GoalsPage", () => {
     expect(within(section).getByRole("progressbar")).toHaveAttribute("aria-valuenow", "45");
   });
 
+  it("projects a goal behind its target to the date and states the monthly contribution", async () => {
+    vi.mocked(goalsApi.listGoals).mockResolvedValue([
+      goal({
+        target_date: "2027-12-31",
+        projection: {
+          status: "behind",
+          months_remaining: 14,
+          monthly_return: "0.008",
+          return_from: "2026-01-01",
+          return_partial: false,
+          projected_value: "52000.00",
+          projected_progress: "0.52",
+          required_monthly_contribution: "3100.50",
+        },
+      }),
+    ]);
+    renderPage();
+    const projection = within(await screen.findByRole("region", { name: "Cem mil investidos" })).getByLabelText(
+      "Projeção de Cem mil investidos",
+    );
+    expect(screen.getByText("31/12/2027 · faltam 14 meses")).toBeVisible();
+    expect(within(projection).getByText("+0,80% ao mês")).toBeVisible();
+    expect(within(projection).getByText(/52,00% da meta/)).toBeVisible();
+    expect(within(projection).getByText("R$ 3.100,50")).toBeVisible();
+  });
+
+  it("needs no contribution when appreciation alone reaches the target, and shows a loss as negative", async () => {
+    vi.mocked(goalsApi.listGoals).mockResolvedValue([
+      goal({
+        target_date: "2027-12-31",
+        projection: {
+          status: "on_track",
+          months_remaining: 1,
+          monthly_return: "-0.0125",
+          return_from: "2026-01-01",
+          return_partial: true,
+          projected_value: "100500.00",
+          projected_progress: "1.005",
+          required_monthly_contribution: "0",
+        },
+      }),
+    ]);
+    renderPage();
+    const projection = await screen.findByLabelText("Projeção de Cem mil investidos");
+    expect(screen.getByText("31/12/2027 · faltam 1 mês")).toBeVisible();
+    expect(within(projection).getByText("-1,25% ao mês")).toBeVisible();
+    expect(within(projection).getByText("Nenhum — a valorização basta")).toBeVisible();
+    expect(within(projection).getByRole("button", { name: /Sobre a projeção de Cem mil investidos.*parte das posições ficou de fora/ })).toBeInTheDocument();
+  });
+
+  it("says so when there is too little history to measure the appreciation", async () => {
+    vi.mocked(goalsApi.listGoals).mockResolvedValue([
+      goal({
+        target_date: "2027-12-31",
+        projection: {
+          status: "behind",
+          months_remaining: 12,
+          monthly_return: null,
+          return_from: null,
+          return_partial: false,
+          projected_value: "45210.50",
+          projected_progress: "0.4521050",
+          required_monthly_contribution: "4565.79",
+        },
+      }),
+    ]);
+    renderPage();
+    const projection = await screen.findByLabelText("Projeção de Cem mil investidos");
+    expect(within(projection).getByText("Sem histórico suficiente")).toBeVisible();
+    expect(within(projection).getByRole("button", { name: /Sobre a projeção de Cem mil investidos.*considera valorização zero/ })).toBeInTheDocument();
+  });
+
+  it("says when a goal has no target date and offers a tile to add another", async () => {
+    vi.mocked(goalsApi.listGoals).mockResolvedValue([goal()]);
+    renderPage();
+    await screen.findByRole("region", { name: "Cem mil investidos" });
+    expect(screen.getByText("Sem data-alvo definida")).toBeVisible();
+    await userEvent.click(screen.getByRole("button", { name: "Adicionar nova meta" }));
+    expect(await screen.findByLabelText("Nome da meta")).toBeVisible();
+  });
+
+  it("shows no projection for a goal without one", async () => {
+    vi.mocked(goalsApi.listGoals).mockResolvedValue([goal()]);
+    renderPage();
+    await screen.findByRole("region", { name: "Cem mil investidos" });
+    expect(screen.queryByLabelText(/^Projeção de/)).toBeNull();
+  });
+
   it.each([
     ["995", "0.995"],
     ["999.9999999999999", "0.9999999999999999"],
@@ -82,7 +171,7 @@ describe("GoalsPage", () => {
     expect(within(section).getByText("99%")).toBeVisible();
     expect(within(section).getByRole("progressbar")).toHaveAttribute("aria-valuenow", "99");
     expect(within(section).queryByText("Meta atingida")).toBeNull();
-    expect(section.querySelector(".ant-progress-status-success")).toBeNull();
+    expect(section.querySelector(".goal-ring-success")).toBeNull();
   });
 
   it.each([
@@ -97,7 +186,7 @@ describe("GoalsPage", () => {
     expect(within(section).getByText(percent)).toBeVisible();
     expect(within(section).getByRole("progressbar")).toHaveAttribute("aria-valuenow", "100");
     expect(within(section).getByText("Meta atingida")).toBeVisible();
-    expect(section.querySelector(".ant-progress-status-success")).not.toBeNull();
+    expect(section.querySelector(".goal-ring-success")).not.toBeNull();
   });
 
   it("creates a goal from the form and refreshes the list", async () => {
