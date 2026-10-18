@@ -127,8 +127,9 @@ The persisted `exchange_rates` cache is unchanged. Fresh v1 `frankfurter` rows
 continue to work, including inverse conversion, with their original attribution;
 new or refreshed rows use `frankfurter-v2-blended`. Reports can therefore mix v1
 ECB and v2 blended observations. No cache reset, account migration or native
-amount rewrite occurs. Existing one-hour TTL, one-minute rate cooldown,
-historical final-row reuse and seven-day maximum lag remain. Failed lookups
+amount rewrite occurs. Existing one-hour TTL, one-minute rate cooldown (a
+provider failure cools down the whole pair, shared by every request; a missing
+history cools down only its day), historical final-row reuse and seven-day maximum lag remain. Failed lookups
 may reuse stored observations effective on/before the requested day, disclosed
 as stale; unsupported currencies without a stored rate are never converted.
 
