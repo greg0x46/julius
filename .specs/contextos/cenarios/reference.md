@@ -38,6 +38,9 @@ scenarios.
 `POST/PUT/DELETE .../transactions[/{transactionId}]`,
 `POST/DELETE .../transactions/{transactionId}/realizations[/{realizationId}]`.
 
+Readjusting with `abater_do_final` keeps the plan's cadence, inferred from the
+most common gap between its installments (weekly, biweekly, otherwise monthly).
+
 Linking a real transaction to a standalone event (`PUT /api/scenarios/{id}/planned-transactions/{eventKey}/realization`)
 requires a considered BRL transaction flowing in the direction of the event's
 amount sign, like a recurring occurrence. Installment status and accumulated
