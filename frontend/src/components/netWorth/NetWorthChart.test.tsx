@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
-import { expect, it, vi } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 
 import type { NetWorthSnapshot } from "../../api/contracts";
 import { NetWorthChart } from "./NetWorthChart";
@@ -49,4 +49,31 @@ it("leaves days that cannot be valued as gaps, not zeros", () => {
   expect(points.map((point: { netWorth: number | null }) => point.netWorth)).toEqual([2500, null, 2100, 2600]);
   expect(screen.getByTestId("line")).toHaveTextContent("false");
   expect(screen.getByRole("img")).toHaveAccessibleName(/lacunas/);
+});
+
+const originalTZ = process.env.TZ;
+afterEach(() => {
+  if (originalTZ === undefined) delete process.env.TZ;
+  else process.env.TZ = originalTZ;
+});
+
+it("labels a midnight-UTC calendar day as that day in a western timezone", () => {
+  process.env.TZ = "America/Sao_Paulo";
+  const snapshot: NetWorthSnapshot = {
+    captured_at: "2026-08-18T00:00:00Z",
+    is_backfilled: false,
+    valuation_version: 1,
+    valuation_status: "complete",
+    net_worth: "100",
+    cash_balance: "100",
+    investment_balance: "0",
+    credit_card_balance: "0",
+    payables_debt: "0",
+    total_assets: "100",
+    total_liabilities: "0",
+  };
+  render(<NetWorthChart snapshots={[snapshot]} />);
+  const points = JSON.parse(screen.getByTestId("points").textContent!);
+  expect(points[0].date).toBe("18/08");
+  expect(screen.getByRole("img")).toHaveAttribute("aria-label", expect.stringContaining("de 18/08 a 18/08"));
 });

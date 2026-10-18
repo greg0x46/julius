@@ -11,10 +11,11 @@ import { useCompactScreen } from "../shared/useCompactScreen";
 
 type ChartPoint = { date: string; netWorth: number | null };
 
+// captured_at is a calendar day at midnight UTC; local time would slide it back a day.
 function dateLabel(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+  return date.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", timeZone: "UTC" });
 }
 
 function toChartData(snapshots: NetWorthSnapshot[]): ChartPoint[] {
