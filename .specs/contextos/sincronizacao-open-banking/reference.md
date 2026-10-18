@@ -24,7 +24,10 @@ application — and each sync run belongs to exactly one connection.
   from future syncs.
 - `internal/pluggy` — Pluggy API adapter (`Adapter`, `Config`, auth/retry), maps
   raw payloads to `SourceSnapshot`/accounts/investments/bills. No routes of its
-  own.
+  own. Ids and cursors are
+  escaped in request URLs; every wait (retry, rate limit) and raw-import write
+  is tied to the run's context, so cancelling the run stops it promptly; response
+  bodies are capped at 32 MiB.
 - `internal/syncsvc` — `Service.Execute` orchestrates a sync run against a
   `Provider` (the Pluggy adapter): processes accounts, investments, bills,
   records raw imports and failures/rejections. Each entry uses a database
