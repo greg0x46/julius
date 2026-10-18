@@ -3,6 +3,8 @@ package automation
 import (
 	"fmt"
 	"strings"
+
+	"github.com/greg0x46/julius/internal/rules"
 )
 
 // Validate checks a Write for structural correctness: at least one action —
@@ -78,6 +80,19 @@ func validateCondition(c Condition) error {
 	}
 	if strings.TrimSpace(c.Value) == "" {
 		return fmt.Errorf("condition value is required")
+	}
+	switch c.Field {
+	case FieldAmount:
+		_, tolerance, ok := rules.ParseWithinPercent(c.Value)
+		if !ok || tolerance.IsNegative() {
+			return fmt.Errorf("amount condition value must be <non-zero amount>:<tolerance percent >= 0>, got %q", c.Value)
+		}
+	case FieldDayOfMonth:
+		// min > max is valid: the range wraps across the turn of the month.
+		first, last, ok := rules.ParseDayRange(c.Value)
+		if !ok || first < 1 || first > 31 || last < 1 || last > 31 {
+			return fmt.Errorf("day_of_month condition value must be <day 1-31>:<day 1-31>, got %q", c.Value)
+		}
 	}
 	return nil
 }
