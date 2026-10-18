@@ -1,4 +1,4 @@
-import { InfoCircleOutlined } from "@ant-design/icons";
+import { ExclamationCircleOutlined, InfoCircleOutlined } from "@ant-design/icons";
 import { useState } from "react";
 
 import type { InvestmentPeriod, InvestmentPeriodPart, InvestmentPeriodPosition } from "../../api/contracts";
@@ -7,7 +7,6 @@ import { isZeroDecimal } from "../../presentation/decimal";
 import { partialReasons } from "../../presentation/investmentPeriod";
 import { SummaryStrip } from "../layout";
 import { Money } from "../shared/Money";
-import { StatusTag } from "../shared/StatusTag";
 import { InvestmentHint } from "./InvestmentHint";
 import { InvestmentYieldValue } from "./InvestmentYieldValue";
 
@@ -17,9 +16,10 @@ const partIsEmpty = (part: InvestmentPeriodPart) =>
 /**
  * The period's result, as the backend states it: patrimônio at the end of the
  * period as the hero, rendimento and rentabilidade beside it, aportes,
- * resgates and custos as secondary figures. Nothing here is summed or divided
- * in the browser; positions the backend could not measure are named, never
- * counted as zero.
+ * resgates and custos as secondary figures. Caveats, the partial warning
+ * included, sit behind the info icon beside the hero. Nothing here is summed
+ * or divided in the browser; positions the backend could not measure are
+ * named, never counted as zero.
  */
 export function InvestmentPeriodSummary({
   data,
@@ -66,48 +66,51 @@ export function InvestmentPeriodSummary({
       ? `${totals.positions_partial_start} ${totals.positions_partial_start === 1 ? "posição começa" : "posições começam"} depois do primeiro dia do período, por falta de preço nesse dia.`
       : null,
   ].filter((note): note is string => note !== null);
+  const partialTitle = `Parcial: ${totals.positions_unavailable} de ${totals.positions_total} posições sem histórico suficiente`;
 
   return (
     <SummaryStrip
       className="investment-period-summary"
       label={`Carteira em ${formatDateOnly(data.to)}`}
-      value={<Money value={totals.end_value} tone="balance" size="hero" />}
-      busy={updating}
-      items={items}
-    >
-      <div className="investment-summary-meta">
-        {totals.partial && (
+      value={
+        <>
+          <Money value={totals.end_value} tone="balance" size="hero" />
           <InvestmentHint
-            label={`Parcial: ${totals.positions_unavailable} de ${totals.positions_total} posições sem histórico suficiente. ${reasons.join(", ")}`}
+            label={`${totals.partial ? `${partialTitle}. ${reasons.join(", ")}. ` : ""}Sobre estes valores: ${notes.join(" ")}`}
             content={
               <>
-                <p>As posições abaixo ficaram de fora dos valores e da rentabilidade; não foram contadas como zero.</p>
+                {totals.partial && (
+                  <>
+                    <p>
+                      <strong>{partialTitle}</strong>
+                    </p>
+                    <p>As posições abaixo ficaram de fora dos valores e da rentabilidade; não foram contadas como zero.</p>
+                    <ul>
+                      {reasons.map((reason) => (
+                        <li key={reason}>{reason}</li>
+                      ))}
+                    </ul>
+                  </>
+                )}
                 <ul>
-                  {reasons.map((reason) => (
-                    <li key={reason}>{reason}</li>
+                  {notes.map((note) => (
+                    <li key={note}>{note}</li>
                   ))}
                 </ul>
               </>
             }
           >
-            <StatusTag tone="warning">
-              Parcial · {totals.positions_unavailable} de {totals.positions_total} posições
-            </StatusTag>
+            {totals.partial ? (
+              <ExclamationCircleOutlined className="investment-summary-info investment-summary-info-warning" />
+            ) : (
+              <InfoCircleOutlined className="investment-summary-info" />
+            )}
           </InvestmentHint>
-        )}
-        <InvestmentHint
-          label={`Sobre estes valores: ${notes.join(" ")}`}
-          content={
-            <ul>
-              {notes.map((note) => (
-                <li key={note}>{note}</li>
-              ))}
-            </ul>
-          }
-        >
-          <InfoCircleOutlined className="investment-summary-info" />
-        </InvestmentHint>
-      </div>
+        </>
+      }
+      busy={updating}
+      items={items}
+    >
       <details
         className="investment-reconcile-disclosure"
         open={explained}

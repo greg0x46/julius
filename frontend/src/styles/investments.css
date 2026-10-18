@@ -65,8 +65,9 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* In the table's figure column the % sits under the amount, like the other quiet lines. */
-.investment-cell-end .investment-yield {
+/* In the table's figure columns the % sits under the amount, like the other quiet lines. */
+.investment-cell-end .investment-yield,
+.investment-period-table .investment-yield {
   flex-direction: column;
   align-items: flex-end;
   gap: 0;
@@ -236,20 +237,18 @@
   color: var(--color-text-secondary);
 }
 
-.investment-summary-meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem;
-}
-
 .investment-summary-info {
+  margin-left: 0.5rem;
   color: var(--color-text-secondary);
   font-size: 1rem;
   vertical-align: middle;
 }
 
-.investment-hint:hover .investment-summary-info {
+.investment-summary-info-warning {
+  color: var(--color-warning-text);
+}
+
+.investment-hint:hover .investment-summary-info:not(.investment-summary-info-warning) {
   color: var(--color-primary);
 }
 
@@ -492,9 +491,10 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* The menu button's tap target (an ::after 8px past the button) must end inside the cell, or the table scrolls sideways. */
 .investment-period-table .investment-col-menu {
   width: 3rem;
-  padding-inline: 0.25rem;
+  padding-inline: 0.25rem 0.5rem;
   text-align: right;
 }
 

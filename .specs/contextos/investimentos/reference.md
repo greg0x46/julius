@@ -546,12 +546,14 @@ Components (`components/investments/`) and hook:
   Custos (only when non-zero). The box carries no explanatory prose: the caveats
   (cash excluded, IR/IOF provisioned and not deducted, period in progress,
   positions that start late via `positions_partial_start`) sit in the popover of
-  an ⓘ icon, whose accessible name includes them. The disclosure **Detalhes do
+  an ⓘ icon beside the hero figure, whose accessible name includes them. The
+  disclosure **Detalhes do
   cálculo** expands the five backend components and, under them, where the
   result comes from: "Posições mantidas" (`totals.held`) plus
   "Encerradas no período" (`totals.closed`, the realized result; hidden when
-  all zeros). When `partial`, a tag reads "Parcial · N de M posições" and its
-  popover gives the reasons by count. A null `yield_rate` is "—" with its
+  all zeros). When `partial`, the warning "Parcial: N de M posições sem
+  histórico suficiente" and the reasons by count go inside that same popover
+  (no tag), and the icon turns amber. A null `yield_rate` is "—" with its
   reason, never 0%.
 - `InvestmentPositionsPeriod` renders the groups: a table from `xl` up (one
   `<tbody>` per group, the group's subtotal as its first row), stacked rows and

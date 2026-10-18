@@ -12,13 +12,19 @@ function renderSummary(overrides: Parameters<typeof investmentPeriodFixture>[0] 
 }
 
 const aboutValues = (strip: HTMLElement) =>
-  within(strip).getByRole("button", { name: /^Sobre estes valores/ }).getAttribute("aria-label");
+  within(strip).getByRole("button", { name: /Sobre estes valores/ }).getAttribute("aria-label");
 
 describe("InvestmentPeriodSummary", () => {
   it("keeps the caveats out of the box until asked", () => {
     const strip = renderSummary();
     expect(within(strip).queryByText(/O saldo para investir/)).toBeNull();
     expect(aboutValues(strip)).toMatch(/O saldo para investir \(caixa\)/);
+  });
+
+  it("keeps the partial warning inside the info icon, not as a tag", () => {
+    const strip = renderSummary();
+    expect(within(strip).queryByText(/Parcial/)).toBeNull();
+    expect(aboutValues(strip)).toMatch(/^Parcial: 1 de 4 posições sem histórico suficiente.*Sobre estes valores/);
   });
 
   it("shows costs only when there are any", () => {

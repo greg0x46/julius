@@ -175,8 +175,7 @@ describe("InvestmentsPage period view", () => {
   it("flags a partial period instead of counting unavailable positions as zero", async () => {
     renderPage();
     const strip = await screen.findByRole("region", { name: /Carteira em/ });
-    expect(within(strip).getByText(/Parcial · 1 de 4 posições/)).toBeVisible();
-    expect(within(strip).getByRole("button", { name: /1× Sem histórico/ })).toBeInTheDocument();
+    expect(within(strip).getByRole("button", { name: /Parcial: 1 de 4 posições sem histórico suficiente.*1× Sem histórico/ })).toBeInTheDocument();
   });
 
   it("shows an unavailable position as — with its reason, never as R$ 0,00", async () => {
