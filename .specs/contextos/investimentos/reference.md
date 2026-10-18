@@ -111,8 +111,7 @@ Operations and transfers on a holding that predates the rule are refused the
 same way; existing rows and reads are untouched. An integrated account stores no
 currency (it is NULL), so its local cash records, which name no asset, cannot be
 checked and are taken as reais. Multi-currency support for manual operations is
-left to #63; until then `MonthlyMovements` and `RealizedGain` assume one
-currency.
+not provided: `MonthlyMovements` and `RealizedGain` assume one currency.
 
 Appreciation and unrealized gain (`Summary.UnrealizedGain`) are never realized
 income or realized gain: they are excluded from `ManualReportingEntries`,
@@ -468,8 +467,45 @@ date-only text as well as legacy timestamps. Integrated custody IDs remain opaqu
 `integrated:<source id>` text; records with UUID identities use native Postgres
 UUIDs. `db.Open` rejects the old schema generation; conversion is separate work.
 
+Position responses expose nullable `total_cost`, the exact acquisition cost
+from the backend ledger. The frontend uses it for manual yield instead of
+reconstructing quantity × average_cost; the gain is computed on the exact
+cost and rounded only for display (including proportional costs after partial
+sales). Older
+responses without it show the existing unknown-cost state. Workspace net
+yield/cost/movement aggregates still run locally and are inventoried as a
+migration gap in the API contract doc.
+
+## API contract verification
+
+Wire semantics and calculation ownership are inventoried in
+[`contratos-api.md`](../../contratos-api.md). Shared synthetic responses are
+checked against Go DTOs and the production TypeScript parsers by the existing
+backend/frontend CI tests.
+
 ## Monetary precision
 
 Investment cash fields and portfolio targets keep decimal strings through editing
 and submission. Contribution totals and quantity × average-cost gain calculations
 use exact arithmetic; BRL rounding happens only at display ([policy](../../precisao-monetaria.md)).
+
+## Reference valuation
+
+`GET /api/investment-summary` converts its existing BRL base into
+`finance.reference_currency` using current `internal/exchange` FX. Totals,
+per-account value/cash, per-goal value and goal targets share that rate and
+carry the chosen `currency_code` plus full `fx` provenance. Goal progress
+ratios do not change. Missing rates make the summary unavailable rather than
+showing zero or an identity conversion. Stale stored rates are disclosed.
+
+The workspace uses the same exact rate for client-computed BRL yield,
+contribution, withdrawal and cost aggregates. Positions and operations, including
+their currencies and amounts, stay native. Synced foreign positions and
+foreign custody cash are valued in BRL with the day's `internal/exchange` rate
+(`investments.BuildSummary`, `ManualNetWorth`, goal values); a currency without a
+rate fails the summary rather than being omitted. Yield, contribution and cost
+aggregates computed in the browser still sum reais positions only. No positions, targets or provider balances are
+rewritten when switching reference currency.
+
+Account cards add converted position value and cash with full decimal precision;
+only the displayed total is rounded to cents, consistently with the workspace.

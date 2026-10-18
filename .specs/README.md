@@ -19,6 +19,9 @@ before changing code. Agent rules and commands: [`/AGENTS.md`](../AGENTS.md).
 
 ## Doc types
 
+- [`auditoria-decisoes-financeiras.md`](auditoria-decisoes-financeiras.md) —
+  ARCH-03 audit evidence, shared decision owners and intentionally distinct rules.
+
 - **`motores-de-dominio.md`** — architecture, not features. Describes the domain
   at the ideal level; where code diverges, the divergence is stated explicitly.
 - **`invariantes-financeiros.md`** — cross-cutting, living matrix: balance,
@@ -57,6 +60,11 @@ renamed. Frontend routes and UI labels are also Portuguese.
 | `patrimonio-liquido` | Net worth | `networth` |
 | `investimentos` | Investments, quotes, reconciliation | `investments`, `quotes`, `marketdata` |
 | `configuracoes-autenticacao` | Settings, authentication | `auth`, `settings` |
+
+## Financial API contracts
+
+- [`contratos-api.md`](contratos-api.md) — wire precision, date/state/nullability
+  semantics, calculation ownership and shared Go/TypeScript contract checks.
 
 ## Shared database read boundary
 

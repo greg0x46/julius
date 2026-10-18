@@ -2,11 +2,14 @@ package httpapi
 
 import (
 	"database/sql"
+	"errors"
 	"net/http"
 	"time"
 
+	"github.com/greg0x46/julius/internal/exchange"
 	"github.com/greg0x46/julius/internal/money"
 	"github.com/greg0x46/julius/internal/networth"
+	"github.com/greg0x46/julius/internal/valuation"
 )
 
 type netWorthBreakdownDTO struct {
@@ -32,8 +35,19 @@ func toNetWorthBreakdownDTO(b networth.Breakdown) netWorthBreakdownDTO {
 }
 
 type netWorthSnapshotDTO struct {
-	CapturedAt time.Time `json:"captured_at"`
-	netWorthBreakdownDTO
+	CurrencyCode   string         `json:"currency_code"`
+	FX             *exchange.Rate `json:"fx,omitempty"`
+	StoredCurrency string         `json:"stored_currency"`
+	CapturedAt     time.Time      `json:"captured_at"`
+	// ValuationVersion 0 marks a snapshot from before foreign balances were
+	// valued: it covers BRL accounts and holdings only. Valuation records the
+	// day and rates behind every other row.
+	ValuationVersion int                 `json:"valuation_version"`
+	ValuationStatus  string              `json:"valuation_status"`
+	Valuation        *valuation.Metadata `json:"valuation,omitempty"`
+	// The figures are absent when the day cannot be valued (status
+	// "unavailable"), never zero.
+	*netWorthBreakdownDTO
 	// IsBackfilled mirrors SnapshotRow.IsBackfilled: true when this row was
 	// reconstructed by networth.Backfill rather than captured live, in
 	// which case InvestmentBalance is always "0" — see Backfill's doc
@@ -62,6 +76,10 @@ func handleGetNetWorth(conn *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
 		latest, err := networth.Snapshot(ctx, conn)
+		if errors.Is(err, valuation.ErrMissingRate) {
+			writeProblem(w, 503, "exchange-unavailable", "Cotação indisponível", "Falta a cotação de uma moeda para valorar o patrimônio líquido em reais. Nenhum saldo foi ignorado.")
+			return
+		}
 		if err != nil {
 			netWorthUnavailableProblem(w)
 			return
@@ -78,13 +96,35 @@ func handleGetNetWorth(conn *sql.DB) http.HandlerFunc {
 			return
 		}
 
+		report, ok := reportValuation(w, r, conn, latest.CapturedAt)
+		if !ok {
+			return
+		}
+		fx := exchange.New(conn, nil)
+		toDTO := func(row networth.SnapshotRow, v valuationDTO) netWorthSnapshotDTO {
+			dto := netWorthSnapshotDTO{
+				CurrencyCode: v.CurrencyCode, StoredCurrency: row.CurrencyCode, CapturedAt: row.CapturedAt,
+				ValuationVersion: row.ValuationVersion, ValuationStatus: row.ValuationStatus, Valuation: row.Valuation,
+				IsBackfilled: row.IsBackfilled,
+			}
+			if row.ValuationStatus == networth.ValuationUnavailable {
+				return dto
+			}
+			breakdown := toNetWorthBreakdownDTO(row.Breakdown)
+			v.breakdown(&breakdown)
+			dto.FX, dto.netWorthBreakdownDTO = &v.FX, &breakdown
+			return dto
+		}
 		series := make([]netWorthSnapshotDTO, len(rows))
 		for i, row := range rows {
-			series[i] = netWorthSnapshotDTO{CapturedAt: row.CapturedAt, netWorthBreakdownDTO: toNetWorthBreakdownDTO(row.Breakdown), IsBackfilled: row.IsBackfilled}
+			day := valuationDTO{CurrencyCode: report.CurrencyCode}
+			if row.ValuationStatus != networth.ValuationUnavailable {
+				if day, ok = valuationForCurrency(w, r, fx, report.CurrencyCode, row.CapturedAt); !ok {
+					return
+				}
+			}
+			series[i] = toDTO(row, day)
 		}
-		writeJSON(w, http.StatusOK, netWorthResponseDTO{
-			Series: series,
-			Latest: netWorthSnapshotDTO{CapturedAt: latest.CapturedAt, netWorthBreakdownDTO: toNetWorthBreakdownDTO(latest.Breakdown), IsBackfilled: latest.IsBackfilled},
-		})
+		writeJSON(w, http.StatusOK, netWorthResponseDTO{Series: series, Latest: toDTO(latest, report)})
 	}
 }

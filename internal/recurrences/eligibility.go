@@ -33,10 +33,8 @@ type ReconcileEligibility struct {
 // for income, an outflow for an expense), that aren't ignored, and that
 // aren't already reconciled to some other occurrence.
 //
-// Deliberately narrower than payables' equivalent in one way and wider in
-// another. Narrower: an ignored transaction is out, because a transaction
-// excluded from the totals can't be the thing that carries a commitment's
-// money. Wider: unlike CandidatesByMonth, this does NOT require the
+// Shares the BRL link checks with payables through money. Unlike
+// CandidatesByMonth, this does NOT require the
 // commitment's category or account — reconciling by hand is often exactly
 // what a user does *because* the category on the transaction is wrong, and
 // refusing the link would leave them with no way to fix it.
@@ -52,19 +50,12 @@ func EligibilityForReconciliation(
 	}
 
 	wantClassification := money.Outflow
-	notWantReason := ReasonNotOutflow
 	if kind == KindIncome {
-		wantClassification, notWantReason = money.Inflow, ReasonNotInflow
+		wantClassification = money.Inflow
 	}
 
-	if inclusionState == money.Ignored {
-		return reason(ReasonIgnored)
-	}
-	if classification != wantClassification {
-		return reason(notWantReason)
-	}
-	if eff == nil || eff.CurrencyCode != "BRL" {
-		return reason(ReasonMissingBRLPair)
+	if r := money.BRLLinkIneligibility(classification, wantClassification, inclusionState, eff); r != nil {
+		return reason(ReconcileIneligibilityReason(*r))
 	}
 	if alreadyReconciled {
 		return reason(ReasonAlreadyReconciled)

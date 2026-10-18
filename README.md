@@ -81,7 +81,13 @@ authentication configuration that does not depend on the host:
   is opening balance + posted movements + explicit adjustments. Edit, archive
   and reactivate accounts in **Contas e cartões**; currency and opening balance
   lock after movements. Foreign amounts stay in their original currency and
-  remain excluded from Net Worth BRL aggregates without rates.
+  are valued in BRL in Net Worth and the investment summary with the day's
+  exchange rate; a missing rate makes the figure unavailable.
+- **Reference currency** — choose the currency for consolidated Home, category,
+  investment and net-worth figures in **Configurações → Geral** (BRL by default).
+  Current reports use current FX; net-worth history uses each snapshot day’s FX.
+  Original records and stored BRL snapshots remain untouched. Missing rates
+  make the affected report unavailable instead of assuming a 1:1 conversion.
 - **Transactions** — searchable/filterable transaction list, manual
   inclusion/exclusion (e.g. ignoring a chargeback or a duplicate) and
   categorization. Entries can also be created by hand in an existing account —
@@ -115,7 +121,8 @@ authentication configuration that does not depend on the host:
   portfolios, per-asset operations, manual valuations and optional automatic
   quotes (B3 and crypto), enabled by default with a persistent daily schedule. Contributions and withdrawals reconciled with the
   statement show up apart from spending, keeping their cash effect and avoiding
-  double counting in net worth.
+  double counting in net worth. Manual-position returns use the exact recorded
+  acquisition cost, rather than reconstructing it from the displayed average cost.
   A curated starter asset catalog is populated automatically on startup.
 - **Browser authentication** — email and password login for the owner account,
   persisted sessions, logout and password change. No public sign-up.
@@ -599,8 +606,10 @@ The release scripts (`scripts/next-version.sh`, `update-changelog.sh`,
 The frontend suite runs as two Vitest projects (jsdom and plain Node); see
 [`frontend/TESTING.md`](frontend/TESTING.md) for the split and worker count.
 
-`npm run test:e2e` (Playwright) is declared in `package.json` but has no
-`playwright.config.*` or tests yet — scaffolded, not implemented.
+`npm run test:e2e` runs the financial browser journeys against isolated local
+Julius servers and disposable SQLite databases, without Pluggy credentials.
+See [`frontend/TESTING.md`](frontend/TESTING.md#financial-browser-journeys-playwright)
+for installation, coverage and failure evidence. CI runs the same suite.
 
 ## Open Finance & Pluggy
 

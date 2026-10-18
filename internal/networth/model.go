@@ -2,13 +2,18 @@
 // minus liabilities) over time. There is no background worker: a snapshot
 // for "today" is written on every read (Snapshot, called from the HTTP
 // handler before List), which is enough for a self-hosted app used
-// sporadically. The cash figure comes from transactions.CashOnHandIn (BRL).
+// sporadically. Every figure is valued in BRL: balances and holdings in other
+// currencies are converted with dated exchange rates, recorded on the row, and
+// a currency without a rate makes the valuation unavailable rather than
+// being dropped.
 package networth
 
 import (
 	"time"
 
 	"github.com/shopspring/decimal"
+
+	"github.com/greg0x46/julius/internal/valuation"
 )
 
 // Breakdown is a point-in-time decomposition of net worth into the
@@ -55,9 +60,16 @@ func (b Breakdown) TotalsFor() Breakdown {
 // Snapshot mirrors one net_worth_snapshots row: a Breakdown captured on a
 // given calendar day.
 type SnapshotRow struct {
-	ID         string
-	CapturedAt time.Time
-	Breakdown  Breakdown
+	CurrencyCode string
+	ID           string
+	CapturedAt   time.Time
+	Breakdown    Breakdown
+	// ValuationVersion is 0 for rows written before foreign balances were
+	// valued: those cover BRL accounts and holdings only. Valuation is nil
+	// for them; otherwise it records the valuation day and rates used.
+	ValuationVersion int
+	ValuationStatus  string
+	Valuation        *valuation.Metadata
 	// IsBackfilled marks a row written by Backfill (reconstructed from past
 	// transactions) rather than Snapshot (a live read of today's
 	// provider-synced balances). Breakdown.InvestmentBalance is always zero
@@ -66,3 +78,15 @@ type SnapshotRow struct {
 	CreatedAt    time.Time
 	UpdatedAt    time.Time
 }
+
+// Valuation statuses of a stored snapshot.
+const (
+	// ValuationVersion is bumped whenever the way a snapshot is valued changes.
+	ValuationVersion = 1
+
+	ValuationLegacy        = "legacy"        // before foreign balances were valued; BRL coverage only
+	ValuationComplete      = "complete"      // live read, every currency valued
+	ValuationStale         = "stale"         // live read using at least one stale rate
+	ValuationReconstructed = "reconstructed" // rebuilt for a past day with that day's rates
+	ValuationUnavailable   = "unavailable"   // a past day that cannot be valued; carries no figures
+)

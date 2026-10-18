@@ -3,6 +3,8 @@ package networth
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
 	"time"
@@ -12,9 +14,11 @@ import (
 
 	"github.com/greg0x46/julius/internal/db"
 	dbtypes "github.com/greg0x46/julius/internal/db/types"
+	"github.com/greg0x46/julius/internal/exchange"
 	"github.com/greg0x46/julius/internal/money"
 	"github.com/greg0x46/julius/internal/payables"
 	"github.com/greg0x46/julius/internal/transactions"
+	"github.com/greg0x46/julius/internal/valuation"
 )
 
 // Backfill reconstructs and stores net_worth_snapshots for every past day in
@@ -53,6 +57,19 @@ import (
 // is what lets the frontend flag this to the user instead of silently
 // showing a lower total on past days.
 func Backfill(ctx context.Context, q Querier, today time.Time) error {
+	return BackfillWith(ctx, q, today, exchange.New(q, nil))
+}
+
+// BackfillWith is Backfill with the exchange rates supplied by the caller.
+//
+// Each past day is valued with that day's own rates, and its row records them.
+// Past foreign balances are walked back in their native currency and converted
+// only at the end, so a movement is never valued at another day's rate. When a
+// rate cannot be resolved the day is skipped without storing anything, so a
+// later read retries it. A day that can never be valued (a foreign movement
+// with no amount in its account's currency lies after it) is stored once with
+// status "unavailable" and no figures, never as zero.
+func BackfillWith(ctx context.Context, q Querier, today time.Time, rates valuation.Resolver) error {
 	todayDay := formatDate(today)
 	todayBoundary, err := dbtypes.ParseDate(todayDay)
 	if err != nil {
@@ -81,7 +98,7 @@ func Backfill(ctx context.Context, q Querier, today time.Time) error {
 		return err
 	}
 
-	currentCash, err := cashBalance(ctx, q)
+	currentCash, err := transactions.CashOnHandByCurrency(ctx, q, nil)
 	if err != nil {
 		return err
 	}
@@ -96,21 +113,39 @@ func Backfill(ctx context.Context, q Querier, today time.Time) error {
 	// every transaction answers every day at once.
 	type gap struct {
 		day, dayEnd time.Time
-		cash        decimal.Decimal
+		cash        money.Balances
+		// unreconstructable: a movement after this day cannot be reversed out
+		// of its account (a foreign account with no amount in its own
+		// currency), so no later-or-earlier figure of that cash is known.
+		unreconstructable bool
 	}
 	var gaps []gap
 	idx := 0
-	runningDelta := decimal.Zero
+	runningDelta := money.Balances{}
+	unreconstructable := false
 	for d := yesterday; !d.Before(windowStart); d = d.AddDate(0, 0, -1) {
 		dayEnd := d.AddDate(0, 0, 1)
 		for idx < len(deltas) && !deltas[idx].occurredAt.Before(dayEnd) {
-			runningDelta = runningDelta.Add(deltas[idx].delta)
+			if deltas[idx].unreconstructable {
+				unreconstructable = true
+			} else {
+				runningDelta[deltas[idx].currency] = runningDelta[deltas[idx].currency].Add(deltas[idx].delta)
+			}
 			idx++
 		}
 		if existing[formatDate(d)] {
 			continue
 		}
-		gaps = append(gaps, gap{day: d, dayEnd: dayEnd, cash: currentCash.Sub(runningDelta)})
+		// Native balances per currency: nothing is converted until the day's
+		// own rates are known, so a movement is never valued at another day's rate.
+		cash := money.Balances{}
+		for _, currency := range currentCash.Currencies() {
+			cash[currency] = currentCash.Get(currency)
+		}
+		for _, currency := range runningDelta.Currencies() {
+			cash[currency] = cash.Get(currency).Sub(runningDelta.Get(currency))
+		}
+		gaps = append(gaps, gap{day: d, dayEnd: dayEnd, cash: cash, unreconstructable: unreconstructable})
 	}
 	if len(gaps) == 0 {
 		return nil
@@ -129,15 +164,37 @@ func Backfill(ctx context.Context, q Querier, today time.Time) error {
 	}
 
 	for i, g := range gaps {
-		// The card side still costs a query per day: its cycle math keys off
-		// time.Local calendar days and has no as-of-many-days form, so
-		// there is nothing to hoist out of the loop here yet.
-		creditCard, err := creditCardBalanceAsOf(ctx, q, g.day)
+		valued := valuation.New(rates, g.day)
+		if g.unreconstructable {
+			// Deterministic, so it is stored: retrying cannot change it.
+			if err := insertBackfillSnapshot(ctx, q, formatDate(g.day), Breakdown{}.TotalsFor(), valued, ValuationUnavailable); err != nil {
+				return err
+			}
+			continue
+		}
+		cash, err := valueBalances(ctx, g.cash, valued)
+		if errors.Is(err, valuation.ErrMissingRate) {
+			// Possibly transient (provider down): store nothing so a later
+			// read retries this day instead of freezing it as unavailable.
+			continue
+		}
 		if err != nil {
 			return err
 		}
-		breakdown := Breakdown{CashBalance: g.cash, CreditCardBalance: creditCard, PayablesDebt: debts[i]}.TotalsFor()
-		if err := insertBackfillSnapshot(ctx, q, formatDate(g.day), breakdown); err != nil {
+		// The card side still costs a query per day: its cycle math keys off
+		// time.Local calendar days and has no as-of-many-days form, so
+		// there is nothing to hoist out of the loop here yet.
+		loc := time.Local
+		reference := time.Date(g.day.Year(), g.day.Month(), g.day.Day(), 12, 0, 0, 0, loc)
+		creditCard, err := transactions.CreditCardBalanceValued(ctx, q, reference, loc, valued)
+		if errors.Is(err, valuation.ErrMissingRate) {
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		breakdown := Breakdown{CashBalance: cash, CreditCardBalance: creditCard, PayablesDebt: debts[i]}.TotalsFor()
+		if err := insertBackfillSnapshot(ctx, q, formatDate(g.day), breakdown, valued, ValuationReconstructed); err != nil {
 			return err
 		}
 	}
@@ -165,20 +222,39 @@ func existingCapturedDays(ctx context.Context, q Querier, from, to time.Time) (m
 	return result, rows.Err()
 }
 
-func insertBackfillSnapshot(ctx context.Context, q Querier, capturedAt string, breakdown Breakdown) error {
+// valueBalances values native per-currency balances in the BRL base.
+func valueBalances(ctx context.Context, balances money.Balances, valued *valuation.Valuation) (decimal.Decimal, error) {
+	total := decimal.Zero
+	for _, currency := range balances.Currencies() {
+		value, err := valued.Convert(ctx, balances.Get(currency), currency)
+		if err != nil {
+			return decimal.Zero, err
+		}
+		total = total.Add(value)
+	}
+	return total, nil
+}
+
+func insertBackfillSnapshot(ctx context.Context, q Querier, capturedAt string, breakdown Breakdown, valued *valuation.Valuation, status string) error {
 	now := db.FormatTime(time.Now())
-	_, err := q.ExecContext(ctx, `
+	rates, err := json.Marshal(valued.Rates)
+	if err != nil {
+		return err
+	}
+	_, err = q.ExecContext(ctx, `
 		INSERT INTO net_worth_snapshots (
 			id, captured_at, total_assets, total_liabilities, net_worth,
 			cash_balance, investment_balance, credit_card_balance, payables_debt,
-			is_backfilled, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, TRUE, ?, ?)
+			is_backfilled, created_at, updated_at,
+			valuation_version, valuation_status, valued_at, rate_policy, valuation_rates
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, TRUE, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT (captured_at) DO NOTHING`,
 		uuid.NewString(), capturedAt,
 		money.CanonicalDecimal(breakdown.TotalAssets), money.CanonicalDecimal(breakdown.TotalLiabilities), money.CanonicalDecimal(breakdown.NetWorth),
 		money.CanonicalDecimal(breakdown.CashBalance), money.CanonicalDecimal(breakdown.InvestmentBalance), money.CanonicalDecimal(breakdown.CreditCardBalance),
 		money.CanonicalDecimal(breakdown.PayablesDebt),
 		now, now,
+		ValuationVersion, status, db.FormatTime(valued.ValuedAt), valued.RatePolicy, string(rates),
 	)
 	return err
 }
@@ -189,7 +265,12 @@ func insertBackfillSnapshot(ctx context.Context, q Querier, capturedAt string, b
 // debt indicator, since cash is an asset and card balance is a liability.
 type cashTransactionDelta struct {
 	occurredAt time.Time
-	delta      decimal.Decimal
+	// delta is in currency, the account's own currency.
+	delta    decimal.Decimal
+	currency string
+	// unreconstructable: the movement is on a foreign account but carries no
+	// amount in that account's currency, so it cannot be reversed.
+	unreconstructable bool
 }
 
 // cashDeltasDescending loads every non-CREDIT-account transaction's real
@@ -214,10 +295,10 @@ func cashDeltasDescending(ctx context.Context, q Querier) ([]cashTransactionDelt
 		       ft.occurred_at, ft.provider_status, ft.movement_type
 		FROM financial_transactions ft
 		JOIN financial_accounts fa ON fa.id = ft.account_id
-		WHERE (fa.account_type IS NULL OR fa.account_type != 'CREDIT') AND (fa.currency_code IS NULL OR fa.currency_code = 'BRL') AND ft.deleted_at IS NULL AND (ft.origin = 'synced' OR (fa.origin = 'manual' AND ft.provider_status = 'POSTED'))
+		WHERE (fa.account_type IS NULL OR fa.account_type != 'CREDIT') AND ft.deleted_at IS NULL AND (ft.origin = 'synced' OR (fa.origin = 'manual' AND ft.provider_status = 'POSTED'))
  UNION ALL SELECT aba.amount, aba.amount, fa.currency_code, fa.currency_code,
  aba.created_at, 'POSTED', CASE WHEN SUBSTR(CAST(aba.amount AS TEXT), 1, 1) = '-' THEN 'DEBIT' ELSE 'CREDIT' END
- FROM account_balance_adjustments aba JOIN financial_accounts fa ON fa.id = aba.account_id WHERE fa.currency_code = 'BRL'`)
+ FROM account_balance_adjustments aba JOIN financial_accounts fa ON fa.id = aba.account_id`)
 	if err != nil {
 		return nil, fmt.Errorf("query cash transactions: %w", err)
 	}
@@ -276,10 +357,17 @@ func cashDeltasDescending(ctx context.Context, q Querier) ([]cashTransactionDelt
 		// the transfer rule reach here would leave every day before a
 		// transfer off by its full amount.
 		included, _ := money.Eligibility(classification, providerStatus, effective, money.Considered, "")
-		// cashBalance is BRL-only: other currencies, and foreign accounts whose
-		// transaction falls back to a BRL amount, are not reversed out.
-		if !included || effective == nil || effective.CurrencyCode != money.BRL ||
-			accountCurrency == nil || *accountCurrency != money.BRL {
+		if !included || effective == nil || accountCurrency == nil {
+			continue
+		}
+		if effective.CurrencyCode != *accountCurrency {
+			// Only the account-currency amount moved the account's balance. A
+			// BRL account whose entry carries just a foreign amount never
+			// counted it, as before; a foreign account is a gap in the
+			// history, not something to guess at.
+			if *accountCurrency != money.BRL {
+				result = append(result, cashTransactionDelta{occurredAt: occurredAt, unreconstructable: true})
+			}
 			continue
 		}
 
@@ -287,7 +375,7 @@ func cashDeltasDescending(ctx context.Context, q Querier) ([]cashTransactionDelt
 		if classification == money.Outflow {
 			delta = delta.Neg()
 		}
-		result = append(result, cashTransactionDelta{occurredAt: occurredAt, delta: delta})
+		result = append(result, cashTransactionDelta{occurredAt: occurredAt, delta: delta, currency: *accountCurrency})
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -323,9 +411,9 @@ func earliestCashTransactionDay(ctx context.Context, q Querier) (day time.Time, 
 		FROM financial_transactions ft
 		JOIN financial_accounts fa ON fa.id = ft.account_id
 		WHERE (fa.account_type IS NULL OR fa.account_type != 'CREDIT')
-		  AND ft.occurred_at IS NOT NULL AND (fa.currency_code IS NULL OR fa.currency_code = 'BRL') AND ft.deleted_at IS NULL AND (ft.origin = 'synced' OR (fa.origin = 'manual' AND ft.provider_status = 'POSTED'))
+		  AND ft.occurred_at IS NOT NULL AND ft.deleted_at IS NULL AND (ft.origin = 'synced' OR (fa.origin = 'manual' AND ft.provider_status = 'POSTED'))
  UNION ALL SELECT aba.created_at FROM account_balance_adjustments aba
- JOIN financial_accounts fa ON fa.id = aba.account_id WHERE fa.currency_code = 'BRL') history`).Scan(dbtypes.Time(&raw))
+ JOIN financial_accounts fa ON fa.id = aba.account_id) history`).Scan(dbtypes.Time(&raw))
 	if err != nil || !raw.Valid {
 		return time.Time{}, false, err
 	}
@@ -339,16 +427,4 @@ func earliestCashTransactionDay(ctx context.Context, q Querier) (day time.Time, 
 		return time.Time{}, false, err
 	}
 	return dayBoundary, true, nil
-}
-
-// creditCardBalanceAsOf mirrors creditCardBalance but for a past day,
-// reusing transactions.CreditCardTransactionTotalAt's
-// arbitrary-reference-date support. The reference time is local noon on
-// day — as opposed to a UTC midnight boundary — because the cycle math
-// keys off time.Local calendar days (see CreditCardTransactionTotalAt);
-// noon keeps the same calendar date in virtually every timezone.
-func creditCardBalanceAsOf(ctx context.Context, q Querier, day time.Time) (decimal.Decimal, error) {
-	loc := time.Local
-	reference := time.Date(day.Year(), day.Month(), day.Day(), 12, 0, 0, 0, loc)
-	return transactions.CreditCardTransactionTotalAt(ctx, q, "BRL", reference, loc)
 }

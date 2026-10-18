@@ -1,7 +1,6 @@
 import type { Investment, InvestmentOperation, InvestmentPosition } from "../../api/contracts";
 import { formatDateOnly } from "../../presentation/dates";
 import { yieldUnavailable } from "../../presentation/investmentLabels";
-import { multiplyDecimals } from "../../presentation/decimal";
 import { subtractBRL, sumBRL } from "../../presentation/money";
 
 export function isZeroBRL(value: string | null): boolean {
@@ -74,7 +73,7 @@ export function positionYield(position: InvestmentPosition, linked: LinkedInvest
       short: "Sem cotação registrada",
     };
   }
-  if (position.average_cost === null || isZeroBRL(position.average_cost)) {
+  if (position.total_cost == null || isZeroBRL(position.total_cost)) {
     return { known: false, reason: "Sem custo de aquisição registrado.", short: "Sem custo de aquisição" };
   }
   if (isZeroBRL(position.quantity)) {
@@ -84,7 +83,7 @@ export function positionYield(position: InvestmentPosition, linked: LinkedInvest
       short: "Sem quantidade registrada",
     };
   }
-  const basis = multiplyDecimals(position.average_cost, position.quantity);
+  const basis = position.total_cost;
   const gross = subtractBRL(position.current_value, basis);
   const net = subtractBRL(gross, cost);
   return { known: true, value: net, percent: (Number(net) / Number(basis)) * 100, basis, gross };

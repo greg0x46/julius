@@ -71,6 +71,10 @@ calendar-date adapters, including SQLite date-only text and legacy timestamps.
 
 ## Reporting conversion
 
+Monthly period boundaries use `dates.DaysInMonth`, the same calendar rule as
+recurring schedules and card-cycle clamping. `money.PeriodFor` still chooses
+the reporting calendar date in the request's timezone.
+
 `internal/reporting` consolidates eligible effective account-currency money to
 BRL using `internal/exchange` historical rates for the reporting calendar date.
 Queries, groups and category reports return conversion coverage and native
@@ -218,8 +222,8 @@ keep their money in the balance. Creating USD 10 on a USD account stores USD
 For synced accounts, manual entries still never change provider balances or
 historical reconstruction. Credit-card totals remain the deliberate exception:
 they sum eligible entries, so manual entries count toward the open bill.
-`CashOnHandIn(..., BRL)` (Net Worth) remains a BRL aggregate and excludes foreign
-accounts; Timeline converts native balances separately for its reference-date anchor. Net-worth history reverses posted manual-account movements and
+Net Worth values the same native balances in BRL (`CashOnHandValued`) at the valuation
+day's rate, as Timeline does for its reference-date anchor. Net-worth history reverses posted manual-account movements and
 adjustment deltas, using opening balance as its historical baseline; existing
 snapshots are never rewritten.
 
@@ -237,6 +241,13 @@ text conversions. Shared test fixtures bind binary payloads and use portable
 boolean literals so query coverage runs against both typed baselines.
 `TestQueryTypedValuesBothDialects` pins exact large amounts, UTC instants,
 decision timestamps and absent values on SQLite and Postgres.
+
+## API contract verification
+
+Wire semantics and calculation ownership are inventoried in
+[`contratos-api.md`](../../contratos-api.md). Shared synthetic responses are
+checked against Go DTOs and the production TypeScript parsers by the existing
+backend/frontend CI tests.
 
 ## Monetary precision
 
@@ -331,3 +342,20 @@ Tests: `TestLinkedTransfersPreserveNativeCashAndReporting`,
 `TestTransferMigrationPreservesExistingMovements`; frontend
 `TransactionTransferScreen.test.tsx`, `ManualTransferForm.test.tsx`,
 `transferRate.test.ts` and `transfers.test.ts`.
+
+## Consolidated report valuation
+
+Transaction-query `reporting.totals` (overall and per group), spending-by-category
+and category-breakdown responses convert their existing
+BRL aggregates with current `internal/exchange` rates to
+`finance.reference_currency` (default BRL), including projected items only
+when requested. Responses include the valuation `currency_code` and `fx`
+provenance; missing FX is 503 `exchange-unavailable`. The transaction summary
+and group headings use these converted totals and their explicit currency, with a warning for stale FX. Ledger query items and
+account balances retain their native amounts and currencies. Their original
+per-currency totals and the consolidated BRL eligibility exclusions are
+unchanged; the reference preference changes valuation/display only. The
+consolidated BRL figures already use each entry's reporting-day rate (see
+`internal/reporting`); the reference currency then applies one current
+BRL→reference rate on top, so a non-BRL reference is a presentation valuation
+of that BRL base, not a per-day reconstruction.

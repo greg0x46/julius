@@ -149,3 +149,23 @@ For the same reason `CertaintyTier` appears nowhere in the UI — the certainty
 vocabulary (principle 4 of `.specs/motores-de-dominio.md`) lives only in the
 backend today. The badge that showed it (`EntryOriginBadge`) and its label map
 were removed with it.
+
+## API contract verification
+
+Wire semantics and calculation ownership are inventoried in
+[`contratos-api.md`](../../contratos-api.md). Shared synthetic responses are
+checked against Go DTOs and the production TypeScript parsers by the existing
+backend/frontend CI tests.
+
+## Reference valuation
+
+`/api/timeline` values its consolidated BRL series in the persisted financial
+reference currency (BRL by default). One current FX rate applies to the base,
+simulation, entries, daily balances, period totals and scenario deltas; past
+and projected points are current-rate equivalents, not an FX forecast or a
+historical-rate cash reconstruction. This keeps the balance walk and all Home
+figures on the same basis. The original BRL eligibility and foreign-currency
+exclusions are unchanged. Responses include `currency_code` and full `fx`
+provenance; missing FX makes the report unavailable and stale FX is disclosed.
+Home money figures, daily allowance, accessible links and chart tooltips read
+that response currency. Category reports use the same current-rate policy.

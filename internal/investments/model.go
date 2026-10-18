@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/shopspring/decimal"
+
+	"github.com/greg0x46/julius/internal/valuation"
 )
 
 // Querier is implemented by *sql.DB and *sql.Tx. Keeping this package on the
@@ -278,6 +280,8 @@ type SummaryPortfolio struct {
 }
 
 type Summary struct {
+	// Valuation records the rates that converted foreign holdings into CurrencyCode.
+	Valuation      valuation.Metadata
 	CurrencyCode   string
 	TotalValue     decimal.Decimal
 	ManualValue    decimal.Decimal

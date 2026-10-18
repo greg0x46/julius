@@ -180,6 +180,7 @@ var columnKinds = map[string]string{
 	"net_worth_snapshots.total_assets":                               "numeric",
 	"net_worth_snapshots.total_liabilities":                          "numeric",
 	"net_worth_snapshots.updated_at":                                 "timestamptz",
+	"net_worth_snapshots.valued_at":                                  "timestamptz",
 	"normalization_events.account_id":                                "uuid",
 	"normalization_events.bill_id":                                   "uuid",
 	"normalization_events.created_at":                                "timestamptz",

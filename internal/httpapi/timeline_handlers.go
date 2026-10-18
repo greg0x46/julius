@@ -144,6 +144,7 @@ func scenarioImpactToDTO(i timeline.Impact) scenarioImpactDTO {
 // dashboard's — gets an income/expense total for exactly the requested
 // range.
 type timelineResponseDTO struct {
+	valuationDTO
 	Base            timelineSeriesDTO   `json:"base"`
 	PeriodTotals    periodTotalsDTO     `json:"period_totals"`
 	Simulation      *timelineSeriesDTO  `json:"simulation"`
@@ -254,6 +255,22 @@ func handleGetTimeline(conn *sql.DB) http.HandlerFunc {
 			}
 		}
 
+		valuation, ok := reportValuation(w, r, conn, time.Now().UTC())
+		if !ok {
+			return
+		}
+		response.valuationDTO = valuation
+		valuation.series(&response.Base)
+		valuation.fields(&response.PeriodTotals.Income, &response.PeriodTotals.Expense, &response.PeriodTotals.Result)
+		if response.PeriodTotals.Reporting != nil {
+			valuation.summary(response.PeriodTotals.Reporting)
+		}
+		if response.Simulation != nil {
+			valuation.series(response.Simulation)
+		}
+		for i := range response.ScenarioImpacts {
+			valuation.fields(&response.ScenarioImpacts[i].Delta)
+		}
 		writeJSON(w, http.StatusOK, response)
 	}
 }

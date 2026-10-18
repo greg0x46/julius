@@ -3,6 +3,7 @@ package networth
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -12,10 +13,12 @@ import (
 
 	"github.com/greg0x46/julius/internal/db"
 	dbtypes "github.com/greg0x46/julius/internal/db/types"
+	"github.com/greg0x46/julius/internal/exchange"
 	"github.com/greg0x46/julius/internal/investments"
 	"github.com/greg0x46/julius/internal/money"
 	"github.com/greg0x46/julius/internal/payables"
 	"github.com/greg0x46/julius/internal/transactions"
+	"github.com/greg0x46/julius/internal/valuation"
 )
 
 // Querier is satisfied by both *sql.DB and *sql.Tx — identical in shape to
@@ -29,68 +32,89 @@ const dateLayout = "2006-01-02"
 
 func formatDate(t time.Time) string { return t.UTC().Format(dateLayout) }
 
-// cashBalance is the asset side's cash figure: BRL cash from
-// transactions.CashOnHandIn; other currencies are not converted into it.
-// Credit card accounts are excluded there — their balance is owed debt,
-// handled by creditCardBalance below.
-func cashBalance(ctx context.Context, q Querier) (decimal.Decimal, error) {
-	return transactions.CashOnHandIn(ctx, q, nil, money.BRL)
+// newValuation values at the given day with the application's exchange service.
+func newValuation(q Querier, at time.Time) *valuation.Valuation {
+	return valuation.New(exchange.New(q, nil), at)
 }
 
-// creditCardBalance is what's currently owed across every credit card,
-// computed the same way handlePayableTotalOwed's "Dívida total" homepage
-// widget does — the current bill cycle's eligible transaction total, never
-// financial_accounts.balance directly (see the doc comment on
-// transactions.CreditCardTransactionTotal for why: the provider balance can
-// include locally-ignored transactions). Reusing that exact function is
-// what keeps this figure and the homepage's in agreement.
-func creditCardBalance(ctx context.Context, q Querier) (decimal.Decimal, error) {
-	return transactions.CreditCardTransactionTotal(ctx, q, "BRL")
-}
-
-// investmentBalance sums every synced investment's current balance. Balances
-// are stored as TEXT to stay exact, so the summing happens here in Go with
-// decimal.Decimal rather than through a float-lossy SQL SUM.
-func investmentBalance(ctx context.Context, q Querier) (decimal.Decimal, error) {
-	manual, err := investments.ManualNetWorth(ctx, q)
+// investmentBalance sums every synced investment's current balance, each valued
+// in BRL, plus the manual investments' contribution. Balances are stored as
+// TEXT to stay exact, so the summing happens here in Go with decimal.Decimal
+// rather than through a float-lossy SQL SUM.
+func investmentBalance(ctx context.Context, q Querier, valued *valuation.Valuation) (decimal.Decimal, error) {
+	manual, err := investments.ManualNetWorthValued(ctx, q, valued)
 	if err != nil {
 		return decimal.Zero, err
 	}
-	rows, err := q.QueryContext(ctx, `SELECT balance FROM financial_investments WHERE balance IS NOT NULL AND (currency_code IS NULL OR currency_code = 'BRL')`)
+	rows, err := q.QueryContext(ctx, `SELECT balance, currency_code FROM financial_investments WHERE balance IS NOT NULL`)
 	if err != nil {
 		return decimal.Decimal{}, err
 	}
 	defer rows.Close()
-	total := manual
+	type holding struct {
+		amount   decimal.Decimal
+		currency string
+	}
+	var holdings []holding
 	for rows.Next() {
 		var raw string
-		if err := rows.Scan(dbtypes.Decimal(&raw)); err != nil {
+		var currency sql.NullString
+		if err := rows.Scan(dbtypes.Decimal(&raw), &currency); err != nil {
 			return decimal.Decimal{}, err
 		}
 		amount, err := decimal.NewFromString(raw)
 		if err != nil {
 			return decimal.Decimal{}, fmt.Errorf("parse investment balance %q: %w", raw, err)
 		}
-		total = total.Add(amount)
+		code := valuation.Currency(nil)
+		if currency.Valid {
+			code = valuation.Currency(&currency.String)
+		}
+		holdings = append(holdings, holding{amount, code})
 	}
-	return total, rows.Err()
+	if err := rows.Err(); err != nil {
+		return decimal.Zero, err
+	}
+	rows.Close()
+	total := manual
+	for _, h := range holdings {
+		value, err := valued.Convert(ctx, h.amount, h.currency)
+		if err != nil {
+			return decimal.Zero, err
+		}
+		total = total.Add(value)
+	}
+	return total, nil
 }
 
 // Compute aggregates the current net worth from live data — never from a
 // stored snapshot: assets are cash (non-CREDIT account balances) +
 // investments; liabilities are the current credit card bill cycle +
-// remaining debts. Receivables never enter this computation at all — see
-// Breakdown's doc comment for why.
+// remaining debts, all valued in BRL at today's rates. Receivables never
+// enter this computation at all — see Breakdown's doc comment for why.
 func Compute(ctx context.Context, q Querier) (Breakdown, error) {
-	cash, err := cashBalance(ctx, q)
+	return ComputeValued(ctx, q, newValuation(q, time.Now()))
+}
+
+// ComputeValued is Compute with the valuation (and so the rates it used)
+// supplied by the caller.
+func ComputeValued(ctx context.Context, q Querier, valued *valuation.Valuation) (Breakdown, error) {
+	// Cash is the same transactions.CashOnHandByCurrency the timeline anchors
+	// on, so both views start from the same native balances. Credit card
+	// accounts are excluded there — their balance is owed debt.
+	cash, err := transactions.CashOnHandValued(ctx, q, nil, valued)
 	if err != nil {
 		return Breakdown{}, err
 	}
-	investments, err := investmentBalance(ctx, q)
+	investments, err := investmentBalance(ctx, q, valued)
 	if err != nil {
 		return Breakdown{}, err
 	}
-	creditCard, err := creditCardBalance(ctx, q)
+	// What's currently owed across every credit card is the current bill
+	// cycle's eligible transaction total, never financial_accounts.balance
+	// (see transactions.CreditCardTransactionTotal for why: the provider
+	// balance can include locally-ignored transactions).
+	creditCard, err := transactions.CreditCardBalanceValued(ctx, q, valued.ValuedAt, time.Local, valued)
 	if err != nil {
 		return Breakdown{}, err
 	}
@@ -112,9 +136,23 @@ func Compute(ctx context.Context, q Querier) (Breakdown, error) {
 // calling it repeatedly the same day only ever refreshes that one row
 // instead of accumulating duplicates.
 func Snapshot(ctx context.Context, q Querier) (SnapshotRow, error) {
-	breakdown, err := Compute(ctx, q)
+	return SnapshotValued(ctx, q, newValuation(q, time.Now()))
+}
+
+// SnapshotValued is Snapshot with the valuation supplied by the caller; the
+// row records its day and every rate it used.
+func SnapshotValued(ctx context.Context, q Querier, valued *valuation.Valuation) (SnapshotRow, error) {
+	breakdown, err := ComputeValued(ctx, q, valued)
 	if err != nil {
 		return SnapshotRow{}, err
+	}
+	rates, err := json.Marshal(valued.Rates)
+	if err != nil {
+		return SnapshotRow{}, err
+	}
+	status := ValuationComplete
+	if valued.Stale() {
+		status = ValuationStale
 	}
 
 	now := time.Now()
@@ -126,8 +164,9 @@ func Snapshot(ctx context.Context, q Querier) (SnapshotRow, error) {
 		INSERT INTO net_worth_snapshots (
 			id, captured_at, total_assets, total_liabilities, net_worth,
 			cash_balance, investment_balance, credit_card_balance, payables_debt,
-			is_backfilled, created_at, updated_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, FALSE, ?, ?)
+			is_backfilled, created_at, updated_at,
+			valuation_version, valuation_status, valued_at, rate_policy, valuation_rates
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, FALSE, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT (captured_at) DO UPDATE SET
 			total_assets = excluded.total_assets,
 			total_liabilities = excluded.total_liabilities,
@@ -137,12 +176,18 @@ func Snapshot(ctx context.Context, q Querier) (SnapshotRow, error) {
 			credit_card_balance = excluded.credit_card_balance,
 			payables_debt = excluded.payables_debt,
 			is_backfilled = FALSE,
-			updated_at = excluded.updated_at`,
+			updated_at = excluded.updated_at,
+			valuation_version = excluded.valuation_version,
+			valuation_status = excluded.valuation_status,
+			valued_at = excluded.valued_at,
+			rate_policy = excluded.rate_policy,
+			valuation_rates = excluded.valuation_rates`,
 		id, capturedAt,
 		money.CanonicalDecimal(breakdown.TotalAssets), money.CanonicalDecimal(breakdown.TotalLiabilities), money.CanonicalDecimal(breakdown.NetWorth),
 		money.CanonicalDecimal(breakdown.CashBalance), money.CanonicalDecimal(breakdown.InvestmentBalance), money.CanonicalDecimal(breakdown.CreditCardBalance),
 		money.CanonicalDecimal(breakdown.PayablesDebt),
 		nowStored, nowStored,
+		ValuationVersion, status, db.FormatTime(valued.ValuedAt), valued.RatePolicy, string(rates),
 	)
 	if err != nil {
 		return SnapshotRow{}, err
@@ -158,14 +203,27 @@ func scanSnapshotRow(scan func(...any) error) (SnapshotRow, error) {
 		totalAssetsRaw, totalLiabilitiesRaw, netWorthRaw       string
 		cashRaw, investmentRaw, creditCardRaw, payablesDebtRaw string
 		isBackfilledRaw                                        int
+		valuedAtRaw, ratePolicy                                sql.NullString
+		ratesRaw                                               string
 	)
 	if err := scan(dbtypes.ID(&s.ID), dbtypes.Date(&capturedAtRaw), dbtypes.Decimal(&totalAssetsRaw), dbtypes.Decimal(&totalLiabilitiesRaw), dbtypes.Decimal(&netWorthRaw),
 		dbtypes.Decimal(&cashRaw), dbtypes.Decimal(&investmentRaw), dbtypes.Decimal(&creditCardRaw), dbtypes.Decimal(&payablesDebtRaw), dbtypes.Bool(&isBackfilledRaw),
-		dbtypes.Time(&createdAtRaw), dbtypes.Time(&updatedAtRaw)); err != nil {
+		dbtypes.Time(&createdAtRaw), dbtypes.Time(&updatedAtRaw), &s.CurrencyCode,
+		&s.ValuationVersion, &s.ValuationStatus, dbtypes.Time(&valuedAtRaw), &ratePolicy, &ratesRaw); err != nil {
 		return SnapshotRow{}, err
 	}
 	s.IsBackfilled = isBackfilledRaw != 0
 	var err error
+	if valuedAtRaw.Valid {
+		valuedAt, err := dbtypes.ParseTime(valuedAtRaw.String)
+		if err != nil {
+			return SnapshotRow{}, err
+		}
+		s.Valuation = &valuation.Metadata{BaseCurrency: s.CurrencyCode, ValuedAt: valuedAt, RatePolicy: ratePolicy.String, Rates: map[string]valuation.Rate{}}
+		if err := json.Unmarshal([]byte(ratesRaw), &s.Valuation.Rates); err != nil {
+			return SnapshotRow{}, fmt.Errorf("parse snapshot valuation rates: %w", err)
+		}
+	}
 	if s.CapturedAt, err = dbtypes.ParseDate(capturedAtRaw); err != nil {
 		return SnapshotRow{}, err
 	}
@@ -198,7 +256,8 @@ func scanSnapshotRow(scan func(...any) error) (SnapshotRow, error) {
 
 const snapshotColumns = `id, captured_at, total_assets, total_liabilities, net_worth,
 	cash_balance, investment_balance, credit_card_balance, payables_debt, is_backfilled,
-	created_at, updated_at`
+	created_at, updated_at, valuation_currency,
+	valuation_version, valuation_status, valued_at, rate_policy, valuation_rates`
 
 func getByCapturedAt(ctx context.Context, q Querier, capturedAt string) (SnapshotRow, error) {
 	row := q.QueryRowContext(ctx, `SELECT `+snapshotColumns+` FROM net_worth_snapshots WHERE captured_at = ?`, capturedAt)

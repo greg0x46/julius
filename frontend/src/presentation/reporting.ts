@@ -14,3 +14,8 @@ export function reportingTotals(report: ReportingSummary | undefined, totals: Cu
 export function reportingError(error: unknown): ApiError | null {
   return error instanceof ApiError && error.problem?.type === "/problems/reporting-fx-unavailable" ? error : null;
 }
+
+/** The server's own explanation (e.g. a missing exchange rate) for a failed report, if it sent one. */
+export function problemMessage(error: unknown): string | undefined {
+  return error instanceof ApiError ? error.message : undefined;
+}

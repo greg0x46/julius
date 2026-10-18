@@ -1,3 +1,4 @@
+import { ApiError } from "../api/problems";
 import { AimOutlined, BankOutlined, PieChartOutlined, SwapOutlined } from "@ant-design/icons";
 import { Alert, Button, Skeleton, Switch } from "antd";
 import { useMemo, useState } from "react";
@@ -293,9 +294,9 @@ export function InvestmentsPage() {
       actions={createMenu}
       tabs={<PageTabs label="Visão dos investimentos" options={viewOptions} value={view} onChange={setView} />}
     >
-      {workspace.error && !workspace.isLoading && view !== "synced" && (
+      {workspace.error && !workspace.isLoading && (
         <UnavailableState onRetry={() => void workspace.refetch()}>
-          Não foi possível carregar os investimentos
+          {workspace.error instanceof ApiError ? workspace.error.message : "Não foi possível carregar os investimentos"}
         </UnavailableState>
       )}
       {actionError && (
@@ -315,20 +316,30 @@ export function InvestmentsPage() {
             <Skeleton active paragraph={{ rows: 5 }} />
           </div>
         </div>
-      ) : workspace.error && view !== "synced" ? null : (
+      ) : workspace.error ? null : (
         // A failed load shows only the retry above: zeroed totals and "Nenhuma
         // conta ainda" beside it would claim there is nothing there.
         <>
           {workspace.positions.some((position) => position.currency_code !== "BRL") && (
-            <Alert type="info" showIcon style={{ marginBottom: 16 }} message="Totais em reais"
-              description="Posições em outras moedas são exibidas na moeda original e ficam fora dos totais e metas em reais. Esta versão não faz conversão de câmbio." />
+            <Alert
+              type="info"
+              showIcon
+              style={{ marginBottom: 16 }}
+              message={`Totais em ${workspace.summary?.currency_code ?? "BRL"}`}
+              description="Posições em outras moedas aparecem na moeda original. O valor total, o caixa e as metas as incluem convertidas com o câmbio do dia; rendimento, aportes e custo somam apenas posições em reais."
+            />
           )}
           {/* Each view's hero is its own scope: the workspace total for the
               account and goal views, the imported investments' total for the
               synced one. Two heroes on one screen would compete. */}
           {view === "synced" ? (
             !syncedInvestments.isLoading &&
-            syncedInvestments.investments.length > 0 && <InvestmentsSummary investments={syncedInvestments.investments} />
+            syncedInvestments.investments.length > 0 && (
+              <InvestmentsSummary
+                valuation={workspace.summary ?? undefined}
+                investments={syncedInvestments.investments}
+              />
+            )
           ) : (
             <InvestmentWorkspaceSummary
               summary={workspace.summary}
@@ -369,6 +380,7 @@ export function InvestmentsPage() {
               <div className="investments-list">
                 {workspace.accounts.map((account) => (
                   <InvestmentAccountCard
+                    valuation={workspace.summary ?? undefined}
                     key={account.id}
                     account={account}
                     summary={summaryAccount(account.id)}
@@ -415,6 +427,7 @@ export function InvestmentsPage() {
                 if (portfolio === null && positions.length === 0) return null;
                 return (
                   <InvestmentGoalCard
+                    valuation={workspace.summary ?? undefined}
                     key={portfolio?.id ?? "sem-objetivo"}
                     portfolio={portfolio}
                     summary={summaryPortfolio(portfolio?.id ?? null)}
