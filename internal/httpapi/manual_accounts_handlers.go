@@ -100,7 +100,8 @@ func handleWriteManualAccount(conn *sql.DB, create bool) http.HandlerFunc {
 				accountNotFoundProblem(w)
 				return
 			}
-			var origin, oldCurrency, oldOpening string
+			var origin, oldCurrency string
+			var oldOpening decimal.Decimal
 			var hasMovements bool
 			err = tx.QueryRowContext(r.Context(), `SELECT origin, COALESCE(currency_code, ''), COALESCE(opening_balance, '0'),
     EXISTS(SELECT 1 FROM financial_transactions WHERE account_id = ?) OR
@@ -114,7 +115,7 @@ func handleWriteManualAccount(conn *sql.DB, create bool) http.HandlerFunc {
 				writeProblem(w, 409, "account-not-manual", "Conta sincronizada", "Os dados desta conta são definidos pela fonte de dados.")
 				return
 			}
-			if hasMovements && (oldCurrency != req.CurrencyCode || oldOpening != openingRaw) {
+			if hasMovements && (oldCurrency != req.CurrencyCode || !oldOpening.Equal(opening)) {
 				writeProblem(w, 409, "account-has-movements", "Conta com movimentações", "A moeda e o saldo inicial não podem ser alterados após movimentações. Use um ajuste para corrigir o saldo.")
 				return
 			}

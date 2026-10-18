@@ -16,6 +16,7 @@ import (
 	"github.com/greg0x46/julius/internal/exchange"
 	"github.com/greg0x46/julius/internal/ledger"
 	"github.com/greg0x46/julius/internal/money"
+	"github.com/greg0x46/julius/internal/projections"
 	"github.com/greg0x46/julius/internal/reporting"
 	"github.com/greg0x46/julius/internal/scenarios"
 	"github.com/greg0x46/julius/internal/transactions"
@@ -493,26 +494,14 @@ func spendingByCategoryUnavailableProblem(w http.ResponseWriter) {
 	writeProblem(w, 503, "spending-by-category-unavailable", "Gastos por categoria temporariamente indisponíveis", "Tente novamente em instantes.")
 }
 
-// dateWithinBounds reports whether t's calendar date (year/month/day, no
-// time-of-day/timezone — matching how scenario_transactions.projected_at is
-// stored) falls within [from, to] inclusive.
-func dateWithinBounds(t time.Time, from, to money.Date) bool {
-	d := money.Date{Year: t.Year(), Month: t.Month(), Day: t.Day()}
-	notBefore := d.Year > from.Year ||
-		(d.Year == from.Year && (d.Month > from.Month || (d.Month == from.Month && d.Day >= from.Day)))
-	notAfter := d.Year < to.Year ||
-		(d.Year == to.Year && (d.Month < to.Month || (d.Month == to.Month && d.Day <= to.Day)))
-	return notBefore && notAfter
-}
-
-// projectedSpendingByCategory mirrors task 8's opt-in union: every
-// scenario_transaction of scenarioID whose projected_at falls in [from, to],
-// grouped by its free-text category (nil/empty groups as "Sem categoria",
-// same convention as the real side) — never merged into a real category's
-// total, always its own row tagged source="projetado", so the response can
-// never conflate a hypothetical amount with a real one.
+// Projected outflows stay separate from real categories and exclude events
+// already represented by a real transaction.
 func projectedSpendingByCategory(ctx context.Context, db *sql.DB, scenarioID string, from, to money.Date) ([]categorySpendingItemDTO, int, error) {
-	list, err := scenarios.ListScenarioTransactions(ctx, db, scenarioID)
+	list, err := projections.List(ctx, db, projections.ProjectionQuery{
+		From:      time.Date(from.Year, from.Month, from.Day, 0, 0, 0, 0, time.UTC),
+		To:        time.Date(to.Year, to.Month, to.Day, 0, 0, 0, 0, time.UTC),
+		Selection: projections.SelectionExplicit, IDs: []string{scenarioID},
+	})
 	if err != nil {
 		return nil, 0, err
 	}
@@ -524,21 +513,18 @@ func projectedSpendingByCategory(ctx context.Context, db *sql.DB, scenarioID str
 	byCategory := make(map[string]*accum)
 	var order []string
 	for _, st := range list {
-		if !dateWithinBounds(st.ProjectedAt, from, to) {
+		if st.Realized || !st.Amount.IsNegative() {
 			continue
 		}
 		count++
-		key, name := "", "Sem categoria"
-		if st.Category != nil && *st.Category != "" {
-			key, name = *st.Category, *st.Category
-		}
+		key := st.CategoryName
 		a, ok := byCategory[key]
 		if !ok {
-			a = &accum{name: name, amount: decimal.Zero}
+			a = &accum{name: key, amount: decimal.Zero}
 			byCategory[key] = a
 			order = append(order, key)
 		}
-		a.amount = a.amount.Add(st.Amount)
+		a.amount = a.amount.Add(st.Amount.Abs())
 	}
 	items := make([]categorySpendingItemDTO, len(order))
 	for i, key := range order {

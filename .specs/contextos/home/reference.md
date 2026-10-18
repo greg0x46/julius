@@ -9,12 +9,11 @@
 The landing dashboard: balance/inflows/outflows of the selected period, the
 balance projection (today, end of horizon, lowest balance), the daily spending
 allowance until the end of the month, and spending by category. The first three
-read the backend `Series`; they differ only in which field each consumes. The
-daily allowance is the only computation done on the client (floor, truncation
-and division over the daily balances the server returns): a deliberate
-exception to "Home never recomputes", kept client-side to avoid a new API field
-for one division; moving it to the server is the natural step if another screen
-needs the same number.
+read the backend `Series`. The client selects historical minima with exact
+decimal comparisons and computes the daily allowance (floor, truncation and
+division over the daily balances the server returns). These are deliberate
+exceptions to "Home never recomputes"; moving them to the server is the natural
+step if another screen needs the same figures.
 
 A monthly retrospective screen once existed (`/relatorio-financeiro`, with
 month-by-month breakdown, category drill-down and comparisons); it was removed
@@ -46,8 +45,8 @@ sources**: Ledger entries and the unified scenario projection flow
   occurrence is suppressed all the same (reconciliation is a fact about the
   occurrence), and the narrow candidate window keeps the effect limited to a
   month boundary.
-- **Hypothetical** — a transaction of an explicitly selected standalone
-  scenario.
+- **Hypothetical** — a transaction of a standalone scenario, included through
+  the active selection or explicit scenario IDs. Standalone scenarios start inactive.
 
 The package **does not know Payables**: a plan's link to a `Payable` is
 encapsulated in `internal/scenarios` (`Scenario.PayableID`/`Kind`, via
@@ -116,9 +115,13 @@ Home (`/`):
 - `PeriodBalanceCard` — balance, inflows and outflows of the period
   (`period_totals`), with historical BRL consolidation, explicit missing-rate
   states and expandable native currency totals for mixed-currency periods.
-- `ProjectionSummaryCard` — balance today, balance at end of horizon, lowest
-  balance, plus `ProjectionTimeline`. Selectable horizon (end of month, 3, 6,
-  12 months; 3 by default).
+- `ProjectionSummaryCard` — balance today, balance at the end of a future
+  window, lowest balance, plus `ProjectionTimeline`. Uses the shared selected
+  period, including the whole-period option. Historical minimum selection and the empty-balance
+  check use exact decimal comparisons. Equal minima retain the first date;
+  neither decision converts monetary values to JavaScript numbers. The chart
+  preserves the server's end-of-day balance for today, including commitments
+  and card bills due today; "Saldo hoje" shows `starting_balance`, the cash now.
 - `DailyAllowanceCard` — daily spending allowance ("R$ X / dia"), below the
   period result, as a compact figure (`Money` size `row`; the page hero is only
   the period result). It runs its own query with `reference_date = from = today`
@@ -145,8 +148,9 @@ Home (`/`):
 
 **Scenario simulation has no UI entry point today.** `GET /api/timeline` still
 accepts `scenario_ids` and returns `simulation` and `scenario_impacts` — the
-backend is complete — but no screen consumes them: Home is deliberately the base
-only ("no hypothetical scenarios"). The components that did this
+backend is complete — but no screen consumes them: Home requests the base
+series with its active-scenario selection, without an explicit simulation.
+The components that did this
 (`ScenarioMultiSelect`, `BaseVsSimulationCompare`, `ProjectionComposition`) were
 removed as dead; recover them from git history if simulation returns to the
 screen.

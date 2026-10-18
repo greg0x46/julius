@@ -119,8 +119,8 @@ projects with 2 workers: `dom` (jsdom + `src/test/setup.dom.ts`) for
 `*.test.tsx` and the `.ts` files listed in `domTsTests` in `vite.config.ts`, and
 `node` (no DOM) for the other `*.test.ts`. A new `.ts` test that needs the DOM
 must be added to `domTsTests` (or become `.tsx`); details in
-`frontend/TESTING.md`. Playwright is scaffolded (`test:e2e`) without config or
-tests — don't expect it to work.
+`frontend/TESTING.md`. Playwright financial journeys run with `npm run test:e2e`
+against disposable SQLite databases; install Chromium first as described there.
 
 ## Workflow for new work
 

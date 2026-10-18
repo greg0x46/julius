@@ -38,6 +38,11 @@ scenarios.
 `POST/PUT/DELETE .../transactions[/{transactionId}]`,
 `POST/DELETE .../transactions/{transactionId}/realizations[/{realizationId}]`.
 
+Nested installment updates/deletions and realization creation/deletion validate
+that the installment belongs to the scenario named in the URL. A missing scenario
+or a mismatched/missing installment returns 404 before changing any data; deleting
+a realization also checks that it belongs to the named installment.
+
 ## Frontend
 
 `/cenarios` — "Simule decisões hipotéticas" (standalone scenarios). The payment
@@ -49,3 +54,9 @@ Payables).
 Equal installment generation floors the exact quotient to BRL cents; the last
 installment keeps the full remainder, including fractional cents. It does not
 round division before flooring ([policy](../../precisao-monetaria.md)).
+
+Fixed-amount installment generation and reduce-term readjustment derive the
+count from exact integer quotient and remainder. Every installment stays at or
+below the chosen amount, including remainders beyond 16 decimal places.
+Generation and readjustment reject more than 10,000 installments per operation
+before allocating a plan or replacing existing installments; HTTP returns 422.

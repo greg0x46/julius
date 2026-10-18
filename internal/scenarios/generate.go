@@ -14,6 +14,11 @@ import (
 // totalAmount, months, or cadence can't produce a sensible plan.
 var ErrInvalidInstallmentPlan = errors.New("invalid installment plan")
 
+// MaxInstallments bounds the work and memory of a generated plan.
+const MaxInstallments = 10_000
+
+var ErrTooManyInstallments = errors.New("too many installments")
+
 // GeneratedInstallment is one row GenerateInstallments proposes — not yet
 // persisted.
 type GeneratedInstallment struct {
@@ -87,6 +92,9 @@ func GenerateInstallments(totalAmount decimal.Decimal, count int, startDate time
 	if !cadence.IsValid() {
 		return nil, ErrInvalidInstallmentPlan
 	}
+	if count > MaxInstallments {
+		return nil, ErrTooManyInstallments
+	}
 
 	shares := splitEvenly(totalAmount, count)
 	installments := make([]GeneratedInstallment, count)
@@ -106,8 +114,16 @@ func GenerateInstallments(totalAmount decimal.Decimal, count int, startDate time
 // left over, so the installments always sum to exactly totalAmount. Shared
 // with the "abater do final" readjustment strategy (Readjust), which needs
 // the same "fixed value, derived count" math.
-func splitByAmount(totalAmount, installmentAmount decimal.Decimal) []decimal.Decimal {
-	count := int(totalAmount.Div(installmentAmount).Ceil().IntPart())
+func splitByAmount(totalAmount, installmentAmount decimal.Decimal) ([]decimal.Decimal, error) {
+	quotient, remainder := totalAmount.QuoRem(installmentAmount, 0)
+	limit := decimal.NewFromInt(MaxInstallments)
+	if quotient.GreaterThan(limit) || (quotient.Equal(limit) && remainder.IsPositive()) {
+		return nil, ErrTooManyInstallments
+	}
+	count := int(quotient.IntPart())
+	if remainder.IsPositive() {
+		count++
+	}
 	if count < 1 {
 		count = 1
 	}
@@ -116,7 +132,7 @@ func splitByAmount(totalAmount, installmentAmount decimal.Decimal) []decimal.Dec
 		amounts[i] = installmentAmount
 	}
 	amounts[count-1] = totalAmount.Sub(installmentAmount.Mul(decimal.NewFromInt(int64(count - 1))))
-	return amounts
+	return amounts, nil
 }
 
 // GenerateInstallmentsForAmount splits totalAmount into installments worth
@@ -130,7 +146,10 @@ func GenerateInstallmentsForAmount(totalAmount, installmentAmount decimal.Decima
 		return nil, ErrInvalidInstallmentPlan
 	}
 
-	amounts := splitByAmount(totalAmount, installmentAmount)
+	amounts, err := splitByAmount(totalAmount, installmentAmount)
+	if err != nil {
+		return nil, err
+	}
 	count := len(amounts)
 	installments := make([]GeneratedInstallment, count)
 	for i, amount := range amounts {
