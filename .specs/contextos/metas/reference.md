@@ -61,3 +61,6 @@ Problems: `invalid-goal-input` (400), `goal-not-found` (404),
 Page **Metas** at `/metas`: list of goals with a progress bar, current value and
 target, create/edit/delete. All HTTP goes through `src/api`; the page shows the
 backend `current_value` and `progress` as-is.
+Completion requires `progress >= 1` using exact decimal comparison. The whole
+percentage and bar stay at most 99% below that boundary; reached goals fill the
+bar while their displayed percentage may exceed 100%.

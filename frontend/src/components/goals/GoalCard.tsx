@@ -2,6 +2,7 @@ import { Progress } from "antd";
 
 import type { Goal } from "../../api/contracts";
 import { formatDateOnly } from "../../presentation/dates";
+import { compareDecimals } from "../../presentation/decimal";
 import { goalMetricLabel, goalPercent } from "../../presentation/goals";
 import { Section } from "../layout";
 import { Money } from "../shared/Money";
@@ -25,7 +26,7 @@ export function GoalCard({
 }) {
   const confirm = useConfirm();
   const percent = goalPercent(goal.progress);
-  const reached = percent >= 100;
+  const reached = compareDecimals(goal.progress, "1") >= 0;
 
   return (
     <Section

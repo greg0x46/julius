@@ -70,15 +70,34 @@ describe("GoalsPage", () => {
     expect(within(section).getByRole("progressbar")).toHaveAttribute("aria-valuenow", "45");
   });
 
-  it("clamps the bar at 100% but keeps the real percent once the goal is passed", async () => {
+  it.each([
+    ["995", "0.995"],
+    ["999.9999999999999", "0.9999999999999999"],
+  ])("keeps an unreached goal incomplete at value %s", async (current_value, progress) => {
     vi.mocked(goalsApi.listGoals).mockResolvedValue([
-      goal({ current_value: "123450.00", progress: "1.2345" }),
+      goal({ target_amount: "1000", current_value, progress }),
     ]);
     renderPage();
     const section = await screen.findByRole("region", { name: "Cem mil investidos" });
-    expect(within(section).getByText("123%")).toBeVisible();
+    expect(within(section).getByText("99%")).toBeVisible();
+    expect(within(section).getByRole("progressbar")).toHaveAttribute("aria-valuenow", "99");
+    expect(within(section).queryByText("Meta atingida")).toBeNull();
+    expect(section.querySelector(".ant-progress-status-success")).toBeNull();
+  });
+
+  it.each([
+    ["100000.00", "1", "100%"],
+    ["123450.00", "1.2345", "123%"],
+  ])("marks a goal reached at value %s and caps its bar", async (current_value, progress, percent) => {
+    vi.mocked(goalsApi.listGoals).mockResolvedValue([
+      goal({ current_value, progress }),
+    ]);
+    renderPage();
+    const section = await screen.findByRole("region", { name: "Cem mil investidos" });
+    expect(within(section).getByText(percent)).toBeVisible();
     expect(within(section).getByRole("progressbar")).toHaveAttribute("aria-valuenow", "100");
     expect(within(section).getByText("Meta atingida")).toBeVisible();
+    expect(section.querySelector(".ant-progress-status-success")).not.toBeNull();
   });
 
   it("creates a goal from the form and refreshes the list", async () => {
