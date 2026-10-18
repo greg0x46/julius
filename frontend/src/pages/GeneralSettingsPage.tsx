@@ -64,6 +64,7 @@ export function GeneralSettingsPage() {
         queryKeys.netWorth,
         queryKeys.transactions,
         queryKeys.investmentWorkspacePart("summary"),
+        queryKeys.investmentPeriod,
       ]) {
         await client.cancelQueries({ queryKey });
         client.removeQueries({ queryKey });

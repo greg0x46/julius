@@ -7,6 +7,7 @@ import {
   parseInvestmentAssetClassification,
   parseInvestmentOperation,
   parseInvestmentOperationList,
+  parseInvestmentPeriod,
   parseInvestmentPosition,
   parseInvestmentPositionList,
   parseInvestmentReconciliation,
@@ -21,6 +22,9 @@ import {
   type InvestmentAssetClassDefinition,
   type InvestmentOperation,
   type InvestmentOperationWrite,
+  type InvestmentPeriod,
+  type InvestmentPeriodGrouping,
+  type InvestmentPeriodSource,
   type InvestmentPosition,
   type InvestmentPositionUpdate,
   type InvestmentPositionWrite,
@@ -339,4 +343,21 @@ export type InvestmentCompoundWrite = {
 export function createInvestmentOperations(write: InvestmentCompoundWrite): Promise<InvestmentOperation[]> {
   return send("/api/investment-operations/batch",
     { method: "POST", headers: json, body: JSON.stringify(write) }, 201, parseInvestmentOperationList);
+}
+
+export type InvestmentPeriodParams = {
+  /** First day of the period; null means since inception. */
+  from: string | null;
+  to: string;
+  groupBy: InvestmentPeriodGrouping;
+  source: InvestmentPeriodSource | null;
+};
+
+export function getInvestmentPeriod(params: InvestmentPeriodParams, signal?: AbortSignal): Promise<InvestmentPeriod> {
+  const query = new URLSearchParams();
+  if (params.from) query.set("from", params.from);
+  query.set("to", params.to);
+  query.set("group_by", params.groupBy);
+  if (params.source) query.set("source", params.source);
+  return send(`/api/investment-portfolio?${query.toString()}`, { ...get, signal }, 200, parseInvestmentPeriod);
 }

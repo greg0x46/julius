@@ -3,6 +3,7 @@ export * from "./automationRules";
 export * from "./categories";
 export * from "./dataSources";
 export * from "./goals";
+export * from "./investmentPeriod";
 export * from "./investmentWorkspace";
 export * from "./investments";
 export * from "./netWorth";

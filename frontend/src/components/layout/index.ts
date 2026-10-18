@@ -17,5 +17,5 @@ export { EmptyState } from "./EmptyState";
 export { ListToolbar } from "./ListToolbar";
 export { SearchField } from "./SearchField";
 export { FilterButton } from "./FilterButton";
-export { GroupBySelect, SortSelect } from "./ToolbarSelect";
+export { GroupBySelect, SortSelect, ToolbarSelect } from "./ToolbarSelect";
 export { DataCard, DataCardSummary } from "./DataCard";

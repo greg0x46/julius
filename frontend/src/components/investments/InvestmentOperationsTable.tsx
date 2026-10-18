@@ -5,7 +5,7 @@ import type { InvestmentOperation, InvestmentPosition } from "../../api/contract
 import { investmentOperationKindLabel } from "../../presentation/investmentWorkspaceLabels";
 import { EmptyState, ResponsiveList } from "../layout";
 import { Money } from "../shared/Money";
-import { formatDate } from "./investmentMath";
+import { formatDate } from "./investmentDate";
 import { RecordMenu, type RecordMenuItem } from "../shared/RecordMenu";
 import { useConfirm } from "../shared/useConfirm";
 
@@ -82,7 +82,7 @@ export function InvestmentOperationsTable({
       stackBelow="lg"
       items={operations}
       getKey={(operation) => operation.id}
-      empty={<EmptyState title="Nenhuma movimentação nesta conta" />}
+      empty={<EmptyState title="Nenhuma movimentação" />}
       row={(operation) => ({
         title: kindOf(operation),
         meta: [

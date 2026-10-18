@@ -123,7 +123,10 @@ authentication configuration that does not depend on the host:
 - **Goals** — set a target amount (and optional date) for the total market
   value of your investments and follow the progress, recomputed on every read.
   More metrics (cash balance, net worth) are planned.
-- **Investments** — integrated and manual investment accounts, per-asset operations, manual valuations and optional automatic
+- **Investments** — a period view of your portfolio (same period selector as Home and Transactions): portfolio value at the end of
+  the period, net yield and return, contributions and withdrawals, with positions grouped by account or asset class,
+  searchable, and with positions the history cannot cover flagged instead of counted as zero. Integrated and manual investment
+  accounts, per-asset operations, manual valuations and optional automatic
   quotes (B3 and crypto), enabled by default with a persistent daily schedule. Contributions and withdrawals reconciled with the
   statement show up apart from spending, keeping their cash effect and avoiding
   double counting in net worth. Manual-position returns use the exact recorded
@@ -137,7 +140,9 @@ authentication configuration that does not depend on the host:
 
 ## Investments by account
 
-In **Investimentos**, register a manual custody account or use the grouping
+In **Investimentos**, pick the period at the top: the summary and the positions
+follow it, and the accounts, with their movements, stay below the positions.
+Register a manual custody account or use the grouping
 created for a connection. Create empty positions for new purchases; enter an
 opening balance only for holdings that already existed. Purchases accept
 quantity, price, fees and taxes. The "deposit along with the purchase" option
