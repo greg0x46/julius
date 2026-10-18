@@ -428,11 +428,20 @@ func toResultDTO(result transactions.Result) transactionQueryResultDTO {
 	}
 }
 
+const (
+	maxQueryPage     = 100_000
+	maxQueryPageSize = 1_000
+)
+
 func handleQueryTransactions(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req transactionQueryRequest
 		if err := decodeStrict(r, &req); err != nil {
 			writeProblem(w, 422, "invalid-transaction-query", "Consulta de transações inválida", "Revise os campos enviados.")
+			return
+		}
+		if req.Page > maxQueryPage || req.PageSize > maxQueryPageSize {
+			writeProblem(w, 422, "invalid-transaction-query", "Consulta de transações inválida", "Página ou tamanho de página acima do limite.")
 			return
 		}
 		filters, problem := toFilters(req.Filters)
