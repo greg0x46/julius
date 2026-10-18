@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 	"testing/fstest"
 	"time"
@@ -1200,5 +1201,14 @@ func TestCategoryBreakdownOverHTTP(t *testing.T) {
 		if resp.StatusCode != 400 {
 			t.Errorf("%s: status = %d, want 400", query, resp.StatusCode)
 		}
+	}
+}
+
+func TestOversizedJSONBodyIsRejected(t *testing.T) {
+	srv, _ := newTestServer(t)
+	resp := doJSON(t, "POST", srv.URL+"/api/categories", map[string]string{"name": strings.Repeat("a", 2<<20)})
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusRequestEntityTooLarge {
+		t.Fatalf("status = %d, want 413", resp.StatusCode)
 	}
 }

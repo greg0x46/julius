@@ -227,7 +227,7 @@ func NewServer(db *sql.DB, frontend fs.FS, secrets *settings.Secrets, config aut
 
 	mux.Handle("/", spaHandler(frontend))
 
-	return authentication.gate(mux)
+	return limitBody(authentication.gate(mux))
 }
 
 func handleHealth(db *sql.DB) http.HandlerFunc {
