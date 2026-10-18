@@ -177,6 +177,15 @@ func RealizeEvent(ctx context.Context, conn *sql.DB, scenarioID, eventKey string
 			return GenericRealization{}, fmt.Errorf("%w: transaction is not linked to the scenario payable", ErrInvalidRealization)
 		}
 	}
+	if relation == RelationAllocation && scenario.PayableID == nil && write.State == RealizationStateLinked {
+		planned, err := GetScenarioTransaction(ctx, conn, *scenarioTransactionID)
+		if err != nil {
+			return GenericRealization{}, err
+		}
+		if err := validateStandaloneTransaction(ctx, conn, planned.Amount, *write.TransactionID); err != nil {
+			return GenericRealization{}, err
+		}
+	}
 	if relation == RelationAllocation {
 		if write.State == RealizationStateLinked && !write.AllocatedAmount.IsPositive() {
 			// A generic event link may omit an allocation amount (the common
@@ -294,6 +303,32 @@ func validateRecurringTransaction(ctx context.Context, q Querier, scenarioID, tr
 		return fmt.Errorf("%w: transaction is not eligible for this recurring event", ErrInvalidRealization)
 	}
 	return nil
+}
+
+// validateStandaloneTransaction applies the recurring link rules to a
+// standalone event: a considered BRL transaction flowing in the direction of
+// the planned amount's sign (a zero amount accepts either).
+func validateStandaloneTransaction(ctx context.Context, q Querier, planned decimal.Decimal, transactionID string) error {
+	item, found, err := transactions.GetItem(ctx, q, transactionID)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return ErrTransactionUnavailable
+	}
+	kinds := []recurrences.Kind{recurrences.KindIncome, recurrences.KindExpense}
+	switch {
+	case planned.IsNegative():
+		kinds = kinds[1:]
+	case planned.IsPositive():
+		kinds = kinds[:1]
+	}
+	for _, kind := range kinds {
+		if recurrences.EligibilityForItem(kind, item, false).Eligible {
+			return nil
+		}
+	}
+	return fmt.Errorf("%w: transaction is not eligible for this event", ErrInvalidRealization)
 }
 
 // isCompleteEventTransactionConflict recognises exactly one constraint: the
