@@ -95,6 +95,16 @@ describe("reconcile category action", () => {
     expect(screen.getByText("Despesa: Aluguel")).toBeInTheDocument();
   });
 
+  it("never sends a fractional day of the month for the commitment", async () => {
+    const { onSubmit } = renderForm({ rule, linkedCommitment: commitment });
+    const input = screen.getByRole("spinbutton", { name: "Dia do mês" });
+    fireEvent.change(input, { target: { value: "6.5" } });
+    fireEvent.blur(input);
+    await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
+    expect(onSubmit).toHaveBeenCalledOnce();
+    expect(Number.isInteger(onSubmit.mock.calls[0]![0].reconcile.commitment.day_of_month)).toBe(true);
+  });
+
   it("lists both actions on the same automation", () => {
     render(<AutomationEntryList
       rules={[{ ...rule, actions: [...rule.actions, { type: "set_category", scenario_id: null, category_id: category.id }] }]}

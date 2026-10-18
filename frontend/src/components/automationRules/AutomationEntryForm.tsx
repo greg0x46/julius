@@ -616,6 +616,7 @@ export function AutomationEntryForm({
               style={{ width: "100%" }}
               min={1}
               max={31}
+              precision={0}
               inputMode="numeric"
               value={commitmentDraft.dayOfMonth}
               onChange={(value) => setCommitmentDraft((current) => ({ ...current, dayOfMonth: value }))}
