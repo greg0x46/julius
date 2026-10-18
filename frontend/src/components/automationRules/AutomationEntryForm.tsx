@@ -95,6 +95,13 @@ const blankReconcileConditions: RuleCondition[] = [
   { field: "day_of_month", operator: "day_range", value: "1:10" },
 ];
 
+// The API rejects a zero reference, which could never match an amount.
+function hasZeroAmountReference(condition: RuleCondition): boolean {
+  if (condition.operator !== "within_percent") return false;
+  const reference = condition.value.split(":")[0]?.trim() ?? "";
+  return /^[-+]?0*[.,]?0*$/.test(reference);
+}
+
 function blankConditionsFor(actionTypes: AutomationActionType[]): RuleCondition[] {
   return (actionTypes.includes("reconcile") ? blankReconcileConditions : blankIgnoreConditions).map(
     (condition) => ({ ...condition }),
@@ -350,6 +357,10 @@ export function AutomationEntryForm({
     }
     if (ruleDraft.conditions.some((condition) => condition.value.trim() === "")) {
       setError("Preencha o valor de todas as condições.");
+      return;
+    }
+    if (ruleDraft.conditions.some(hasZeroAmountReference)) {
+      setError("Informe um valor esperado maior que zero.");
       return;
     }
     if (actionTypes.length === 0) {

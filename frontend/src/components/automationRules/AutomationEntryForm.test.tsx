@@ -81,12 +81,16 @@ describe("reconcile category action", () => {
     await choose("Selecione uma recorrência", commitment.name);
     expect(screen.getByText("Despesa: Aluguel")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(screen.getByText("Informe um valor esperado maior que zero.")).toBeInTheDocument();
+    fireEvent.change(screen.getByRole("spinbutton", { name: "Valor esperado" }), { target: { value: "1500" } });
+    await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
     expect(onSubmit).toHaveBeenLastCalledWith(expect.objectContaining({ actionTypes: ["reconcile", "set_category"], categoryId: category.id }));
     clearCategory();
     await choose("Categoria", otherCategory.name);
     expect(screen.getByRole("combobox", { name: "Categoria a aplicar (opcional)" })).toHaveValue("");
     expect(screen.getByText("Sem categoria a aplicar")).toBeInTheDocument();
-  }, 30_000);
+  }, 60_000);
 
   it("defaults from a new commitment's category", async () => {
     renderForm(null);
