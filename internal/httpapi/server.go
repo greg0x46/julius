@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/greg0x46/julius/internal/auth"
+	"github.com/greg0x46/julius/internal/exchange"
 	"github.com/greg0x46/julius/internal/investments"
 	"github.com/greg0x46/julius/internal/ledger"
 	"github.com/greg0x46/julius/internal/marketdata"
@@ -97,7 +98,7 @@ func NewServer(db *sql.DB, frontend fs.FS, secrets *settings.Secrets, config aut
 	mux.HandleFunc("GET /api/statement-imports/accounts", handleStatementAccounts(db))
 	mux.HandleFunc("GET /api/statement-imports/template", handleStatementTemplate())
 
-	mux.HandleFunc("GET /api/accounts/currencies", handleAccountCurrencies)
+	mux.HandleFunc("GET /api/accounts/currencies", handleAccountCurrencies(exchange.New(db, nil)))
 	mux.HandleFunc("POST /api/accounts", handleWriteManualAccount(db, true))
 	mux.HandleFunc("PUT /api/accounts/{id}", handleWriteManualAccount(db, false))
 	mux.HandleFunc("POST /api/accounts/{id}/adjustments", handleAdjustManualAccount(db))
