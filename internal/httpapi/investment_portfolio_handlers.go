@@ -12,6 +12,7 @@ import (
 
 	"github.com/shopspring/decimal"
 
+	"github.com/greg0x46/julius/internal/exchange"
 	"github.com/greg0x46/julius/internal/investments"
 	"github.com/greg0x46/julius/internal/marketdata"
 	"github.com/greg0x46/julius/internal/money"
@@ -172,18 +173,6 @@ func investmentAccountToDTO(a investments.Account) investmentAccountDTO {
 	}
 }
 
-type investmentPortfolioDTO struct {
-	ID           string    `json:"id"`
-	Name         string    `json:"name"`
-	TargetAmount *string   `json:"target_amount"`
-	TargetDate   *string   `json:"target_date"`
-	Notes        *string   `json:"notes"`
-	CurrentValue string    `json:"current_value"`
-	Progress     *string   `json:"progress"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
-}
-
 type investmentAssetDTO struct {
 	ID           string                 `json:"id"`
 	Name         string                 `json:"name"`
@@ -212,31 +201,17 @@ func investmentAssetToDTO(asset investments.Asset) investmentAssetDTO {
 	}
 }
 
-func investmentPortfolioToDTO(p investments.Portfolio) investmentPortfolioDTO {
-	return investmentPortfolioDTO{
-		ID:           p.ID,
-		Name:         p.Name,
-		TargetAmount: optionalMoney(p.TargetAmount),
-		TargetDate:   optionalDay(p.TargetDate),
-		Notes:        p.Notes,
-		CurrentValue: money.CanonicalDecimal(p.CurrentValue),
-		Progress:     optionalMoney(p.Progress),
-		CreatedAt:    p.CreatedAt,
-		UpdatedAt:    p.UpdatedAt,
-	}
-}
-
 type investmentPositionDTO struct {
 	ID                 string  `json:"id"`
 	Source             string  `json:"source"`
 	AccountID          string  `json:"account_id"`
 	AssetID            *string `json:"asset_id"`
-	PortfolioID        *string `json:"portfolio_id"`
 	Name               string  `json:"name"`
 	Ticker             *string `json:"ticker"`
 	AssetType          string  `json:"asset_type"`
 	Quantity           string  `json:"quantity"`
 	AverageCost        *string `json:"average_cost"`
+	TotalCost          *string `json:"total_cost"`
 	CurrentValue       string  `json:"current_value"`
 	CurrentUnitPrice   *string `json:"current_unit_price"`
 	ValuedOn           *string `json:"valued_on"`
@@ -256,12 +231,12 @@ func investmentPositionToDTO(p investments.Position) investmentPositionDTO {
 		Source:             string(p.Source),
 		AccountID:          p.AccountID,
 		AssetID:            p.AssetID,
-		PortfolioID:        p.PortfolioID,
 		Name:               p.Name,
 		Ticker:             p.Ticker,
 		AssetType:          p.AssetType,
 		Quantity:           money.CanonicalDecimal(p.Quantity),
 		AverageCost:        optionalMoney(p.AverageCost),
+		TotalCost:          optionalMoney(p.TotalCost),
 		CurrentValue:       money.CanonicalDecimal(p.CurrentValue),
 		CurrentUnitPrice:   optionalMoney(p.CurrentUnitPrice),
 		ValuedOn:           optionalDay(p.ValuedOn),
@@ -335,14 +310,6 @@ func investmentReconciliationToDTO(r investments.Reconciliation) investmentRecon
 	}
 }
 
-type investmentSummaryPortfolioDTO struct {
-	PortfolioID  *string `json:"portfolio_id"`
-	Name         string  `json:"name"`
-	CurrentValue string  `json:"current_value"`
-	TargetAmount *string `json:"target_amount"`
-	Progress     *string `json:"progress"`
-}
-
 type investmentSummaryAccountDTO struct {
 	AccountID    string `json:"account_id"`
 	Name         string `json:"name"`
@@ -352,14 +319,14 @@ type investmentSummaryAccountDTO struct {
 }
 
 type investmentSummaryDTO struct {
-	CurrencyCode   string                          `json:"currency_code"`
-	TotalValue     string                          `json:"total_value"`
-	ManualValue    string                          `json:"manual_value"`
-	SyncedValue    string                          `json:"synced_value"`
-	CashBalance    string                          `json:"cash_balance"`
-	UnrealizedGain string                          `json:"unrealized_gain"`
-	Portfolios     []investmentSummaryPortfolioDTO `json:"portfolios"`
-	Accounts       []investmentSummaryAccountDTO   `json:"accounts"`
+	FX             *exchange.Rate                `json:"fx,omitempty"`
+	CurrencyCode   string                        `json:"currency_code"`
+	TotalValue     string                        `json:"total_value"`
+	ManualValue    string                        `json:"manual_value"`
+	SyncedValue    string                        `json:"synced_value"`
+	CashBalance    string                        `json:"cash_balance"`
+	UnrealizedGain string                        `json:"unrealized_gain"`
+	Accounts       []investmentSummaryAccountDTO `json:"accounts"`
 }
 
 func investmentSummaryToDTO(s investments.Summary) investmentSummaryDTO {
@@ -370,17 +337,7 @@ func investmentSummaryToDTO(s investments.Summary) investmentSummaryDTO {
 		SyncedValue:    money.CanonicalDecimal(s.SyncedValue),
 		CashBalance:    money.CanonicalDecimal(s.CashBalance),
 		UnrealizedGain: money.CanonicalDecimal(s.UnrealizedGain),
-		Portfolios:     []investmentSummaryPortfolioDTO{},
 		Accounts:       []investmentSummaryAccountDTO{},
-	}
-	for _, p := range s.Portfolios {
-		dto.Portfolios = append(dto.Portfolios, investmentSummaryPortfolioDTO{
-			PortfolioID:  p.PortfolioID,
-			Name:         p.Name,
-			CurrentValue: money.CanonicalDecimal(p.CurrentValue),
-			TargetAmount: optionalMoney(p.TargetAmount),
-			Progress:     optionalMoney(p.Progress),
-		})
 	}
 	for _, a := range s.Accounts {
 		dto.Accounts = append(dto.Accounts, investmentSummaryAccountDTO{
@@ -429,9 +386,6 @@ func writeInvestmentProblem(w http.ResponseWriter, err error) {
 	case errors.Is(err, investments.ErrAccountNotFound):
 		writeProblem(w, http.StatusNotFound, "investment-account-not-found",
 			"Conta de custódia não encontrada", "A conta de investimento informada não existe.")
-	case errors.Is(err, investments.ErrPortfolioNotFound):
-		writeProblem(w, http.StatusNotFound, "investment-portfolio-not-found",
-			"Objetivo não encontrado", "O objetivo de investimento informado não existe.")
 	case errors.Is(err, investments.ErrPositionNotFound):
 		writeProblem(w, http.StatusNotFound, "investment-position-not-found",
 			"Posição não encontrada", "A posição informada não existe.")
@@ -461,10 +415,14 @@ func writeInvestmentProblem(w http.ResponseWriter, err error) {
 			"Registro de investimento não encontrado", "O registro informado não existe.")
 	case errors.Is(err, investments.ErrInvalidInput):
 		writeInvestmentInvalid(w, "Revise os campos enviados.")
+	case errors.Is(err, investments.ErrUnsupportedCurrency):
+		writeProblem(w, http.StatusBadRequest, "investment-unsupported-currency",
+			"Moeda não suportada",
+			"Posições e movimentações manuais são em reais: este ativo está cadastrado em outra moeda.")
 	case errors.Is(err, investments.ErrIntegratedReadOnly):
 		writeProblem(w, http.StatusConflict, "investment-integrated-read-only",
 			"Registro integrado é somente leitura",
-			"Dados vindos da conexão não podem ser editados aqui; apenas o objetivo e o vínculo com a conta financeira são escolhas locais.")
+			"Dados vindos da conexão não podem ser editados aqui; apenas o vínculo com a conta financeira é uma escolha local.")
 	case errors.Is(err, investments.ErrNotManual):
 		writeProblem(w, http.StatusConflict, "investment-not-manual",
 			"Registro não é manual",
@@ -665,98 +623,6 @@ func handleDeleteInvestmentAccount(conn *sql.DB) http.HandlerFunc {
 	}
 }
 
-// --------------------------------------------------------------- portfolios
-
-type investmentPortfolioRequest struct {
-	Name         string            `json:"name"`
-	TargetAmount investmentDecimal `json:"target_amount"`
-	TargetDate   *string           `json:"target_date"`
-	Notes        *string           `json:"notes"`
-}
-
-func (req investmentPortfolioRequest) toInput() (investments.PortfolioInput, bool) {
-	input := investments.PortfolioInput{
-		Name:         req.Name,
-		TargetAmount: req.TargetAmount.pointer(),
-		Notes:        req.Notes,
-	}
-	if req.TargetDate != nil && strings.TrimSpace(*req.TargetDate) != "" {
-		day, ok := investmentBodyDate(req.TargetDate)
-		if !ok {
-			return investments.PortfolioInput{}, false
-		}
-		input.TargetDate = &day
-	}
-	return input, true
-}
-
-func handleListInvestmentPortfolios(conn *sql.DB) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		portfolios, err := investments.ListPortfolios(r.Context(), conn)
-		if err != nil {
-			writeInvestmentProblem(w, err)
-			return
-		}
-		items := make([]investmentPortfolioDTO, 0, len(portfolios))
-		for _, portfolio := range portfolios {
-			items = append(items, investmentPortfolioToDTO(portfolio))
-		}
-		writeInvestmentItems(w, items)
-	}
-}
-
-func handleCreateInvestmentPortfolio(conn *sql.DB) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		var req investmentPortfolioRequest
-		if err := decodeStrict(r, &req); err != nil {
-			writeInvestmentInvalid(w, "Não foi possível ler os dados enviados.")
-			return
-		}
-		input, ok := req.toInput()
-		if !ok {
-			writeInvestmentInvalid(w, "Informe a data alvo no formato AAAA-MM-DD.")
-			return
-		}
-		portfolio, err := investments.CreatePortfolio(r.Context(), conn, input)
-		if err != nil {
-			writeInvestmentProblem(w, err)
-			return
-		}
-		writeJSON(w, http.StatusCreated, investmentPortfolioToDTO(portfolio))
-	}
-}
-
-func handleUpdateInvestmentPortfolio(conn *sql.DB) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		var req investmentPortfolioRequest
-		if err := decodeStrict(r, &req); err != nil {
-			writeInvestmentInvalid(w, "Não foi possível ler os dados enviados.")
-			return
-		}
-		input, ok := req.toInput()
-		if !ok {
-			writeInvestmentInvalid(w, "Informe a data alvo no formato AAAA-MM-DD.")
-			return
-		}
-		portfolio, err := investments.UpdatePortfolio(r.Context(), conn, r.PathValue("id"), input)
-		if err != nil {
-			writeInvestmentProblem(w, err)
-			return
-		}
-		writeJSON(w, http.StatusOK, investmentPortfolioToDTO(portfolio))
-	}
-}
-
-func handleDeleteInvestmentPortfolio(conn *sql.DB) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if err := investments.DeletePortfolio(r.Context(), conn, r.PathValue("id")); err != nil {
-			writeInvestmentProblem(w, err)
-			return
-		}
-		w.WriteHeader(http.StatusNoContent)
-	}
-}
-
 // ------------------------------------------------------------------- assets
 
 type investmentAssetRequest struct {
@@ -909,7 +775,6 @@ type investmentPositionCreateRequest struct {
 	Name            string            `json:"name"`
 	Ticker          *string           `json:"ticker"`
 	AssetType       *string           `json:"asset_type"`
-	PortfolioID     *string           `json:"portfolio_id"`
 	InitialQuantity investmentDecimal `json:"initial_quantity"`
 	InitialUnitCost investmentDecimal `json:"initial_unit_cost"`
 	InitialValue    investmentDecimal `json:"initial_value"`
@@ -918,11 +783,10 @@ type investmentPositionCreateRequest struct {
 }
 
 type investmentPositionUpdateRequest struct {
-	Name        *string        `json:"name"`
-	Ticker      investmentText `json:"ticker"`
-	AssetType   *string        `json:"asset_type"`
-	PortfolioID investmentText `json:"portfolio_id"`
-	Notes       investmentText `json:"notes"`
+	Name      *string        `json:"name"`
+	Ticker    investmentText `json:"ticker"`
+	AssetType *string        `json:"asset_type"`
+	Notes     investmentText `json:"notes"`
 }
 
 const defaultInvestmentAssetType = "Ativo"
@@ -931,7 +795,6 @@ func handleListInvestmentPositions(conn *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		filter := investments.PositionFilter{
 			AccountID:     investmentQueryFilter(r, "account_id"),
-			PortfolioID:   investmentQueryFilter(r, "portfolio_id"),
 			IncludeClosed: r.URL.Query().Get("include_closed") == "true",
 			Source:        investmentQueryFilter(r, "source"),
 			SourceID:      investmentQueryFilter(r, "source_id"),
@@ -973,7 +836,6 @@ func handleCreateInvestmentPosition(conn *sql.DB) http.HandlerFunc {
 			Name:            req.Name,
 			Ticker:          req.Ticker,
 			AssetType:       defaultInvestmentAssetType,
-			PortfolioID:     investmentOptionalID(req.PortfolioID),
 			InitialQuantity: req.InitialQuantity.orZero(),
 			InitialUnitCost: req.InitialUnitCost.orZero(),
 			InitialValue:    req.InitialValue.pointer(),
@@ -1002,9 +864,8 @@ func handleCreateInvestmentPosition(conn *sql.DB) http.HandlerFunc {
 }
 
 // handleUpdateInvestmentPosition fills every omitted field from the holding as
-// it stands. That is what lets a provider-synced position accept a goal
-// change: the description it sends back is the provider's own, so the domain
-// sees no attempt to rewrite it.
+// it stands, so a provider-synced position sends back its own description and
+// the domain sees no attempt to rewrite it.
 func handleUpdateInvestmentPosition(conn *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id := r.PathValue("id")
@@ -1019,11 +880,10 @@ func handleUpdateInvestmentPosition(conn *sql.DB) http.HandlerFunc {
 			return
 		}
 		update := investments.PositionUpdate{
-			Name:        current.Name,
-			Ticker:      req.Ticker.orCurrent(current.Ticker),
-			AssetType:   current.AssetType,
-			PortfolioID: req.PortfolioID.orCurrent(current.PortfolioID),
-			Notes:       req.Notes.orCurrent(current.Notes),
+			Name:      current.Name,
+			Ticker:    req.Ticker.orCurrent(current.Ticker),
+			AssetType: current.AssetType,
+			Notes:     req.Notes.orCurrent(current.Notes),
 		}
 		if req.Name != nil {
 			update.Name = *req.Name
@@ -1106,7 +966,6 @@ func handleListInvestmentOperations(conn *sql.DB) http.HandlerFunc {
 			PositionID:          investmentQueryFilter(r, "position_id"),
 			Source:              investmentQueryFilter(r, "source"),
 			SourceID:            investmentQueryFilter(r, "source_id"),
-			PortfolioID:         investmentQueryFilter(r, "portfolio_id"),
 			ReconciliationState: investmentQueryFilter(r, "reconciliation_state"),
 			From:                from,
 			To:                  to,
@@ -1298,7 +1157,52 @@ func handleGetInvestmentSummary(conn *sql.DB) http.HandlerFunc {
 			writeInvestmentProblem(w, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, investmentSummaryToDTO(summary))
+		valuation, ok := reportValuation(w, r, conn, time.Now().UTC())
+		if !ok {
+			return
+		}
+		dto := investmentSummaryToDTO(summary)
+		dto.CurrencyCode, dto.FX = valuation.CurrencyCode, &valuation.FX
+		valuation.fields(&dto.TotalValue, &dto.ManualValue, &dto.SyncedValue, &dto.CashBalance, &dto.UnrealizedGain)
+		for i := range dto.Accounts {
+			valuation.fields(&dto.Accounts[i].CurrentValue, &dto.Accounts[i].CashBalance)
+		}
+		writeJSON(w, http.StatusOK, dto)
+	}
+}
+
+type investmentMonthlyMovementDTO struct {
+	Month         string `json:"month"`
+	Contributions string `json:"contributions"`
+	Withdrawals   string `json:"withdrawals"`
+	Income        string `json:"income"`
+	Fees          string `json:"fees"`
+	Taxes         string `json:"taxes"`
+	RealizedGain  string `json:"realized_gain"`
+}
+
+func handleListInvestmentMonthlyMovements(conn *sql.DB) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		movements, err := investments.MonthlyMovements(r.Context(), conn, investmentQueryFilter(r, "account_id"))
+		if err != nil {
+			writeInvestmentProblem(w, err)
+			return
+		}
+		items := make([]investmentMonthlyMovementDTO, 0, len(movements))
+		for _, m := range movements {
+			items = append(items, investmentMonthlyMovementDTO{
+				Month:         m.Month,
+				Contributions: money.CanonicalDecimal(m.Contributions),
+				Withdrawals:   money.CanonicalDecimal(m.Withdrawals),
+				Income:        money.CanonicalDecimal(m.Income),
+				Fees:          money.CanonicalDecimal(m.Fees),
+				Taxes:         money.CanonicalDecimal(m.Taxes),
+				RealizedGain:  money.CanonicalDecimal(m.RealizedGain),
+			})
+		}
+		// source says what the rows cover: only local operations. A synced
+		// holding has no cost basis here, so its sales are not a zero gain.
+		writeJSON(w, http.StatusOK, map[string]any{"items": items, "source": "manual"})
 	}
 }
 

@@ -112,7 +112,7 @@ func TestPendingCardPurchaseAndBillSettlementHaveSeparateEffects(t *testing.T) {
 		if len(result.Totals) != 1 || result.Totals[0].Outflow != "200.00" || result.Totals[0].Inflow != "0" {
 			t.Fatalf("expense counted again: %+v", result.Totals)
 		}
-		cash, err := transactions.CashOnHand(ctx, f.conn, nil)
+		cash, err := transactions.CashOnHandIn(ctx, f.conn, nil, money.BRL)
 		if err != nil || cash.String() != wantCash {
 			t.Fatalf("cash = %s, %v; want %s", cash, err, wantCash)
 		}

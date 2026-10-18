@@ -14,6 +14,7 @@ import (
 	"github.com/greg0x46/julius/internal/dates"
 	dbtypes "github.com/greg0x46/julius/internal/db/types"
 	"github.com/greg0x46/julius/internal/money"
+	"github.com/greg0x46/julius/internal/valuation"
 )
 
 // CreditCardTransactionTotal calculates the card amount from eligible
@@ -70,7 +71,7 @@ func creditCardTransactionTotalAt(ctx context.Context, q Querier, currencyCode s
 
 	total := decimal.Zero
 	for _, accountID := range accounts {
-		amount, err := consideredCardTransactionTotal(ctx, q, accountID, currencyCode, bills, now, loc, selected)
+		amount, err := consideredCardTransactionTotal(ctx, q, accountID, currencyCode, bills, now, loc, selected, nil)
 		if err != nil {
 			return decimal.Zero, err
 		}
@@ -245,6 +246,7 @@ func consideredCardTransactionTotal(
 	now time.Time,
 	loc *time.Location,
 	selected map[string]bool,
+	valued *valuation.Valuation,
 ) (decimal.Decimal, error) {
 	cycle, ok := currentCreditCardCycle(bills, accountID, now, loc)
 	if !ok {
@@ -282,17 +284,24 @@ func consideredCardTransactionTotal(
 		// inflate what the card is owed. The ignored decision was already
 		// applied above; Considered is passed for the same reason.
 		included, _ := money.Eligibility(classification, transaction.providerStatus, effective, money.Considered, "")
-		if !included || effective == nil || effective.CurrencyCode != currencyCode {
+		if !included || effective == nil || (valued == nil && effective.CurrencyCode != currencyCode) {
 			continue
+		}
+		value := effective.Value.Abs()
+		if valued != nil {
+			// Each transaction is valued once, in its own effective currency.
+			if value, err = valued.Convert(ctx, value, effective.CurrencyCode); err != nil {
+				return decimal.Zero, err
+			}
 		}
 		if selected != nil {
 			selected[transaction.id] = true
 		}
 		switch classification {
 		case money.Outflow:
-			total = total.Add(effective.Value.Abs())
+			total = total.Add(value)
 		case money.Inflow:
-			total = total.Sub(effective.Value.Abs())
+			total = total.Sub(value)
 		}
 	}
 	return total, nil
@@ -446,4 +455,46 @@ func stringFromNullString(value sql.NullString) *string {
 		return nil
 	}
 	return &value.String
+}
+
+// CreditCardBalanceValued is what every credit card owes on the cycle open at
+// `at`, each account in its own currency and each transaction valued once in
+// the BRL base. A currency without a rate fails the call; it is never dropped.
+// Accounts without a currency stay out, as they do for CreditCardTransactionTotal.
+func CreditCardBalanceValued(ctx context.Context, q Querier, at time.Time, loc *time.Location, valued *valuation.Valuation) (decimal.Decimal, error) {
+	if loc == nil {
+		return decimal.Zero, fmt.Errorf("credit card cycle timezone is nil")
+	}
+	bills, err := fetchCardBillClosingDates(ctx, q, loc)
+	if err != nil {
+		return decimal.Zero, err
+	}
+	rows, err := q.QueryContext(ctx, `SELECT id, currency_code FROM financial_accounts WHERE account_type = 'CREDIT' AND currency_code IS NOT NULL`)
+	if err != nil {
+		return decimal.Zero, fmt.Errorf("query credit card accounts: %w", err)
+	}
+	type account struct{ id, currency string }
+	var accounts []account
+	for rows.Next() {
+		var a account
+		if err := rows.Scan(dbtypes.ID(&a.id), &a.currency); err != nil {
+			rows.Close()
+			return decimal.Zero, err
+		}
+		accounts = append(accounts, a)
+	}
+	err = rows.Err()
+	rows.Close()
+	if err != nil {
+		return decimal.Zero, err
+	}
+	total := decimal.Zero
+	for _, a := range accounts {
+		amount, err := consideredCardTransactionTotal(ctx, q, a.id, a.currency, bills, at, loc, nil, valued)
+		if err != nil {
+			return decimal.Zero, err
+		}
+		total = total.Add(amount)
+	}
+	return total, nil
 }

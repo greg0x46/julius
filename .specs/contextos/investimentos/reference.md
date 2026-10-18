@@ -1,20 +1,20 @@
 # Investments
 
-Investment accounts represent custody; positions represent assets; goal
-portfolios group positions without creating a second balance. Each position
-belongs to a single portfolio or has no goal.
+Investment accounts represent custody; positions represent assets. Targets
+over the invested total live in the separate Goals area
+([`metas`](../metas/reference.md)); positions carry no goal or grouping.
 
 ## Domain and APIs
 
-`internal/investments` holds accounts, portfolios, manual positions, operations,
+`internal/investments` holds accounts, manual positions, operations,
 valuations and reconciliation. APIs live under `/api/investment-accounts`,
-`/api/investment-portfolios`, `/api/investment-positions`,
+`/api/investment-positions`,
 `/api/investment-operations`, `/api/investment-reconciliations` and
 `/api/investment-summary`. The legacy `/api/investments` queries remain
 available for synced assets and their imported history.
 
 Integrated investments keep the provider's identifiers, initially grouped by
-connection. Goals and reconciliations are local choices. A brokerage cash
+connection. Reconciliations are local choices. A brokerage cash
 balance already present in `financial_accounts` can be linked, without adding
 its balance to net worth again.
 
@@ -24,7 +24,7 @@ as in a manual account and listed next to the provider's positions, which stay
 read-only. The ledger of an integrated account replays only operations that
 carry a position and never computes cash, which remains whatever the
 institution reports. The sync writes only provider data and series quotes, so
-it never changes the quantity, cost, source, goal or valuations of a manual
+it never changes the quantity, cost, source or valuations of a manual
 holding. In the UI, manual rows of an integrated account carry a "Manual" tag.
 
 Manual operations use reais and decimal arithmetic. Purchases fold costs into
@@ -57,6 +57,68 @@ assigned take precedence and are kept. Spending by category uses the remainder;
 the cash curve keeps the full movement. Monthly aggregates distinguish
 contributions and withdrawals.
 
+`investments.MonthlyMovements` derives monthly (`YYYY-MM` from `occurred_on`)
+gross contributions (`Contributions`), withdrawals (`Withdrawals`), realized
+income (`Income`, only income operations), fees (`Fees`), taxes (`Taxes`) and
+realized gain (`RealizedGain`) from local operations (`source = manual`),
+including in integrated accounts, optionally filtered by custody account. Fees
+and taxes include costs from purchases and sales. These amounts do not subtract
+reconciliations: linking a bank entry never reduces the month's gross
+contribution or withdrawal. Imported movements and their reconciliation pivots
+(`source = synced`) are excluded; creating or undoing those links does not
+change local totals. Appreciation, purchase/sale principal and transfers
+between custodians are excluded from the flows above. `GET
+/api/investment-monthly-movements` (`?account_id=` optional) returns `items`
+with `month`, `contributions`, `withdrawals`, `income`, `fees`, `taxes` and
+`realized_gain`, plus `source: "manual"`, which says every row covers local
+operations only; `GET /api/investment-operations` continues to return raw
+operations.
+
+`RealizedGain` (`realized_gain`; negative for a loss) is informative. For each
+local sale it is the net proceeds, `amount − fees − taxes` (what the ledger
+credits to the cash), minus the cost basis that sale wrote off, summed in the
+month of the sale. The basis is the ledger's all-in one, read from the account
+replay as the drop in the position's total cost: purchase and opening-balance
+fees and taxes are capitalized in it, the cost frozen by a custody transfer is
+carried to the destination, and a partial sale writes off a proportional share,
+so selling a holding in pieces adds up exactly. This is the convention of the
+position's yield (purchase at all-in cost, sale at its net value), and makes
+`RealizedGain` already net of the purchase and sale fees and taxes. `Fees` and
+`Taxes` keep itemizing those costs (the timeline books them as expenses, the
+purchase ones on the purchase date) and must not be subtracted from it again.
+It is not part of `Income`, is not in `ManualReportingEntries` and does not feed
+the timeline totals.
+
+It exists only for local operations (`source = manual`): they are the only ones
+whose cost basis the ledger knows. Synced holdings have none and are not
+covered (the response says `source: "manual"`), so a zero or a missing month
+does not mean "no gain" for them.
+
+For a manual position, the yield since inception (the Rendimento formula: value
+at the end minus the net money put in, purchases at all-in cost and sales at net
+value) is exactly its cumulative `RealizedGain` plus its unrealized gain
+(`CurrentValue − TotalCost`), also for a holding that arrived by custody
+transfer, whose frozen cost is both the money counted in and the basis a sale
+writes off. Income operations belong to the account, not to a position, so they
+are in neither the yield nor `RealizedGain`: they are `Income`.
+
+Manual operations carry no currency and are in reais, so `MonthlyMovements`,
+the gain included, sums a single currency. Manual custody accounts are BRL by
+constraint, and the API refuses (400, `investment-unsupported-currency`) a
+manual position whose asset is catalogued in another currency, in a manual or an
+integrated custody, and a currency change on an asset held by manual positions.
+Operations and transfers on a holding that predates the rule are refused the
+same way; existing rows and reads are untouched. An integrated account stores no
+currency (it is NULL), so its local cash records, which name no asset, cannot be
+checked and are taken as reais. Multi-currency support for manual operations is
+not provided: `MonthlyMovements` and `RealizedGain` assume one currency.
+
+Appreciation and unrealized gain (`Summary.UnrealizedGain`) are never realized
+income or realized gain: they are excluded from `ManualReportingEntries`,
+`MonthlyMovements.Income`, `MonthlyMovements.RealizedGain` and timeline income
+totals, although they change net worth. Reconciled contributions and
+withdrawals preserve net worth; a fee reduces net worth by exactly its amount.
+
 Editing or deleting a reconciled manual bank entry requires undoing the links
 first. Ignoring a reconciled entry undoes its links (the operation is reported
 on its own again), and an ignored entry cannot be reconciled. Reconciliation
@@ -68,8 +130,7 @@ modifying the bank-reported balance.
 Net worth sums synced positions once, manual positions, and manual investment
 cash not yet represented in a linked financial account. Manual holdings in an
 integrated account count like any other manual holding (including in
-`ManualNetWorth`), without double-counting the provider's positions. Goal
-portfolios are not summed again. No appreciation is invented for historical
+`ManualNetWorth`), without double-counting the provider's positions. No appreciation is invented for historical
 snapshots without data.
 
 This version records operations; it does not place orders or move money at the
@@ -117,7 +178,16 @@ transaction and is repeatable: restarts and catalog updates insert only missing
 entries. It preserves existing assets, their names,
 classes and quote preferences, including equivalent codes such as `PETR4.SA`.
 The assets become available for selection in new positions even when there is
-no position of them yet. No accounts, balances, operations, transactions or prices are
+no position of them yet.
+
+**New position** requires picking a catalog asset: the search matches ticker or
+name ignoring case and accents, and the chosen asset is reused as-is (class,
+type, currency and quote settings). A missing asset is registered in the same
+drawer ("Novo ativo"), using the same fields as asset settings; choosing a
+quotable type switches automatic quotes on with the matching market (for
+example Crypto assets → Cryptocurrency uses `crypto`). If the typed code (or
+name plus type, without a code) matches a catalog asset, that asset is selected
+instead of creating a duplicate. Editing a position keeps the free-text fields. No accounts, balances, operations, transactions or prices are
 created, and the seed makes no external calls.
 
 CDBs and government bonds are available types; each issue/maturity must be
@@ -289,7 +359,7 @@ position holds with positive quantity, and the backfill writes history. The job
 enters the series.
 
 The value of a manual position whose asset has automatic quotes is **derived on
-read** (`Position.CurrentValue`, which feeds totals, goals and net worth):
+read** (`Position.CurrentValue`, which feeds totals and net worth):
 `quantity × latest series price`, rounded to cents, with
 `valuation_basis = market_quote`, `current_unit_price` equal to the price and
 `valued_on` equal to its day. None of this is persisted; an old quote still
@@ -363,24 +433,22 @@ five days of difference; they require confirmation. Fees, taxes and income can
 also be linked, avoiding duplicating revenue and expenses. Unlinking restores
 the available portion.
 
-The Investimentos screen offers "Revisar lançamentos antigos", opening the
-statement with no period restriction. `POST /api/transactions/query` accepts
-`filters.origin` (`manual`, `synced`). No history is reclassified automatically.
+`POST /api/transactions/query` accepts `filters.origin` (`manual`, `synced`).
+No history is reclassified automatically.
 
-Positions accept the filters `account_id`, `portfolio_id`, `source`,
+Positions accept the filters `account_id`, `source`,
 `source_id` and `include_closed`. Operations accept `account_id`, `position_id`,
-`portfolio_id`, `source`, `source_id`, `from`, `to` and `reconciliation_state`
+`source`, `source_id`, `from`, `to` and `reconciliation_state`
 (`linked`, `unlinked`). Typed valuations are dated `valuation` operations,
 queryable through the same operation history; the quotes job never creates them.
 
 The investments area's total includes the effective cash of linked accounts. In
 net worth that same cash is already in the bank portion, so it is not summed a
-second time. In the per-goal view, purchases and sales are labeled as such,
-without confusing them with the custody's cash transfers.
+second time.
 
 Imported positions in other currencies keep their original currency and value.
-With no FX conversion in this version, they stay out of the investment totals,
-goals and the investments portion of net worth in reais. The UI flags when
+With no FX conversion in this version, they stay out of the investment totals
+and the investments portion of net worth in reais. The UI flags when
 positions exist outside those totals.
 
 ## Database representation
@@ -396,8 +464,44 @@ date-only text as well as legacy timestamps. Integrated custody IDs remain opaqu
 `integrated:<source id>` text; records with UUID identities use native Postgres
 UUIDs. `db.Open` rejects the old schema generation; conversion is separate work.
 
+Position responses expose nullable `total_cost`, the exact acquisition cost
+from the backend ledger. The frontend uses it for manual yield instead of
+reconstructing quantity × average_cost; the gain is computed on the exact
+cost and rounded only for display (including proportional costs after partial
+sales). Older
+responses without it show the existing unknown-cost state. Workspace net
+yield/cost/movement aggregates still run locally and are inventoried as a
+migration gap in the API contract doc.
+
+## API contract verification
+
+Wire semantics and calculation ownership are inventoried in
+[`contratos-api.md`](../../contratos-api.md). Shared synthetic responses are
+checked against Go DTOs and the production TypeScript parsers by the existing
+backend/frontend CI tests.
+
 ## Monetary precision
 
-Investment cash fields and portfolio targets keep decimal strings through editing
+Investment cash fields keep decimal strings through editing
 and submission. Contribution totals and quantity × average-cost gain calculations
 use exact arithmetic; BRL rounding happens only at display ([policy](../../precisao-monetaria.md)).
+
+## Reference valuation
+
+`GET /api/investment-summary` converts its existing BRL base into
+`finance.reference_currency` using current `internal/exchange` FX. Totals,
+per-account value/cash share that rate and carry the chosen `currency_code`
+plus full `fx` provenance. Missing rates make the summary unavailable rather than
+showing zero or an identity conversion. Stale stored rates are disclosed.
+
+The workspace uses the same exact rate for client-computed BRL yield,
+contribution, withdrawal and cost aggregates. Positions and operations, including
+their currencies and amounts, stay native. Synced foreign positions and
+foreign custody cash are valued in BRL with the day's `internal/exchange` rate
+(`investments.BuildSummary`, `ManualNetWorth`); a currency without a
+rate fails the summary rather than being omitted. Yield, contribution and cost
+aggregates computed in the browser still sum reais positions only. No positions, targets or provider balances are
+rewritten when switching reference currency.
+
+Account cards add converted position value and cash with full decimal precision;
+only the displayed total is rounded to cents, consistently with the workspace.

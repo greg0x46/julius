@@ -215,7 +215,7 @@ func TestConversionKindsCoverBaseline(t *testing.T) {
 		if err := rows.Scan(&table, &col, &kind); err != nil {
 			t.Fatal(err)
 		}
-		if expected := kinds[kind]; expected != "" && table != "goose_db_version" {
+		if expected := kinds[kind]; expected != "" && table != "goose_db_version" && table != "goals" {
 			key := table + "." + col
 			seen[key] = true
 			if columnKinds[key] != expected {
@@ -227,7 +227,7 @@ func TestConversionKindsCoverBaseline(t *testing.T) {
 		t.Fatal(err)
 	}
 	for key := range columnKinds {
-		if !seen[key] {
+		if !seen[key] && !skipped[strings.SplitN(key, ".", 2)[0]] {
 			t.Errorf("unknown mapped column %s", key)
 		}
 	}

@@ -343,53 +343,27 @@ func TestSyncedPositionIsReadOnlyAndCountedOnce(t *testing.T) {
 	}
 }
 
-func TestGoalAssignmentMovesNoMoney(t *testing.T) {
+func TestSyncedPositionUpdateWithItsOwnDescriptionChangesNothing(t *testing.T) {
 	f := newBookFixture(t)
 	ctx := context.Background()
-	accountID := f.addManualAccount("Custódia")
 	investmentID := f.addFinancialInvestment("2000", "4", "500")
-	manual, err := investments.CreatePosition(ctx, f.conn, investments.PositionInput{
-		AccountID:       accountID,
-		Name:            "Ações",
-		AssetType:       "Ativo",
-		InitialQuantity: bookDec("10"),
-		InitialUnitCost: bookDec("25"),
-		OccurredOn:      time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC),
-	})
-	if err != nil {
-		t.Fatalf("CreatePosition: %v", err)
-	}
 	before := f.summary()
-	goal, err := investments.CreatePortfolio(ctx, f.conn, investments.PortfolioInput{Name: "Reserva", TargetAmount: bookDecPtr("5000")})
-	if err != nil {
-		t.Fatalf("CreatePortfolio: %v", err)
-	}
-	if _, err := investments.UpdatePosition(ctx, f.conn, manual.ID, investments.PositionUpdate{
-		Name: manual.Name, AssetType: manual.AssetType, PortfolioID: &goal.ID,
-	}); err != nil {
-		t.Fatalf("assign manual: %v", err)
-	}
 	synced, err := investments.GetPosition(ctx, f.conn, investmentID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := investments.UpdatePosition(ctx, f.conn, investmentID, investments.PositionUpdate{
-		Name: synced.Name, AssetType: synced.AssetType, Ticker: synced.Ticker, PortfolioID: &goal.ID,
-	}); err != nil {
-		t.Fatalf("assign synced: %v", err)
+	got, err := investments.UpdatePosition(ctx, f.conn, investmentID, investments.PositionUpdate{
+		Name: synced.Name, AssetType: synced.AssetType, Ticker: synced.Ticker, Notes: synced.Notes,
+	})
+	if err != nil {
+		t.Fatalf("UpdatePosition: %v", err)
 	}
-	assigned := f.positions(investments.PositionFilter{PortfolioID: &goal.ID})
-	if len(assigned) != 2 {
-		t.Fatalf("assigned = %+v", assigned)
+	if !reflect.DeepEqual(got, synced) {
+		t.Fatalf("synced position changed: before=%+v after=%+v", synced, got)
 	}
 	after := f.summary()
-	if after.TotalValue.String() != before.TotalValue.String() || after.CashBalance.String() != before.CashBalance.String() ||
-		after.ManualValue.String() != before.ManualValue.String() || after.SyncedValue.String() != before.SyncedValue.String() {
-		t.Fatalf("goal changed balances: before=%+v after=%+v", before, after)
-	}
-	reloaded, err := investments.GetPortfolio(ctx, f.conn, goal.ID)
-	if err != nil || reloaded.CurrentValue.String() != "2250" {
-		t.Fatalf("portfolio = %+v err=%v", reloaded, err)
+	if after.TotalValue.String() != before.TotalValue.String() || after.SyncedValue.String() != before.SyncedValue.String() {
+		t.Fatalf("update changed balances: before=%+v after=%+v", before, after)
 	}
 }
 
@@ -416,16 +390,12 @@ func TestDeletePositionWithoutOperations(t *testing.T) {
 
 // TestGetPositionMatchesListPositions pins GetPosition to the list derivation:
 // the single read replays only the holding's own account, and that must yield
-// the same quantity, cost, valuation and goal as the full list does.
+// the same quantity, cost and valuation as the full list does.
 func TestGetPositionMatchesListPositions(t *testing.T) {
 	f := newBookFixture(t)
 	ctx := context.Background()
 	custodyID := f.addManualAccount("Custódia")
 	brokerID := f.addManualAccount("Corretora manual")
-	goal, err := investments.CreatePortfolio(ctx, f.conn, investments.PortfolioInput{Name: "Reserva"})
-	if err != nil {
-		t.Fatalf("CreatePortfolio: %v", err)
-	}
 	valued, err := investments.CreatePosition(ctx, f.conn, investments.PositionInput{
 		AccountID:       custodyID,
 		Name:            "Ações",
@@ -435,7 +405,6 @@ func TestGetPositionMatchesListPositions(t *testing.T) {
 		InitialQuantity: bookDec("10"),
 		InitialUnitCost: bookDec("25"),
 		OccurredOn:      time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC),
-		PortfolioID:     &goal.ID,
 	})
 	if err != nil {
 		t.Fatalf("CreatePosition valued: %v", err)
@@ -462,11 +431,6 @@ func TestGetPositionMatchesListPositions(t *testing.T) {
 		t.Fatalf("CreatePosition empty: %v", err)
 	}
 	investmentID := f.addFinancialInvestment("2000", "4", "500")
-	if _, err := investments.UpdatePosition(ctx, f.conn, investmentID, investments.PositionUpdate{
-		Name: "Tesouro Selic", AssetType: "FIXED_INCOME", PortfolioID: &goal.ID,
-	}); err != nil {
-		t.Fatalf("assign synced: %v", err)
-	}
 
 	listed := f.positions(investments.PositionFilter{IncludeClosed: true})
 	if len(listed) != 4 {
@@ -488,8 +452,7 @@ func TestGetPositionMatchesListPositions(t *testing.T) {
 		byID[position.ID] = position
 	}
 	if p := byID[valued.ID]; p.Quantity.String() != "20" || bookDecimalString(p.AverageCost) != "30" ||
-		p.CurrentValue.String() != "700" || p.ValuationBasis != investments.ValuationBasisManualValuation ||
-		p.PortfolioID == nil || *p.PortfolioID != goal.ID {
+		p.CurrentValue.String() != "700" || p.ValuationBasis != investments.ValuationBasisManualValuation {
 		t.Fatalf("valued = %+v", p)
 	}
 	if p := byID[closed.ID]; !p.Closed || p.Quantity.String() != "0" {
@@ -498,8 +461,7 @@ func TestGetPositionMatchesListPositions(t *testing.T) {
 	if p := byID[empty.ID]; p.Closed || p.AverageCost != nil {
 		t.Fatalf("empty = %+v", p)
 	}
-	if p := byID[investmentID]; p.Source != investments.PositionSourceSynced || p.CurrentValue.String() != "2000" ||
-		p.PortfolioID == nil || *p.PortfolioID != goal.ID {
+	if p := byID[investmentID]; p.Source != investments.PositionSourceSynced || p.CurrentValue.String() != "2000" {
 		t.Fatalf("synced = %+v", p)
 	}
 }

@@ -1,18 +1,17 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
+import type { ComponentProps } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import type {
   Investment,
   InvestmentAccount,
   InvestmentOperation,
-  InvestmentPortfolio,
   InvestmentPosition,
   InvestmentSummary,
 } from "../../api/contracts";
 import { InvestmentAccountCard } from "./InvestmentAccountCard";
-import { InvestmentGoalCard } from "./InvestmentGoalCard";
 import { InvestmentWorkspaceSummary } from "./InvestmentWorkspaceSummary";
 
 const account = {
@@ -39,7 +38,6 @@ const syncedPosition = {
   source: "synced",
   account_id: "a1",
   asset_id: null,
-  portfolio_id: "g1",
   name: "LCA Nubank",
   ticker: null,
   asset_type: "LCA",
@@ -64,6 +62,7 @@ const manualPosition = {
   asset_type: "Fundo",
   quantity: "10",
   average_cost: "100.00",
+  total_cost: "1000.00",
   current_value: "1200.00",
   linked_investment_id: null,
   valuation_basis: "manual_valuation",
@@ -83,10 +82,9 @@ const fee = {
   notes: null,
 } as unknown as InvestmentOperation;
 
-const goal = { id: "g1", name: "Reserva", target_amount: null, progress: null, current_value: "2320.50" } as unknown as InvestmentPortfolio;
 const linked = new Map([[lca.id, lca]]);
 
-function renderAccountCard() {
+function renderAccountCard(overrides: Partial<ComponentProps<typeof InvestmentAccountCard>> = {}) {
   render(
     <MemoryRouter>
       <InvestmentAccountCard
@@ -95,7 +93,6 @@ function renderAccountCard() {
         positions={[syncedPosition, manualPosition]}
         allPositions={[syncedPosition, manualPosition]}
         operations={[fee]}
-        portfolios={[goal]}
         linked={linked}
         onRename={vi.fn()}
         onRemove={vi.fn()}
@@ -105,14 +102,37 @@ function renderAccountCard() {
         onRemovePosition={vi.fn()}
         onEditOperation={vi.fn()}
         onRemoveOperation={vi.fn()}
-        onAssignGoal={vi.fn()}
         busy={false}
+        {...overrides}
       />
     </MemoryRouter>,
   );
 }
 
 describe("investment cards", () => {
+  it.each([
+    { nativeValue: "100.03", nativeCash: "100.03", value: "20.006", cash: "20.006", total: "40.012", displayed: "USD 40,01" },
+    { nativeValue: "100.01", nativeCash: "-200.04", value: "20.002", cash: "-40.008", total: "-20.006", displayed: "-USD 20,01" },
+  ])("keeps fractional FX precision in the account and workspace totals ($total USD)", ({ nativeValue, nativeCash, value, cash, total, displayed }) => {
+    const fx = { base: "BRL", quote: "USD", value: "0.2", inverted: false, source: "synthetic", stale: false,
+      as_of: "2026-10-12T00:00:00Z", effective_on: "2026-10-12T00:00:00Z", fetched_at: "2026-10-12T01:00:00Z" };
+    const position = { ...manualPosition, current_value: nativeValue };
+    const accountSummary = { account_id: account.id, name: account.name, kind: account.kind, current_value: value, cash_balance: cash };
+    renderAccountCard({
+      account: { ...account, cash_balance: nativeCash },
+      summary: accountSummary,
+      valuation: { currency_code: "USD", fx },
+      positions: [position],
+      allPositions: [position],
+      operations: [],
+    });
+    render(<InvestmentWorkspaceSummary
+      summary={{ currency_code: "USD", fx, total_value: total, cash_balance: cash, synced_value: "0" } as unknown as InvestmentSummary}
+      positions={[position]} operations={[]} linked={linked} />);
+    expect(screen.getAllByText(displayed)).toHaveLength(2);
+    expect(within(screen.getByRole("table", { name: "Posições" })).getByText(`R$ ${nativeValue.replace(".", ",")}`)).toBeVisible();
+  });
+
   it("shows the rendimento líquido and the IR/Taxas on the account, net of what the institution withheld", () => {
     renderAccountCard();
     const figures = screen.getByRole("region", { name: "Nubank" });
@@ -166,30 +186,6 @@ describe("investment cards", () => {
     expect(screen.queryByRole("menuitem", { name: "Excluir" })).toBeNull();
   });
 
-  it("gives the goal the same figures but no cash balance, which a goal does not hold", () => {
-    render(
-      <MemoryRouter>
-        <InvestmentGoalCard
-          portfolio={goal}
-          summary={undefined}
-          positions={[syncedPosition, manualPosition]}
-          operations={[fee]}
-          portfolios={[goal]}
-          linked={linked}
-          accountNameOf={() => "Nubank"}
-          onEdit={vi.fn()}
-          onRemove={vi.fn()}
-          onAssignGoal={vi.fn()}
-          busy={false}
-        />
-      </MemoryRouter>,
-    );
-    const section = screen.getByRole("region", { name: "Reserva" });
-    expect(within(section).getByRole("button", { name: "Rendimento líquido" })).toBeInTheDocument();
-    expect(within(section).getByRole("button", { name: "IR/Taxas" })).toBeInTheDocument();
-    expect(within(section).queryByText(/Saldo para investir|Caixa disponível/)).toBeNull();
-  });
-
   it("puts the rendimento and the IR/Taxas beside the workspace total", () => {
     render(
       <InvestmentWorkspaceSummary
@@ -203,4 +199,15 @@ describe("investment cards", () => {
     expect(screen.getByText("+R$ 298,50")).toBeVisible();
     expect(screen.getByText("IR/Taxas")).toBeVisible();
   });
+  it("values the workspace total and native secondary aggregates in USD with the same FX rate", () => {
+    const fx = { base: "BRL", quote: "USD", value: "0.2", inverted: false, source: "synthetic", stale: false,
+      as_of: "2026-10-12T00:00:00Z", effective_on: "2026-10-12T00:00:00Z", fetched_at: "2026-10-12T01:00:00Z" };
+    render(<InvestmentWorkspaceSummary
+      summary={{ currency_code: "USD", fx, total_value: "464.10", cash_balance: "0", synced_value: "224.10" } as unknown as InvestmentSummary}
+      positions={[syncedPosition, manualPosition]} operations={[fee]} linked={linked} />);
+    expect(screen.getByText("USD 464,10")).toBeVisible();
+    expect(screen.getByText("+USD 59,70")).toBeVisible();
+    expect(screen.queryByText(/R\$/)).toBeNull();
+  });
+
 });

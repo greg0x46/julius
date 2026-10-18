@@ -13,10 +13,11 @@ persisted.
 ## State vs. ideal
 
 `internal/payables` fully replaced the old `internal/debts` (gone from the
-code). `Kind` still covers only `debt`/`receivable` — the generalization to
-goals ("save R$10,000 by December"), described as a direction in
-`.specs/motores-de-dominio.md` section 4, is **not implemented**. The name
-"Payables" is already considered provisional (see the name note in that doc).
+code). `Kind` covers only `debt`/`receivable` and will stay that way: goals
+("save R$10,000 by December") are a separate package, `internal/goals` (see
+[`metas`](../metas/reference.md)), not a Payables `Kind`. A payable is paid down
+by linked real transactions; a goal measures a figure owned by another engine.
+The name "Payables" therefore remains accurate.
 
 ## Backend
 
@@ -39,6 +40,9 @@ moment.
 
 Also includes link eligibility (`eligibility.go`, which today derives the
 accepted flow direction from the debt/receivable `Kind`).
+The ignored/direction/effective-BRL checks are owned by
+`money.BRLLinkIneligibility`, shared with recurring reconciliation. The
+already-linked check remains here, after those checks.
 
 The card debt / bill due-date helpers **moved out of here** to
 `internal/transactions` (Ledger engine) — see Transactions. The "payables debt

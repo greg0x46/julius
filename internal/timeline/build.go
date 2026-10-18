@@ -66,7 +66,7 @@ func contains(list []string, value string) bool {
 // — a duplicate, a reversal — and such a row is not a distinct movement the
 // bank's reported balance counted either, so dropping it keeps the two
 // definitions aligned in the common case. The cost is the uncommon one: an
-// ignored row that *did* move money (transactions.CashOnHand's example of a
+// ignored row that *did* move money (transactions.CashOnHandByCurrency's example of a
 // transfer to an untracked account) leaves every past day before it short by
 // its amount. The anchor is unaffected — today's point is the reported
 // balance whatever the ledger says — so the error is confined to the shape of

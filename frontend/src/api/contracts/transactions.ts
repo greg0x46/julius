@@ -1,3 +1,4 @@
+import { parseValuation, type ReportValuation } from "./valuation";
 import { parseReportingSummary, type ReportingSummary } from "./reporting";
 import { categoryKinds, categoryOrigins } from "./categories";
 import type { CategoryKind, CategoryOrigin } from "./categories";
@@ -173,7 +174,7 @@ export interface CategoryOption {
   color: string;
 }
 
-export interface TransactionQueryResult {
+export interface TransactionQueryResult extends ReportValuation {
  reporting?: ReportingSummary;
   confirmed_at: string;
   stored_total: number;
@@ -467,7 +468,7 @@ export function parseTransactionQueryResult(value: unknown): TransactionQueryRes
     "totals",
     "groups",
     "available_filters",
-  ], ["reporting"]);
+  ], ["reporting", "currency_code", "fx"]);
   const page = requiredRecord(result.page, ["number", "size", "total_items", "total_pages"]);
   const filters = requiredRecord(result.available_filters, [
     "accounts",
@@ -536,6 +537,7 @@ export function parseTransactionQueryResult(value: unknown): TransactionQueryRes
     page: { number, size, total_items: totalItems, total_pages: totalPages },
     items: result.items.map(parseTransactionItem),
     totals: result.totals.map(parseCurrencyTotals),
+    ...parseValuation(result),
     ...(result.reporting === undefined ? {} : { reporting: parseReportingSummary(result.reporting) }),
     groups: result.groups.map(parseTransactionGroup),
     available_filters: {

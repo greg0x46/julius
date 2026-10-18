@@ -1,3 +1,4 @@
+import { ReportValuation } from "../components/shared/ReportValuation";
 import { Alert, Button, Skeleton } from "antd";
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
@@ -292,6 +293,7 @@ export function TransactionsPage() {
           ) : undefined
         }
       >
+        {data && <ReportValuation valuation={data}>{null}</ReportValuation>}
         {!query.timezoneValid && (
           <Alert
             type="error"

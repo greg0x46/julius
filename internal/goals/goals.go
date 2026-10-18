@@ -1,0 +1,252 @@
+// Package goals tracks a target against one global metric (today the market
+// value of everything invested). A goal stores only its target; the current
+// value and progress are recomputed on read from the engines that own the
+// figure, so a goal never restates or persists money.
+package goals
+
+import (
+	"context"
+	"database/sql"
+	"errors"
+	"strings"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/shopspring/decimal"
+
+	"github.com/greg0x46/julius/internal/db"
+	dbtypes "github.com/greg0x46/julius/internal/db/types"
+	"github.com/greg0x46/julius/internal/money"
+	"github.com/greg0x46/julius/internal/networth"
+)
+
+// Querier is satisfied by *sql.DB and *sql.Tx.
+type Querier = networth.Querier
+
+// Metric names the figure a goal measures. The schema already admits the
+// metrics planned next; Input.validate only accepts those listed in metrics.
+type Metric string
+
+const (
+	// MetricInvestedValue is the market value of every investment, gains and
+	// losses included: the investments line of net worth.
+	MetricInvestedValue Metric = "invested_value"
+)
+
+var metrics = map[Metric]func(networth.Breakdown) decimal.Decimal{
+	MetricInvestedValue: func(b networth.Breakdown) decimal.Decimal { return b.InvestmentBalance },
+}
+
+var (
+	ErrNotFound     = errors.New("goal not found")
+	ErrInvalidInput = errors.New("invalid goal input")
+)
+
+type Goal struct {
+	ID           string
+	Name         string
+	Metric       Metric
+	TargetAmount decimal.Decimal
+	TargetDate   *time.Time
+	Notes        *string
+	// CurrentValue and Progress are computed on read, in BRL. Progress is
+	// CurrentValue / TargetAmount and may exceed 1 once the goal is reached.
+	CurrentValue decimal.Decimal
+	Progress     decimal.Decimal
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+}
+
+type Input struct {
+	Name         string
+	Metric       Metric
+	TargetAmount decimal.Decimal
+	TargetDate   *time.Time
+	Notes        *string
+}
+
+func (in Input) validate() (string, error) {
+	name := strings.TrimSpace(in.Name)
+	if _, ok := metrics[in.Metric]; !ok || name == "" || !in.TargetAmount.IsPositive() {
+		return "", ErrInvalidInput
+	}
+	return name, nil
+}
+
+const columns = `id, name, metric, target_amount, target_date, notes, created_at, updated_at`
+
+func scan(row interface{ Scan(...any) error }) (Goal, error) {
+	var (
+		g                          Goal
+		metric, targetAmount       string
+		targetDate, notes          sql.NullString
+		createdAtRaw, updatedAtRaw string
+	)
+	if err := row.Scan(dbtypes.ID(&g.ID), &g.Name, &metric, dbtypes.Decimal(&targetAmount), dbtypes.Date(&targetDate), &notes,
+		dbtypes.Time(&createdAtRaw), dbtypes.Time(&updatedAtRaw)); err != nil {
+		return Goal{}, err
+	}
+	g.Metric = Metric(metric)
+	var err error
+	if g.TargetAmount, err = decimal.NewFromString(targetAmount); err != nil {
+		return Goal{}, err
+	}
+	if targetDate.Valid {
+		day, err := dbtypes.ParseDate(targetDate.String)
+		if err != nil {
+			return Goal{}, err
+		}
+		g.TargetDate = &day
+	}
+	if notes.Valid {
+		g.Notes = &notes.String
+	}
+	if g.CreatedAt, err = dbtypes.ParseTime(createdAtRaw); err != nil {
+		return Goal{}, err
+	}
+	if g.UpdatedAt, err = dbtypes.ParseTime(updatedAtRaw); err != nil {
+		return Goal{}, err
+	}
+	return g, nil
+}
+
+func nullable(s *string) any {
+	if s == nil || strings.TrimSpace(*s) == "" {
+		return nil
+	}
+	return strings.TrimSpace(*s)
+}
+
+func nullableDay(t *time.Time) any {
+	if t == nil {
+		return nil
+	}
+	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC).Format("2006-01-02")
+}
+
+// withProgress fills the computed fields from a breakdown read once for all
+// the goals of a request, so they agree with each other.
+func withProgress(g Goal, b networth.Breakdown) Goal {
+	g.CurrentValue = metrics[g.Metric](b)
+	g.Progress = g.CurrentValue.Div(g.TargetAmount)
+	return g
+}
+
+func rawGet(ctx context.Context, q Querier, id string) (Goal, error) {
+	g, err := scan(q.QueryRowContext(ctx, `SELECT `+columns+` FROM goals WHERE id = ?`, id))
+	if errors.Is(err, sql.ErrNoRows) {
+		return Goal{}, ErrNotFound
+	}
+	return g, err
+}
+
+func Get(ctx context.Context, q Querier, id string) (Goal, error) {
+	g, err := rawGet(ctx, q, id)
+	if err != nil {
+		return Goal{}, err
+	}
+	b, err := networth.Compute(ctx, q)
+	if err != nil {
+		return Goal{}, err
+	}
+	return withProgress(g, b), nil
+}
+
+func List(ctx context.Context, q Querier) ([]Goal, error) {
+	rows, err := q.QueryContext(ctx, `SELECT `+columns+` FROM goals ORDER BY created_at, id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	goals := []Goal{}
+	for rows.Next() {
+		g, err := scan(rows)
+		if err != nil {
+			return nil, err
+		}
+		goals = append(goals, g)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if len(goals) == 0 {
+		return goals, nil
+	}
+	b, err := networth.Compute(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	for i := range goals {
+		goals[i] = withProgress(goals[i], b)
+	}
+	return goals, nil
+}
+
+func Create(ctx context.Context, conn *sql.DB, in Input) (Goal, error) {
+	name, err := in.validate()
+	if err != nil {
+		return Goal{}, err
+	}
+	tx, err := conn.BeginTx(ctx, nil)
+	if err != nil {
+		return Goal{}, err
+	}
+	defer tx.Rollback()
+	id := uuid.NewString()
+	now := db.FormatTime(time.Now())
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO goals (id, name, metric, target_amount, target_date, notes, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		id, name, string(in.Metric), money.CanonicalDecimal(in.TargetAmount), nullableDay(in.TargetDate), nullable(in.Notes), now, now); err != nil {
+		return Goal{}, err
+	}
+	goal, err := Get(ctx, tx, id)
+	if err != nil {
+		return Goal{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return Goal{}, err
+	}
+	return goal, nil
+}
+
+func Update(ctx context.Context, conn *sql.DB, id string, in Input) (Goal, error) {
+	name, err := in.validate()
+	if err != nil {
+		return Goal{}, err
+	}
+	tx, err := conn.BeginTx(ctx, nil)
+	if err != nil {
+		return Goal{}, err
+	}
+	defer tx.Rollback()
+	if _, err := rawGet(ctx, tx, id); err != nil {
+		return Goal{}, err
+	}
+	if _, err := tx.ExecContext(ctx, `
+		UPDATE goals SET name = ?, metric = ?, target_amount = ?, target_date = ?, notes = ?, updated_at = ?
+		WHERE id = ?`,
+		name, string(in.Metric), money.CanonicalDecimal(in.TargetAmount), nullableDay(in.TargetDate), nullable(in.Notes),
+		db.FormatTime(time.Now()), id); err != nil {
+		return Goal{}, err
+	}
+	goal, err := Get(ctx, tx, id)
+	if err != nil {
+		return Goal{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return Goal{}, err
+	}
+	return goal, nil
+}
+
+func Delete(ctx context.Context, q Querier, id string) error {
+	res, err := q.ExecContext(ctx, `DELETE FROM goals WHERE id = ?`, id)
+	if err != nil {
+		return err
+	}
+	if n, err := res.RowsAffected(); err == nil && n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}

@@ -68,7 +68,8 @@ authentication configuration that does not depend on the host:
   metrics, failures) instead of a black-box import.
 - **Statement import** — upload a Flash CSV, review the per-row preview and
   import it into a file-based account. Re-uploads and overlapping periods are
-  recognized, with an import history and warnings for inconsistent data.
+  automatically deduplicated across files. Balance conflicts show existing and
+  incoming values for an explicit per-row choice, with an import history.
 - **Transfers between own accounts** — link existing synced/manual outflows and
   inflows, including different currencies, or create both movements together
   in manual accounts. Native amounts and balances stay intact; principal stays
@@ -80,7 +81,13 @@ authentication configuration that does not depend on the host:
   is opening balance + posted movements + explicit adjustments. Edit, archive
   and reactivate accounts in **Contas e cartões**; currency and opening balance
   lock after movements. Foreign amounts stay in their original currency and
-  remain excluded from Net Worth BRL aggregates without rates.
+  are valued in BRL in Net Worth and the investment summary with the day's
+  exchange rate; a missing rate makes the figure unavailable.
+- **Reference currency** — choose the currency for consolidated Home, category,
+  investment and net-worth figures in **Configurações → Geral** (BRL by default).
+  Current reports use current FX; net-worth history uses each snapshot day’s FX.
+  Original records and stored BRL snapshots remain untouched. Missing rates
+  make the affected report unavailable instead of assuming a 1:1 conversion.
 - **Transactions** — searchable/filterable transaction list, manual
   inclusion/exclusion (e.g. ignoring a chargeback or a duplicate) and
   categorization. Entries can also be created by hand in an existing account —
@@ -113,11 +120,14 @@ authentication configuration that does not depend on the host:
   lowest balance until then, and how hypothetical scenarios change that answer.
 - **Net worth** — net worth snapshots and history (assets − liabilities) over
   time.
-- **Investments** — integrated and manual investment accounts, goal-based
-  portfolios, per-asset operations, manual valuations and optional automatic
+- **Goals** — set a target amount (and optional date) for the total market
+  value of your investments and follow the progress, recomputed on every read.
+  More metrics (cash balance, net worth) are planned.
+- **Investments** — integrated and manual investment accounts, per-asset operations, manual valuations and optional automatic
   quotes (B3 and crypto), enabled by default with a persistent daily schedule. Contributions and withdrawals reconciled with the
   statement show up apart from spending, keeping their cash effect and avoiding
-  double counting in net worth.
+  double counting in net worth. Manual-position returns use the exact recorded
+  acquisition cost, rather than reconstructing it from the displayed average cost.
   A curated starter asset catalog is populated automatically on startup.
 - **Browser authentication** — email and password login for the owner account,
   persisted sessions, logout and password change. No public sign-up.
@@ -125,7 +135,7 @@ authentication configuration that does not depend on the host:
   AES-256-GCM by a key independent of the password, supplied by the environment
   or a file. The worker keeps running after restarts without requiring a login.
 
-## Investments by account and goal
+## Investments by account
 
 In **Investimentos**, register a manual custody account or use the grouping
 created for a connection. Create empty positions for new purchases; enter an
@@ -143,13 +153,21 @@ Integrated accounts keep the balances reported by the institution. Use
 **Vincular caixa da corretora** (link brokerage cash) when the imported
 financial account already represents the same cash. Manual holdings (such as
 crypto that Open Finance does not expose) can be added to an integrated account,
-next to the institution's positions, and are never overwritten by a sync. Goals group positions from
-any institution without changing their value. Manual quotes are dated;
+next to the institution's positions, and are never overwritten by a sync. Manual quotes are dated;
 corrections to operations recompute subsequent costs and are rejected if they
 would produce negative cash or a negative position.
 
 Contracts and limits are in the
 [investments reference](.specs/contextos/investimentos/reference.md).
+
+## Goals
+
+In **Metas**, create a goal with a name, a target amount in reais and an
+optional date. Today the only metric is **valor investido**: the market value of
+all your investments, gains and losses included (the investments line of net
+worth). Progress is the current value divided by the target and can pass 100%.
+Nothing is stored besides the target. See the
+[goals reference](.specs/contextos/metas/reference.md).
 
 ## Tech stack
 
@@ -601,8 +619,10 @@ The release scripts (`scripts/next-version.sh`, `update-changelog.sh`,
 The frontend suite runs as two Vitest projects (jsdom and plain Node); see
 [`frontend/TESTING.md`](frontend/TESTING.md) for the split and worker count.
 
-`npm run test:e2e` (Playwright) is declared in `package.json` but has no
-`playwright.config.*` or tests yet — scaffolded, not implemented.
+`npm run test:e2e` runs the financial browser journeys against isolated local
+Julius servers and disposable SQLite databases, without Pluggy credentials.
+See [`frontend/TESTING.md`](frontend/TESTING.md#financial-browser-journeys-playwright)
+for installation, coverage and failure evidence. CI runs the same suite.
 
 ## Open Finance & Pluggy
 

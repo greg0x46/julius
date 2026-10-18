@@ -1,14 +1,12 @@
 import type {
   InvestmentAccount,
   InvestmentOperation,
-  InvestmentPortfolio,
   InvestmentPosition,
   InvestmentSummary,
 } from "../api/contracts";
 
 export const manualAccountId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1";
 export const integratedAccountId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2";
-export const goalId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1";
 export const manualPositionId = "cccccccc-cccc-4ccc-8ccc-ccccccccccc1";
 export const syncedPositionId = "cccccccc-cccc-4ccc-8ccc-ccccccccccc2";
 export const depositOperationId = "dddddddd-dddd-4ddd-8ddd-ddddddddddd1";
@@ -42,29 +40,17 @@ export const integratedAccount: InvestmentAccount = {
   updated_at: "2026-09-14T12:00:00Z",
 };
 
-export const goal: InvestmentPortfolio = {
-  id: goalId,
-  name: "Reserva de emergência",
-  target_amount: "10000.00",
-  target_date: null,
-  notes: null,
-  current_value: "1200.00",
-  progress: "0.12",
-  created_at: "2026-09-01T12:00:00Z",
-  updated_at: "2026-09-01T12:00:00Z",
-};
-
 export const manualPosition: InvestmentPosition = {
   id: manualPositionId,
   source: "manual",
   account_id: manualAccountId,
   asset_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa9",
-  portfolio_id: goalId,
   name: "Tesouro Selic 2029",
   ticker: null,
   asset_type: "Tesouro",
   quantity: "1",
   average_cost: "1000.00",
+  total_cost: "1000.00",
   current_value: "1200.00",
   current_unit_price: "1200.00",
   valued_on: "2026-09-12",
@@ -80,12 +66,12 @@ export const closedPosition: InvestmentPosition = {
   source: "manual",
   account_id: manualAccountId,
   asset_id: "cccccccc-cccc-4ccc-8ccc-ccccccccccc9",
-  portfolio_id: null,
   name: "LCI Banco Antigo",
   ticker: null,
   asset_type: "LCI",
   quantity: "0",
   average_cost: "500.00",
+  total_cost: "0.00",
   current_value: "0.00",
   current_unit_price: "0.00",
   valued_on: "2026-08-01",
@@ -101,7 +87,6 @@ export const syncedPosition: InvestmentPosition = {
   source: "synced",
   account_id: integratedAccountId,
   asset_id: null,
-  portfolio_id: null,
   name: "CDB Banco Teste",
   ticker: null,
   asset_type: "CDB",
@@ -162,10 +147,6 @@ export const summary: InvestmentSummary = {
   synced_value: "300.00",
   cash_balance: "500.00",
   unrealized_gain: "200.00",
-  portfolios: [
-    { portfolio_id: goalId, name: "Reserva de emergência", current_value: "1200.00", target_amount: "10000.00", progress: "0.12" },
-    { portfolio_id: null, name: "Sem objetivo", current_value: "300.00", target_amount: null, progress: null },
-  ],
   accounts: [
     { account_id: manualAccountId, name: "Corretora XP", kind: "manual", current_value: "1200.00", cash_balance: "500.00" },
     { account_id: integratedAccountId, name: "Banco Teste", kind: "integrated", current_value: "300.00", cash_balance: "0.00" },

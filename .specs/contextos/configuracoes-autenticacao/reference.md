@@ -127,3 +127,33 @@ Schedule initialization stores the unencrypted flag using SQL `FALSE`, which
 works with SQLite integer flags and Postgres native booleans.
 `TestInitializeScheduleBothDialects` covers startup initialization;
 `TestQuoteSettingsPostgresRoundTrip` covers HTTP schedule writes.
+
+## Financial reference currency
+
+`finance.reference_currency` is an unencrypted persisted preference, defaulting
+to `BRL` when absent. GET/PUT `/api/preferences` expose `reference_currency`
+alongside `transactions_period_basis`. The currency must be a canonical
+uppercase ISO 4217 code from the same catalog as `/api/accounts/currencies`,
+excluding `XXX`. Invalid input returns 422 before either preference is written;
+the two writes share a transaction. Older clients may omit the currency to
+preserve the saved preference. The General settings screen offers one searchable
+currency selector and one Save action for both preferences.
+
+This is a reporting valuation, never a change to the original currency, amount,
+balance or quantity. The existing consolidated BRL base and its eligibility
+exclusions are preserved. Home/timeline, category reports and investment
+summaries are converted using current BRL/reference FX; historical net-worth
+snapshots use captured-day FX. API responses carry `currency_code` and `fx`
+(pair, exact rate, inversion, requested/effective day, source, fetched time,
+stale flag) from `internal/exchange`. Missing FX returns 503
+`exchange-unavailable` with the pair, never an identity estimate; stale stored
+rates remain usable with a visible warning. The ISO catalog includes currencies
+without provider coverage: selecting one is valid, but reports require a stored
+or provider-supplied rate.
+
+Saving clears the timeline, category/transaction, net-worth and investment-summary
+caches. Report labels come from their own response currency, so a pending
+request never relabels an old BRL number as USD. The API validates a consistent
+currency across a net-worth series. Native account, transaction, position and
+operation details retain their original currency. Investment secondary totals
+computed in the browser use the summary's exact FX rate; percentages are unchanged.

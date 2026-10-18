@@ -22,13 +22,9 @@ var (
 		"id", "name", "kind", "currency_code", "source_id", "source_display_name",
 		"financial_account_id", "active", "cash_balance", "created_at", "updated_at",
 	}
-	investmentPortfolioResponseKeys = []string{
-		"id", "name", "target_amount", "target_date", "notes", "current_value",
-		"progress", "created_at", "updated_at",
-	}
 	investmentPositionResponseKeys = []string{
-		"id", "source", "account_id", "asset_id", "portfolio_id", "name", "ticker", "asset_type",
-		"quantity", "average_cost", "current_value", "current_unit_price", "valued_on",
+		"id", "source", "account_id", "asset_id", "name", "ticker", "asset_type",
+		"quantity", "average_cost", "total_cost", "current_value", "current_unit_price", "valued_on",
 		"currency_code", "closed", "linked_investment_id", "notes", "valuation_basis",
 	}
 	investmentOperationResponseKeys = []string{
@@ -40,11 +36,10 @@ var (
 		"financial_investment_transaction_id", "amount", "created_at",
 	}
 	investmentSummaryResponseKeys = []string{
-		"currency_code", "total_value", "manual_value", "synced_value", "cash_balance",
-		"unrealized_gain", "portfolios", "accounts",
+		"currency_code", "fx", "total_value", "manual_value", "synced_value", "cash_balance",
+		"unrealized_gain", "accounts",
 	}
-	investmentSummaryPortfolioKeys = []string{"portfolio_id", "name", "current_value", "target_amount", "progress"}
-	investmentSummaryAccountKeys   = []string{"account_id", "name", "kind", "current_value", "cash_balance"}
+	investmentSummaryAccountKeys = []string{"account_id", "name", "kind", "current_value", "cash_balance"}
 )
 
 func assertInvestmentKeys(t *testing.T, label string, item map[string]any, want []string) {
@@ -247,67 +242,10 @@ func TestInvestmentAccountLifecycleOverHTTP(t *testing.T) {
 
 const uuidLike = "11111111-1111-4111-8111-111111111111"
 
-func TestInvestmentPortfolioLifecycleOverHTTP(t *testing.T) {
-	srv, _ := newTestServer(t)
-
-	if body := investmentRawBody(t, srv, "/api/investment-portfolios"); body != `{"items":[]}` {
-		t.Errorf("empty portfolio list = %s, want an items envelope with an empty array", body)
-	}
-
-	created := investmentCall(t, srv, http.MethodPost, "/api/investment-portfolios", map[string]any{
-		"name": "Reserva de emergência", "target_amount": "30000.00",
-		"target_date": "2027-12-31", "notes": "seis meses de custo",
-	}, http.StatusCreated)
-	assertInvestmentKeys(t, "portfolio", created, investmentPortfolioResponseKeys)
-	id := investmentID(t, created)
-	assertMoney(t, "target_amount", created["target_amount"], "30000.00")
-	if created["target_date"] != "2027-12-31" {
-		t.Errorf("target_date = %v, want a plain YYYY-MM-DD", created["target_date"])
-	}
-	assertMoney(t, "current_value", created["current_value"], "0")
-	if created["progress"] == nil {
-		t.Errorf("progress = nil, want 0 against a known target")
-	}
-
-	updated := investmentCall(t, srv, http.MethodPut, "/api/investment-portfolios/"+id, map[string]any{
-		"name": "Reserva", "target_amount": nil, "target_date": nil, "notes": nil,
-	}, http.StatusOK)
-	if updated["name"] != "Reserva" || updated["target_amount"] != nil || updated["target_date"] != nil || updated["notes"] != nil {
-		t.Errorf("update = %+v", updated)
-	}
-	if updated["progress"] != nil {
-		t.Errorf("progress = %v, want nil without a target", updated["progress"])
-	}
-
-	if slug := investmentProblem(t, srv, http.MethodPost, "/api/investment-portfolios",
-		map[string]any{"name": "", "target_amount": nil, "target_date": nil, "notes": nil},
-		http.StatusBadRequest); slug != "invalid-investment-input" {
-		t.Errorf("empty name slug = %q", slug)
-	}
-	if slug := investmentProblem(t, srv, http.MethodPost, "/api/investment-portfolios",
-		map[string]any{"name": "x", "target_amount": "30000", "target_date": "31/12/2027", "notes": nil},
-		http.StatusBadRequest); slug != "invalid-investment-input" {
-		t.Errorf("bad date slug = %q", slug)
-	}
-	if slug := investmentProblem(t, srv, http.MethodPost, "/api/investment-portfolios",
-		map[string]any{"name": "x", "target_amount": "trinta mil", "target_date": nil, "notes": nil},
-		http.StatusBadRequest); slug != "invalid-investment-input" {
-		t.Errorf("bad decimal slug = %q", slug)
-	}
-
-	investmentCall(t, srv, http.MethodDelete, "/api/investment-portfolios/"+id, nil, http.StatusNoContent)
-	if slug := investmentProblem(t, srv, http.MethodDelete, "/api/investment-portfolios/"+id, nil, http.StatusNotFound); slug != "investment-portfolio-not-found" {
-		t.Errorf("second delete slug = %q", slug)
-	}
-}
-
 func TestInvestmentPositionLifecycleOverHTTP(t *testing.T) {
 	srv, _ := newTestServer(t)
 	account := investmentID(t, createCustodyAccount(t, srv, "Corretora"))
 	other := investmentID(t, createCustodyAccount(t, srv, "Banco"))
-	goal := investmentID(t, investmentCall(t, srv, http.MethodPost, "/api/investment-portfolios", map[string]any{
-		"name": "Aposentadoria", "target_amount": "1000.00", "target_date": nil, "notes": nil,
-	}, http.StatusCreated))
 
 	if body := investmentRawBody(t, srv, "/api/investment-positions"); body != `{"items":[]}` {
 		t.Errorf("empty position list = %s", body)
@@ -315,7 +253,7 @@ func TestInvestmentPositionLifecycleOverHTTP(t *testing.T) {
 
 	created := investmentCall(t, srv, http.MethodPost, "/api/investment-positions", map[string]any{
 		"account_id": account, "name": "ITSA4", "ticker": "ITSA4", "asset_type": "Ação",
-		"portfolio_id": goal, "initial_quantity": "10", "initial_unit_cost": "9.50",
+		"initial_quantity": "10", "initial_unit_cost": "9.50",
 		"occurred_on": "2026-01-05", "notes": "posição inicial",
 	}, http.StatusCreated)
 	assertInvestmentKeys(t, "position", created, investmentPositionResponseKeys)
@@ -325,12 +263,10 @@ func TestInvestmentPositionLifecycleOverHTTP(t *testing.T) {
 	}
 	assertMoney(t, "quantity", created["quantity"], "10")
 	assertMoney(t, "average_cost", created["average_cost"], "9.50")
+	assertMoney(t, "total_cost", created["total_cost"], "95.00")
 	assertMoney(t, "current_value", created["current_value"], "95.00")
 	if created["valuation_basis"] != "cost_basis" {
 		t.Errorf("valuation_basis = %v, want cost_basis without a valuation", created["valuation_basis"])
-	}
-	if created["portfolio_id"] != goal {
-		t.Errorf("portfolio_id = %v, want the goal it was created under", created["portfolio_id"])
 	}
 
 	fetched := investmentCall(t, srv, http.MethodGet, "/api/investment-positions/"+id, nil, http.StatusOK)
@@ -350,10 +286,6 @@ func TestInvestmentPositionLifecycleOverHTTP(t *testing.T) {
 	if len(filtered) != 1 || filtered[0]["id"] != id {
 		t.Errorf("account filter = %+v, want only the position of that account", filtered)
 	}
-	byGoal := investmentItems(t, srv, "/api/investment-positions?portfolio_id="+goal)
-	if len(byGoal) != 1 || byGoal[0]["id"] != id {
-		t.Errorf("portfolio filter = %+v", byGoal)
-	}
 
 	// Selling the whole holding closes it, and a closed holding only shows up
 	// when the caller asks for it.
@@ -370,9 +302,9 @@ func TestInvestmentPositionLifecycleOverHTTP(t *testing.T) {
 	}
 
 	updated := investmentCall(t, srv, http.MethodPut, "/api/investment-positions/"+id, map[string]any{
-		"name": "Itaúsa", "ticker": nil, "asset_type": "Ação", "portfolio_id": nil, "notes": nil,
+		"name": "Itaúsa", "ticker": nil, "asset_type": "Ação", "notes": nil,
 	}, http.StatusOK)
-	if updated["name"] != "Itaúsa" || updated["ticker"] != nil || updated["portfolio_id"] != nil {
+	if updated["name"] != "Itaúsa" || updated["ticker"] != nil {
 		t.Errorf("update = %+v", updated)
 	}
 
@@ -642,7 +574,7 @@ func TestIntegratedInvestmentRecordsAreReadOnlyOverHTTP(t *testing.T) {
 	}
 
 	// The provider holding shows up as a read-only position whose id is the
-	// provider's own, and it accepts a goal and nothing else.
+	// provider's own, and it accepts no local change.
 	positions := investmentItems(t, srv, "/api/investment-positions")
 	if len(positions) != 1 || positions[0]["id"] != holding {
 		t.Fatalf("positions = %+v, want the synced holding", positions)
@@ -657,16 +589,13 @@ func TestIntegratedInvestmentRecordsAreReadOnlyOverHTTP(t *testing.T) {
 	}
 	assertMoney(t, "current_value", synced["current_value"], "1000.50")
 
-	goal := investmentID(t, investmentCall(t, srv, http.MethodPost, "/api/investment-portfolios", map[string]any{
-		"name": "Longo prazo", "target_amount": "2000.00", "target_date": nil, "notes": nil,
-	}, http.StatusCreated))
-	assigned := investmentCall(t, srv, http.MethodPut, "/api/investment-positions/"+holding,
-		map[string]any{"portfolio_id": goal}, http.StatusOK)
-	if assigned["portfolio_id"] != goal {
-		t.Errorf("goal assignment = %+v", assigned)
+	unchanged := investmentCall(t, srv, http.MethodPut, "/api/investment-positions/"+holding,
+		map[string]any{}, http.StatusOK)
+	if unchanged["name"] != synced["name"] || unchanged["current_value"] != synced["current_value"] {
+		t.Errorf("empty update changed the synced position: %+v", unchanged)
 	}
 	if slug := investmentProblem(t, srv, http.MethodPut, "/api/investment-positions/"+holding,
-		map[string]any{"name": "Fundo renomeado", "ticker": nil, "asset_type": "Fundo", "portfolio_id": goal, "notes": nil},
+		map[string]any{"name": "Fundo renomeado", "ticker": nil, "asset_type": "Fundo", "notes": nil},
 		http.StatusConflict); slug != "investment-integrated-read-only" {
 		t.Errorf("synced rename slug = %q", slug)
 	}
@@ -679,6 +608,73 @@ func TestIntegratedInvestmentRecordsAreReadOnlyOverHTTP(t *testing.T) {
 	}, http.StatusConflict); slug != "investment-not-manual" {
 		t.Errorf("operation on synced holding slug = %q", slug)
 	}
+}
+
+func TestInvestmentMonthlyMovementsOverHTTP(t *testing.T) {
+	srv, _ := newTestServer(t)
+	account := investmentID(t, createCustodyAccount(t, srv, "Corretora"))
+	for _, op := range []map[string]any{
+		{"kind": "deposit", "occurred_on": "2026-01-10", "amount": "1000.00"},
+		{"kind": "deposit", "occurred_on": "2026-01-20", "amount": "500.00"},
+		{"kind": "withdrawal", "occurred_on": "2026-02-05", "amount": "200.00"},
+		{"kind": "fee", "occurred_on": "2026-02-06", "amount": "3.50"},
+	} {
+		op["account_id"], op["position_id"] = account, nil
+		investmentCall(t, srv, http.MethodPost, "/api/investment-operations", op, http.StatusCreated)
+	}
+
+	out := investmentCall(t, srv, http.MethodGet, "/api/investment-monthly-movements?account_id="+account, nil, http.StatusOK)
+	items, ok := out["items"].([]any)
+	if !ok || len(items) != 2 {
+		t.Fatalf("items = %+v, want two months", out["items"])
+	}
+	jan, feb := items[0].(map[string]any), items[1].(map[string]any)
+	assertInvestmentKeys(t, "movement", jan, []string{"month", "contributions", "withdrawals", "income", "fees", "taxes", "realized_gain"})
+	if jan["month"] != "2026-01" || feb["month"] != "2026-02" {
+		t.Errorf("months = %v, %v", jan["month"], feb["month"])
+	}
+	assertMoney(t, "contributions", jan["contributions"], "1500.00")
+	assertMoney(t, "withdrawals", feb["withdrawals"], "200.00")
+	assertMoney(t, "fees", feb["fees"], "3.50")
+	assertMoney(t, "realized_gain", feb["realized_gain"], "0")
+	// The rows cover local operations only, whatever their amount.
+	if out["source"] != "manual" {
+		t.Errorf("source = %v, want manual", out["source"])
+	}
+}
+
+func TestInvestmentMonthlyMovementsReportRealizedGainOverHTTP(t *testing.T) {
+	srv, _ := newTestServer(t)
+	account := investmentID(t, createCustodyAccount(t, srv, "Corretora"))
+	position := investmentID(t, investmentCall(t, srv, http.MethodPost, "/api/investment-positions", map[string]any{
+		"account_id": account, "name": "Ações", "asset_type": "Ação",
+	}, http.StatusCreated))
+	for _, op := range []map[string]any{
+		{"kind": "deposit", "occurred_on": "2026-01-10", "amount": "1000.00"},
+		// 6 units for 600.00 plus 12.00 of fees: a basis of 612.00.
+		{"kind": "buy", "occurred_on": "2026-01-11", "amount": "600.00", "quantity": "6", "fees": "12.00", "position_id": position},
+		// 2 units write off 204.00 of it and net 260.00 − 3.00 − 1.00 = 256.00.
+		{"kind": "sell", "occurred_on": "2026-02-05", "amount": "260.00", "quantity": "2", "fees": "3.00", "taxes": "1.00", "position_id": position},
+		// The other 4 go for less than the 408.00 they cost.
+		{"kind": "sell", "occurred_on": "2026-03-05", "amount": "400.00", "quantity": "4", "position_id": position},
+	} {
+		op["account_id"] = account
+		investmentCall(t, srv, http.MethodPost, "/api/investment-operations", op, http.StatusCreated)
+	}
+
+	out := investmentCall(t, srv, http.MethodGet, "/api/investment-monthly-movements?account_id="+account, nil, http.StatusOK)
+	items, ok := out["items"].([]any)
+	if !ok || len(items) != 3 {
+		t.Fatalf("items = %+v, want three months", out["items"])
+	}
+	jan, feb, mar := items[0].(map[string]any), items[1].(map[string]any), items[2].(map[string]any)
+	assertMoney(t, "january fees", jan["fees"], "12")
+	assertMoney(t, "january realized_gain", jan["realized_gain"], "0")
+	assertMoney(t, "february realized_gain", feb["realized_gain"], "52")
+	assertMoney(t, "february fees", feb["fees"], "3")
+	assertMoney(t, "february taxes", feb["taxes"], "1")
+	assertMoney(t, "february income", feb["income"], "0")
+	assertMoney(t, "march realized_gain", mar["realized_gain"], "-8")
 }
 
 func TestManualHoldingInIntegratedAccountOverHTTP(t *testing.T) {
@@ -702,7 +698,7 @@ func TestManualHoldingInIntegratedAccountOverHTTP(t *testing.T) {
 		"occurred_on": "2026-01-10", "amount": "600.00", "quantity": "0.5",
 	}, http.StatusCreated)
 	updated := investmentCall(t, srv, http.MethodPut, "/api/investment-positions/"+id, map[string]any{
-		"name": "Bitcoin", "ticker": "BTC", "asset_type": "Criptoativo", "portfolio_id": nil, "notes": "carteira fria",
+		"name": "Bitcoin", "ticker": "BTC", "asset_type": "Criptoativo", "notes": "carteira fria",
 	}, http.StatusOK)
 	if updated["notes"] != "carteira fria" {
 		t.Errorf("update = %+v", updated)
@@ -722,7 +718,7 @@ func TestManualHoldingInIntegratedAccountOverHTTP(t *testing.T) {
 
 	// The provider holding next to it stays read-only.
 	if slug := investmentProblem(t, srv, http.MethodPut, "/api/investment-positions/"+holding,
-		map[string]any{"name": "Fundo renomeado", "ticker": nil, "asset_type": "Fundo", "portfolio_id": nil, "notes": nil},
+		map[string]any{"name": "Fundo renomeado", "ticker": nil, "asset_type": "Fundo", "notes": nil},
 		http.StatusConflict); slug != "investment-integrated-read-only" {
 		t.Errorf("synced rename slug = %q", slug)
 	}
@@ -796,17 +792,6 @@ func TestInvestmentSummaryOverHTTP(t *testing.T) {
 	}
 	assertMoney(t, "grouping current_value", grouping["current_value"], "1000.50")
 	assertMoney(t, "grouping cash_balance", grouping["cash_balance"], "0")
-
-	portfolios, ok := summary["portfolios"].([]any)
-	if !ok || len(portfolios) != 1 {
-		t.Fatalf("portfolios = %+v, want the single unassigned bucket", summary["portfolios"])
-	}
-	unassigned, _ := portfolios[0].(map[string]any)
-	assertInvestmentKeys(t, "summary portfolio", unassigned, investmentSummaryPortfolioKeys)
-	if unassigned["portfolio_id"] != nil {
-		t.Errorf("portfolio_id = %v, want nil for holdings with no goal", unassigned["portfolio_id"])
-	}
-	assertMoney(t, "unassigned current_value", unassigned["current_value"], "1500.50")
 }
 
 func TestCompoundInvestmentPurchaseOverHTTP(t *testing.T) {
@@ -895,6 +880,7 @@ func TestInvestmentValuesCarryNoDecimalTailOverHTTP(t *testing.T) {
 		"initial_quantity": "3", "initial_value": "100", "occurred_on": "2026-01-05",
 	}, http.StatusCreated)
 	exact("current_value at cost", thirds["current_value"], "100")
+	exact("total_cost", thirds["total_cost"], "100")
 	investmentCall(t, srv, http.MethodPost, "/api/investment-operations", map[string]any{
 		"account_id": account, "position_id": investmentID(t, thirds), "kind": "valuation",
 		"occurred_on": "2026-01-10", "amount": "1000",
@@ -941,7 +927,7 @@ func TestInvestmentIdentityConflictsOverHTTP(t *testing.T) {
 		"account_id": first, "name": "Petrobras", "ticker": "PETR4", "asset_type": "Ação",
 	}, http.StatusCreated)
 	if slug := investmentProblem(t, srv, http.MethodPut, "/api/investment-positions/"+vale, map[string]any{
-		"name": "Vale", "ticker": "PETR4", "asset_type": "Ação", "portfolio_id": nil, "notes": nil,
+		"name": "Vale", "ticker": "PETR4", "asset_type": "Ação", "notes": nil,
 	}, http.StatusConflict); slug != "investment-asset-already-exists" {
 		t.Errorf("rename onto another asset slug = %q", slug)
 	}

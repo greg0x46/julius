@@ -2,6 +2,7 @@ export * from "./accounts";
 export * from "./automationRules";
 export * from "./categories";
 export * from "./dataSources";
+export * from "./goals";
 export * from "./investmentWorkspace";
 export * from "./investments";
 export * from "./netWorth";
@@ -20,3 +21,4 @@ export * from "./timeline";
 export * from "./transactions";
 
 export type { ReportingSummary } from "./reporting";
+export * from "./valuation";

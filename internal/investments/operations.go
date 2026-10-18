@@ -34,7 +34,6 @@ type OperationFilter struct {
 	PositionID          *string
 	Source              *string
 	SourceID            *string
-	PortfolioID         *string
 	ReconciliationState *string
 	From, To            *time.Time
 }
@@ -65,10 +64,6 @@ func ListOperations(ctx context.Context, q Querier, filter OperationFilter) ([]O
 	if filter.SourceID != nil {
 		clauses = append(clauses, `account_id IN (SELECT id FROM investment_accounts WHERE source_id = ?)`)
 		args = append(args, *filter.SourceID)
-	}
-	if filter.PortfolioID != nil {
-		clauses = append(clauses, `position_id IN (SELECT manual_position_id FROM investment_position_portfolios WHERE portfolio_id = ?)`)
-		args = append(args, *filter.PortfolioID)
 	}
 	if filter.ReconciliationState != nil {
 		switch *filter.ReconciliationState {
@@ -116,8 +111,11 @@ func requirePositionOfAccount(ctx context.Context, q Querier, accountID string, 
 	if positionID == nil || *positionID == "" {
 		return nil
 	}
-	var owner string
-	err := q.QueryRowContext(ctx, `SELECT account_id FROM investment_positions WHERE id = ?`, *positionID).Scan(dbtypes.ID(&owner))
+	var owner, currency string
+	err := q.QueryRowContext(ctx, `
+		SELECT p.account_id, a.currency_code
+		FROM investment_positions p JOIN investment_assets a ON a.id = p.asset_id
+		WHERE p.id = ?`, *positionID).Scan(dbtypes.ID(&owner), &currency)
 	if errors.Is(err, sql.ErrNoRows) {
 		var synced bool
 		if err := q.QueryRowContext(ctx,
@@ -135,7 +133,7 @@ func requirePositionOfAccount(ctx context.Context, q Querier, accountID string, 
 	if owner != accountID {
 		return ErrInvalidInput
 	}
-	return nil
+	return requireBRLAsset(currency)
 }
 
 // mutateLedger applies one write and replays every account it touched in the
@@ -204,6 +202,13 @@ func CreateTransfer(ctx context.Context, conn *sql.DB, in TransferInput) ([]Oper
 		}
 		if sourceAsset != destinationAsset || sourceAccount == destinationAccount {
 			return nil, ErrInvalidInput
+		}
+		asset, err := GetAsset(ctx, tx, sourceAsset)
+		if err != nil {
+			return nil, err
+		}
+		if err := requireBRLAsset(asset.CurrencyCode); err != nil {
+			return nil, err
 		}
 		if _, err := requireManualAccount(ctx, tx, sourceAccount); err != nil {
 			return nil, err

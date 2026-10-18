@@ -1,7 +1,6 @@
 import type { Investment, InvestmentOperation, InvestmentPosition } from "../../api/contracts";
 import { formatDateOnly } from "../../presentation/dates";
 import { yieldUnavailable } from "../../presentation/investmentLabels";
-import { multiplyDecimals } from "../../presentation/decimal";
 import { subtractBRL, sumBRL } from "../../presentation/money";
 
 export function isZeroBRL(value: string | null): boolean {
@@ -74,7 +73,7 @@ export function positionYield(position: InvestmentPosition, linked: LinkedInvest
       short: "Sem cotação registrada",
     };
   }
-  if (position.average_cost === null || isZeroBRL(position.average_cost)) {
+  if (position.total_cost == null || isZeroBRL(position.total_cost)) {
     return { known: false, reason: "Sem custo de aquisição registrado.", short: "Sem custo de aquisição" };
   }
   if (isZeroBRL(position.quantity)) {
@@ -84,7 +83,7 @@ export function positionYield(position: InvestmentPosition, linked: LinkedInvest
       short: "Sem quantidade registrada",
     };
   }
-  const basis = multiplyDecimals(position.average_cost, position.quantity);
+  const basis = position.total_cost;
   const gross = subtractBRL(position.current_value, basis);
   const net = subtractBRL(gross, cost);
   return { known: true, value: net, percent: (Number(net) / Number(basis)) * 100, basis, gross };
@@ -94,7 +93,7 @@ export type YieldAggregate = { gain: string; percent: number | null };
 
 /**
  * The same R$-gain-over-principal math as positionYield, summed across a
- * group of positions (an account, a goal, the whole workspace). Positions
+ * group of positions (an account, the whole workspace). Positions
  * with unknown rentabilidade — or in a foreign currency — sit out of both
  * sides of the ratio rather than being counted as zero gain.
  */
@@ -176,17 +175,6 @@ export function costsByPosition(
   const result: Record<string, string> = {};
   for (const [positionId, values] of byPosition) result[positionId] = sumBRL(values);
   return result;
-}
-
-/**
- * A goal holds no cash, so its aportes are what was put into its positions
- * (compras e saldo inicial) and its resgates are what was sold out of them.
- */
-export function goalMovements(operations: InvestmentOperation[]): MovementTotals {
-  return {
-    deposits: totalOf(operations, ["buy", "initial_balance"]),
-    withdrawals: totalOf(operations, ["sell"]),
-  };
 }
 
 /** The most recent date among the values that make a card's figures. */

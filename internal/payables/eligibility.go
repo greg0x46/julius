@@ -28,19 +28,12 @@ func EligibilityForLink(kind Kind, classification money.Classification, inclusio
 	reason := func(r LinkIneligibilityReason) LinkEligibility { return LinkEligibility{Eligible: false, Reason: &r} }
 
 	wantClassification := money.Outflow
-	notWantReason := ReasonNotOutflow
 	if kind == KindReceivable {
-		wantClassification, notWantReason = money.Inflow, ReasonNotInflow
+		wantClassification = money.Inflow
 	}
 
-	if inclusionState == money.Ignored {
-		return reason(ReasonIgnored)
-	}
-	if classification != wantClassification {
-		return reason(notWantReason)
-	}
-	if eff == nil || eff.CurrencyCode != "BRL" {
-		return reason(ReasonMissingBRLPair)
+	if r := money.BRLLinkIneligibility(classification, wantClassification, inclusionState, eff); r != nil {
+		return reason(LinkIneligibilityReason(*r))
 	}
 	if alreadyLinked {
 		return reason(ReasonAlreadyLinked)

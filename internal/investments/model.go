@@ -1,6 +1,6 @@
 // Package investments owns the local investment ledger. Provider holdings
-// stay in financial_investments; manual holdings, their custody cash, goals
-// and the links that explain a bank movement live here.
+// stay in financial_investments; manual holdings, their custody cash and
+// the links that explain a bank movement live here.
 package investments
 
 import (
@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/shopspring/decimal"
+
+	"github.com/greg0x46/julius/internal/valuation"
 )
 
 // Querier is implemented by *sql.DB and *sql.Tx. Keeping this package on the
@@ -93,18 +95,6 @@ type Account struct {
 	UpdatedAt         time.Time
 }
 
-type Portfolio struct {
-	ID           string
-	Name         string
-	TargetAmount *decimal.Decimal
-	TargetDate   *time.Time
-	Notes        *string
-	CurrentValue decimal.Decimal
-	Progress     *decimal.Decimal
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
-}
-
 // Asset identifies an economic instrument independently from its custody.
 // CanonicalKey is internal identity material (for example ticker:BTC); API
 // callers use ID and cannot accidentally create one asset per account.
@@ -141,7 +131,6 @@ type Position struct {
 	Source      PositionSource
 	AccountID   string
 	AssetID     *string
-	PortfolioID *string
 	Name        string
 	Ticker      *string
 	AssetType   string
@@ -199,20 +188,12 @@ type AccountInput struct {
 	Active *bool
 }
 
-type PortfolioInput struct {
-	Name         string
-	TargetAmount *decimal.Decimal
-	TargetDate   *time.Time
-	Notes        *string
-}
-
 type PositionInput struct {
 	AccountID       string
 	AssetID         *string
 	Name            string
 	Ticker          *string
 	AssetType       string
-	PortfolioID     *string
 	InitialQuantity decimal.Decimal
 	InitialUnitCost decimal.Decimal
 	// InitialValue opens a holding the caller only knows the amount of, such
@@ -223,11 +204,10 @@ type PositionInput struct {
 }
 
 type PositionUpdate struct {
-	Name        string
-	Ticker      *string
-	AssetType   string
-	PortfolioID *string
-	Notes       *string
+	Name      string
+	Ticker    *string
+	AssetType string
+	Notes     *string
 }
 
 type OperationInput struct {
@@ -269,22 +249,15 @@ type SummaryAccount struct {
 	CashBalance  decimal.Decimal
 }
 
-type SummaryPortfolio struct {
-	PortfolioID  *string
-	Name         string
-	CurrentValue decimal.Decimal
-	TargetAmount *decimal.Decimal
-	Progress     *decimal.Decimal
-}
-
 type Summary struct {
+	// Valuation records the rates that converted foreign holdings into CurrencyCode.
+	Valuation      valuation.Metadata
 	CurrencyCode   string
 	TotalValue     decimal.Decimal
 	ManualValue    decimal.Decimal
 	SyncedValue    decimal.Decimal
 	CashBalance    decimal.Decimal
 	UnrealizedGain decimal.Decimal
-	Portfolios     []SummaryPortfolio
 	Accounts       []SummaryAccount
 }
 
@@ -300,6 +273,22 @@ type ManualReportingEntry struct {
 	Amount     decimal.Decimal
 }
 
+// MonthlyMovement is one calendar month (YYYY-MM) of gross local investment flows.
+// Contributions and Withdrawals are principal, never income or expense.
+// RealizedGain (negative for a loss) is the net proceeds of local sales minus
+// the all-in cost basis written off, so it is net of purchase and sale fees
+// and taxes and is not part of Income. Synced holdings have no cost basis:
+// their sales are not covered and a zero is not "no gain".
+type MonthlyMovement struct {
+	Month         string
+	Contributions decimal.Decimal
+	Withdrawals   decimal.Decimal
+	Income        decimal.Decimal
+	Fees          decimal.Decimal
+	Taxes         decimal.Decimal
+	RealizedGain  decimal.Decimal
+}
+
 type ManualReporting struct {
 	Income decimal.Decimal
 	Fees   decimal.Decimal
@@ -309,7 +298,6 @@ type ManualReporting struct {
 var (
 	ErrNotFound                  = errors.New("investment record not found")
 	ErrAccountNotFound           = errors.New("investment account not found")
-	ErrPortfolioNotFound         = errors.New("investment portfolio not found")
 	ErrPositionNotFound          = errors.New("investment position not found")
 	ErrAssetNotFound             = errors.New("investment asset not found")
 	ErrAssetAlreadyExists        = errors.New("investment asset already exists")
@@ -319,6 +307,7 @@ var (
 	ErrOperationNotFound         = errors.New("investment operation not found")
 	ErrReconciliationNotFound    = errors.New("investment reconciliation not found")
 	ErrInvalidInput              = errors.New("invalid investment input")
+	ErrUnsupportedCurrency       = errors.New("manual investment records are in reais")
 	ErrIntegratedReadOnly        = errors.New("integrated investment data is read-only")
 	ErrNotManual                 = errors.New("investment record is not manual")
 	ErrNegativeCash              = errors.New("investment operation would make cash negative")

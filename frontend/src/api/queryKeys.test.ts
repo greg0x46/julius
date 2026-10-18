@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   invalidateAfterAccountClosingDayChange,
   invalidateAfterAutomationRuleChange,
+  invalidateAfterGoalChange,
   invalidateAfterInvestmentAssetChange,
   invalidateAfterLedgerChange,
   invalidateAfterOccurrenceReconciliation,
@@ -81,7 +82,7 @@ describe("invalidation policies", () => {
     ]);
   });
 
-  it("ledger change refreshes workspace, transactions, timeline and net worth", async () => {
+  it("ledger change refreshes workspace, transactions, timeline, net worth and goals", async () => {
     const { client, invalidateQueries } = spyClient();
     await invalidateAfterLedgerChange(client);
     expect(keysOf(invalidateQueries)).toEqual([
@@ -89,7 +90,14 @@ describe("invalidation policies", () => {
       ["transactions"],
       ["timeline"],
       ["netWorth"],
+      ["goals"],
     ]);
+  });
+
+  it("goal change refreshes only goals", async () => {
+    const { client, invalidateQueries } = spyClient();
+    await invalidateAfterGoalChange(client);
+    expect(keysOf(invalidateQueries)).toEqual([["goals"]]);
   });
 
   it("awaits every invalidation it starts", async () => {
