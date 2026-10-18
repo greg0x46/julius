@@ -167,11 +167,14 @@ func AssignManualWithQuerier(ctx context.Context, q Querier, transactionID, cate
 	}
 
 	category, err := Get(ctx, q, categoryID)
-	if errors.Is(err, ErrNotFound) || !category.IsActive {
+	if errors.Is(err, ErrNotFound) {
 		return Decision{}, ErrCategoryInvalid
 	}
 	if err != nil {
 		return Decision{}, err
+	}
+	if !category.IsActive {
+		return Decision{}, ErrCategoryInvalid
 	}
 
 	group, err := findInstallmentGroup(ctx, q, transactionID)
@@ -231,11 +234,14 @@ func ApplyRuleWithQuerier(ctx context.Context, q Querier, transactionID, categor
 	}
 
 	category, err := Get(ctx, q, categoryID)
-	if errors.Is(err, ErrNotFound) || !category.IsActive {
+	if errors.Is(err, ErrNotFound) {
 		return Decision{}, false, ErrCategoryInvalid
 	}
 	if err != nil {
 		return Decision{}, false, err
+	}
+	if !category.IsActive {
+		return Decision{}, false, ErrCategoryInvalid
 	}
 
 	existing, err := getDecision(ctx, q, transactionID)
@@ -254,6 +260,16 @@ func ApplyRuleWithQuerier(ctx context.Context, q Querier, transactionID, categor
 	var primary Decision
 	var changed bool
 	for _, id := range group {
+		// Siblings may have been categorized by hand before this row.
+		if id != transactionID {
+			sibling, err := getDecision(ctx, q, id)
+			if err != nil {
+				return Decision{}, false, err
+			}
+			if sibling != nil && sibling.Origin == OriginManual {
+				continue
+			}
+		}
 		decision, didChange, err := writeDecision(ctx, q, id, categoryID, OriginRule)
 		if err != nil {
 			return Decision{}, false, err

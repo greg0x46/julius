@@ -335,7 +335,7 @@ func TestCreateAutomationRuleWithReconcileActionLinksCommitment(t *testing.T) {
 
 	body := map[string]any{
 		"name": "Concilia aluguel", "is_active": true, "logic_operator": "and",
-		"conditions": []map[string]string{{"field": "amount", "operator": "within_percent", "value": "10"}},
+		"conditions": []map[string]string{{"field": "amount", "operator": "within_percent", "value": "1500.00:10"}},
 		"actions":    []map[string]any{{"type": "reconcile", "scenario_id": commitmentID}},
 	}
 	resp := doJSON(t, http.MethodPost, srv.URL+"/api/automation-rules", body)
@@ -359,7 +359,7 @@ func TestCreateAutomationRuleReconcileActionRejectsUnknownCommitment(t *testing.
 	srv, _ := newTestServer(t)
 	body := map[string]any{
 		"name": "Concilia inexistente", "is_active": true, "logic_operator": "and",
-		"conditions": []map[string]string{{"field": "amount", "operator": "within_percent", "value": "10"}},
+		"conditions": []map[string]string{{"field": "amount", "operator": "within_percent", "value": "1500.00:10"}},
 		"actions":    []map[string]any{{"type": "reconcile", "scenario_id": "does-not-exist"}},
 	}
 	resp := doJSON(t, http.MethodPost, srv.URL+"/api/automation-rules", body)
@@ -369,13 +369,33 @@ func TestCreateAutomationRuleReconcileActionRejectsUnknownCommitment(t *testing.
 	}
 }
 
+func TestCreateAutomationRuleRejectsMalformedConditionValues(t *testing.T) {
+	srv, _ := newTestServer(t)
+	for _, c := range []map[string]string{
+		{"field": "amount", "operator": "within_percent", "value": "10"},
+		{"field": "amount", "operator": "within_percent", "value": "0:10"},
+		{"field": "day_of_month", "operator": "day_range", "value": "0:40"},
+	} {
+		body := map[string]any{
+			"name": "Mal formada", "is_active": true, "logic_operator": "and",
+			"conditions": []map[string]string{c},
+			"actions":    []map[string]any{{"type": "ignore"}},
+		}
+		resp := doJSON(t, http.MethodPost, srv.URL+"/api/automation-rules", body)
+		resp.Body.Close()
+		if resp.StatusCode != 422 {
+			t.Errorf("condition %v: status = %d, want 422", c, resp.StatusCode)
+		}
+	}
+}
+
 func TestDeleteRecurringCommitmentLinkedToRuleReturns409(t *testing.T) {
 	srv, _ := newTestServer(t)
 	commitmentID := createRecurringCommitmentForAutomation(t, srv)
 
 	body := map[string]any{
 		"name": "Concilia aluguel", "is_active": true, "logic_operator": "and",
-		"conditions": []map[string]string{{"field": "amount", "operator": "within_percent", "value": "10"}},
+		"conditions": []map[string]string{{"field": "amount", "operator": "within_percent", "value": "1500.00:10"}},
 		"actions":    []map[string]any{{"type": "reconcile", "scenario_id": commitmentID}},
 	}
 	resp := doJSON(t, http.MethodPost, srv.URL+"/api/automation-rules", body)

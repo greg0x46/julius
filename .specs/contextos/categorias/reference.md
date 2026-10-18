@@ -31,7 +31,8 @@ Each decision carries an `origin`; precedence is
 
 - `manual` — the user chose (`AssignManual`). Never overwritten.
 - `rule` — `set_category` action of an automation rule (`ApplyRule`). Overwrites
-  `learned` and `automatic`.
+  `learned` and `automatic`; on an installment purchase it skips siblings the user
+  categorized manually.
 - `learned` — copied from the **most recent manual** decision made on a similar
   transaction (`ApplyLearned`, `learned.go`). Similar = same normalized
   description (lowercase, collapsed whitespace, ` N/M` installment suffix
@@ -56,10 +57,6 @@ follows the same order (learned → rules).
 ## Frontend
 
 `/categorias` — catalog CRUD.
-
-Category report values use the financial reference currency (default BRL),
-with current FX and its provenance. Catalog and transaction category decisions
-are unchanged; see [Transactions — Consolidated report valuation](../transacoes/reference.md#consolidated-report-valuation).
 
 Category report values use the financial reference currency (default BRL),
 with current FX and its provenance. Catalog and transaction category decisions
