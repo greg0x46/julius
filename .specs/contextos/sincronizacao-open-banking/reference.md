@@ -54,7 +54,11 @@ application — and each sync run belongs to exactly one connection.
     `general_error_code = 'interrupted'`, via compare-and-set (a single failure
     recorded even with concurrent recoveries). There is no automatic retry; the
     daily schedule or "Sincronizar agora" creates a new run. Unclaimed runs
-    survive a restart and run later. With one instance, a run interrupted by a
+    survive a restart and run later, but one unclaimed for 15 min (e.g. no
+    Pluggy credentials configured) becomes `failed` with
+    `general_error_code = 'worker_unavailable'` (`syncsvc.FailUnclaimedRuns`,
+    same compare-and-set), so it no longer blocks the connection's next sync.
+    Missing credentials are logged once per distinct reason, not every poll. With one instance, a run interrupted by a
     crash is only recovered when the lease expires (up to ~90 s after restart),
     and until then the connection shows as syncing.
   - Limits: SQLite serves a single process (one connection; sharing the file

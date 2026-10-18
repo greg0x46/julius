@@ -20,6 +20,10 @@ const (
 	// DefaultLeaseTimeout is how long a claimed run may go without a
 	// heartbeat before RecoverStaleRuns treats its owner as dead.
 	DefaultLeaseTimeout = 90 * time.Second
+	// DefaultClaimDeadline is how long a run may stay unclaimed before
+	// FailUnclaimedRuns gives up on it. Generous: runs of several
+	// connections queue behind each other.
+	DefaultClaimDeadline = 15 * time.Minute
 )
 
 // ErrClaimLost is returned when a worker tries to finish a run it no longer
@@ -143,6 +147,85 @@ func recoverRun(ctx context.Context, conn *sql.DB, run staleRun, now time.Time) 
 		INSERT INTO sync_failures (id, sync_run_id, stage, error_code, safe_message, created_at)
 		VALUES (?, ?, 'interrupted', 'interrupted', ?, ?)`,
 		uuid.NewString(), run.id, message, nowText,
+	); err != nil {
+		return false, err
+	}
+	return true, tx.Commit()
+}
+
+// FailUnclaimedRuns marks as failed/worker_unavailable every unclaimed Pluggy
+// run started more than deadline before now. Without it a run nobody can
+// claim (e.g. missing credentials) stays in_progress forever and
+// uq_sync_runs_active_source rejects every later sync of its connection.
+// Each run is failed by compare-and-set on worker_id IS NULL, so a claim that
+// lands first wins.
+func FailUnclaimedRuns(ctx context.Context, conn *sql.DB, now time.Time, deadline time.Duration) ([]string, error) {
+	if deadline <= 0 {
+		deadline = DefaultClaimDeadline
+	}
+	rows, err := conn.QueryContext(ctx, `
+		SELECT sr.id FROM sync_runs sr
+		JOIN data_sources ds ON ds.id = sr.source_id
+		WHERE sr.status = 'in_progress' AND sr.run_type = 'sync' AND ds.provider = 'pluggy'
+		  AND sr.worker_id IS NULL AND sr.started_at < ?
+		ORDER BY sr.started_at, sr.id`,
+		db.FormatTime(now.Add(-deadline)),
+	)
+	if err != nil {
+		return nil, err
+	}
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(dbtypes.ID(&id)); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, err
+	}
+	rows.Close()
+
+	var failed []string
+	for _, id := range ids {
+		ok, err := failUnclaimedRun(ctx, conn, id, now, deadline)
+		if err != nil {
+			return failed, err
+		}
+		if ok {
+			failed = append(failed, id)
+		}
+	}
+	return failed, nil
+}
+
+func failUnclaimedRun(ctx context.Context, conn *sql.DB, id string, now time.Time, deadline time.Duration) (bool, error) {
+	tx, err := conn.BeginTx(ctx, nil)
+	if err != nil {
+		return false, err
+	}
+	defer tx.Rollback()
+
+	nowText := db.FormatTime(now)
+	message := SafeMessage("worker_unavailable")
+	result, err := tx.ExecContext(ctx, `
+		UPDATE sync_runs SET status = 'failed', finished_at = ?, general_error_code = 'worker_unavailable', general_error_message = ?
+		WHERE id = ? AND status = 'in_progress' AND worker_id IS NULL AND started_at < ?`,
+		nowText, message, id, db.FormatTime(now.Add(-deadline)),
+	)
+	if err != nil {
+		return false, err
+	}
+	if affected, err := result.RowsAffected(); err != nil || affected != 1 {
+		return false, err
+	}
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO sync_failures (id, sync_run_id, stage, error_code, safe_message, created_at)
+		VALUES (?, ?, 'worker_unavailable', 'worker_unavailable', ?, ?)`,
+		uuid.NewString(), id, message, nowText,
 	); err != nil {
 		return false, err
 	}
