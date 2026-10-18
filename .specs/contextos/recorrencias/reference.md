@@ -81,6 +81,9 @@ not reconciled to another occurrence. It deliberately differs from
 `CandidatesByMonth` by **not** requiring the commitment's account or limiting
 the transaction to the occurrence's month (manual links have a 45-day reach).
 Neither path requires the commitment's category.
+The transaction-side reconciliation read uses the same cash-movement eligibility
+as occurrence resolution: transfer-category payments retain both their current
+reconciliation and available occurrences, while ignored transactions offer neither.
 
 A transaction marked ignored loses its link (`UnlinkIfPresent`, in
 `onIgnoredHook` together with `payables`); a detached occurrence is unaffected,

@@ -80,11 +80,9 @@ func handleGetTransactionReconciliation(conn *sql.DB) http.HandlerFunc {
 			writeJSON(w, http.StatusOK, response)
 			return
 		}
-		if !item.TotalsEligibility.Included {
-			// A transaction excluded from the totals carries no money the app
-			// counts, so it can settle nothing — and realItemsIn drops it from
-			// the candidate pool, so nothing could have matched it either.
-			// Offering options here would only lead to a 422 on the write.
+		if !item.TotalsEligibility.MovesCash() {
+			// Match realItemsIn: transfer payments still carry real cash and
+			// can settle commitments even though they are outside flow totals.
 			writeJSON(w, http.StatusOK, response)
 			return
 		}

@@ -364,8 +364,32 @@ func handleCreateScenarioTransaction(conn *sql.DB) http.HandlerFunc {
 	}
 }
 
+func validateScenarioTransactionScope(w http.ResponseWriter, r *http.Request, conn *sql.DB) bool {
+	scenarioID := r.PathValue("id")
+	if _, err := scenarios.GetScenario(r.Context(), conn, scenarioID); errors.Is(err, scenarios.ErrScenarioNotFound) {
+		scenarioNotFoundProblem(w)
+		return false
+	} else if err != nil {
+		scenariosUnavailableProblem(w)
+		return false
+	}
+	st, err := scenarios.GetScenarioTransaction(r.Context(), conn, r.PathValue("transactionId"))
+	if errors.Is(err, scenarios.ErrTransactionNotFound) || (err == nil && st.ScenarioID != scenarioID) {
+		scenarioTransactionNotFoundProblem(w)
+		return false
+	}
+	if err != nil {
+		scenariosUnavailableProblem(w)
+		return false
+	}
+	return true
+}
+
 func handleUpdateScenarioTransaction(conn *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if !validateScenarioTransactionScope(w, r, conn) {
+			return
+		}
 		id := r.PathValue("transactionId")
 		var req scenarioTransactionWriteRequest
 		if err := decodeStrict(r, &req); err != nil {
@@ -590,6 +614,9 @@ func handleReadjustInstallments(conn *sql.DB) http.HandlerFunc {
 
 func handleDeleteScenarioTransaction(conn *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if !validateScenarioTransactionScope(w, r, conn) {
+			return
+		}
 		id := r.PathValue("transactionId")
 		if err := scenarios.DeleteScenarioTransaction(r.Context(), conn, id); errors.Is(err, scenarios.ErrTransactionNotFound) {
 			scenarioTransactionNotFoundProblem(w)
@@ -682,6 +709,9 @@ func handleCreateRealization(conn *sql.DB) http.HandlerFunc {
 
 func handleDeleteRealization(conn *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if !validateScenarioTransactionScope(w, r, conn) {
+			return
+		}
 		transactionID, realizationID := r.PathValue("transactionId"), r.PathValue("realizationId")
 
 		realization, err := scenarios.GetRealization(r.Context(), conn, realizationID)

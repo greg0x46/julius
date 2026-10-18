@@ -54,6 +54,9 @@ authentication configuration that does not depend on the host:
 - **Exact money boundaries** — amounts stay decimal strings through entry,
   editing, calculation and HTTP. BRL display rounds to cents with ties away
   from zero; saved fractional cents and large values retain their precision.
+  Historical balance minima use exact comparisons to select their value and date.
+  The balance chart includes commitments due today in today's end-of-day point;
+  **Saldo hoje** shows the current cash balance.
   See the [monetary precision policy](.specs/precisao-monetaria.md).
 
 - **Build identifier** — every signed-in page has a small footer showing the
@@ -80,7 +83,8 @@ authentication configuration that does not depend on the host:
   (BRL by default), including USD/EUR, without a bank connection. Native balance
   is opening balance + posted movements + explicit adjustments. Edit, archive
   and reactivate accounts in **Contas e cartões**; currency and opening balance
-  lock after movements. Foreign amounts stay in their original currency and
+  lock after movements; equivalent decimal representations still allow name
+  and archive changes. Foreign amounts stay in their original currency and
   are valued in BRL in Net Worth and the investment summary with the day's
   exchange rate; a missing rate makes the figure unavailable.
 - **Reference currency** — choose the currency for consolidated Home, category,
@@ -115,6 +119,8 @@ authentication configuration that does not depend on the host:
 - **Scenarios** — user-authored hypothetical projections ("what if I travel",
   "what if I change jobs"), or the installment plan of a debt/receivable —
   they never affect real totals unless explicitly included in a query.
+  Fixed-amount installments preserve exact remainders without exceeding the
+  chosen installment amount.
 - **Financial report** — a single time navigation (Actual → Today → Base
   Projection → Simulation): how much you will have on a future date, your
   lowest balance until then, and how hypothetical scenarios change that answer.

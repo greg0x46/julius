@@ -189,6 +189,12 @@ the previous amount, and replay adds no expense
 - `POST /api/transactions/query`, `GET /api/transactions/spending-by-category`,
   `GET /api/transactions/category-breakdown`,
   `PUT /api/transactions/{id}/inclusion`, `PUT /api/transactions/{id}/category`.
+- Spending by category accepts an explicit `scenario_id` and reads its monthly
+  events through `projections.List`. Only unrealized outflows contribute, as
+  positive expense magnitudes in separate `source=projetado` rows. Debt plans,
+  signed standalone entries and recurring schedules follow the same direction
+  and realization rules as Timeline; incoming events never increase spending
+  (`TestSpendingProjectionUsesCanonicalDirectionAndRealization`).
 - In `POST /api/transactions/query`, `filters.classification` accepts `inflow`
   (positive amount), `outflow` (negative amount) and `unclassified`; the UI
   offers only inflows and outflows. Any other value is 400
@@ -226,7 +232,10 @@ the previous amount, and replay adds no expense
   and account timestamp are written atomically. Its response is the account.
   Currency and opening balance are locked once transactions (even deleted)
   or adjustments exist (409); account writes and transaction creation share
-  a row lock to serialize this check. Archive/reactivate via PUT `archived`.
+  a row lock to serialize this check. Opening balances compare as exact decimals,
+  so equivalent representations such as `100.00` and `100` still allow name
+  edits and archive/reactivate via PUT `archived`
+  (`TestManualAccountOpeningBalanceUsesDecimalEquality`).
   Archived accounts retain balances/history and reject creation/update of
   transactions targeting them (409), and new adjustments (409).
 - Investments: `GET /api/investments[/{id}][/transactions]`.

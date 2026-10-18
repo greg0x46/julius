@@ -107,7 +107,11 @@ func GenerateInstallments(totalAmount decimal.Decimal, count int, startDate time
 // with the "abater do final" readjustment strategy (Readjust), which needs
 // the same "fixed value, derived count" math.
 func splitByAmount(totalAmount, installmentAmount decimal.Decimal) []decimal.Decimal {
-	count := int(totalAmount.Div(installmentAmount).Ceil().IntPart())
+	quotient, remainder := totalAmount.QuoRem(installmentAmount, 0)
+	count := int(quotient.IntPart())
+	if remainder.IsPositive() {
+		count++
+	}
 	if count < 1 {
 		count = 1
 	}
