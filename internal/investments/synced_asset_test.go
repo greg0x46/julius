@@ -68,6 +68,45 @@ func TestFindSyncedAssetSharesTheAssetOfHoldingsWithTheSameIdentity(t *testing.T
 	}
 }
 
+// Listing never writes the catalog, and creating an asset is safe when several
+// requests resolve the same new identity at once.
+func TestConcurrentReadsAndResolvesOfASyncedAssetDoNotRaceOnItsKey(t *testing.T) {
+	eachLedger(t, func(t *testing.T, f *ledgerFixture) {
+		holding := equity("10")
+		f.addHolding(holding)
+		const workers = 20
+		run := func(work func() error) {
+			t.Helper()
+			errs := make(chan error, workers)
+			for i := 0; i < workers; i++ {
+				go func() { errs <- work() }()
+			}
+			for i := 0; i < workers; i++ {
+				if err := <-errs; err != nil {
+					t.Errorf("concurrent call failed: %v", err)
+				}
+			}
+		}
+
+		before := f.assetCount()
+		run(func() error {
+			_, err := investments.ListPositions(f.ctx, f.conn, investments.PositionFilter{})
+			return err
+		})
+		if f.assetCount() != before {
+			t.Fatalf("listing created assets: %d, was %d", f.assetCount(), before)
+		}
+
+		run(func() error {
+			_, err := investments.ResolveSyncedAsset(f.ctx, f.conn, holding)
+			return err
+		})
+		if f.assetCount() != before+1 {
+			t.Fatalf("assets = %d, want exactly one new", f.assetCount())
+		}
+	})
+}
+
 func TestFindSyncedAssetOfAHoldingWithNoIdentityIsNotFound(t *testing.T) {
 	f := newLedgerFixture(t)
 	if _, err := investments.ResolveSyncedAsset(f.ctx, f.conn, investments.SyncedHolding{}); err == nil {
