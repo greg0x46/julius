@@ -1,5 +1,5 @@
 import { Alert, Button } from "antd";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import type { AutomationAction, AutomationRule, RetroactiveApplyResult } from "../api/contracts";
 import {
@@ -37,14 +37,18 @@ export function AutomationRulesPage() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [lastResult, setLastResult] = useState<RetroactiveApplyResult | null>(null);
+  // A commitment created before the rule write failed: a retry updates it instead of creating another.
+  const createdCommitmentId = useRef<string | null>(null);
 
   const openCreate = () => {
+    createdCommitmentId.current = null;
     setEditingEntry(null);
     setSaveError(null);
     setFormOpen(true);
   };
 
   const openEditRule = (rule: AutomationRule) => {
+    createdCommitmentId.current = null;
     const target = rule.actions.find((action) => action.type === "reconcile");
     const linkedCommitment = target?.scenario_id
       ? commitments.commitments.find((commitment) => commitment.id === target.scenario_id) ?? null
@@ -71,15 +75,14 @@ export function AutomationRulesPage() {
       }
       if (payload.actionTypes.includes("reconcile") && payload.reconcile) {
         const { reconcile } = payload;
-        const savedCommitment =
+        const existingId =
           reconcile.commitmentMode === "existing" && reconcile.existingCommitmentId
-            ? (
-                await commitments.updateCommitment({
-                  commitmentId: reconcile.existingCommitmentId,
-                  write: reconcile.commitment,
-                })
-              )
-            : await commitments.createCommitment(reconcile.commitment);
+            ? reconcile.existingCommitmentId
+            : createdCommitmentId.current;
+        const savedCommitment = existingId
+          ? await commitments.updateCommitment({ commitmentId: existingId, write: reconcile.commitment })
+          : await commitments.createCommitment(reconcile.commitment);
+        if (!existingId) createdCommitmentId.current = savedCommitment.id;
         actions.push({
           type: "reconcile",
           scenario_id: savedCommitment.id,
@@ -98,6 +101,7 @@ export function AutomationRulesPage() {
       const result = editingRuleId
         ? await automationRules.updateRule({ ruleId: editingRuleId, write })
         : await automationRules.createRule(write);
+      createdCommitmentId.current = null;
       setLastResult(result.retroactive_apply);
       setFormOpen(false);
       feedback.success("Automação salva");
