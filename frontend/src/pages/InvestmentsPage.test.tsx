@@ -118,7 +118,7 @@ describe("InvestmentsPage period view", () => {
     renderPage();
     const strip = await screen.findByRole("region", { name: "Carteira em 30/09/2025" });
     expect(vi.mocked(portfolioApi.getInvestmentPeriod).mock.calls[0][0]).toMatchObject({ to: "2999-12-31" });
-    expect(within(strip).getByText(/Período em andamento: considerado até hoje, 30\/09\/2025/)).toBeVisible();
+    expect(within(strip).getByRole("button", { name: /Sobre estes valores.*Período em andamento: considerado até hoje, 30\/09\/2025/ })).toBeInTheDocument();
   });
 
   it("sends no request for a period that has not started", async () => {
@@ -136,7 +136,7 @@ describe("InvestmentsPage period view", () => {
     expect(within(strip).getByText("+13,48%")).toBeVisible();
     expect(within(strip).getByText("R$ 520,00")).toBeVisible();
 
-    const toggle = within(strip).getByText("Entenda o resultado do período");
+    const toggle = within(strip).getByText("Detalhes do cálculo");
     expect(toggle.closest("details")).not.toHaveAttribute("open");
     await userEvent.click(toggle);
     expect(toggle.closest("details")).toHaveAttribute("open");
@@ -148,7 +148,7 @@ describe("InvestmentsPage period view", () => {
   it("separates the held positions from the ones closed in the period", async () => {
     renderPage();
     const strip = await screen.findByRole("region", { name: /Carteira em/ });
-    await userEvent.click(within(strip).getByText("Entenda o resultado do período"));
+    await userEvent.click(within(strip).getByText("Detalhes do cálculo"));
     const origin = within(strip).getByRole("group", { name: "De onde vem o resultado do período" });
     expect(within(origin).getByText("Resultado do período = mantidas + encerradas")).toBeVisible();
     const held = within(origin).getByText("Posições mantidas em 30/09/2025").closest("div")!;
@@ -167,7 +167,7 @@ describe("InvestmentsPage period view", () => {
     });
     renderPage();
     const strip = await screen.findByRole("region", { name: /Carteira em/ });
-    await userEvent.click(within(strip).getByText("Entenda o resultado do período"));
+    await userEvent.click(within(strip).getByText("Detalhes do cálculo"));
     expect(within(strip).getByText(/Posições mantidas em/)).toBeVisible();
     expect(within(strip).queryByText(/Encerradas no período/)).toBeNull();
   });
@@ -175,7 +175,7 @@ describe("InvestmentsPage period view", () => {
   it("flags a partial period instead of counting unavailable positions as zero", async () => {
     renderPage();
     const strip = await screen.findByRole("region", { name: /Carteira em/ });
-    expect(within(strip).getByText(/Parcial: 1 de 4 posições sem histórico suficiente/)).toBeVisible();
+    expect(within(strip).getByText(/Parcial · 1 de 4 posições/)).toBeVisible();
     expect(within(strip).getByRole("button", { name: /1× Sem histórico/ })).toBeInTheDocument();
   });
 
@@ -331,9 +331,10 @@ describe("InvestmentsPage period view", () => {
     await renderCustodyRows();
     await screen.findByText("Tesouro Selic 2029");
     await userEvent.click(screen.getByRole("button", { name: "Ações de Corretora XP" }));
-    expect(await screen.findByRole("menuitem", { name: "Registrar movimentação" })).toBeInTheDocument();
-    expect(screen.getByRole("menuitem", { name: "Nova posição" })).toBeInTheDocument();
+    expect(await screen.findByRole("menuitem", { name: "Ver movimentações" })).toBeInTheDocument();
     expect(screen.getByRole("menuitem", { name: "Editar conta" })).toBeInTheDocument();
+    expect(screen.queryByRole("menuitem", { name: "Registrar movimentação" })).toBeNull();
+    expect(screen.queryByRole("menuitem", { name: "Nova posição" })).toBeNull();
     fireEvent.keyDown(document.body, { key: "Escape" });
 
     await userEvent.click(screen.getByRole("button", { name: "Ações de Tesouro Selic 2029" }));
@@ -349,21 +350,39 @@ describe("InvestmentsPage period view", () => {
     expect(screen.queryByRole("menuitem", { name: "Editar" })).toBeNull();
   });
 
-  it("lists the accounts below the positions, with their movements", async () => {
+  it("opens the accounts drawer from Contas, with cash and each account's movements", async () => {
     renderPage();
-    const section = await screen.findByRole("region", { name: "Contas e movimentações" });
-    expect(within(section).getByText("Corretora XP")).toBeVisible();
-    expect(within(section).getAllByText(/Histórico de movimentações \(0\)/)).toHaveLength(2);
-    expect(within(section).getByRole("button", { name: "Ações da conta Corretora XP" })).toBeInTheDocument();
+    await screen.findByRole("region", { name: /Carteira em/ });
+    expect(screen.queryByRole("region", { name: "Contas e movimentações" })).toBeNull();
+    await userEvent.click(await screen.findByRole("button", { name: "Contas" }));
+    const drawer = await screen.findByRole("dialog", { name: "Contas de investimento" });
+    expect(within(drawer).getAllByText("Disponível hoje").length).toBeGreaterThan(0);
+    expect(within(drawer).getByRole("button", { name: "Ações da conta Corretora XP" })).toBeInTheDocument();
+    await userEvent.click(within(drawer).getByRole("button", { name: "Corretora XP" }));
+    expect(await screen.findByText("Nenhuma movimentação")).toBeVisible();
+    await userEvent.click(screen.getByRole("button", { name: "Voltar para as contas" }));
+    expect(await screen.findByRole("button", { name: "Corretora XP" })).toBeVisible();
   });
 
-  it("offers a way to create an account when there is none", async () => {
-    vi.mocked(portfolioApi.listInvestmentAccounts).mockResolvedValue([]);
-    vi.mocked(portfolioApi.listInvestmentPositions).mockResolvedValue([]);
-    vi.mocked(portfolioApi.getInvestmentPeriod).mockResolvedValue(investmentPeriodFixture({ groups: [] }));
+  it("swaps the accounts drawer for a form instead of stacking, and brings it back", async () => {
     renderPage();
-    expect(await screen.findByText("Nenhuma posição neste período")).toBeVisible();
-    expect(await screen.findByText("Nenhuma conta de investimento ainda")).toBeVisible();
+    await screen.findByRole("region", { name: /Carteira em/ });
+    await userEvent.click(await screen.findByRole("button", { name: "Contas" }));
+    const drawer = await screen.findByRole("dialog", { name: "Contas de investimento" });
+    await userEvent.click(within(drawer).getByRole("button", { name: "Ações da conta Corretora XP" }));
+    await userEvent.click(await screen.findByRole("menuitem", { name: "Editar conta" }));
+    expect(await screen.findByRole("button", { name: "Cancelar" })).toBeVisible();
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: "Contas de investimento" })).toBeNull());
+    await userEvent.click(screen.getByRole("button", { name: "Cancelar" }));
+    expect(await screen.findByRole("dialog", { name: "Contas de investimento" })).toBeVisible();
+  });
+
+  it("opens an account's movements from its menu in the period view", async () => {
+    await renderCustodyRows();
+    await screen.findByText("Tesouro Selic 2029");
+    await userEvent.click(screen.getByRole("button", { name: "Ações de Corretora XP" }));
+    await userEvent.click(await screen.findByRole("menuitem", { name: "Ver movimentações" }));
+    expect(await screen.findByRole("dialog", { name: "Corretora XP" })).toBeVisible();
   });
 
   it("starts groups collapsed, subtotal visible, and expands them to show the rows", async () => {

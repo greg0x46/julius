@@ -542,15 +542,17 @@ Components (`components/investments/`) and hook:
   search and **Mostrar encerradas** shape the rows, the tab's grouping is sent to
   the backend. The section header states how many positions the server measured.
 - `InvestmentPeriodSummary` shows **Carteira em `to`** (`totals.end_value`),
-  Rendimento no período (`totals.yield` together with `yield_rate`), Aportes,
-  Resgates and Custos (only when non-zero). The disclosure **Entenda o resultado
-  do período** expands the five backend components and, under them, where the
+  Rendimento (`totals.yield` together with `yield_rate`), Aportes, Resgates and
+  Custos (only when non-zero). The box carries no explanatory prose: the caveats
+  (cash excluded, IR/IOF provisioned and not deducted, period in progress,
+  positions that start late via `positions_partial_start`) sit in the popover of
+  an ⓘ icon, whose accessible name includes them. The disclosure **Detalhes do
+  cálculo** expands the five backend components and, under them, where the
   result comes from: "Posições mantidas" (`totals.held`) plus
   "Encerradas no período" (`totals.closed`, the realized result; hidden when
-  all zeros). When `partial`, a tag reads
-  "Parcial: N de M posições sem histórico suficiente" with the reasons by count;
-  positions that start late (`positions_partial_start`) are named in the note.
-  A null `yield_rate` is "—" with its reason, never 0%.
+  all zeros). When `partial`, a tag reads "Parcial · N de M posições" and its
+  popover gives the reasons by count. A null `yield_rate` is "—" with its
+  reason, never 0%.
 - `InvestmentPositionsPeriod` renders the groups: a table from `xl` up (one
   `<tbody>` per group, the group's subtotal as its first row), stacked rows and
   collapsible headers below it. Groups start **collapsed**: the header carries the
@@ -563,12 +565,16 @@ Components (`components/investments/`) and hook:
   none). On compact screens, Investido and Participação are
   labelled facts under the asset instead of one dense sentence. Group toggles
   are buttons with `aria-expanded`.
-- `InvestmentAccountsSection`, titled **Contas e movimentações** below the
-  positions, keeps management reachable whatever the grouping: each account's menu
-  (Registrar movimentação, Nova posição, Editar/Excluir conta or Vincular caixa),
-  its current cash as **Disponível hoje** and its movement-history disclosure. Account groups and
+- `InvestmentAccountsDrawer`, opened by the **Contas** button in the page header,
+  keeps account management reachable whatever the grouping: the list of accounts
+  with each one's current cash (**Disponível hoje**) and menu (Ver movimentações,
+  Editar/Excluir conta or Vincular caixa), and, per account, its movement history
+  (correct/delete). Creating (movimentação, posição, conta) is only in the page's
+  **Adicionar** menu; account menus hold management only. **Ver
+  movimentações** in an account group's or a manual position's menu opens the same
+  drawer on that account, or filtered to that position. Account groups and
   position rows carry the same menus (`useInvestmentMenus`); a synced position
-  offers only **Ver detalhes**.
+  offers **Ver detalhes**, whose page lists its movements.
 
 Display rules:
 
@@ -592,7 +598,7 @@ Display rules:
   the provisioned IR/IOF are in the popover of the position's Rendimento, as
   "Informado pela instituição" for conference; they never feed a total.
 - Cash (saldo para investir) is not part of the period figures; each account's
-  cash in the accounts section is today's balance.
+  cash in the accounts drawer is today's balance.
 
 ## Combined actions, review and filters
 

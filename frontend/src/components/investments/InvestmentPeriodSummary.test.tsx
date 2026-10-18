@@ -11,7 +11,16 @@ function renderSummary(overrides: Parameters<typeof investmentPeriodFixture>[0] 
   return screen.getByRole("region", { name: /Carteira em/ });
 }
 
+const aboutValues = (strip: HTMLElement) =>
+  within(strip).getByRole("button", { name: /^Sobre estes valores/ }).getAttribute("aria-label");
+
 describe("InvestmentPeriodSummary", () => {
+  it("keeps the caveats out of the box until asked", () => {
+    const strip = renderSummary();
+    expect(within(strip).queryByText(/O saldo para investir/)).toBeNull();
+    expect(aboutValues(strip)).toMatch(/O saldo para investir \(caixa\)/);
+  });
+
   it("shows costs only when there are any", () => {
     expect(within(renderSummary()).queryByText("Custos")).toBeNull();
   });
@@ -20,8 +29,8 @@ describe("InvestmentPeriodSummary", () => {
     const strip = renderSummary({ totals: { ...periodTotals, costs: "12.50" } });
     expect(within(strip).getByText("Custos")).toBeVisible();
     expect(within(strip).getByText("R$ 12,50")).toBeVisible();
-    expect(within(strip).getByText(/antes do IR\/IOF provisionado/)).toBeVisible();
-    expect(within(strip).getByText(/O saldo para investir \(caixa\)/)).toBeVisible();
+    expect(aboutValues(strip)).toMatch(/antes do IR\/IOF provisionado/);
+    expect(aboutValues(strip)).toMatch(/O saldo para investir \(caixa\)/);
   });
 
   it("does not claim a rentabilidade when the backend has no capital base", () => {
@@ -40,13 +49,13 @@ describe("InvestmentPeriodSummary", () => {
     const strip = renderSummary({
       totals: { ...periodTotals, partial: false, positions_unavailable: 0, positions_partial_start: 2 },
     });
-    expect(within(strip).getByText(/2 posições começam depois do primeiro dia do período/)).toBeVisible();
+    expect(aboutValues(strip)).toMatch(/2 posições começam depois do primeiro dia do período/);
     expect(within(strip).queryByText(/Parcial/)).toBeNull();
   });
 
   it("explains the start for a whole-period request", async () => {
     const strip = renderSummary({ from: null });
-    await userEvent.click(within(strip).getByText("Entenda o resultado do período"));
+    await userEvent.click(within(strip).getByText("Detalhes do cálculo"));
     expect(within(strip).getByText(/início de cada posição/)).toBeVisible();
   });
 });

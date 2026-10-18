@@ -1,3 +1,4 @@
+import { InfoCircleOutlined } from "@ant-design/icons";
 import { useState } from "react";
 
 import type { InvestmentPeriod, InvestmentPeriodPart, InvestmentPeriodPosition } from "../../api/contracts";
@@ -34,7 +35,7 @@ export function InvestmentPeriodSummary({
   const reasons = partialReasons(positions);
   const items = [
     {
-      label: "Rendimento no período",
+      label: "Rendimento",
       value:
         totals.yield_rate === null ? (
           <span className="investment-summary-result">
@@ -64,7 +65,7 @@ export function InvestmentPeriodSummary({
     totals.positions_partial_start > 0
       ? `${totals.positions_partial_start} ${totals.positions_partial_start === 1 ? "posição começa" : "posições começam"} depois do primeiro dia do período, por falta de preço nesse dia.`
       : null,
-  ].filter(Boolean);
+  ].filter((note): note is string => note !== null);
 
   return (
     <SummaryStrip
@@ -73,42 +74,48 @@ export function InvestmentPeriodSummary({
       value={<Money value={totals.end_value} tone="balance" size="hero" />}
       busy={updating}
       items={items}
-      note={
-        <span className="investment-summary-notes">
-          {notes.map((note) => <span key={note}>{note}</span>)}
-        </span>
-      }
     >
-      {totals.partial && (
+      <div className="investment-summary-meta">
+        {totals.partial && (
+          <InvestmentHint
+            label={`Parcial: ${totals.positions_unavailable} de ${totals.positions_total} posições sem histórico suficiente. ${reasons.join(", ")}`}
+            content={
+              <>
+                <p>As posições abaixo ficaram de fora dos valores e da rentabilidade; não foram contadas como zero.</p>
+                <ul>
+                  {reasons.map((reason) => (
+                    <li key={reason}>{reason}</li>
+                  ))}
+                </ul>
+              </>
+            }
+          >
+            <StatusTag tone="warning">
+              Parcial · {totals.positions_unavailable} de {totals.positions_total} posições
+            </StatusTag>
+          </InvestmentHint>
+        )}
         <InvestmentHint
-          label={`Parcial: ${totals.positions_unavailable} de ${totals.positions_total} posições sem histórico suficiente. ${reasons.join(", ")}`}
+          label={`Sobre estes valores: ${notes.join(" ")}`}
           content={
-            <>
-              <p>As posições abaixo ficaram de fora dos valores e da rentabilidade; não foram contadas como zero.</p>
-              <ul>
-                {reasons.map((reason) => (
-                  <li key={reason}>{reason}</li>
-                ))}
-              </ul>
-            </>
+            <ul>
+              {notes.map((note) => (
+                <li key={note}>{note}</li>
+              ))}
+            </ul>
           }
         >
-          <StatusTag tone="warning">
-            Parcial: {totals.positions_unavailable} de {totals.positions_total} posições sem histórico suficiente
-          </StatusTag>
+          <InfoCircleOutlined className="investment-summary-info" />
         </InvestmentHint>
-      )}
+      </div>
       <details
         className="investment-reconcile-disclosure"
         open={explained}
         onToggle={(event) => setExplained(event.currentTarget.open)}
       >
-        <summary>Entenda o resultado do período</summary>
+        <summary>Detalhes do cálculo</summary>
         {explained && (
           <>
-            <p className="investment-reconcile-equation">
-              Inicial + aportes − resgates + rendimento = carteira no fim
-            </p>
             <dl id="investment-reconcile" className="investment-reconcile">
               <div>
                 <dt>

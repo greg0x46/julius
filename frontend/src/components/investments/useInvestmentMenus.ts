@@ -8,15 +8,15 @@ export interface InvestmentMenuHandlers {
   busy: boolean;
   onRename: (account: InvestmentAccount) => void;
   onRemove: (account: InvestmentAccount) => void;
-  onNewPosition: (account: InvestmentAccount) => void;
-  onNewOperation: (account: InvestmentAccount) => void;
+  onViewOperations: (account: InvestmentAccount) => void;
+  onViewPositionOperations: (position: InvestmentPosition) => void;
   onEditPosition: (position: InvestmentPosition) => void;
   onRemovePosition: (position: InvestmentPosition) => void;
 }
 
 /**
  * The record actions of accounts and positions, shared by every place that
- * lists them (the account groups of the period view and the accounts section).
+ * lists them (the account groups of the period view and the accounts drawer).
  * A synced account and a synced position stay read-only.
  */
 export function useInvestmentMenus(handlers: InvestmentMenuHandlers) {
@@ -24,8 +24,7 @@ export function useInvestmentMenus(handlers: InvestmentMenuHandlers) {
   const navigate = useNavigate();
 
   const accountMenu = (account: InvestmentAccount): RecordMenuItem[] => [
-    { key: "operation", label: "Registrar movimentação", onClick: () => handlers.onNewOperation(account) },
-    { key: "position", label: "Nova posição", onClick: () => handlers.onNewPosition(account) },
+    { key: "operations", label: "Ver movimentações", onClick: () => handlers.onViewOperations(account) },
     ...(account.kind === "manual"
       ? [
           { key: "edit", label: "Editar conta", onClick: () => handlers.onRename(account) },
@@ -62,6 +61,11 @@ export function useInvestmentMenus(handlers: InvestmentMenuHandlers) {
       });
     }
     if (position.source !== "synced") {
+      items.push({
+        key: "operations",
+        label: "Ver movimentações",
+        onClick: () => handlers.onViewPositionOperations(position),
+      });
       items.push({ key: "edit", label: "Editar", onClick: () => handlers.onEditPosition(position) });
       items.push({
         key: "delete",

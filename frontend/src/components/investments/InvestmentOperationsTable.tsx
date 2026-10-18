@@ -82,7 +82,7 @@ export function InvestmentOperationsTable({
       stackBelow="lg"
       items={operations}
       getKey={(operation) => operation.id}
-      empty={<EmptyState title="Nenhuma movimentação nesta conta" />}
+      empty={<EmptyState title="Nenhuma movimentação" />}
       row={(operation) => ({
         title: kindOf(operation),
         meta: [

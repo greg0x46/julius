@@ -72,29 +72,6 @@
   gap: 0;
 }
 
-/* ---- Movements disclosure: part of the section, not a nested card -------- */
-
-.investment-operations.ant-collapse {
-  margin-top: 0.5rem;
-  border-top: 1px solid var(--color-border);
-  border-radius: 0;
-  background: transparent;
-}
-
-.investment-operations .ant-collapse-item {
-  border: 0;
-}
-
-.investment-operations .ant-collapse-header {
-  padding-inline: 0 !important;
-  color: var(--color-text-secondary);
-  font-size: var(--fs-small);
-}
-
-.investment-operations .ant-collapse-content-box {
-  padding: 0 !important;
-}
-
 /* ---- Tables ------------------------------------------------------------- */
 
 .investment-cell {
@@ -259,16 +236,21 @@
   color: var(--color-text-secondary);
 }
 
-.investment-summary-notes {
+.investment-summary-meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.125rem 0.5rem;
+  align-items: center;
+  gap: 0.5rem;
 }
 
-.investment-summary-notes > span + span::before {
-  content: "·";
-  margin-right: 0.5rem;
-  color: var(--color-border-strong);
+.investment-summary-info {
+  color: var(--color-text-secondary);
+  font-size: 1rem;
+  vertical-align: middle;
+}
+
+.investment-hint:hover .investment-summary-info {
+  color: var(--color-primary);
 }
 
 .investment-reconcile-disclosure {
@@ -303,12 +285,6 @@
 
 .investment-reconcile-disclosure[open] > summary::before {
   transform: rotate(45deg) translate(-1px, -1px);
-}
-
-.investment-reconcile-equation {
-  margin: 0.25rem 0 0.625rem;
-  color: var(--color-text-secondary);
-  font-size: var(--fs-caption);
 }
 
 .investment-hint-content ul {
@@ -546,7 +522,7 @@
   font-weight: 400;
 }
 
-/* ---- Accounts section ------------------------------------------------------ */
+/* ---- Accounts drawer ------------------------------------------------------ */
 
 .investment-account-list {
   display: flex;
@@ -586,27 +562,24 @@
   font-weight: 600;
 }
 
-.investment-account .investment-operations.ant-collapse {
-  margin-top: 0.25rem;
+.investment-drawer-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.investment-account-name.ant-btn {
+  height: auto;
+  padding: 0;
+  font-weight: 600;
+}
+
+.ant-drawer-body > .investment-account-cash {
+  align-items: flex-start;
+  margin-bottom: 1rem;
 }
 
 @media (max-width: 47.99rem) {
-  .investment-summary-notes {
-    display: block;
-  }
-
-  .investment-summary-notes > span {
-    display: block;
-  }
-
-  .investment-summary-notes > span + span {
-    margin-top: 0.25rem;
-  }
-
-  .investment-summary-notes > span + span::before {
-    display: none;
-  }
-
   .investment-account-header {
     grid-template-columns: minmax(0, 1fr) auto;
   }

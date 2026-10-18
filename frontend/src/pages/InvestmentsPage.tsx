@@ -1,6 +1,6 @@
 import { ApiError } from "../api/problems";
 import { BankOutlined, PieChartOutlined, SwapOutlined } from "@ant-design/icons";
-import { Alert, Skeleton } from "antd";
+import { Alert } from "antd";
 import { useMemo, useState } from "react";
 
 import type {
@@ -20,12 +20,15 @@ import { InvestmentAccountEditForm } from "../components/investments/InvestmentA
 import { InvestmentAccountForm } from "../components/investments/InvestmentAccountForm";
 import { InvestmentOperationForm } from "../components/investments/InvestmentOperationForm";
 import { InvestmentPositionForm } from "../components/investments/InvestmentPositionForm";
-import { InvestmentAccountsSection } from "../components/investments/InvestmentAccountsSection";
+import {
+  InvestmentAccountsDrawer,
+  type InvestmentAccountsScope,
+} from "../components/investments/InvestmentAccountsDrawer";
 import { InvestmentPeriodView } from "../components/investments/InvestmentPeriodView";
 import { useInvestmentMenus } from "../components/investments/useInvestmentMenus";
 import { PeriodNavigator } from "../components/filters/PeriodNavigator";
 import { periodPresets } from "../components/filters/periodPresets";
-import { CreateActionMenu, Page, PageTabs } from "../components/layout";
+import { CreateActionMenu, Page, PageAction, PageTabs } from "../components/layout";
 import { useFeedback } from "../components/shared/useFeedback";
 import { useAccounts } from "../hooks/useAccounts";
 import { useInvestmentWorkspace } from "../hooks/useInvestmentWorkspace";
@@ -54,12 +57,10 @@ export function InvestmentsPage() {
   const [editingAccount, setEditingAccount] = useState<InvestmentAccount | null>(null);
   const [positionFormOpen, setPositionFormOpen] = useState(false);
   const [editingPosition, setEditingPosition] = useState<InvestmentPosition | null>(null);
-  // InvestmentPositionForm picks its account from the list it is given, so an
-  // account's "Nova posição" hands it only that account instead of a preselection.
-  const [positionAccounts, setPositionAccounts] = useState<InvestmentAccount[] | null>(null);
   const [operationFormOpen, setOperationFormOpen] = useState(false);
   const [editingOperation, setEditingOperation] = useState<InvestmentOperation | null>(null);
   const [operationAccountId, setOperationAccountId] = useState<string | null>(null);
+  const [accountsScope, setAccountsScope] = useState<InvestmentAccountsScope | null>(null);
 
   // Manual holdings may sit in a manual account or next to a connection's holdings.
   const holdingAccounts = workspace.accounts.filter((account) => account.active);
@@ -100,22 +101,20 @@ export function InvestmentsPage() {
     setSaveError(null);
     setEditingAccount(account);
   };
-  const openPositionCreate = (accounts: InvestmentAccount[] | null) => {
+  const openPositionCreate = () => {
     setSaveError(null);
     setEditingPosition(null);
-    setPositionAccounts(accounts);
     setPositionFormOpen(true);
   };
   const openPositionEdit = (position: InvestmentPosition) => {
     setSaveError(null);
     setEditingPosition(position);
-    setPositionAccounts(null);
     setPositionFormOpen(true);
   };
-  const openOperationCreate = (accountId: string | null) => {
+  const openOperationCreate = () => {
     setSaveError(null);
     setEditingOperation(null);
-    setOperationAccountId(accountId);
+    setOperationAccountId(null);
     setOperationFormOpen(true);
   };
   const openOperationEdit = (operation: InvestmentOperation) => {
@@ -160,14 +159,18 @@ export function InvestmentsPage() {
     );
 
   const busy = workspace.isSaving || workspace.isDeleting;
+  // A form opened from the accounts drawer replaces it instead of stacking on
+  // it; the scope is kept, so the drawer comes back where it was.
+  const formOpen = accountFormOpen || editingAccount !== null || positionFormOpen || operationFormOpen;
 
   const menus = useInvestmentMenus({
     busy,
     onRename: openAccountEdit,
     onRemove: (account) =>
       void run(() => workspace.deleteAccount(account.id), "Não foi possível excluir a conta.", "Excluído"),
-    onNewPosition: (account) => openPositionCreate([account]),
-    onNewOperation: (account) => openOperationCreate(account.id),
+    onViewOperations: (account) => setAccountsScope({ accountId: account.id, positionId: null }),
+    onViewPositionOperations: (position) =>
+      setAccountsScope({ accountId: position.account_id, positionId: position.id }),
     onEditPosition: openPositionEdit,
     onRemovePosition: (position) =>
       void run(() => workspace.deletePosition(position.id), "Não foi possível excluir a posição.", "Excluído"),
@@ -188,7 +191,7 @@ export function InvestmentsPage() {
               : "Aporte, resgate ou outra movimentação em uma conta",
           icon: <SwapOutlined aria-hidden="true" />,
           disabled: workspace.accounts.length === 0,
-          onClick: () => openOperationCreate(null),
+          onClick: () => openOperationCreate(),
         },
         {
           key: "position",
@@ -199,7 +202,7 @@ export function InvestmentsPage() {
               : "Um ativo dentro de uma conta de investimento",
           icon: <PieChartOutlined aria-hidden="true" />,
           disabled: holdingAccounts.length === 0,
-          onClick: () => openPositionCreate(null),
+          onClick: openPositionCreate,
         },
         {
           key: "account",
@@ -227,7 +230,18 @@ export function InvestmentsPage() {
           bare
         />
       }
-      actions={createMenu}
+      actions={
+        <>
+          {createMenu}
+          <PageAction
+            icon={<BankOutlined aria-hidden="true" />}
+            label="Contas"
+            // A failed load would read as "no accounts"; the retry above is the only answer then.
+            disabled={workspace.isLoading || Boolean(workspace.error)}
+            onClick={() => setAccountsScope({ accountId: null, positionId: null })}
+          />
+        </>
+      }
       tabs={<PageTabs label="Agrupar posições por" options={groupingOptions} value={groupBy} onChange={setGroupBy} />}
     >
       {workspace.error && !workspace.isLoading && (
@@ -250,39 +264,33 @@ export function InvestmentsPage() {
         request={request}
         groupBy={groupBy}
         workspacePositions={workspace.positions}
-        onNewPosition={() => (holdingAccounts.length === 0 ? openAccountCreate() : openPositionCreate(null))}
+        onNewPosition={() => (holdingAccounts.length === 0 ? openAccountCreate() : openPositionCreate())}
         positionMenu={menus.positionMenu}
         groupMenu={(group) => {
           const account = accountOfGroup(group);
           return account === undefined ? [] : menus.accountMenu(account);
         }}
       />
-      {workspace.isLoading ? (
-        <div className="section" role="status" aria-label="Carregando contas">
-          <div className="section-body">
-            <Skeleton active paragraph={{ rows: 2 }} />
-          </div>
-        </div>
-      ) : workspace.error ? null : (
-        // A failed load shows only the retry above: "Nenhuma conta ainda"
-        // beside it would claim there is nothing there.
-        <InvestmentAccountsSection
-          accounts={workspace.accounts}
-          positions={workspace.positions}
-          operations={workspace.operations}
-          menuOf={menus.accountMenu}
-          onNewAccount={openAccountCreate}
-          onEditOperation={openOperationEdit}
-          onRemoveOperation={(operation) =>
-            void run(
-              () => workspace.deleteOperation(operation.id),
-              "Não foi possível excluir a movimentação.",
-              "Excluído",
-            )
-          }
-          busy={busy}
-        />
-      )}
+      <InvestmentAccountsDrawer
+        scope={accountsScope}
+        hidden={formOpen}
+        accounts={workspace.accounts}
+        positions={workspace.positions}
+        operations={workspace.operations}
+        menuOf={menus.accountMenu}
+        onNewAccount={openAccountCreate}
+        onScope={setAccountsScope}
+        onEditOperation={openOperationEdit}
+        onRemoveOperation={(operation) =>
+          void run(
+            () => workspace.deleteOperation(operation.id),
+            "Não foi possível excluir a movimentação.",
+            "Excluído",
+          )
+        }
+        onClose={() => setAccountsScope(null)}
+        busy={busy}
+      />
 
       <InvestmentAccountForm
         open={accountFormOpen}
@@ -304,7 +312,7 @@ export function InvestmentsPage() {
       <InvestmentPositionForm
         open={positionFormOpen}
         position={editingPosition}
-        accounts={positionAccounts ?? workspace.accounts}
+        accounts={workspace.accounts}
         submitting={workspace.isSaving}
         submitError={saveError}
         onCreate={submitPositionCreate}
