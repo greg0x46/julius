@@ -39,6 +39,8 @@ another engine. See `motores-de-dominio.md` §4.
 - Target must be strictly positive; name required. Everything is in BRL and is
   **not** converted to the reference currency.
 - A list reads the metric once, so all goals in a response agree.
+- Create and update commit only after computing the response progress; a
+  valuation failure leaves the stored goal unchanged.
 
 Table `goals` (migration `0005_goals`, both dialects): `id`, `name`, `metric`,
 `target_amount`, `target_date`, `notes`, `created_at`, `updated_at`. The same
@@ -59,3 +61,6 @@ Problems: `invalid-goal-input` (400), `goal-not-found` (404),
 Page **Metas** at `/metas`: list of goals with a progress bar, current value and
 target, create/edit/delete. All HTTP goes through `src/api`; the page shows the
 backend `current_value` and `progress` as-is.
+Completion requires `progress >= 1` using exact decimal comparison. The whole
+percentage and bar stay at most 99% below that boundary; reached goals fill the
+bar while their displayed percentage may exceed 100%.

@@ -621,8 +621,10 @@ The release scripts (`scripts/next-version.sh`, `update-changelog.sh`,
 The frontend suite runs as two Vitest projects (jsdom and plain Node); see
 [`frontend/TESTING.md`](frontend/TESTING.md) for the split and worker count.
 
-`npm run test:e2e` (Playwright) is declared in `package.json` but has no
-`playwright.config.*` or tests yet — scaffolded, not implemented.
+`npm run test:e2e` runs the financial browser journeys against isolated local
+Julius servers and disposable SQLite databases, without Pluggy credentials.
+See [`frontend/TESTING.md`](frontend/TESTING.md#financial-browser-journeys-playwright)
+for installation, coverage and failure evidence. CI runs the same suite.
 
 ## Open Finance & Pluggy
 
