@@ -7,7 +7,7 @@ import (
 
 var goalResponseKeys = []string{
 	"id", "name", "metric", "target_amount", "target_date", "notes",
-	"current_value", "progress", "currency_code", "created_at", "updated_at",
+	"current_value", "progress", "projection", "currency_code", "created_at", "updated_at",
 }
 
 func TestGoalLifecycleOverHTTP(t *testing.T) {
@@ -36,6 +36,19 @@ func TestGoalLifecycleOverHTTP(t *testing.T) {
 	assertMoney(t, "current_value", created["current_value"], "1000.50")
 	assertMoney(t, "progress", created["progress"], "0.5")
 
+	// A dated goal is projected to its date; with no measurable history the
+	// projection assumes no appreciation.
+	projection, _ := created["projection"].(map[string]any)
+	assertInvestmentKeys(t, "projection", projection, []string{
+		"status", "months_remaining", "monthly_return", "return_from", "return_partial",
+		"projected_value", "projected_progress", "required_monthly_contribution",
+	})
+	if projection["status"] != "behind" || projection["monthly_return"] != nil || projection["return_from"] != nil {
+		t.Errorf("projection = %+v", projection)
+	}
+	assertMoney(t, "projected_value", projection["projected_value"], "1000.50")
+	assertMoney(t, "projected_progress", projection["projected_progress"], "0.5")
+
 	// A bare JSON number is read from its literal text, and the date is optional.
 	second := investmentCall(t, srv, http.MethodPost, "/api/goals", map[string]any{
 		"name": "Viagem", "metric": "invested_value", "target_amount": 5000,
@@ -44,6 +57,9 @@ func TestGoalLifecycleOverHTTP(t *testing.T) {
 		t.Errorf("optional fields = %+v", second)
 	}
 	assertMoney(t, "second target", second["target_amount"], "5000")
+	if second["projection"] != nil {
+		t.Errorf("undated goal projection = %+v, want null", second["projection"])
+	}
 
 	items := investmentItems(t, srv, "/api/goals")
 	if len(items) != 2 || items[0]["id"] != id {
