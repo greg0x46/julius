@@ -12,6 +12,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/greg0x46/julius/internal/categories"
+	"github.com/greg0x46/julius/internal/dates"
 	dbtypes "github.com/greg0x46/julius/internal/db/types"
 	"github.com/greg0x46/julius/internal/exchange"
 	"github.com/greg0x46/julius/internal/investments"
@@ -294,7 +295,11 @@ func buildView(r row, query QueryRequest, periodBasis string, billDueDates map[s
 		included, reason = false, &linkedReason
 	}
 
-	effectiveAt := effectiveDate(r, periodBasis, billDueDates)
+	loc, err := time.LoadLocation(query.Timezone)
+	if err != nil {
+		loc = time.UTC // PeriodFor and computeDateBounds report an invalid zone
+	}
+	effectiveAt := effectiveDate(r, periodBasis, billDueDates, loc)
 	period, err := money.PeriodFor(r.occurredAt, query.GroupBy, query.Timezone)
 	if err != nil {
 		return view{}, err
@@ -338,19 +343,28 @@ func parseBillID(raw *string) *string {
 // after the purchase (Pluggy typically posts a bill shortly before the
 // month it's due, so this is usually right; it self-corrects once the real
 // bill closes and a sync links it).
-func effectiveDate(r row, periodBasis string, billDueDates map[string]time.Time) *time.Time {
+func effectiveDate(r row, periodBasis string, billDueDates map[string]time.Time, loc *time.Location) *time.Time {
 	if periodBasis != settings.PeriodBasisPaidAt || r.accountType == nil || *r.accountType != "CREDIT" {
 		return r.occurredAt
 	}
 	if billID := parseBillID(r.creditCardMetadata); billID != nil {
 		if due, ok := billDueDates[r.accountID+"\x00"+*billID]; ok {
-			return &due
+			// The due date is a calendar day: anchor it at local noon so
+			// the request zone's day bounds and FX day agree with it.
+			anchored := time.Date(due.Year(), due.Month(), due.Day(), 12, 0, 0, 0, loc)
+			return &anchored
 		}
 	}
 	if r.occurredAt == nil {
 		return nil
 	}
-	estimated := r.occurredAt.AddDate(0, 1, 0)
+	local := r.occurredAt.In(loc)
+	year, month := local.Year(), local.Month()+1
+	if month > time.December {
+		year, month = year+1, time.January
+	}
+	day := min(local.Day(), dates.DaysInMonth(year, month))
+	estimated := time.Date(year, month, day, local.Hour(), local.Minute(), local.Second(), local.Nanosecond(), loc)
 	return &estimated
 }
 
