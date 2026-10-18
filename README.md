@@ -120,7 +120,8 @@ authentication configuration that does not depend on the host:
   "what if I change jobs"), or the installment plan of a debt/receivable —
   they never affect real totals unless explicitly included in a query.
   Fixed-amount installments preserve exact remainders without exceeding the
-  chosen installment amount.
+  chosen installment amount. Generation and readjustment are limited to 10,000
+  installments per operation; requests exceeding the limit preserve the plan.
 - **Financial report** — a single time navigation (Actual → Today → Base
   Projection → Simulation): how much you will have on a future date, your
   lowest balance until then, and how hypothetical scenarios change that answer.

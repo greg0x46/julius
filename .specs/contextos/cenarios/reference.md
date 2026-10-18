@@ -58,3 +58,5 @@ round division before flooring ([policy](../../precisao-monetaria.md)).
 Fixed-amount installment generation and reduce-term readjustment derive the
 count from exact integer quotient and remainder. Every installment stays at or
 below the chosen amount, including remainders beyond 16 decimal places.
+Generation and readjustment reject more than 10,000 installments per operation
+before allocating a plan or replacing existing installments; HTTP returns 422.

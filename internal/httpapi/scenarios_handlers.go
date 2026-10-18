@@ -501,6 +501,10 @@ func handleGenerateInstallments(conn *sql.DB) http.HandlerFunc {
 		} else {
 			drafts, err = scenarios.GenerateInstallmentsForAmount(remaining, *req.InstallmentAmount, startDate, cadence)
 		}
+		if errors.Is(err, scenarios.ErrTooManyInstallments) {
+			invalidScenarioTransactionProblem(w, "O plano não pode gerar mais de 10.000 parcelas por operação.")
+			return
+		}
 		if err != nil {
 			invalidScenarioTransactionProblem(w, "A dívida/conta a receber não possui valor restante para gerar parcelas.")
 			return
@@ -590,6 +594,9 @@ func handleReadjustInstallments(conn *sql.DB) http.HandlerFunc {
 
 		created, err := scenarios.Readjust(r.Context(), conn, scenarioID, remaining, strategy)
 		switch {
+		case errors.Is(err, scenarios.ErrTooManyInstallments):
+			invalidScenarioTransactionProblem(w, "O plano não pode gerar mais de 10.000 parcelas por operação.")
+			return
 		case errors.Is(err, scenarios.ErrNoAffectedInstallments):
 			writeProblem(w, 422, "scenario-readjust-nothing-to-do", "Nada para reajustar",
 				"Todas as parcelas já possuem alguma alocação.")

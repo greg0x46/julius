@@ -102,8 +102,14 @@ func Readjust(ctx context.Context, conn *sql.DB, scenarioID string, remainingAmo
 	var drafts []GeneratedInstallment
 	switch strategy {
 	case StrategyReduceTerm:
-		drafts = reduceTermInstallments(balance, affected)
+		drafts, err = reduceTermInstallments(balance, affected)
+		if err != nil {
+			return nil, err
+		}
 	case StrategyRedistribute:
+		if len(affected) > MaxInstallments {
+			return nil, ErrTooManyInstallments
+		}
 		drafts = redistributeInstallments(balance, affected)
 	}
 
@@ -142,7 +148,7 @@ func Readjust(ctx context.Context, conn *sql.DB, scenarioID string, remainingAmo
 // remainder installment is still around, picking "last by date" can lock
 // onto that tiny remainder and blow the count up (e.g. 24 -> 95) instead of
 // the plan's actual installment value.
-func reduceTermInstallments(balance decimal.Decimal, affected []ScenarioTransaction) []GeneratedInstallment {
+func reduceTermInstallments(balance decimal.Decimal, affected []ScenarioTransaction) ([]GeneratedInstallment, error) {
 	referenceAmount := affected[0].Amount
 	for _, st := range affected[1:] {
 		if st.Amount.GreaterThan(referenceAmount) {
@@ -151,7 +157,10 @@ func reduceTermInstallments(balance decimal.Decimal, affected []ScenarioTransact
 	}
 	startDate := affected[0].ProjectedAt
 
-	amounts := splitByAmount(balance, referenceAmount)
+	amounts, err := splitByAmount(balance, referenceAmount)
+	if err != nil {
+		return nil, err
+	}
 	n := len(amounts)
 	installments := make([]GeneratedInstallment, n)
 	for i, amount := range amounts {
@@ -161,7 +170,7 @@ func reduceTermInstallments(balance decimal.Decimal, affected []ScenarioTransact
 			ProjectedAt: startDate.AddDate(0, i, 0),
 		}
 	}
-	return installments
+	return installments, nil
 }
 
 // redistributeInstallments implements "redistribuir entre os meses": the
