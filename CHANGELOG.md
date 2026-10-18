@@ -4,6 +4,20 @@ Notable changes per release. A section is added by `scripts/update-changelog.sh`
 only when a release is prepared, and the release job publishes that same text as
 the GitHub release notes. Newest release first.
 
+## v0.10.0 — 2026-10-18
+
+### Features
+
+- **settings:** Make financial reference currency configurable ([#120](https://github.com/greg0x46/julius/pull/120))
+- **networth:** Value multi-currency cash, debt, and investments consistently ([#81](https://github.com/greg0x46/julius/pull/81))
+
+### Fixes
+
+- **investments:** Use backend exact acquisition cost for yields
+- **investments:** Round exact acquisition costs before displaying returns
+- **api:** Align contract fixtures and yield math with exact decimals and valuation fields
+- **deps:** Bump the go-minor-patch group with 3 updates ([#125](https://github.com/greg0x46/julius/pull/125))
+
 ## v0.9.0 — 2026-10-17
 
 ### Features
