@@ -121,8 +121,9 @@ authentication configuration that does not depend on the host:
 - **Net worth** — net worth snapshots and history (assets − liabilities) over
   time.
 - **Goals** — set a target amount (and optional date) for the total market
-  value of your investments and follow the progress, recomputed on every read.
-  More metrics (cash balance, net worth) are planned.
+  value of your investments and follow the progress, recomputed on every read. With a
+  date, the goal is projected to it from the average monthly return of your investments and
+  shows the monthly contribution needed to reach the target. More metrics (cash balance, net worth) are planned.
 - **Investments** — a period view of your portfolio (same period selector as Home and Transactions): portfolio value at the end of
   the period, net yield and return, contributions and withdrawals, with positions grouped by account or asset class,
   searchable, and with positions the history cannot cover flagged instead of counted as zero. Integrated and manual investment
@@ -171,7 +172,12 @@ In **Metas**, create a goal with a name, a target amount in reais and an
 optional date. Today the only metric is **valor investido**: the market value of
 all your investments, gains and losses included (the investments line of net
 worth). Progress is the current value divided by the target and can pass 100%.
-Nothing is stored besides the target. See the
+With a future date, the goal also shows a projection: the average monthly
+appreciation (or depreciation) of your investments over the last 12 months, the
+value and percentage of the target expected on the date without new
+contributions, and the monthly contribution needed to reach it. It is an
+estimate that assumes the past return repeats. Nothing is stored besides the
+target. See the
 [goals reference](.specs/contextos/metas/reference.md).
 
 ## Tech stack

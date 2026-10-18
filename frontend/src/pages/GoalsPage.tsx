@@ -8,6 +8,7 @@ import { EmptyState, Page, PageAction } from "../components/layout";
 import { useFeedback } from "../components/shared/useFeedback";
 import { useGoals } from "../hooks/useGoals";
 import { errorMessage } from "../presentation/errors";
+import { sortGoals } from "../presentation/goals";
 
 export function GoalsPage() {
   const goals = useGoals();
@@ -93,7 +94,7 @@ export function GoalsPage() {
         </div>
       ) : (
         <div className="goals-list">
-          {goals.goals.map((goal) => (
+          {sortGoals(goals.goals).map((goal) => (
             <GoalCard
               key={goal.id}
               goal={goal}
@@ -102,6 +103,12 @@ export function GoalsPage() {
               onRemove={(target) => void remove(target)}
             />
           ))}
+          <button type="button" className="goal-add" onClick={() => openForm(null)}>
+            <span className="goal-add-plus" aria-hidden="true">
+              +
+            </span>
+            Adicionar nova meta
+          </button>
         </div>
       )}
 

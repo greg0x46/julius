@@ -148,6 +148,16 @@
         "notes": "Synthetic note",
         "current_value": "0.000000000000000001",
         "progress": "0.25",
+        "projection": {
+          "status": "behind",
+          "months_remaining": 12,
+          "monthly_return": "0.000000000000000001",
+          "return_from": "2026-07-30",
+          "return_partial": false,
+          "projected_value": "9007199254740993.123456789012345678",
+          "projected_progress": "0.75",
+          "required_monthly_contribution": "0.000000000000000001"
+        },
         "currency_code": "BRL",
         "created_at": "2026-07-30T12:34:56.123456789Z",
         "updated_at": "2026-07-30T12:34:56.123456789Z"
@@ -161,6 +171,7 @@
         "notes": null,
         "current_value": "0",
         "progress": "0",
+        "projection": null,
         "currency_code": "BRL",
         "created_at": "2026-07-30T12:34:56.123456789Z",
         "updated_at": "2026-07-30T12:34:56.123456789Z"
