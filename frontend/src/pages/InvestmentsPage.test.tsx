@@ -40,7 +40,7 @@ function renderPage() {
 }
 
 function summaryOf() {
-  return screen.getByRole("region", { name: /Patrimônio em/ });
+  return screen.getByRole("region", { name: /Carteira em/ });
 }
 
 async function chooseGrouping(label: string) {
@@ -76,7 +76,7 @@ afterEach(() => {
 describe("InvestmentsPage period view", () => {
   it("asks the backend for the chosen period, grouped by account", async () => {
     renderPage();
-    await screen.findByRole("region", { name: /Patrimônio em 30\/09\/2025/ });
+    await screen.findByRole("region", { name: /Carteira em 30\/09\/2025/ });
     expect(portfolioApi.getInvestmentPeriod).toHaveBeenCalledWith(
       { from: "2025-09-01", to: "2025-09-30", groupBy: "account", source: null },
       expect.anything(),
@@ -86,7 +86,7 @@ describe("InvestmentsPage period view", () => {
   it("omits from for the whole period and ends it today", async () => {
     storePeriod({ preset: "all" });
     renderPage();
-    await screen.findByRole("region", { name: /Patrimônio em/ });
+    await screen.findByRole("region", { name: /Carteira em/ });
     expect(portfolioApi.getInvestmentPeriod).toHaveBeenCalledWith(
       { from: null, to: dayjs().format("YYYY-MM-DD"), groupBy: "account", source: null },
       expect.anything(),
@@ -99,7 +99,7 @@ describe("InvestmentsPage period view", () => {
       investmentPeriodFixture({ group_by: params.groupBy, to: "2025-09-30", to_clamped: true }),
     );
     renderPage();
-    const strip = await screen.findByRole("region", { name: "Patrimônio em 30/09/2025" });
+    const strip = await screen.findByRole("region", { name: "Carteira em 30/09/2025" });
     expect(vi.mocked(portfolioApi.getInvestmentPeriod).mock.calls[0][0]).toMatchObject({ to: "2999-12-31" });
     expect(within(strip).getByText(/Período em andamento: considerado até hoje, 30\/09\/2025/)).toBeVisible();
   });
@@ -113,16 +113,16 @@ describe("InvestmentsPage period view", () => {
 
   it("states the backend's totals and how they reconcile", async () => {
     renderPage();
-    const strip = await screen.findByRole("region", { name: "Patrimônio em 30/09/2025" });
+    const strip = await screen.findByRole("region", { name: "Carteira em 30/09/2025" });
     expect(within(strip).getByText("R$ 1.500,00")).toBeVisible();
     expect(within(strip).getByText("+R$ 240,00")).toBeVisible();
     expect(within(strip).getByText("+13,48%")).toBeVisible();
     expect(within(strip).getByText("R$ 520,00")).toBeVisible();
 
-    const toggle = within(strip).getByRole("button", { name: /Inicial \+ aportes − resgates \+ rendimento = final/ });
-    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    const toggle = within(strip).getByText("Entenda o resultado do período");
+    expect(toggle.closest("details")).not.toHaveAttribute("open");
     await userEvent.click(toggle);
-    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(toggle.closest("details")).toHaveAttribute("open");
     const reconcile = strip.querySelector("#investment-reconcile") as HTMLElement;
     expect(within(reconcile).getByText("R$ 1.780,00")).toBeVisible();
     expect(within(reconcile).getByText("R$ 1.500,00")).toBeVisible();
@@ -130,8 +130,8 @@ describe("InvestmentsPage period view", () => {
 
   it("separates the held positions from the ones closed in the period", async () => {
     renderPage();
-    const strip = await screen.findByRole("region", { name: /Patrimônio em/ });
-    await userEvent.click(within(strip).getByRole("button", { name: /Inicial \+ aportes/ }));
+    const strip = await screen.findByRole("region", { name: /Carteira em/ });
+    await userEvent.click(within(strip).getByText("Entenda o resultado do período"));
     const origin = within(strip).getByRole("group", { name: "De onde vem o resultado do período" });
     expect(within(origin).getByText("Resultado do período = mantidas + encerradas")).toBeVisible();
     const held = within(origin).getByText("Posições mantidas em 30/09/2025").closest("div")!;
@@ -149,15 +149,15 @@ describe("InvestmentsPage period view", () => {
       totals: { ...base.totals, closed: zero },
     });
     renderPage();
-    const strip = await screen.findByRole("region", { name: /Patrimônio em/ });
-    await userEvent.click(within(strip).getByRole("button", { name: /Inicial \+ aportes/ }));
+    const strip = await screen.findByRole("region", { name: /Carteira em/ });
+    await userEvent.click(within(strip).getByText("Entenda o resultado do período"));
     expect(within(strip).getByText(/Posições mantidas em/)).toBeVisible();
     expect(within(strip).queryByText(/Encerradas no período/)).toBeNull();
   });
 
   it("flags a partial period instead of counting unavailable positions as zero", async () => {
     renderPage();
-    const strip = await screen.findByRole("region", { name: /Patrimônio em/ });
+    const strip = await screen.findByRole("region", { name: /Carteira em/ });
     expect(within(strip).getByText(/Parcial: 1 de 4 posições sem histórico suficiente/)).toBeVisible();
     expect(within(strip).getByRole("button", { name: /1× Sem histórico/ })).toBeInTheDocument();
   });
@@ -201,7 +201,7 @@ describe("InvestmentsPage period view", () => {
 
   it("changes grouping on the backend and leaves the summary untouched", async () => {
     renderPage();
-    const strip = await screen.findByRole("region", { name: /Patrimônio em/ });
+    const strip = await screen.findByRole("region", { name: /Carteira em/ });
     const before = strip.textContent;
     await chooseGrouping("Classe de ativo");
     await screen.findByText("Renda fixa", { selector: ".investment-group-name" });
@@ -240,7 +240,7 @@ describe("InvestmentsPage period view", () => {
     const before = summaryOf().textContent;
     const callsBefore = vi.mocked(portfolioApi.getInvestmentPeriod).mock.calls.length;
 
-    await userEvent.click(screen.getByRole("switch", { name: "Mostrar encerradas" }));
+    await userEvent.click(screen.getByRole("switch", { name: "Mostrar posições encerradas" }));
     expect(screen.getByText("LCI Banco Antigo")).toBeVisible();
     expect(screen.getByText("Encerrada")).toBeVisible();
     expect(screen.queryByText(/encerrada oculta/)).toBeNull();
@@ -277,15 +277,14 @@ describe("InvestmentsPage period view", () => {
   it("sends the origin to the backend and says it changes what is measured", async () => {
     renderPage();
     await screen.findByText("Tesouro Selic 2029");
-    fireEvent.mouseDown(screen.getByRole("combobox", { name: "Origem" }));
-    fireEvent.click(await screen.findByText("Manuais", { selector: ".ant-select-item-option-content" }));
+    await userEvent.click(screen.getByText("Manuais"));
     await waitFor(() =>
       expect(portfolioApi.getInvestmentPeriod).toHaveBeenLastCalledWith(
         expect.objectContaining({ source: "manual" }),
         expect.anything(),
       ),
     );
-    expect(screen.getByText(/A origem muda o que é medido/)).toBeVisible();
+    expect(screen.getByText(/Exibindo totais e posições apenas de origem manual/)).toBeVisible();
   });
 
   it("keeps account and position management reachable from the period view", async () => {
@@ -312,9 +311,9 @@ describe("InvestmentsPage period view", () => {
 
   it("lists the accounts below the positions, with their movements", async () => {
     renderPage();
-    const section = await screen.findByRole("region", { name: "Contas de investimento" });
+    const section = await screen.findByRole("region", { name: "Contas e movimentações" });
     expect(within(section).getByText("Corretora XP")).toBeVisible();
-    expect(within(section).getAllByText(/Movimentações \(0\)/)).toHaveLength(2);
+    expect(within(section).getAllByText(/Histórico de movimentações \(0\)/)).toHaveLength(2);
     expect(within(section).getByRole("button", { name: "Ações da conta Corretora XP" })).toBeInTheDocument();
   });
 

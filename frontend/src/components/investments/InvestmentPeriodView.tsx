@@ -13,7 +13,8 @@ import type { PeriodRequest } from "../../presentation/investmentPeriod";
 import { investmentGroupingLabel } from "../../presentation/investmentPeriod";
 import { problemMessage } from "../../presentation/reporting";
 import { UnavailableState } from "../AsyncState";
-import { EmptyState, GroupBySelect, ListToolbar, SearchField, Section, ToolbarSelect } from "../layout";
+import { SegmentedControl } from "../filters/SegmentedControl";
+import { EmptyState, GroupBySelect, ListToolbar, SearchField, Section } from "../layout";
 import { ReportValuation } from "../shared/ReportValuation";
 import type { RecordMenuItem } from "../shared/RecordMenu";
 import { InvestmentPeriodSummary } from "./InvestmentPeriodSummary";
@@ -104,7 +105,24 @@ export function InvestmentPeriodView({
       {data && (
         <ReportValuation valuation={data}>
           <InvestmentPeriodSummary data={data} positions={allPositions} updating={updating} />
-          <Section title="Posições">
+          <Section
+            title="Posições"
+            trailing={`${data.totals.positions_total} ${data.totals.positions_total === 1 ? "posição" : "posições"}`}
+            className="investment-positions-section"
+          >
+            <div className="investment-scope-control">
+              <div className="investment-scope-copy">
+                <span className="investment-control-label">Origem no cálculo</span>
+                <span className="investment-quiet">Recalcula patrimônio, rendimento e subtotais</span>
+              </div>
+              <SegmentedControl
+                id="investment-source"
+                label="Origem no cálculo"
+                value={source}
+                options={sourceOptions}
+                onChange={setSource}
+              />
+            </div>
             <ListToolbar
               label="Controles das posições"
               start={
@@ -124,24 +142,18 @@ export function InvestmentPeriodView({
                   onChange={setGroupBy}
                 />
               }
+              chips={
+                <div className="investment-list-options">
+                  <label className="list-toolbar-switch">
+                    <Switch size="small" checked={showClosed} onChange={setShowClosed} />
+                    <span>Mostrar posições encerradas</span>
+                  </label>
+                </div>
+              }
             />
-            <div className="investment-filter-row">
-              <ToolbarSelect
-                id="investment-source"
-                label="Origem"
-                value={source}
-                options={sourceOptions}
-                onChange={setSource}
-              />
-              <label className="list-toolbar-switch">
-                <Switch size="small" checked={showClosed} onChange={setShowClosed} />
-                <span>Mostrar encerradas</span>
-              </label>
-            </div>
             {source !== "all" && (
               <p className="investment-note" role="status">
-                A origem muda o que é medido: o patrimônio, o rendimento e os subtotais consideram só posições{" "}
-                {source === "manual" ? "manuais" : "sincronizadas"}.
+                Exibindo totais e posições apenas de origem {source === "manual" ? "manual" : "sincronizada"}.
               </p>
             )}
             <div aria-busy={updating} className={updating ? "investment-results is-updating" : "investment-results"}>

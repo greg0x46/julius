@@ -169,6 +169,7 @@ function subtitle(position: InvestmentPeriodPosition, data: InvestmentPeriod): s
     position.source === "synced" ? investmentTypeLabel(position.asset_type) : position.asset_type,
     data.group_by === "account" ? null : position.account_name,
     data.source === null ? investmentPositionSourceLabel[position.source] : null,
+    position.quantity === null ? null : `Qtd. ${formatDecimal(position.quantity)}`,
   ]
     .filter(Boolean)
     .join(" · ");
@@ -318,10 +319,15 @@ export function InvestmentPositionsPeriod({
                               <PositionBadges position={position} />
                             </span>
                             {position.unavailable_reason === null && (
-                              <span className="list-row-meta">
-                                Investido <InvestedValue position={position} /> · Qtd{" "}
-                                {position.quantity === null ? "—" : formatDecimal(position.quantity)} · Part.{" "}
-                                {position.share === null ? "—" : formatRatioPercent(position.share)}
+                              <span className="investment-mobile-metrics">
+                                <span>
+                                  <span className="investment-mobile-metric-label">Investido</span>
+                                  <InvestedValue position={position} />
+                                </span>
+                                <span>
+                                  <span className="investment-mobile-metric-label">Participação</span>
+                                  {position.share === null ? "—" : formatRatioPercent(position.share)}
+                                </span>
                               </span>
                             )}
                           </span>
@@ -368,7 +374,6 @@ export function InvestmentPositionsPeriod({
               <th scope="col" className="investment-col-end">Valor atual</th>
               <th scope="col" className="investment-col-end">Valor investido</th>
               <th scope="col" className="investment-col-end">Rendimento</th>
-              <th scope="col" className="investment-col-end">Quantidade</th>
               <th scope="col" className="investment-col-end">Participação</th>
               <th scope="col" className="investment-col-menu">
                 <span className="visually-hidden">Ações</span>
@@ -392,7 +397,6 @@ export function InvestmentPositionsPeriod({
                     <td className="investment-col-end">
                       <InvestmentYieldValue gain={group.totals.yield} rate={group.totals.yield_rate} />
                     </td>
-                    <td />
                     <td className="investment-col-end">{share(group)}</td>
                     <td className="investment-col-menu">{menu(groupMenu(group), `Ações de ${group.label}`)}</td>
                   </tr>
@@ -421,9 +425,6 @@ export function InvestmentPositionsPeriod({
                       </td>
                       <td className="investment-col-end"><InvestedValue position={position} /></td>
                       <td className="investment-col-end"><YieldFigure position={position} /></td>
-                      <td className="investment-col-end investment-number">
-                        {position.quantity === null ? dash : formatDecimal(position.quantity)}
-                      </td>
                       <td className="investment-col-end">
                         {position.share === null ? dash : formatRatioPercent(position.share)}
                       </td>
@@ -432,7 +433,7 @@ export function InvestmentPositionsPeriod({
                   ))}
                 {open && rows.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="investment-quiet investment-group-empty">
+                    <td colSpan={6} className="investment-quiet investment-group-empty">
                       Nenhuma posição visível neste grupo.
                     </td>
                   </tr>

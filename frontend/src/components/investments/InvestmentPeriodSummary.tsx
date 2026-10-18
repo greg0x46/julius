@@ -38,19 +38,21 @@ export function InvestmentPeriodSummary({
   const { totals } = data;
   const reasons = partialReasons(positions);
   const items = [
-    { label: "Resultado do período", value: <InvestmentYieldValue gain={totals.yield} rate={null} /> },
     {
-      label: "Rentabilidade",
+      label: "Rendimento no período",
       value:
         totals.yield_rate === null ? (
-          <InvestmentHint
-            label="Rentabilidade indisponível: não há capital positivo investido no período."
-            content="Não há capital positivo investido no período para calcular a rentabilidade."
-          >
-            —
-          </InvestmentHint>
+          <span className="investment-summary-result">
+            <InvestmentYieldValue gain={totals.yield} rate={null} />
+            <InvestmentHint
+              label="Rentabilidade indisponível: não há capital positivo investido no período."
+              content="Não há capital positivo investido no período para calcular a rentabilidade."
+            >
+              <span className="investment-summary-unavailable">—</span>
+            </InvestmentHint>
+          </span>
         ) : (
-          <InvestmentYieldValue gain={null} rate={totals.yield_rate} />
+          <InvestmentYieldValue gain={totals.yield} rate={totals.yield_rate} />
         ),
     },
     { label: "Aportes", value: <Money value={totals.contributions} tone="neutral" /> },
@@ -73,11 +75,15 @@ export function InvestmentPeriodSummary({
   return (
     <SummaryStrip
       className="investment-period-summary"
-      label={`Patrimônio em ${formatDateOnly(data.to)}`}
+      label={`Carteira em ${formatDateOnly(data.to)}`}
       value={<Money value={totals.end_value} tone="balance" size="hero" />}
       busy={updating}
       items={items}
-      note={notes.join(" ")}
+      note={
+        <span className="investment-summary-notes">
+          {notes.map((note) => <span key={note}>{note}</span>)}
+        </span>
+      }
     >
       {totals.partial && (
         <InvestmentHint
@@ -98,57 +104,61 @@ export function InvestmentPeriodSummary({
           </StatusTag>
         </InvestmentHint>
       )}
-      <button
-        type="button"
-        className="investment-reconcile-toggle"
-        aria-expanded={explained}
-        aria-controls="investment-reconcile"
-        onClick={() => setExplained((open) => !open)}
+      <details
+        className="investment-reconcile-disclosure"
+        open={explained}
+        onToggle={(event) => setExplained(event.currentTarget.open)}
       >
-        Inicial + aportes − resgates + rendimento = final
-      </button>
-      {explained && (
-        <>
-        <dl id="investment-reconcile" className="investment-reconcile">
-          <div>
-            <dt>Valor inicial ({data.from === null ? "início de cada posição" : `antes de ${formatDateOnly(data.from)}`})</dt>
-            <dd><Money value={totals.start_value} tone="neutral" /></dd>
-          </div>
-          <div>
-            <dt>+ Aportes</dt>
-            <dd><Money value={totals.contributions} tone="neutral" /></dd>
-          </div>
-          <div>
-            <dt>− Resgates</dt>
-            <dd><Money value={totals.withdrawals} tone="neutral" /></dd>
-          </div>
-          <div>
-            <dt>+ Rendimento</dt>
-            <dd><Money value={totals.yield} tone="result" /></dd>
-          </div>
-          <div className="investment-reconcile-total">
-            <dt>= Valor final ({formatDateOnly(data.to)})</dt>
-            <dd><Money value={totals.end_value} tone="balance" /></dd>
-          </div>
-        </dl>
-        <dl className="investment-reconcile" role="group" aria-label="De onde vem o resultado do período">
-          <div className="investment-reconcile-total">
-            <dt>Resultado do período = mantidas + encerradas</dt>
-            <dd><InvestmentYieldValue gain={totals.yield} rate={totals.yield_rate} /></dd>
-          </div>
-          <div>
-            <dt>Posições mantidas em {formatDateOnly(data.to)}</dt>
-            <dd><InvestmentYieldValue gain={totals.held.yield} rate={totals.held.yield_rate} /></dd>
-          </div>
-          {!partIsEmpty(totals.closed) && (
-            <div>
-              <dt>Encerradas no período (resultado realizado)</dt>
-              <dd><InvestmentYieldValue gain={totals.closed.yield} rate={totals.closed.yield_rate} /></dd>
-            </div>
-          )}
-        </dl>
-        </>
-      )}
+        <summary>Entenda o resultado do período</summary>
+        {explained && (
+          <>
+            <p className="investment-reconcile-equation">
+              Inicial + aportes − resgates + rendimento = carteira no fim
+            </p>
+            <dl id="investment-reconcile" className="investment-reconcile">
+              <div>
+                <dt>
+                  Valor inicial (
+                  {data.from === null ? "início de cada posição" : `antes de ${formatDateOnly(data.from)}`})
+                </dt>
+                <dd><Money value={totals.start_value} tone="neutral" /></dd>
+              </div>
+              <div>
+                <dt>+ Aportes</dt>
+                <dd><Money value={totals.contributions} tone="neutral" /></dd>
+              </div>
+              <div>
+                <dt>− Resgates</dt>
+                <dd><Money value={totals.withdrawals} tone="neutral" /></dd>
+              </div>
+              <div>
+                <dt>+ Rendimento</dt>
+                <dd><Money value={totals.yield} tone="result" /></dd>
+              </div>
+              <div className="investment-reconcile-total">
+                <dt>= Carteira no fim ({formatDateOnly(data.to)})</dt>
+                <dd><Money value={totals.end_value} tone="balance" /></dd>
+              </div>
+            </dl>
+            <dl className="investment-reconcile" role="group" aria-label="De onde vem o resultado do período">
+              <div className="investment-reconcile-total">
+                <dt>Resultado do período = mantidas + encerradas</dt>
+                <dd><InvestmentYieldValue gain={totals.yield} rate={totals.yield_rate} /></dd>
+              </div>
+              <div>
+                <dt>Posições mantidas em {formatDateOnly(data.to)}</dt>
+                <dd><InvestmentYieldValue gain={totals.held.yield} rate={totals.held.yield_rate} /></dd>
+              </div>
+              {!partIsEmpty(totals.closed) && (
+                <div>
+                  <dt>Encerradas no período (resultado realizado)</dt>
+                  <dd><InvestmentYieldValue gain={totals.closed.yield} rate={totals.closed.yield_rate} /></dd>
+                </div>
+              )}
+            </dl>
+          </>
+        )}
+      </details>
     </SummaryStrip>
   );
 }

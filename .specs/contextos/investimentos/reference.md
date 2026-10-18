@@ -534,14 +534,16 @@ Components (`components/investments/`) and hook:
   `group_by` and `source`; the previous answer stays while a new one loads
   (`aria-busy`, dimmed rows). Its query key lives under the `investmentWorkspace`
   root, so every ledger or asset write refreshes it.
-- `InvestmentPeriodView` owns the toolbar state (search, **Agrupar por**
-  Conta/Classe de ativo/Nenhum, **Origem**, **Mostrar encerradas**) and the
-  loading/error states.
-- `InvestmentPeriodSummary` shows **Patrimônio em `to`** (`totals.end_value`),
-  Resultado do período (`totals.yield`), Rentabilidade, Aportes, Resgates and
-  Custos (only when non-zero), and a toggle "Inicial + aportes − resgates +
-  rendimento = final" that expands the five backend components and, under them,
-  where the result comes from: "Posições mantidas" (`totals.held`) plus
+- `InvestmentPeriodView` owns the controls and loading/error states. **Origem
+  no cálculo** is a segmented scope control above the list; search, **Agrupar
+  por** Conta/Classe de ativo/Nenhum and **Mostrar posições encerradas** shape
+  the rows below it. The section header states how many positions the server
+  measured.
+- `InvestmentPeriodSummary` shows **Carteira em `to`** (`totals.end_value`),
+  Rendimento no período (`totals.yield` together with `yield_rate`), Aportes,
+  Resgates and Custos (only when non-zero). The disclosure **Entenda o resultado
+  do período** expands the five backend components and, under them, where the
+  result comes from: "Posições mantidas" (`totals.held`) plus
   "Encerradas no período" (`totals.closed`, the realized result; hidden when
   all zeros). When `partial`, a tag reads
   "Parcial: N de M posições sem histórico suficiente" with the reasons by count;
@@ -550,13 +552,16 @@ Components (`components/investments/`) and hook:
 - `InvestmentPositionsPeriod` renders the groups: a table from `lg` up (one
   `<tbody>` per group, the group's subtotal as its first row), stacked rows and
   collapsible headers below it. Columns: Ativo, Valor atual (`end_value`), Valor
-  investido (`invested`), Rendimento (R$ and `yield_rate`), Quantidade,
-  Participação (the position's `share`, "—" when the backend has none; a group
-  header shows the group's `share`). Group toggles are buttons with `aria-expanded`.
-- `InvestmentAccountsSection` (below the positions) keeps account and
-  movement management reachable whatever the grouping: each account's menu
+  investido (`invested`), Rendimento (R$ and `yield_rate`) and Participação (the
+  position's `share`, "—" when the backend has none; a group header shows the
+  group's `share`). Quantity stays in the asset's secondary line rather than a
+  separate numeric column. On compact screens, Investido and Participação are
+  labelled facts under the asset instead of one dense sentence. Group toggles
+  are buttons with `aria-expanded`.
+- `InvestmentAccountsSection`, titled **Contas e movimentações** below the
+  positions, keeps management reachable whatever the grouping: each account's menu
   (Registrar movimentação, Nova posição, Editar/Excluir conta or Vincular caixa),
-  its current cash and its movimentações disclosure. Account groups and
+  its current cash as **Disponível hoje** and its movement-history disclosure. Account groups and
   position rows carry the same menus (`useInvestmentMenus`); a synced position
   offers only **Ver detalhes**.
 

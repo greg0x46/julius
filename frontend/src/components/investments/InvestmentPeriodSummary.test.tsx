@@ -8,7 +8,7 @@ import { InvestmentPeriodSummary } from "./InvestmentPeriodSummary";
 function renderSummary(overrides: Parameters<typeof investmentPeriodFixture>[0] = {}) {
   const data = investmentPeriodFixture({ group_by: "none", ...overrides });
   render(<InvestmentPeriodSummary data={data} positions={data.groups.flatMap((group) => group.positions)} updating={false} />);
-  return screen.getByRole("region", { name: /Patrimônio em/ });
+  return screen.getByRole("region", { name: /Carteira em/ });
 }
 
 describe("InvestmentPeriodSummary", () => {
@@ -47,7 +47,7 @@ describe("InvestmentPeriodSummary", () => {
 
   it("explains the start for a whole-period request", async () => {
     const strip = renderSummary({ from: null });
-    await userEvent.click(within(strip).getByRole("button", { name: /Inicial \+ aportes/ }));
+    await userEvent.click(within(strip).getByText("Entenda o resultado do período"));
     expect(within(strip).getByText(/início de cada posição/)).toBeVisible();
   });
 });

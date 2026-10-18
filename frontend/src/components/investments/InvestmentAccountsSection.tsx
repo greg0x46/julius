@@ -35,7 +35,7 @@ export function InvestmentAccountsSection({
 }) {
   if (accounts.length === 0) {
     return (
-      <Section title="Contas de investimento">
+      <Section title="Contas e movimentações">
         <EmptyState
           title="Nenhuma conta de investimento ainda"
           hint="Crie uma conta manual ou conecte uma instituição."
@@ -45,7 +45,11 @@ export function InvestmentAccountsSection({
     );
   }
   return (
-    <Section title="Contas de investimento" className="investment-accounts">
+    <Section
+      title="Contas e movimentações"
+      trailing={`${accounts.length} ${accounts.length === 1 ? "conta" : "contas"}`}
+      className="investment-accounts"
+    >
       <ul className="investment-account-list">
         {accounts.map((account) => {
           const own = operations.filter((operation) => operation.account_id === account.id);
@@ -55,10 +59,13 @@ export function InvestmentAccountsSection({
                 <div className="investment-cell">
                   <span className="investment-cell-title">{account.name}</span>
                   <span className="investment-quiet">
-                    Conta {investmentAccountKindLabel[account.kind].toLowerCase()} · Saldo para investir hoje{" "}
-                    <Money currencyCode="BRL" value={account.cash_balance} tone="neutral" />
+                    Conta {investmentAccountKindLabel[account.kind].toLowerCase()}
                     {!account.active && " · Inativa"}
                   </span>
+                </div>
+                <div className="investment-account-cash">
+                  <span>Disponível hoje</span>
+                  <Money currencyCode="BRL" value={account.cash_balance} tone="balance" />
                 </div>
                 <RecordMenu label={`Ações da conta ${account.name}`} items={menuOf(account)} />
               </div>
@@ -68,7 +75,7 @@ export function InvestmentAccountsSection({
                 items={[
                   {
                     key: "operations",
-                    label: `Movimentações (${own.length})`,
+                    label: `Histórico de movimentações (${own.length})`,
                     children: (
                       <InvestmentOperationsTable
                         operations={own}
