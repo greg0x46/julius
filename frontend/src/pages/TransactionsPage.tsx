@@ -168,6 +168,13 @@ export function TransactionsPage() {
     if (data) setFacets(data.available_filters);
   }, [data]);
 
+  // A stale `?page=N` past the last page would otherwise show an empty list.
+  const totalPages = data?.page.total_pages;
+  const hasItems = (data?.page.total_items ?? 0) > 0;
+  useEffect(() => {
+    if (hasItems && totalPages !== undefined && page > totalPages) setPage(totalPages);
+  }, [hasItems, totalPages, page]);
+
   useEffect(() => {
     const params = filtersToSearchParams(filters);
     if (filters.date_from === null && filters.date_to === null) params.set("period", "all");

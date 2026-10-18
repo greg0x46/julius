@@ -470,6 +470,7 @@ export function PayableTimeline({
                     aria-label="Número de parcelas"
                     min={1}
                     max={520}
+                    precision={0}
                     value={months}
                     onChange={(value) => setMonths(value)}
                   />
