@@ -14,6 +14,8 @@ import {
   investmentPeriodFixture,
   manualAccount,
   manualPosition,
+  periodTesouro,
+  periodUnavailable,
   summary,
   syncedPosition,
 } from "../test/investmentWorkspaceFixtures";
@@ -44,8 +46,23 @@ function summaryOf() {
 }
 
 async function chooseGrouping(label: string) {
-  fireEvent.mouseDown(screen.getByRole("combobox", { name: "Agrupar por" }));
-  fireEvent.click(await screen.findByText(label, { selector: ".ant-select-item-option-content" }));
+  await userEvent.click(screen.getByText(label, { selector: ".ant-segmented-item-label" }));
+}
+
+// Groups start collapsed; most checks need to see their rows.
+async function expandGroups() {
+  for (const toggle of document.querySelectorAll<HTMLElement>(".investment-group-toggle[aria-expanded=false]")) {
+    await userEvent.click(toggle);
+  }
+}
+
+/** Renders the page by custody with every group expanded (the fixture's richest shape). */
+async function renderCustodyRows() {
+  renderPage();
+  await screen.findByRole("region", { name: /Carteira em/ });
+  await chooseGrouping("Custódia");
+  await screen.findByText("Corretora XP", { selector: ".investment-group-name" });
+  await expandGroups();
 }
 
 beforeEach(() => {
@@ -74,11 +91,11 @@ afterEach(() => {
 });
 
 describe("InvestmentsPage period view", () => {
-  it("asks the backend for the chosen period, grouped by account", async () => {
+  it("asks the backend for the chosen period, grouped by class", async () => {
     renderPage();
     await screen.findByRole("region", { name: /Carteira em 30\/09\/2025/ });
     expect(portfolioApi.getInvestmentPeriod).toHaveBeenCalledWith(
-      { from: "2025-09-01", to: "2025-09-30", groupBy: "account", source: null },
+      { from: "2025-09-01", to: "2025-09-30", groupBy: "class", source: null },
       expect.anything(),
     );
   });
@@ -88,7 +105,7 @@ describe("InvestmentsPage period view", () => {
     renderPage();
     await screen.findByRole("region", { name: /Carteira em/ });
     expect(portfolioApi.getInvestmentPeriod).toHaveBeenCalledWith(
-      { from: null, to: dayjs().format("YYYY-MM-DD"), groupBy: "account", source: null },
+      { from: null, to: dayjs().format("YYYY-MM-DD"), groupBy: "class", source: null },
       expect.anything(),
     );
   });
@@ -163,7 +180,7 @@ describe("InvestmentsPage period view", () => {
   });
 
   it("shows an unavailable position as — with its reason, never as R$ 0,00", async () => {
-    renderPage();
+    await renderCustodyRows();
     const row = (await screen.findByText("Fundo Sem Histórico")).closest("tr")!;
     expect(within(row).getAllByText("—").length).toBeGreaterThanOrEqual(3);
     expect(within(row).queryByText(/R\$/)).toBeNull();
@@ -171,7 +188,7 @@ describe("InvestmentsPage period view", () => {
   });
 
   it("shows an unknown invested amount as — with the reason, not zero", async () => {
-    renderPage();
+    await renderCustodyRows();
     const row = (await screen.findByText("CDB Banco Teste")).closest("tr")!;
     expect(within(row).getByRole("button", { name: /Valor investido indisponível: O histórico não inclui a primeira aplicação/ })).toBeInTheDocument();
     expect(within(row).getByText("Início parcial")).toBeVisible();
@@ -179,7 +196,7 @@ describe("InvestmentsPage period view", () => {
   });
 
   it("keeps the institution's own profit as a conference figure in the position detail", async () => {
-    renderPage();
+    await renderCustodyRows();
     const row = (await screen.findByText("CDB Banco Teste")).closest("tr")!;
     await userEvent.click(within(row).getByRole("button", { name: "Detalhes do período de CDB Banco Teste" }));
     expect(await screen.findByText("Informado pela instituição")).toBeInTheDocument();
@@ -187,8 +204,8 @@ describe("InvestmentsPage period view", () => {
     expect(screen.getByText("IR/IOF provisionado (não deduzido)")).toBeInTheDocument();
   });
 
-  it("shows server subtotals and shares for each account group", async () => {
-    renderPage();
+  it("shows server subtotals and shares for each custody group", async () => {
+    await renderCustodyRows();
     const group = (await screen.findByText("Corretora XP", { selector: ".investment-group-name" })).closest("tr")!;
     expect(within(group).getByText("R$ 1.200,00")).toBeVisible();
     expect(within(group).getByText("+R$ 220,00")).toBeVisible();
@@ -203,29 +220,26 @@ describe("InvestmentsPage period view", () => {
     renderPage();
     const strip = await screen.findByRole("region", { name: /Carteira em/ });
     const before = strip.textContent;
-    await chooseGrouping("Classe de ativo");
     await screen.findByText("Renda fixa", { selector: ".investment-group-name" });
-    expect(portfolioApi.getInvestmentPeriod).toHaveBeenLastCalledWith(
-      expect.objectContaining({ groupBy: "class" }),
-      expect.anything(),
-    );
+    await chooseGrouping("Custódia");
+    await screen.findByText("Corretora XP", { selector: ".investment-group-name" });
     expect(summaryOf().textContent).toBe(before);
 
-    await chooseGrouping("Nenhum");
+    await chooseGrouping("Sem agrupamento");
     await waitFor(() =>
       expect(portfolioApi.getInvestmentPeriod).toHaveBeenLastCalledWith(
         expect.objectContaining({ groupBy: "none" }),
         expect.anything(),
       ),
     );
-    // Without groups each position still carries the server's share of the portfolio.
+    // Without groups every row is listed and carries the server's share of the portfolio.
     const row = (await screen.findByText("Tesouro Selic 2029")).closest("tr")!;
     expect(within(row).getByText("80,00%")).toBeVisible();
     expect(summaryOf().textContent).toBe(before);
   });
 
   it("shows each position's own share, and — when there is none", async () => {
-    renderPage();
+    await renderCustodyRows();
     const row = (await screen.findByText("CDB Banco Teste")).closest("tr")!;
     expect(within(row).getByText("20,00%")).toBeVisible();
     const unavailable = screen.getByText("Fundo Sem Histórico").closest("tr")!;
@@ -233,14 +247,13 @@ describe("InvestmentsPage period view", () => {
   });
 
   it("hides closed positions by default and says the totals still include them", async () => {
-    renderPage();
-    await screen.findByText("Tesouro Selic 2029");
+    await renderCustodyRows();
     expect(screen.queryByText("LCI Banco Antigo")).toBeNull();
     expect(screen.getByText("Totais e subtotais incluem 1 encerrada oculta.")).toBeVisible();
     const before = summaryOf().textContent;
     const callsBefore = vi.mocked(portfolioApi.getInvestmentPeriod).mock.calls.length;
 
-    await userEvent.click(screen.getByRole("switch", { name: "Mostrar posições encerradas" }));
+    await userEvent.click(screen.getByRole("switch", { name: "Mostrar encerradas" }));
     expect(screen.getByText("LCI Banco Antigo")).toBeVisible();
     expect(screen.getByText("Encerrada")).toBeVisible();
     expect(screen.queryByText(/encerrada oculta/)).toBeNull();
@@ -251,10 +264,29 @@ describe("InvestmentsPage period view", () => {
     expect(within(group).getByText("R$ 1.200,00")).toBeVisible();
   });
 
-  it("searches rows by name or ticker without touching totals or subtotals", async () => {
+  it("hides a closed position that has no figures too, and says it is outside the totals", async () => {
+    const base = investmentPeriodFixture({ group_by: "none" });
+    const [group] = base.groups;
+    const gone = { ...periodUnavailable, id: "00000000-0000-4000-8000-0000000000aa", name: "Fundo Encerrado", closed_as_of_to: true };
+    vi.mocked(portfolioApi.getInvestmentPeriod).mockResolvedValue({
+      ...base,
+      groups: [{ ...group, positions: [periodTesouro, gone] }],
+    });
     renderPage();
     await screen.findByText("Tesouro Selic 2029");
+    expect(screen.queryByText("Fundo Encerrado")).toBeNull();
+    expect(screen.getByText(/1 encerrada oculta está sem valor no período e fora dos totais/)).toBeVisible();
+    expect(screen.queryByText(/Totais e subtotais incluem/)).toBeNull();
+
+    await userEvent.click(screen.getByRole("switch", { name: "Mostrar encerradas" }));
+    expect(screen.getByText("Fundo Encerrado")).toBeVisible();
+  });
+
+  it("searches rows by name or ticker without touching totals or subtotals", async () => {
+    await renderCustodyRows();
+    await screen.findByText("Tesouro Selic 2029");
     const before = summaryOf().textContent;
+    const callsBefore = vi.mocked(portfolioApi.getInvestmentPeriod).mock.calls.length;
     await userEvent.type(screen.getByRole("textbox", { name: "Buscar ativo" }), "cdb");
     expect(screen.queryByText("Tesouro Selic 2029")).toBeNull();
     expect(screen.getByText("CDB Banco Teste")).toBeVisible();
@@ -264,31 +296,39 @@ describe("InvestmentsPage period view", () => {
     expect(within(group).getByText("1 de 2 posições")).toBeVisible();
     expect(within(group).getByText("R$ 300,00")).toBeVisible();
     expect(summaryOf().textContent).toBe(before);
-    expect(portfolioApi.getInvestmentPeriod).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(portfolioApi.getInvestmentPeriod).mock.calls.length).toBe(callsBefore);
   });
 
   it("reports a search with no match", async () => {
-    renderPage();
+    await renderCustodyRows();
     await screen.findByText("Tesouro Selic 2029");
     await userEvent.type(screen.getByRole("textbox", { name: "Buscar ativo" }), "zzz");
     expect(await screen.findByText("Nenhuma posição encontrada")).toBeVisible();
   });
 
-  it("sends the origin to the backend and says it changes what is measured", async () => {
-    renderPage();
-    await screen.findByText("Tesouro Selic 2029");
-    await userEvent.click(screen.getByText("Manuais"));
-    await waitFor(() =>
-      expect(portfolioApi.getInvestmentPeriod).toHaveBeenLastCalledWith(
-        expect.objectContaining({ source: "manual" }),
-        expect.anything(),
-      ),
+  it("has no manual/synced split: no origin control, no tab, no origin tag", async () => {
+    await renderCustodyRows();
+    expect(screen.queryByText("Origem no cálculo")).toBeNull();
+    expect(screen.queryByText("Sincronizados")).toBeNull();
+    expect(screen.queryByText("Sincronizadas")).toBeNull();
+    expect(screen.queryByText(/· Manual ·/)).toBeNull();
+    expect(portfolioApi.getInvestmentPeriod).not.toHaveBeenCalledWith(
+      expect.objectContaining({ source: expect.stringMatching(/manual|synced/) }),
+      expect.anything(),
     );
-    expect(screen.getByText(/Exibindo totais e posições apenas de origem manual/)).toBeVisible();
+  });
+
+  it("shows each group's server share beside its subtotal", async () => {
+    renderPage();
+    await screen.findByRole("region", { name: /Carteira em/ });
+    await chooseGrouping("Custódia");
+    const group = (await screen.findByText("Corretora XP", { selector: ".investment-group-name" })).closest("tr")!;
+    expect(within(group).getByText("80,00%")).toBeVisible();
+    expect(within(group).getByText("R$ 1.200,00")).toBeVisible();
   });
 
   it("keeps account and position management reachable from the period view", async () => {
-    renderPage();
+    await renderCustodyRows();
     await screen.findByText("Tesouro Selic 2029");
     await userEvent.click(screen.getByRole("button", { name: "Ações de Corretora XP" }));
     expect(await screen.findByRole("menuitem", { name: "Registrar movimentação" })).toBeInTheDocument();
@@ -302,7 +342,7 @@ describe("InvestmentsPage period view", () => {
   });
 
   it("keeps a synced position read-only but links to its detail", async () => {
-    renderPage();
+    await renderCustodyRows();
     const row = (await screen.findByText("CDB Banco Teste")).closest("tr")!;
     await userEvent.click(within(row).getByRole("button", { name: "Ações de CDB Banco Teste" }));
     expect(await screen.findByRole("menuitem", { name: "Ver detalhes" })).toBeInTheDocument();
@@ -326,27 +366,37 @@ describe("InvestmentsPage period view", () => {
     expect(await screen.findByText("Nenhuma conta de investimento ainda")).toBeVisible();
   });
 
-  it("collapses and expands a group from the keyboard-reachable toggle", async () => {
+  it("starts groups collapsed, subtotal visible, and expands them to show the rows", async () => {
     renderPage();
-    await screen.findByText("Tesouro Selic 2029");
-    const toggle = screen.getAllByRole("button", { expanded: true })[0];
-    expect(toggle).toHaveTextContent("Corretora XP");
-    await userEvent.click(toggle);
-    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await screen.findByRole("region", { name: /Carteira em/ });
+    await chooseGrouping("Custódia");
+    const toggle = await screen.findByRole("button", { name: /Corretora XP/, expanded: false });
     expect(screen.queryByText("Tesouro Selic 2029")).toBeNull();
-    // The group's subtotal stays: collapsing hides rows only.
+    // Collapsed hides rows only: the group's subtotal and share stay.
     expect(within(toggle.closest("tr")!).getByText("R$ 1.200,00")).toBeVisible();
     await userEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByText("Tesouro Selic 2029")).toBeVisible();
+    await userEvent.click(toggle);
+    expect(screen.queryByText("Tesouro Selic 2029")).toBeNull();
+  });
+
+  it("keeps the groups open while searching, so no match is hidden behind a collapsed header", async () => {
+    renderPage();
+    await screen.findByRole("region", { name: /Carteira em/ });
+    await chooseGrouping("Custódia");
+    await screen.findByText("Corretora XP", { selector: ".investment-group-name" });
+    await userEvent.type(screen.getByRole("textbox", { name: "Buscar ativo" }), "selic");
     expect(screen.getByText("Tesouro Selic 2029")).toBeVisible();
   });
 
-  it("keeps the synced view on the legacy listing and off the period", async () => {
-    vi.mocked(investmentsApi.listInvestments).mockResolvedValue([]);
+  it("lists every position in one table when ungrouped", async () => {
     renderPage();
-    await screen.findByText("Tesouro Selic 2029");
-    await userEvent.click(screen.getByText("Sincronizados"));
-    expect(screen.queryByRole("group", { name: "Navegar entre períodos" })).toBeNull();
-    expect(screen.getByText(/Esta visão não segue o período escolhido/)).toBeVisible();
+    await screen.findByRole("region", { name: /Carteira em/ });
+    await chooseGrouping("Sem agrupamento");
+    expect(await screen.findByText("Tesouro Selic 2029")).toBeVisible();
+    expect(screen.getByText("CDB Banco Teste")).toBeVisible();
+    expect(screen.queryByRole("button", { expanded: false, name: /posições/ })).toBeNull();
   });
 });
 
@@ -366,17 +416,22 @@ describe("InvestmentsPage period view on a phone", () => {
 
   it("stacks the positions under collapsible group headers", async () => {
     renderPage();
-    const list = await screen.findByRole("list", { name: "Posições de Corretora XP" });
+    await screen.findByRole("region", { name: /Carteira em/ });
+    await chooseGrouping("Custódia");
+    const toggle = await screen.findByRole("button", { name: /Corretora XP/, expanded: false });
     expect(screen.queryByRole("table")).toBeNull();
-    expect(within(list).getByText("Tesouro Selic 2029")).toBeVisible();
-    const toggle = screen.getAllByRole("button", { expanded: true })[0];
-    await userEvent.click(toggle);
     expect(screen.queryByRole("list", { name: "Posições de Corretora XP" })).toBeNull();
-    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await userEvent.click(toggle);
+    const list = screen.getByRole("list", { name: "Posições de Corretora XP" });
+    expect(within(list).getByText("Tesouro Selic 2029")).toBeVisible();
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
   });
 
   it("never shows an unavailable position as zero", async () => {
     renderPage();
+    await screen.findByRole("region", { name: /Carteira em/ });
+    await chooseGrouping("Custódia");
+    await userEvent.click(await screen.findByRole("button", { name: /Banco Teste/, expanded: false }));
     const list = await screen.findByRole("list", { name: "Posições de Banco Teste" });
     const row = within(list).getByText("Fundo Sem Histórico").closest(".list-row") as HTMLElement;
     expect(within(row).getAllByText("—").length).toBeGreaterThanOrEqual(2);

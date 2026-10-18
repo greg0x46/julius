@@ -26,7 +26,8 @@ read-only. The ledger of an integrated account replays only operations that
 carry a position and never computes cash, which remains whatever the
 institution reports. The sync writes only provider data and series quotes, so
 it never changes the quantity, cost, source or valuations of a manual
-holding. In the UI, manual rows of an integrated account carry a "Manual" tag.
+holding. The UI does not tag or split positions by origin; a synced position
+is read-only and offers only **Ver detalhes**.
 
 Manual operations use reais and decimal arithmetic. Purchases fold costs into
 the weighted average cost; sales write off proportional cost. Corrections
@@ -448,6 +449,9 @@ The legacy `/api/investments` and `/yield` endpoints are untouched.
   counted as zero. With an explicit `from`, a synced position is computable
   even when its purchase predates the provider's history, as long as quotes
   price both ends (`history_complete: false`, `invested` null).
+  Its `closed_as_of_to` is still set when the quantity is known to be zero, so
+  the closed filter can hide it; it stays out of every sum either way. An
+  unknown quantity says nothing and leaves it listed.
 - **Costs and taxes.** Counted once: a manual position's purchase fees and
   taxes are inside its contributions and a sale's are netted from its
   withdrawals, so `costs` (the fees and taxes of the period's manual operations)
@@ -514,31 +518,29 @@ fixture (`investment_period`) pins the shape.
 
 ### Page
 
-`/investimentos` (`pages/InvestmentsPage.tsx`) has two views (`PageTabs`):
-
-- **Carteira** is the period view. The shared `usePeriod()` window is mounted
-  through `PeriodNavigator` in the page `context`, like Home and Transações.
-  `presentation/investmentPeriod.ts#periodRequest` turns it into the request:
-  "Todo o período" omits `from` (and ends today); a window that starts after today sends
-  nothing and says "Este período ainda não começou". An end in the future is
-  sent as is: the server cuts it at today and answers `to_clamped`, which the
-  summary states ("Período em andamento"). The window moves the summary and the
-  positions together.
-- **Sincronizados** is the legacy `/api/investments` listing and its detail
-  pages (`InvestmentList`, `InvestmentsSummary`); it does not follow the period
-  and says so.
+`/investimentos` (`pages/InvestmentsPage.tsx`) is a single view; there is no
+manual/synced split in the UI (the legacy `/api/investments` listing is no
+longer shown here, only its detail pages, reached from a position's name or
+**Ver detalhes**). The shared `usePeriod()` window is mounted through
+`PeriodNavigator` in the page `context`, like Home and Transações.
+`presentation/investmentPeriod.ts#periodRequest` turns it into the request:
+"Todo o período" omits `from` (and ends today); a window that starts after today sends
+nothing and says "Este período ainda não começou". An end in the future is
+sent as is: the server cuts it at today and answers `to_clamped`, which the
+summary states ("Período em andamento"). The window moves the summary and the
+positions together. The page tabs (`PageTabs`) choose how
+the positions list is grouped: **Classe de ativo** (default), **Custódia** or
+**Sem agrupamento**.
 
 Components (`components/investments/`) and hook:
 
 - `useInvestmentPortfolioPeriod` (`hooks/`) reads the endpoint with
-  `group_by` and `source`; the previous answer stays while a new one loads
+  `group_by` (the UI never sends `source`); the previous answer stays while a new one loads
   (`aria-busy`, dimmed rows). Its query key lives under the `investmentWorkspace`
   root, so every ledger or asset write refreshes it.
-- `InvestmentPeriodView` owns the controls and loading/error states. **Origem
-  no cálculo** is a segmented scope control above the list; search, **Agrupar
-  por** Conta/Classe de ativo/Nenhum and **Mostrar posições encerradas** shape
-  the rows below it. The section header states how many positions the server
-  measured.
+- `InvestmentPeriodView` owns the loading/error states and the list controls:
+  search and **Mostrar encerradas** shape the rows, the tab's grouping is sent to
+  the backend. The section header states how many positions the server measured.
 - `InvestmentPeriodSummary` shows **Carteira em `to`** (`totals.end_value`),
   Rendimento no período (`totals.yield` together with `yield_rate`), Aportes,
   Resgates and Custos (only when non-zero). The disclosure **Entenda o resultado
@@ -549,13 +551,16 @@ Components (`components/investments/`) and hook:
   "Parcial: N de M posições sem histórico suficiente" with the reasons by count;
   positions that start late (`positions_partial_start`) are named in the note.
   A null `yield_rate` is "—" with its reason, never 0%.
-- `InvestmentPositionsPeriod` renders the groups: a table from `lg` up (one
+- `InvestmentPositionsPeriod` renders the groups: a table from `xl` up (one
   `<tbody>` per group, the group's subtotal as its first row), stacked rows and
-  collapsible headers below it. Columns: Ativo, Valor atual (`end_value`), Valor
-  investido (`invested`), Rendimento (R$ and `yield_rate`) and Participação (the
-  position's `share`, "—" when the backend has none; a group header shows the
-  group's `share`). Quantity stays in the asset's secondary line rather than a
-  separate numeric column. On compact screens, Investido and Participação are
+  collapsible headers below it. Groups start **collapsed**: the header carries the
+  subtotal and `share` (the figure with a thin bar, so concentration by class or
+  custody reads at a glance), and a toggle expands it to the rows (searching keeps
+  matching groups open). Columns: Ativo (ticker and quantity beneath), Classe (with
+  the instrument type beneath) and Custódia (each hidden when it is the grouping),
+  Valor atual (`end_value`), Valor investido (`invested`), Rendimento (R$ and
+  `yield_rate`) and Participação (the position's `share`, "—" when the backend has
+  none). On compact screens, Investido and Participação are
   labelled facts under the asset instead of one dense sentence. Group toggles
   are buttons with `aria-expanded`.
 - `InvestmentAccountsSection`, titled **Contas e movimentações** below the
@@ -571,8 +576,10 @@ Display rules:
   accent-insensitive) and **Mostrar encerradas** are client-side row filters
   only: totals and subtotals stay those of the full group, and the UI says so
   ("A busca só esconde linhas…", "Totais e subtotais incluem N encerradas
-  ocultas"). **Origem** is sent as `source` and changes what is measured, which
-  the page states.
+  ocultas"). A hidden closed position with no figures is
+  not in any total, so it gets its own note ("N encerrada oculta está sem valor
+  no período e fora dos totais") rather than being counted among those. `source` stays a backend filter but
+  the page does not use it.
 - The main figures are the consolidated period result (`totals`), which
   includes positions closed as of `to`; the held/closed split comes from the
   server and the client never sums it.

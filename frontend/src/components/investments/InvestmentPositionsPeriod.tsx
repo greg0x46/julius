@@ -12,12 +12,12 @@ import type {
 import { formatDecimal, investmentTypeLabel } from "../../presentation/investmentLabels";
 import {
   formatRatioPercent,
+  investmentAssetClassLabel,
   investedUnavailableHint,
   matchesAssetSearch,
   periodUnavailableLabel,
 } from "../../presentation/investmentPeriod";
 import { isZeroDecimal } from "../../presentation/decimal";
-import { investmentPositionSourceLabel } from "../../presentation/investmentWorkspaceLabels";
 import { formatMoney } from "../../presentation/money";
 import { EmptyState } from "../layout";
 import { Money } from "../shared/Money";
@@ -162,14 +162,20 @@ function PositionBadges({ position }: { position: InvestmentPeriodPosition }) {
   );
 }
 
-function subtitle(position: InvestmentPeriodPosition, data: InvestmentPeriod): string {
+// Provider types are enums (MUTUAL_FUND); a manual type is the user's own text.
+const typeLabel = (position: InvestmentPeriodPosition) =>
+  position.source === "synced" ? investmentTypeLabel(position.asset_type) : position.asset_type;
+
+const quantityLabel = (position: InvestmentPeriodPosition) =>
+  position.quantity === null ? null : `Qtd. ${formatDecimal(position.quantity)}`;
+
+/** Stacked rows have no columns, so type and custody go in the line. */
+function stackedSubtitle(position: InvestmentPeriodPosition, data: InvestmentPeriod): string {
   return [
     position.ticker,
-    // Provider types are enums (MUTUAL_FUND); a manual type is the user's own text.
-    position.source === "synced" ? investmentTypeLabel(position.asset_type) : position.asset_type,
+    typeLabel(position),
     data.group_by === "account" ? null : position.account_name,
-    data.source === null ? investmentPositionSourceLabel[position.source] : null,
-    position.quantity === null ? null : `Qtd. ${formatDecimal(position.quantity)}`,
+    quantityLabel(position),
   ]
     .filter(Boolean)
     .join(" · ");
@@ -207,6 +213,19 @@ function share(group: InvestmentPeriodGroup): string {
   return group.share === null ? "—" : formatRatioPercent(group.share);
 }
 
+/** The group's share as a figure and a thin bar; the width only sizes the bar. */
+function GroupShare({ group }: { group: InvestmentPeriodGroup }) {
+  const width = group.share === null ? 0 : Math.max(0, Math.min(100, Number(group.share) * 100));
+  return (
+    <span className="investment-share">
+      <span>{share(group)}</span>
+      <span className="investment-share-bar" aria-hidden="true">
+        <span style={{ width: `${width}%` }} />
+      </span>
+    </span>
+  );
+}
+
 /**
  * The positions of the period, grouped as the backend grouped them. Group
  * subtotals, shares and every figure come from the response; search and the
@@ -222,10 +241,12 @@ export function InvestmentPositionsPeriod({
   empty,
 }: InvestmentPositionsPeriodProps) {
   const idBase = useId();
-  const stacked = !Grid.useBreakpoint().lg;
-  const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
+  // Eight columns need the room of a wide screen; below it the rows stack.
+  const stacked = !Grid.useBreakpoint().xl;
+  // Groups start collapsed: the subtotal and share are the answer, the rows the detail.
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
   const toggle = (key: string) =>
-    setCollapsed((current) => {
+    setExpanded((current) => {
       const next = new Set(current);
       if (!next.delete(key)) next.add(key);
       return next;
@@ -233,14 +254,22 @@ export function InvestmentPositionsPeriod({
 
   const searching = search.trim() !== "";
   const grouped = data.group_by !== "none";
-  const hiddenClosed = showClosed
-    ? 0
-    : data.groups.reduce((sum, group) => sum + group.positions.filter((p) => p.closed_as_of_to).length, 0);
+  // An unavailable position is in no total, so it is told apart from a closed one that is.
+  const hiddenClosed = { counted: 0, unmeasured: 0 };
+  if (!showClosed) {
+    for (const position of data.groups.flatMap((group) => group.positions)) {
+      if (!position.closed_as_of_to) continue;
+      if (position.unavailable_reason === null) hiddenClosed.counted += 1;
+      else hiddenClosed.unmeasured += 1;
+    }
+  }
   const visible = data.groups
     .map((group) => ({
       group,
       rows: group.positions.filter(
-        (position) => (showClosed || !position.closed_as_of_to) && matchesAssetSearch(position, search),
+        (position) =>
+          (showClosed || !position.closed_as_of_to) &&
+          matchesAssetSearch(position, search),
       ),
     }))
     // A search keeps only groups with a match; otherwise a group stays even if its rows are all hidden.
@@ -252,12 +281,19 @@ export function InvestmentPositionsPeriod({
     <>
       {searching && (
         <p className="investment-note" role="status">
-          A busca só esconde linhas: totais e subtotais continuam sendo os do grupo inteiro.
+          A busca só esconde linhas: totais, subtotais e participações continuam sendo os do grupo inteiro.
         </p>
       )}
-      {hiddenClosed > 0 && (
+      {hiddenClosed.counted > 0 && (
         <p className="investment-note">
-          Totais e subtotais incluem {hiddenClosed} {hiddenClosed === 1 ? "encerrada oculta" : "encerradas ocultas"}.
+          Totais e subtotais incluem {hiddenClosed.counted}{" "}
+          {hiddenClosed.counted === 1 ? "encerrada oculta" : "encerradas ocultas"}.
+        </p>
+      )}
+      {hiddenClosed.unmeasured > 0 && (
+        <p className="investment-note">
+          {hiddenClosed.unmeasured} {hiddenClosed.unmeasured === 1 ? "encerrada oculta está" : "encerradas ocultas estão"}{" "}
+          sem valor no período e fora dos totais.
         </p>
       )}
     </>
@@ -272,6 +308,11 @@ export function InvestmentPositionsPeriod({
     );
   }
 
+  // The grouping already says one of them; ungrouped rows carry both.
+  const showClass = data.group_by !== "class";
+  const showCustody = data.group_by !== "account";
+  const columns = 5 + Number(showClass) + Number(showCustody);
+
   const menu = (items: RecordMenuItem[], label: string) =>
     items.length === 0 ? null : <RecordMenu label={label} items={items} />;
 
@@ -281,19 +322,21 @@ export function InvestmentPositionsPeriod({
         {notes}
         <div className="investment-groups">
           {visible.map(({ group, rows }) => {
-            const open = !grouped || !collapsed.has(group.key);
+            const open = !grouped || searching || expanded.has(group.key);
             const id = `${idBase}-${group.key}`;
             return (
               <section key={group.key} className="investment-group" aria-label={group.label}>
                 {grouped && (
                   <div className="investment-group-header">
-                    <button type="button" className="investment-group-toggle" aria-expanded={open} aria-controls={id} onClick={() => toggle(group.key)}>
+                    <button type="button" className="investment-group-toggle" aria-expanded={open} aria-controls={id} disabled={searching} onClick={() => toggle(group.key)}>
                       {open ? <CaretDownOutlined aria-hidden="true" /> : <CaretRightOutlined aria-hidden="true" />}
                       <span className="investment-group-text">
                         <span className="investment-group-title">
                           <GroupLabel group={group} shown={rows.length} />
                         </span>
-                        <span className="investment-quiet">Participação {share(group)}</span>
+                        <span className="investment-quiet investment-group-share">
+                          <GroupShare group={group} />
+                        </span>
                       </span>
                       <span className="investment-row-figures">
                         <span className="investment-row-value"><Money value={group.totals.end_value} tone="balance" /></span>
@@ -314,7 +357,7 @@ export function InvestmentPositionsPeriod({
                             <span className="list-row-title">
                               <PositionName position={position} href={hrefOf(position)} />
                             </span>
-                            <span className="list-row-meta">{subtitle(position, data)}</span>
+                            <span className="list-row-meta">{stackedSubtitle(position, data)}</span>
                             <span className="list-row-meta investment-row-badges">
                               <PositionBadges position={position} />
                             </span>
@@ -371,6 +414,8 @@ export function InvestmentPositionsPeriod({
           <thead>
             <tr>
               <th scope="col">Ativo</th>
+              {showClass && <th scope="col">Classe</th>}
+              {showCustody && <th scope="col">Custódia</th>}
               <th scope="col" className="investment-col-end">Valor atual</th>
               <th scope="col" className="investment-col-end">Valor investido</th>
               <th scope="col" className="investment-col-end">Rendimento</th>
@@ -381,23 +426,25 @@ export function InvestmentPositionsPeriod({
             </tr>
           </thead>
           {visible.map(({ group, rows }) => {
-            const open = !grouped || !collapsed.has(group.key);
+            const open = !grouped || searching || expanded.has(group.key);
             return (
               <tbody key={group.key}>
                 {grouped && (
                   <tr className="investment-group-row">
                     <th scope="row">
-                      <button type="button" className="investment-group-toggle" aria-expanded={open} onClick={() => toggle(group.key)}>
+                      <button type="button" className="investment-group-toggle" aria-expanded={open} disabled={searching} onClick={() => toggle(group.key)}>
                         {open ? <CaretDownOutlined aria-hidden="true" /> : <CaretRightOutlined aria-hidden="true" />}
                         <GroupLabel group={group} shown={rows.length} />
                       </button>
                     </th>
+                    {showClass && <td />}
+                    {showCustody && <td />}
                     <td className="investment-col-end"><Money value={group.totals.end_value} tone="balance" /></td>
                     <td className="investment-col-end"><GroupInvested totals={group.totals} /></td>
                     <td className="investment-col-end">
                       <InvestmentYieldValue gain={group.totals.yield} rate={group.totals.yield_rate} />
                     </td>
-                    <td className="investment-col-end">{share(group)}</td>
+                    <td className="investment-col-end"><GroupShare group={group} /></td>
                     <td className="investment-col-menu">{menu(groupMenu(group), `Ações de ${group.label}`)}</td>
                   </tr>
                 )}
@@ -409,12 +456,23 @@ export function InvestmentPositionsPeriod({
                           <span className="investment-cell-title">
                             <PositionName position={position} href={hrefOf(position)} />
                           </span>
-                          <span className="investment-quiet">{subtitle(position, data)}</span>
+                          <span className="investment-quiet">
+                            {[position.ticker, quantityLabel(position)].filter(Boolean).join(" · ")}
+                          </span>
                           <span className="investment-row-badges">
                             <PositionBadges position={position} />
                           </span>
                         </div>
                       </th>
+                      {showClass && (
+                        <td>
+                          <div className="investment-cell">
+                            <span className="investment-nowrap">{investmentAssetClassLabel[position.asset_class]}</span>
+                            <span className="investment-quiet">{typeLabel(position)}</span>
+                          </div>
+                        </td>
+                      )}
+                      {showCustody && <td>{position.account_name}</td>}
                       <td className="investment-col-end">
                         <div className="investment-cell investment-cell-end">
                           <span className="investment-cell-value">
@@ -433,7 +491,7 @@ export function InvestmentPositionsPeriod({
                   ))}
                 {open && rows.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="investment-quiet investment-group-empty">
+                    <td colSpan={columns} className="investment-quiet investment-group-empty">
                       Nenhuma posição visível neste grupo.
                     </td>
                   </tr>

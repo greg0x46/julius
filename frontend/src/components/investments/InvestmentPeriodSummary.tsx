@@ -13,11 +13,6 @@ import { InvestmentYieldValue } from "./InvestmentYieldValue";
 const partIsEmpty = (part: InvestmentPeriodPart) =>
   [part.start_value, part.end_value, part.contributions, part.withdrawals, part.yield, part.capital_base].every(isZeroDecimal);
 
-const sourceNote = {
-  manual: "Somente posições manuais.",
-  synced: "Somente posições sincronizadas.",
-} as const;
-
 /**
  * The period's result, as the backend states it: patrimônio at the end of the
  * period as the hero, rendimento and rentabilidade beside it, aportes,
@@ -61,7 +56,6 @@ export function InvestmentPeriodSummary({
   ];
 
   const notes = [
-    data.source !== null ? sourceNote[data.source] : null,
     "O saldo para investir (caixa) das contas não entra nestes valores.",
     isZeroDecimal(totals.provisioned_taxes)
       ? null

@@ -4,12 +4,7 @@
    states and the summary come from layout.css; this file only holds what is
    specific to the investment screens. Written mobile-first. */
 
-.section + .investments-hint {
-  margin-top: 1rem;
-}
-
 /* One quiet line of explanation: what a view means, never an alert box. */
-.investments-hint,
 .investment-note {
   margin: 0 0 0.75rem;
   color: var(--color-text-secondary);
@@ -369,37 +364,22 @@
   border-top: 1px solid var(--color-border);
 }
 
-.investment-scope-control {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  padding-bottom: 0.75rem;
-  margin-bottom: 0.75rem;
-  border-bottom: 1px solid var(--color-border);
-}
-
-.investment-scope-copy {
-  display: flex;
-  flex-direction: column;
-  gap: 0.125rem;
-}
-
-.investment-control-label {
-  color: var(--color-text);
-  font-size: var(--fs-small);
-  font-weight: 600;
-}
-
-.investment-scope-control .segmented-control {
-  width: auto;
-  min-width: 23rem;
-}
-
 .investment-list-options {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
+  gap: 0.5rem 0.75rem;
   min-height: 26px;
+}
+
+.investment-period-table .investment-col-quiet {
+  color: var(--color-text-secondary);
+  font-size: var(--fs-small);
+}
+
+.investment-nowrap,
+.investment-period-table thead th {
+  white-space: nowrap;
 }
 
 .investment-results.is-updating {
@@ -611,21 +591,6 @@
 }
 
 @media (max-width: 47.99rem) {
-  .investment-scope-control {
-    align-items: stretch;
-    flex-direction: column;
-    gap: 0.5rem;
-  }
-
-  .investment-scope-copy .investment-quiet {
-    display: none;
-  }
-
-  .investment-scope-control .segmented-control {
-    width: 100%;
-    min-width: 0;
-  }
-
   .investment-summary-notes {
     display: block;
   }
@@ -656,4 +621,47 @@
     grid-column: 2;
     grid-row: 1 / span 2;
   }
+}
+
+.investment-group-toggle:disabled {
+  cursor: default;
+}
+
+/* Group share: the figure with a thin bar under it, so concentration reads at a glance. */
+.investment-share {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.25rem;
+  font-weight: 600;
+}
+
+.investment-share-bar {
+  display: block;
+  width: 4.5rem;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--color-border);
+  overflow: hidden;
+}
+
+.investment-share-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--color-accent);
+}
+
+.investment-group-share {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  white-space: nowrap;
+}
+
+.investment-group-share .investment-share {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--color-text);
 }

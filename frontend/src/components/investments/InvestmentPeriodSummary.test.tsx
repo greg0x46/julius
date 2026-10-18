@@ -16,11 +16,10 @@ describe("InvestmentPeriodSummary", () => {
     expect(within(renderSummary()).queryByText("Custos")).toBeNull();
   });
 
-  it("shows costs, the origin and the unpaid provisioned taxes when they apply", () => {
-    const strip = renderSummary({ totals: { ...periodTotals, costs: "12.50" }, source: "synced" });
+  it("shows costs and the unpaid provisioned taxes when they apply", () => {
+    const strip = renderSummary({ totals: { ...periodTotals, costs: "12.50" } });
     expect(within(strip).getByText("Custos")).toBeVisible();
     expect(within(strip).getByText("R$ 12,50")).toBeVisible();
-    expect(within(strip).getByText(/Somente posições sincronizadas/)).toBeVisible();
     expect(within(strip).getByText(/antes do IR\/IOF provisionado/)).toBeVisible();
     expect(within(strip).getByText(/O saldo para investir \(caixa\)/)).toBeVisible();
   });

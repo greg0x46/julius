@@ -96,7 +96,9 @@ type PortfolioPosition struct {
 	// Quantity is the units held at `to`; nil when the provider sent none.
 	Quantity *decimal.Decimal
 	// ClosedAsOfTo: nothing is held at the end of `to`; the position is kept
-	// because it moved or was worth something inside the period.
+	// because it moved or was worth something inside the period. An
+	// unavailable position is closed when its quantity is known to be zero,
+	// even though no figure can be stated for it.
 	ClosedAsOfTo bool
 	// UnavailableReason is empty when the period figures below are valid.
 	UnavailableReason string
@@ -529,6 +531,7 @@ func (l *portfolioLoader) position(ctx context.Context, valued *valuation.Valuat
 	switch {
 	case errors.As(err, &reason):
 		result.UnavailableReason = reason.Reason
+		result.ClosedAsOfTo = quantity != nil && !quantity.IsPositive()
 		result.ProvisionedTaxes = nil
 		result.Invested = convertOrNil(ctx, valued, invested, result.CurrencyCode)
 		return result, true, nil

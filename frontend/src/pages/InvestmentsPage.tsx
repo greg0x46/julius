@@ -1,12 +1,11 @@
 import { ApiError } from "../api/problems";
 import { BankOutlined, PieChartOutlined, SwapOutlined } from "@ant-design/icons";
-import { Alert, Button, Skeleton } from "antd";
+import { Alert, Skeleton } from "antd";
 import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
 
 import type {
-  Investment,
   InvestmentPeriodGroup,
+  InvestmentPeriodGrouping,
   InvestmentAccount,
   InvestmentAccountUpdate,
   InvestmentAccountWrite,
@@ -19,12 +18,10 @@ import type {
 import { UnavailableState } from "../components/AsyncState";
 import { InvestmentAccountEditForm } from "../components/investments/InvestmentAccountEditForm";
 import { InvestmentAccountForm } from "../components/investments/InvestmentAccountForm";
-import { InvestmentList } from "../components/investments/InvestmentList";
 import { InvestmentOperationForm } from "../components/investments/InvestmentOperationForm";
 import { InvestmentPositionForm } from "../components/investments/InvestmentPositionForm";
 import { InvestmentAccountsSection } from "../components/investments/InvestmentAccountsSection";
 import { InvestmentPeriodView } from "../components/investments/InvestmentPeriodView";
-import { InvestmentsSummary } from "../components/investments/InvestmentsSummary";
 import { useInvestmentMenus } from "../components/investments/useInvestmentMenus";
 import { PeriodNavigator } from "../components/filters/PeriodNavigator";
 import { periodPresets } from "../components/filters/periodPresets";
@@ -32,29 +29,24 @@ import { CreateActionMenu, Page, PageTabs } from "../components/layout";
 import { useFeedback } from "../components/shared/useFeedback";
 import { useAccounts } from "../hooks/useAccounts";
 import { useInvestmentWorkspace } from "../hooks/useInvestmentWorkspace";
-import { useInvestments } from "../hooks/useInvestments";
 import { usePeriod } from "../hooks/usePeriod";
 import { useToday } from "../hooks/useToday";
 import { errorMessage } from "../presentation/errors";
-import { periodRequest } from "../presentation/investmentPeriod";
+import { investmentGroupingLabel, periodRequest } from "../presentation/investmentPeriod";
 
-type View = "portfolio" | "synced";
-
-const viewOptions: { label: string; value: View }[] = [
-  { label: "Carteira", value: "portfolio" },
-  { label: "Sincronizados", value: "synced" },
-];
+const groupingOptions = (["class", "account", "none"] as const).map((value) => ({
+  value,
+  label: investmentGroupingLabel[value],
+}));
 
 export function InvestmentsPage() {
   const workspace = useInvestmentWorkspace();
   const financialAccounts = useAccounts();
-  const syncedInvestments = useInvestments();
-  const navigate = useNavigate();
   const feedback = useFeedback();
   const { period, setPeriod } = usePeriod();
   const today = useToday().format("YYYY-MM-DD");
 
-  const [view, setView] = useState<View>("portfolio");
+  const [groupBy, setGroupBy] = useState<InvestmentPeriodGrouping>("class");
   const [actionError, setActionError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -226,19 +218,17 @@ export function InvestmentsPage() {
       description="Patrimônio e rendimento da carteira no período"
       compactMobileHeader
       context={
-        view === "portfolio" ? (
-          <PeriodNavigator
-            id="investments-period"
-            value={[period.from, period.to]}
-            presets={periodPresets()}
-            onChange={setPeriod}
-            reset={{ preset: "this-month", label: "Este mês" }}
-            bare
-          />
-        ) : undefined
+        <PeriodNavigator
+          id="investments-period"
+          value={[period.from, period.to]}
+          presets={periodPresets()}
+          onChange={setPeriod}
+          reset={{ preset: "this-month", label: "Este mês" }}
+          bare
+        />
       }
       actions={createMenu}
-      tabs={<PageTabs label="Visão dos investimentos" options={viewOptions} value={view} onChange={setView} />}
+      tabs={<PageTabs label="Agrupar posições por" options={groupingOptions} value={groupBy} onChange={setGroupBy} />}
     >
       {workspace.error && !workspace.isLoading && (
         <UnavailableState onRetry={() => void workspace.refetch()}>
@@ -256,76 +246,42 @@ export function InvestmentsPage() {
         />
       )}
 
-      {view === "portfolio" && (
-        <>
-          <InvestmentPeriodView
-            request={request}
-            workspacePositions={workspace.positions}
-            onNewPosition={() => (holdingAccounts.length === 0 ? openAccountCreate() : openPositionCreate(null))}
-            positionMenu={menus.positionMenu}
-            groupMenu={(group) => {
-              const account = accountOfGroup(group);
-              return account === undefined ? [] : menus.accountMenu(account);
-            }}
-          />
-          {workspace.isLoading ? (
-            <div className="section" role="status" aria-label="Carregando contas">
-              <div className="section-body">
-                <Skeleton active paragraph={{ rows: 2 }} />
-              </div>
-            </div>
-          ) : workspace.error ? null : (
-            // A failed load shows only the retry above: "Nenhuma conta ainda"
-            // beside it would claim there is nothing there.
-            <InvestmentAccountsSection
-              accounts={workspace.accounts}
-              positions={workspace.positions}
-              operations={workspace.operations}
-              menuOf={menus.accountMenu}
-              onNewAccount={openAccountCreate}
-              onEditOperation={openOperationEdit}
-              onRemoveOperation={(operation) =>
-                void run(
-                  () => workspace.deleteOperation(operation.id),
-                  "Não foi possível excluir a movimentação.",
-                  "Excluído",
-                )
-              }
-              busy={busy}
-            />
-          )}
-        </>
-      )}
-
-      {view === "synced" && (
-        <>
-          {!syncedInvestments.isLoading && syncedInvestments.investments.length > 0 && (
-            <InvestmentsSummary
-              valuation={workspace.summary ?? undefined}
-              investments={syncedInvestments.investments}
-            />
-          )}
-          {syncedInvestments.error && (
-            <Alert
-              type="error"
-              showIcon
-              message="Não foi possível carregar os investimentos sincronizados"
-              description={<Button onClick={() => syncedInvestments.refetch()}>Tentar novamente</Button>}
-              style={{ marginBottom: 16 }}
-            />
-          )}
-          {!syncedInvestments.error && (
-            <InvestmentList
-              investments={syncedInvestments.investments}
-              isLoading={syncedInvestments.isLoading}
-              onOpen={(investment: Investment) => navigate(`/investimentos/${investment.id}`)}
-            />
-          )}
-          <p className="investments-hint">
-            Estes ativos também aparecem como posições dentro da conta integrada correspondente. Aqui fica o detalhe
-            importado, com o histórico do provedor. Esta visão não segue o período escolhido.
-          </p>
-        </>
+      <InvestmentPeriodView
+        request={request}
+        groupBy={groupBy}
+        workspacePositions={workspace.positions}
+        onNewPosition={() => (holdingAccounts.length === 0 ? openAccountCreate() : openPositionCreate(null))}
+        positionMenu={menus.positionMenu}
+        groupMenu={(group) => {
+          const account = accountOfGroup(group);
+          return account === undefined ? [] : menus.accountMenu(account);
+        }}
+      />
+      {workspace.isLoading ? (
+        <div className="section" role="status" aria-label="Carregando contas">
+          <div className="section-body">
+            <Skeleton active paragraph={{ rows: 2 }} />
+          </div>
+        </div>
+      ) : workspace.error ? null : (
+        // A failed load shows only the retry above: "Nenhuma conta ainda"
+        // beside it would claim there is nothing there.
+        <InvestmentAccountsSection
+          accounts={workspace.accounts}
+          positions={workspace.positions}
+          operations={workspace.operations}
+          menuOf={menus.accountMenu}
+          onNewAccount={openAccountCreate}
+          onEditOperation={openOperationEdit}
+          onRemoveOperation={(operation) =>
+            void run(
+              () => workspace.deleteOperation(operation.id),
+              "Não foi possível excluir a movimentação.",
+              "Excluído",
+            )
+          }
+          busy={busy}
+        />
       )}
 
       <InvestmentAccountForm

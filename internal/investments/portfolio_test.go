@@ -400,6 +400,36 @@ func TestPortfolioCountsFeesAndTaxesOnce(t *testing.T) {
 	sameDecimal(t, "costs in the second week", *later.Costs, "4")
 }
 
+// An unavailable position is still closed when the provider says nothing is
+// held, so the "show closed" switch can hide it; an unknown quantity says
+// nothing and the position stays listed.
+func TestPortfolioMarksAnUnavailablePositionClosedOnlyWhenNothingIsHeld(t *testing.T) {
+	f := newLedgerFixture(t)
+	manualAndSyncedStory(f)
+	gone := equity("0")
+	gone.Name, gone.Code = strRef("Gone"), strRef("GONE11")
+	f.addHolding(gone)
+	held := equity("10")
+	held.Name, held.Code = strRef("Held"), strRef("HELD11")
+	f.addHolding(held)
+	unknown := equity("10")
+	unknown.Name, unknown.Code, unknown.Quantity = strRef("Unknown"), strRef("UNKN11"), nil
+	f.addHolding(unknown)
+
+	found := positionsOf(f.portfolio(period(nil, day(28))))
+	for _, name := range []string{"Gone", "Held", "Unknown"} {
+		if found[name].UnavailableReason == "" {
+			t.Fatalf("%s should be unavailable: %+v", name, found[name])
+		}
+	}
+	if !found["Gone"].ClosedAsOfTo {
+		t.Fatalf("a position known to hold nothing must be closed: %+v", found["Gone"])
+	}
+	if found["Held"].ClosedAsOfTo || found["Unknown"].ClosedAsOfTo {
+		t.Fatalf("held = %v, unknown quantity = %v", found["Held"].ClosedAsOfTo, found["Unknown"].ClosedAsOfTo)
+	}
+}
+
 func TestPortfolioNeverTurnsUnknownIntoZero(t *testing.T) {
 	f := newLedgerFixture(t)
 	manualAndSyncedStory(f)

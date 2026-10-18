@@ -10,9 +10,9 @@ import { multiplyDecimals, roundDecimal } from "./decimal";
 /** Display only: the backend states the figures; these choose words and place the decimal point. */
 
 export const investmentGroupingLabel: Record<InvestmentPeriodGrouping, string> = {
-  account: "Conta",
   class: "Classe de ativo",
-  none: "Nenhum",
+  account: "Custódia",
+  none: "Sem agrupamento",
 };
 
 export const investmentAssetClassLabel: Record<InvestmentPeriodAssetClass, string> = {
