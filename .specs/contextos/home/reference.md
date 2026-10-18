@@ -96,7 +96,9 @@ inflows and outflows.
 
 `GET /api/timeline` — `reference_date`, `from`, `to`, filters (`account_ids`,
 `category_ids`, `card_numbers`) and `scenario_ids`. Returns `base`,
-`period_totals`, `simulation` and `scenario_impacts`.
+`period_totals`, `simulation` and `scenario_impacts`. `simulation` is `base` plus
+the listed scenarios (active scenarios stay in it); each impact is only what
+that scenario adds.
 
 `GET /api/timeline/range` — the widest window the curve covers (from the oldest
 transaction to the last planned installment), used by the "whole period" option.
