@@ -83,7 +83,7 @@ the transaction to the occurrence's month (manual links have a 45-day reach).
 Neither path requires the commitment's category.
 
 A transaction marked ignored loses its link (`UnlinkIfPresent`, in
-`onIgnoredHook` together with `payables`); a detached occurrence is unaffected,
+`ledger.OnIgnored` together with `payables`, also fired by sync updates); a detached occurrence is unaffected,
 because the decision is about the occurrence.
 
 ## HTTP routes
