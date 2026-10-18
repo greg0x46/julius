@@ -2,8 +2,8 @@ package reporting_test
 
 import (
 	"context"
-	"fmt"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
