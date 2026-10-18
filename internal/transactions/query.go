@@ -516,6 +516,9 @@ func Query(ctx context.Context, q Querier, query QueryRequest) (Result, error) {
 				day = &local
 			}
 			v.reporting = reporting.Convert(ctx, rates, v.reportableAmount(), v.effective.CurrencyCode, day)
+			if v.reporting.Issue != nil && v.row.accountName != nil {
+				v.reporting.Issue.Account = *v.row.accountName
+			}
 		}
 	}
 

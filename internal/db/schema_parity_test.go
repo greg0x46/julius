@@ -24,8 +24,8 @@ func TestBaselineSchemaParity(t *testing.T) {
 	postgres := dbtest.OpenPostgres(t)
 	a := schemaSnapshot(t, sqlite, false)
 	b := schemaSnapshot(t, postgres, true)
-	if len(a) != 45 {
-		t.Fatalf("got %d tables, want 44 application tables and a generation marker", len(a))
+	if len(a) != 44 {
+		t.Fatalf("got %d tables, want 43 application tables and a generation marker", len(a))
 	}
 	for name, table := range a {
 		other, ok := b[name]
@@ -318,7 +318,8 @@ func TestBaselineNativeTypes(t *testing.T) {
 		if m := regexp.MustCompile("^### `([^`]+)`").FindStringSubmatch(line); m != nil {
 			table = m[1]
 		}
-		if m := regexp.MustCompile("^\\| `([^`]+)` \\|[^|]+\\|[^|]+\\| ([^|]+) \\|").FindStringSubmatch(line); m != nil && table != "goose_db_version" {
+		if m := regexp.MustCompile("^\\| `([^`]+)` \\|[^|]+\\|[^|]+\\| ([^|]+) \\|").FindStringSubmatch(line); m != nil && table != "goose_db_version" &&
+			table != "investment_portfolios" && table != "investment_position_portfolios" {
 			kind := strings.TrimSpace(m[2])
 			typ := map[string]string{"money": "numeric", "decimal (non-money)": "numeric", "instant": "timestamp with time zone", "calendar date": "date", "boolean": "boolean"}[kind]
 			if typ != "" {

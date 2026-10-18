@@ -244,10 +244,10 @@ test("investment contributions and withdrawals preserve bank cash and exclude re
   expect(await read(page, "/api/accounts", parseAccountList)).toEqual([expect.objectContaining({ name: "Banco sintético", balance: "800.00" })]);
   await page.goto("/investimentos");
   await page.reload();
-  const summary = page.getByRole("region", { name: "Valor atual", exact: true });
-  await expect(summary).toContainText("200,00");
-  await expect(summary.getByText("Aportes desde o início", { exact: true }).locator("..")).toContainText("300,00");
-  await expect(summary.getByText("Resgates desde o início", { exact: true }).locator("..")).toContainText("100,00");
+  await expect(page.getByRole("region", { name: /^Carteira em/ })).toContainText("R$ 0,00");
+  await page.getByRole("button", { name: "Contas", exact: true }).click();
+  const drawer = page.getByRole("dialog", { name: "Contas de investimento", exact: true });
+  await expect(drawer.getByRole("listitem").filter({ hasText: "Corretora sintética" })).toContainText("200,00");
   expect(await read(page, "/api/investment-summary", parseInvestmentSummary)).toMatchObject({ total_value: "200.00", cash_balance: "200.00" });
   const operations = await read(page, "/api/investment-operations", parseInvestmentOperationList);
   expect(operations).toHaveLength(2);

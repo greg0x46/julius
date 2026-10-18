@@ -18,6 +18,7 @@ const roots = {
   automationRuleConditionOptions: ["automationRuleConditionOptions"],
   categories: ["categories"],
   dataSources: ["data-sources"],
+  goals: ["goals"],
   investmentAssets: ["investmentAssets"],
   investmentAssetClassification: ["investmentAssetClassification"],
   investments: ["investments"],
@@ -48,8 +49,16 @@ export const queryKeys = {
   investmentTransactionsOf: (positionId: string) =>
     [...roots.investmentTransactions, positionId] as const,
   investmentWorkspacePart: (
-    part: "accounts" | "portfolios" | "positions" | "operations" | "reconciliations" | "summary",
+    part: "accounts" | "positions" | "operations" | "reconciliations" | "summary",
   ) => [...roots.investmentWorkspace, part] as const,
+  // Under the workspace root so every ledger/asset write refreshes it too.
+  investmentPeriod: [...roots.investmentWorkspace, "period"] as const,
+  investmentPeriodFor: (params: {
+    from: string | null;
+    to: string;
+    groupBy: string;
+    source: string | null;
+  }) => [...roots.investmentWorkspace, "period", params] as const,
   investmentDetail: (investmentId: string) => [...roots.investments, investmentId] as const,
   investmentDetailTransactions: (investmentId: string) =>
     [...roots.investments, investmentId, "transactions"] as const,
@@ -114,14 +123,18 @@ export const invalidateAfterScenarioChange = (client: Client) =>
 export const invalidateAfterPayablePlanChange = (client: Client, payableId: string) =>
   invalidateAll(client, [queryKeys.payableScenarios(payableId), ...projectionViews]);
 
-/** An investment ledger write moves cash flow, balance curves and net worth. */
+/** An investment ledger write moves cash flow, balance curves, net worth and goal progress. */
 export const invalidateAfterLedgerChange = (client: Client) =>
   invalidateAll(client, [
     roots.investmentWorkspace,
     roots.transactions,
     roots.timeline,
     roots.netWorth,
+    roots.goals,
   ]);
+
+/** A goal's own write only changes the goals list. */
+export const invalidateAfterGoalChange = (client: Client) => invalidateAll(client, [roots.goals]);
 
 /** Registering or editing an asset changes the catalog and the workspace. */
 export const invalidateAfterInvestmentAssetChange = (client: Client) =>

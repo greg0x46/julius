@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/greg0x46/julius/internal/auth"
+	"github.com/greg0x46/julius/internal/exchange"
 	"github.com/greg0x46/julius/internal/investments"
 	"github.com/greg0x46/julius/internal/ledger"
 	"github.com/greg0x46/julius/internal/marketdata"
@@ -97,7 +98,7 @@ func NewServer(db *sql.DB, frontend fs.FS, secrets *settings.Secrets, config aut
 	mux.HandleFunc("GET /api/statement-imports/accounts", handleStatementAccounts(db))
 	mux.HandleFunc("GET /api/statement-imports/template", handleStatementTemplate())
 
-	mux.HandleFunc("GET /api/accounts/currencies", handleAccountCurrencies)
+	mux.HandleFunc("GET /api/accounts/currencies", handleAccountCurrencies(exchange.New(db, nil)))
 	mux.HandleFunc("POST /api/accounts", handleWriteManualAccount(db, true))
 	mux.HandleFunc("PUT /api/accounts/{id}", handleWriteManualAccount(db, false))
 	mux.HandleFunc("POST /api/accounts/{id}/adjustments", handleAdjustManualAccount(db))
@@ -107,11 +108,16 @@ func NewServer(db *sql.DB, frontend fs.FS, secrets *settings.Secrets, config aut
 	mux.HandleFunc("GET /api/accounts/{id}/bills", handleListAccountBills(db))
 	mux.HandleFunc("PUT /api/accounts/{id}/closing-day", handleSetAccountClosingDay(db))
 
+	mux.HandleFunc("GET /api/goals", handleListGoals(db))
+	mux.HandleFunc("POST /api/goals", handleCreateGoal(db))
+	mux.HandleFunc("PUT /api/goals/{id}", handleUpdateGoal(db))
+	mux.HandleFunc("DELETE /api/goals/{id}", handleDeleteGoal(db))
+
 	mux.HandleFunc("GET /api/investments", handleListInvestments(db))
 	mux.HandleFunc("GET /api/investments/{id}", handleGetInvestment(db))
 	mux.HandleFunc("GET /api/investments/{id}/transactions", handleListInvestmentTransactions(db))
 
-	// The investment workspace: custody accounts, goals, manual positions,
+	// The investment workspace: custody accounts, manual positions,
 	// their operations and the links that explain a bank line. It is a
 	// sibling of /api/investments above, never a sub-collection of it: that
 	// one answers what the provider reported about a holding, this one owns
@@ -120,11 +126,6 @@ func NewServer(db *sql.DB, frontend fs.FS, secrets *settings.Secrets, config aut
 	mux.HandleFunc("POST /api/investment-accounts", handleCreateInvestmentAccount(db))
 	mux.HandleFunc("PUT /api/investment-accounts/{id}", handleUpdateInvestmentAccount(db))
 	mux.HandleFunc("DELETE /api/investment-accounts/{id}", handleDeleteInvestmentAccount(db))
-
-	mux.HandleFunc("GET /api/investment-portfolios", handleListInvestmentPortfolios(db))
-	mux.HandleFunc("POST /api/investment-portfolios", handleCreateInvestmentPortfolio(db))
-	mux.HandleFunc("PUT /api/investment-portfolios/{id}", handleUpdateInvestmentPortfolio(db))
-	mux.HandleFunc("DELETE /api/investment-portfolios/{id}", handleDeleteInvestmentPortfolio(db))
 
 	mux.HandleFunc("GET /api/investment-assets", handleListInvestmentAssets(db))
 	mux.HandleFunc("GET /api/investment-asset-classification", handleInvestmentAssetClassification)
@@ -152,6 +153,7 @@ func NewServer(db *sql.DB, frontend fs.FS, secrets *settings.Secrets, config aut
 	mux.HandleFunc("DELETE /api/investment-reconciliations/{id}", handleDeleteInvestmentReconciliation(db))
 
 	mux.HandleFunc("GET /api/investment-summary", handleGetInvestmentSummary(db))
+	mux.HandleFunc("GET /api/investment-portfolio", handleGetInvestmentPeriod(db))
 	mux.HandleFunc("GET /api/investment-monthly-movements", handleListInvestmentMonthlyMovements(db))
 
 	mux.HandleFunc("GET /api/automation-rules/condition-options", handleListConditionOptions(db))

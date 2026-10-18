@@ -18,6 +18,10 @@ func TestManualAccountLifecycle(t *testing.T) {
 	}
 	usd := create("USD")
 	create("EUR")
+	nativeOnly := create("XTS")
+	if nativeOnly["currency_code"] != "XTS" || nativeOnly["balance"] != "100" {
+		t.Fatalf("native-only account: %+v", nativeOnly)
+	}
 	id := usd["id"].(string)
 	for _, table := range []string{"data_sources", "raw_imports"} {
 		var n int

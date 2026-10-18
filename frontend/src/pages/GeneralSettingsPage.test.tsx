@@ -14,7 +14,7 @@ afterEach(() => vi.unstubAllGlobals());
 
 it("saves the currency with the existing preference and discards old report caches", async () => {
   const fetch = vi.fn<typeof globalThis.fetch>().mockImplementation(async (url, init) => {
-    if (String(url).endsWith("/accounts/currencies")) return json(["BRL", "USD", "EUR"]);
+    if (String(url).endsWith("/accounts/currencies")) return json({ currencies: [{ code: "BRL" }, { code: "USD" }, { code: "EUR" }], status: "complete", source: "frankfurter" });
     if (init?.method === "PUT") return json(JSON.parse(String(init.body)));
     return json({
       transactions_period_basis: "occurred_at",

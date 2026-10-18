@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   invalidateAfterAccountClosingDayChange,
   invalidateAfterAutomationRuleChange,
+  invalidateAfterGoalChange,
   invalidateAfterInvestmentAssetChange,
   invalidateAfterLedgerChange,
   invalidateAfterOccurrenceReconciliation,
@@ -39,6 +40,10 @@ describe("queryKeys values", () => {
     expect(queryKeys.accountCards("a1")).toEqual(["accounts", "a1", "cards"]);
     expect(queryKeys.accountBills("a1")).toEqual(["accounts", "a1", "bills"]);
     expect(queryKeys.investmentWorkspacePart("summary")).toEqual(["investmentWorkspace", "summary"]);
+    expect(
+      queryKeys.investmentPeriodFor({ from: null, to: "2026-10-01", groupBy: "account", source: null }),
+    ).toEqual(["investmentWorkspace", "period", { from: null, to: "2026-10-01", groupBy: "account", source: null }]);
+    expect(queryKeys.investmentPeriod).toEqual(["investmentWorkspace", "period"]);
     expect(queryKeys.recurrenceOccurrences("c1")).toEqual(["recurringCommitments", "c1", "occurrences"]);
     expect(queryKeys.recurrenceCandidates("c1", "2026-01-01", "q")).toEqual([
       "recurringCommitments",
@@ -81,7 +86,7 @@ describe("invalidation policies", () => {
     ]);
   });
 
-  it("ledger change refreshes workspace, transactions, timeline and net worth", async () => {
+  it("ledger change refreshes workspace, transactions, timeline, net worth and goals", async () => {
     const { client, invalidateQueries } = spyClient();
     await invalidateAfterLedgerChange(client);
     expect(keysOf(invalidateQueries)).toEqual([
@@ -89,7 +94,14 @@ describe("invalidation policies", () => {
       ["transactions"],
       ["timeline"],
       ["netWorth"],
+      ["goals"],
     ]);
+  });
+
+  it("goal change refreshes only goals", async () => {
+    const { client, invalidateQueries } = spyClient();
+    await invalidateAfterGoalChange(client);
+    expect(keysOf(invalidateQueries)).toEqual([["goals"]]);
   });
 
   it("awaits every invalidation it starts", async () => {

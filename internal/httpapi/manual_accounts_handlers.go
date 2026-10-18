@@ -3,7 +3,6 @@ package httpapi
 import (
 	"database/sql"
 	"net/http"
-	"sort"
 	"strings"
 	"time"
 
@@ -13,6 +12,7 @@ import (
 
 	"github.com/greg0x46/julius/internal/db"
 	dbtypes "github.com/greg0x46/julius/internal/db/types"
+	"github.com/greg0x46/julius/internal/exchange"
 	"github.com/greg0x46/julius/internal/money"
 	"github.com/greg0x46/julius/internal/transactions"
 )
@@ -24,18 +24,23 @@ type manualAccountRequest struct {
 	Archived       bool   `json:"archived"`
 }
 
-func handleAccountCurrencies(w http.ResponseWriter, r *http.Request) {
-	codes := map[string]bool{}
-	iter := currency.Query()
-	for iter.Next() {
-		codes[iter.Unit().String()] = true
+func handleAccountCurrencies(provider exchange.CoverageProvider) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		coverage := provider.Currencies(r.Context())
+		currencies := make([]exchange.Currency, 0, len(coverage.Currencies))
+		for _, c := range coverage.Currencies {
+			if validManualAccountCurrency(c.Code) {
+				currencies = append(currencies, c)
+			}
+		}
+		coverage.Currencies = currencies
+		writeJSON(w, 200, coverage)
 	}
-	result := []string{}
-	for code := range codes {
-		result = append(result, code)
-	}
-	sort.Strings(result)
-	writeJSON(w, 200, result)
+}
+
+func validManualAccountCurrency(code string) bool {
+	_, err := currency.ParseISO(code)
+	return err == nil && code == strings.ToUpper(code) && code != "XXX"
 }
 
 func invalidManualAccount(w http.ResponseWriter, detail string) {
@@ -56,9 +61,8 @@ func handleWriteManualAccount(conn *sql.DB, create bool) http.HandlerFunc {
 		if req.OpeningBalance == "" {
 			req.OpeningBalance = "0"
 		}
-		_, currencyErr := currency.ParseISO(req.CurrencyCode)
 		opening, err := decimal.NewFromString(req.OpeningBalance)
-		if req.Name == "" || len(req.Name) > 200 || currencyErr != nil || req.CurrencyCode != strings.ToUpper(req.CurrencyCode) || req.CurrencyCode == "XXX" || err != nil {
+		if req.Name == "" || len(req.Name) > 200 || !validManualAccountCurrency(req.CurrencyCode) || err != nil {
 			invalidManualAccount(w, "Informe um nome, uma moeda ISO 4217 e um saldo inicial decimal válido.")
 			return
 		}

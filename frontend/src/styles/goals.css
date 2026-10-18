@@ -1,0 +1,28 @@
+/* Metas: one Section per goal with its current value, target and progress.
+   Surfaces and empty states come from layout.css. */
+
+.goals-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.goal-metric,
+.goal-note {
+  margin: 0 0 0.5rem;
+  color: var(--color-text-secondary);
+  font-size: var(--fs-small);
+}
+
+.goal-figures {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.goal-target {
+  color: var(--color-text-secondary);
+  font-size: var(--fs-small);
+}

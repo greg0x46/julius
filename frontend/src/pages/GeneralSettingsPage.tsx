@@ -64,6 +64,7 @@ export function GeneralSettingsPage() {
         queryKeys.netWorth,
         queryKeys.transactions,
         queryKeys.investmentWorkspacePart("summary"),
+        queryKeys.investmentPeriod,
       ]) {
         await client.cancelQueries({ queryKey });
         client.removeQueries({ queryKey });
@@ -102,7 +103,7 @@ export function GeneralSettingsPage() {
                 showSearch
                 optionFilterProp="label"
                 style={{ width: "100%" }}
-                options={(currencies.data ?? [currency]).map((code) => ({
+                options={(currencies.data?.currencies.map((item) => item.code) ?? [currency]).map((code) => ({
                   value: code,
                   label: `${code} — ${names.of(code) ?? code}`,
                 }))}

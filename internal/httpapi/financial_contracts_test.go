@@ -12,6 +12,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/greg0x46/julius/internal/exchange"
+	"github.com/greg0x46/julius/internal/goals"
 	"github.com/greg0x46/julius/internal/investments"
 	"github.com/greg0x46/julius/internal/money"
 	"github.com/greg0x46/julius/internal/networth"
@@ -145,12 +146,53 @@ func financialContractPayloads() map[string]any {
 	}
 	unavailable := netWorthSnapshotDTO{CurrencyCode: "BRL", StoredCurrency: "BRL", CapturedAt: instant, ValuationVersion: 1, ValuationStatus: networth.ValuationUnavailable}
 
+	rate := decimal.RequireFromString("0.0123456789")
+	usd := "USD"
+	foreign := investments.PortfolioPosition{
+		ID: id, Source: investments.PositionSourceSynced, AccountID: "integrated:" + id, AccountName: "Integrated custody", AssetID: text(id),
+		Name: "Synthetic foreign", Ticker: text("SYNT"), AssetType: "EQUITY", AssetClass: investments.AssetClassVariableIncome, CurrencyCode: usd,
+		Quantity: &small, OpeningOn: day, HistoryComplete: true,
+		EndValue: amount, Contributions: amount.Sub(small), Yield: small, CapitalBase: amount, YieldRate: &rate, Share: &rate,
+		Native:   &investments.PortfolioNative{EndValue: small, Contributions: small, Yield: small, Invested: &small},
+		Invested: &amount, ProvisionedTaxes: &small, ReportedProfit: &small, ReportedAsOf: &day,
+	}
+	closed := investments.PortfolioPosition{
+		ID: id, Source: investments.PositionSourceManual, AccountID: id, AccountName: "Manual custody", AssetID: text(id),
+		Name: "Synthetic closed", AssetType: "EQUITY", AssetClass: investments.AssetClassUnclassified, CurrencyCode: brl,
+		Quantity: &decimal.Zero, ClosedAsOfTo: true, OpeningOn: day, PartialStart: true, HistoryComplete: true,
+		StartValue: amount, Withdrawals: amount.Add(small), Yield: small, CapitalBase: amount,
+		Native:   &investments.PortfolioNative{StartValue: amount, Withdrawals: amount.Add(small), Yield: small, Invested: &decimal.Zero},
+		Invested: &decimal.Zero, Costs: &small,
+	}
+	missing := investments.PortfolioPosition{
+		ID: id, Source: investments.PositionSourceSynced, AccountID: "integrated:" + id, AccountName: "Integrated custody",
+		Name: "Synthetic unavailable", AssetType: "EQUITY", AssetClass: investments.AssetClassOther, CurrencyCode: brl,
+		UnavailableReason: investments.YieldReasonNoHistory, InvestedUnavailableReason: investments.YieldReasonNoHistory,
+	}
+	periodTotals := investments.PortfolioTotals{
+		StartValue: amount, EndValue: amount, Contributions: small, Withdrawals: small, Yield: small, CapitalBase: amount, YieldRate: &rate,
+		Held:     investments.PortfolioPart{StartValue: amount, EndValue: amount, Contributions: small, Yield: small, CapitalBase: amount, YieldRate: &rate},
+		Closed:   investments.PortfolioPart{Withdrawals: small},
+		Invested: amount, InvestedUnknown: 1, Costs: small, ProvisionedTaxes: small,
+		PositionsTotal: 3, PositionsUnavailable: 1, PositionsPartialStart: 1,
+	}
+	manualSource := investments.PositionSourceManual
+	period := investments.Portfolio{
+		From: &day, To: day, GroupBy: investments.PortfolioGroupAccount, Source: &manualSource, AccountID: text(id), Totals: periodTotals,
+		Groups: []investments.PortfolioGroup{
+			{Key: id, Label: "Manual custody", AccountID: text(id), Totals: periodTotals, Share: &rate, Positions: []investments.PortfolioPosition{foreign, closed, missing}},
+			{Key: string(investments.AssetClassOther), Label: "Outros", AssetClass: &missing.AssetClass, Totals: investments.PortfolioTotals{}, Positions: []investments.PortfolioPosition{}},
+		},
+		Valuation: valuation.Metadata{BaseCurrency: "BRL", ValuedAt: day, RatePolicy: "synthetic", Rates: map[string]valuation.Rate{"USD": {Value: small, EffectiveOn: day, Source: "synthetic"}}},
+	}
+
 	return map[string]any{
-		"accounts":     accounts,
-		"cards":        []accountCardDTO{{CardNumber: "1234", TransactionCount: 1, LastTransactionAt: &instant}, {CardNumber: "5678"}},
-		"bills":        []accountBillDTO{{ID: id, ExternalID: "provider-bill", DueDate: &day, ClosingDate: &day, TotalAmount: &moneyText, CurrencyCode: &brl, MinimumPaymentAmount: text("0.01")}, {ID: id, ExternalID: "empty-bill"}},
-		"transactions": result,
-		"investments":  []investmentDTO{{ID: id, ExternalID: "provider-holding", Balance: &moneyText, CurrencyCode: &brl, Quantity: text(money.CanonicalDecimal(small)), DueDate: &day, AsOfDate: &instant, ProviderUpdatedAt: &instant, YieldValue: text("1.00"), YieldSource: text("informado")}, {ID: id, ExternalID: "empty-holding", YieldUnavailableReason: text("sem_historico")}},
+		"investment_period": investmentPeriodToDTO(period, reference),
+		"accounts":          accounts,
+		"cards":             []accountCardDTO{{CardNumber: "1234", TransactionCount: 1, LastTransactionAt: &instant}, {CardNumber: "5678"}},
+		"bills":             []accountBillDTO{{ID: id, ExternalID: "provider-bill", DueDate: &day, ClosingDate: &day, TotalAmount: &moneyText, CurrencyCode: &brl, MinimumPaymentAmount: text("0.01")}, {ID: id, ExternalID: "empty-bill"}},
+		"transactions":      result,
+		"investments":       []investmentDTO{{ID: id, ExternalID: "provider-holding", Balance: &moneyText, CurrencyCode: &brl, Quantity: text(money.CanonicalDecimal(small)), DueDate: &day, AsOfDate: &instant, ProviderUpdatedAt: &instant, YieldValue: text("1.00"), YieldSource: text("informado")}, {ID: id, ExternalID: "empty-holding", YieldUnavailableReason: text("sem_historico")}},
 		"investment_accounts": map[string]any{"items": []investmentAccountDTO{
 			investmentAccountToDTO(investments.Account{ID: id, Name: "Manual custody", Kind: investments.AccountKindManual, CashBalance: amount, Active: true, CreatedAt: instant, UpdatedAt: instant}),
 			investmentAccountToDTO(investments.Account{ID: "integrated:" + id, Name: "Integrated custody", Kind: investments.AccountKindIntegrated, SourceID: text(id), CreatedAt: instant, UpdatedAt: instant}),
@@ -160,11 +202,13 @@ func financialContractPayloads() map[string]any {
 		"investment_summary": investmentSummaryToDTO(investments.Summary{
 			CurrencyCode: brl, TotalValue: amount, ManualValue: amount, UnrealizedGain: small,
 			Accounts: []investments.SummaryAccount{{AccountID: id, Name: "Synthetic custody", Kind: investments.AccountKindManual, CurrentValue: amount, CashBalance: small}},
-			Portfolios: []investments.SummaryPortfolio{
-				{PortfolioID: text(id), Name: "Synthetic goal", CurrentValue: amount, TargetAmount: &amount, Progress: &small},
-				{Name: "Sem objetivo", CurrentValue: small},
-			},
 		}),
+		"goals": map[string]any{"items": []goalDTO{goalToDTO(goals.Goal{
+			ID: id, Name: "Synthetic goal", Metric: goals.MetricInvestedValue, TargetAmount: amount, TargetDate: &day, Notes: text("Synthetic note"),
+			CurrentValue: small, Progress: decimal.RequireFromString("0.25"), CreatedAt: instant, UpdatedAt: instant,
+		}), goalToDTO(goals.Goal{
+			ID: id, Name: "Goal without date", Metric: goals.MetricInvestedValue, TargetAmount: amount, CreatedAt: instant, UpdatedAt: instant,
+		})}},
 		"timeline":            timelineResponseDTO{valuationDTO: reference, Base: series, PeriodTotals: periodTotalsToDTO(timeline.PeriodTotals{Income: small, Expense: amount, Result: small.Sub(amount)}), ScenarioImpacts: []scenarioImpactDTO{}},
 		"timeline_simulation": timelineResponseDTO{valuationDTO: reference, Base: series, PeriodTotals: periodTotalsDTO{Income: "0", Expense: "0", Result: "0"}, Simulation: &simulation, ScenarioImpacts: []scenarioImpactDTO{{ScenarioID: id, ScenarioName: "Synthetic scenario", Delta: moneyText}}},
 		"net_worth":           netWorthResponseDTO{Latest: snapshot, Series: []netWorthSnapshotDTO{unavailable, snapshot}},

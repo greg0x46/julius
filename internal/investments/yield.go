@@ -77,6 +77,8 @@ type valueSeries interface {
 	// missingInception says why.
 	inception() (time.Time, bool)
 	missingInception() string
+	// flowEvents are the dated money movements, sorted by day.
+	flowEvents() []flowEvent
 }
 
 // PositionYield is the rendimento of a holding between from and to. A nil
@@ -259,11 +261,6 @@ func loadSyncedSeries(ctx context.Context, q Querier, cache *YieldCache, id stri
 			return nil, err
 		}
 	}
-	s := &syncedSeries{quotes: quotes, complete: true}
-	if holding.Quantity != nil {
-		s.quantityNow, s.quantityKnown = *holding.Quantity, true
-	}
-
 	rows, err := q.QueryContext(ctx, `
 		SELECT direction, quantity, amount, occurred_at, trade_date
 		FROM financial_investment_transactions WHERE investment_id = ?`, id)
@@ -271,28 +268,55 @@ func loadSyncedSeries(ctx context.Context, q Querier, cache *YieldCache, id stri
 		return nil, err
 	}
 	defer rows.Close()
-	soldQty, boughtQty := decimal.Zero, decimal.Zero
+	var movements []syncedMovement
 	for rows.Next() {
-		var direction, quantityRaw, amountRaw, occurredRaw sql.NullString
-		var tradeDate *time.Time
-		if err := rows.Scan(&direction, dbtypes.Decimal(&quantityRaw), dbtypes.Decimal(&amountRaw), dbtypes.Time(&occurredRaw), dbtypes.Date(&tradeDate)); err != nil {
+		var m syncedMovement
+		if err := m.scan(rows); err != nil {
 			return nil, err
 		}
+		movements = append(movements, m)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return newSyncedSeries(holding, quotes, movements)
+}
+
+// syncedMovement is one provider movement as stored, before it is placed.
+type syncedMovement struct {
+	direction, quantity, amount, occurred sql.NullString
+	tradeDate                             *time.Time
+}
+
+// scan reads the columns direction, quantity, amount, occurred_at, trade_date.
+func (m *syncedMovement) scan(row interface{ Scan(...any) error }) error {
+	return row.Scan(&m.direction, dbtypes.Decimal(&m.quantity), dbtypes.Decimal(&m.amount), dbtypes.Time(&m.occurred), dbtypes.Date(&m.tradeDate))
+}
+
+// newSyncedSeries places a holding's movements over its price series.
+func newSyncedSeries(holding SyncedHolding, quotes []AssetQuote, movements []syncedMovement) (*syncedSeries, error) {
+	s := &syncedSeries{quotes: quotes, complete: true}
+	if holding.Quantity != nil {
+		s.quantityNow, s.quantityKnown = *holding.Quantity, true
+	}
+
+	soldQty, boughtQty := decimal.Zero, decimal.Zero
+	for _, m := range movements {
 		s.movements++
-		inflow := direction.String == "inflow"
-		amount, amountErr := decimal.NewFromString(amountRaw.String)
-		when := tradeDate
+		inflow := m.direction.String == "inflow"
+		amount, amountErr := decimal.NewFromString(m.amount.String)
+		when := m.tradeDate
 		if when == nil {
 			var err error
-			if when, err = dbtypes.ParseNullTime(occurredRaw); err != nil {
+			if when, err = dbtypes.ParseNullTime(m.occurred); err != nil {
 				return nil, err
 			}
 		}
 		// A movement that cannot be placed — no direction, no amount, no
 		// date — leaves the history unable to account for the holding, the
 		// same evidence rule the API applied before quotes existed.
-		if !direction.Valid || (direction.String != "inflow" && direction.String != "outflow") ||
-			!amountRaw.Valid || amountErr != nil || when == nil {
+		if !m.direction.Valid || (m.direction.String != "inflow" && m.direction.String != "outflow") ||
+			!m.amount.Valid || amountErr != nil || when == nil {
 			s.complete = false
 			continue
 		}
@@ -302,7 +326,7 @@ func loadSyncedSeries(ctx context.Context, q Querier, cache *YieldCache, id stri
 		}
 		// A movement without quantity (a dividend paid out) moves money,
 		// not units.
-		if quantity, err := decimal.NewFromString(quantityRaw.String); quantityRaw.Valid && err == nil {
+		if quantity, err := decimal.NewFromString(m.quantity.String); m.quantity.Valid && err == nil {
 			if inflow {
 				event.quantity = quantity
 				boughtQty = boughtQty.Add(quantity)
@@ -312,9 +336,6 @@ func loadSyncedSeries(ctx context.Context, q Querier, cache *YieldCache, id stri
 			}
 		}
 		s.events = append(s.events, event)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
 	}
 	sort.SliceStable(s.events, func(i, j int) bool { return s.events[i].day.Before(s.events[j].day) })
 
@@ -405,6 +426,8 @@ func (s *syncedSeries) value(d time.Time) (decimal.Decimal, bool) {
 
 func (s *syncedSeries) flows(from, to time.Time) decimal.Decimal { return sumFlows(s.events, from, to) }
 
+func (s *syncedSeries) flowEvents() []flowEvent { return s.events }
+
 func (s *syncedSeries) inception() (time.Time, bool) {
 	if !s.complete || s.firstInflow == nil {
 		return time.Time{}, false
@@ -459,25 +482,55 @@ func loadManualSeries(ctx context.Context, q Querier, positionID string) (*manua
 	if err != nil {
 		return nil, err
 	}
-	rows, err := q.QueryContext(ctx, `SELECT `+operationColumns+` FROM investment_operations WHERE account_id = ?`+operationOrder, accountID)
+	operations, cashless, err := accountOperations(ctx, q, accountID)
 	if err != nil {
 		return nil, err
 	}
+	var quotes []AssetQuote
+	if quoteSource.Valid && quoteSource.String != "" {
+		if quotes, err = ListAssetQuotes(ctx, q, assetID, nil); err != nil {
+			return nil, err
+		}
+	}
+	return newManualSeries(operations, cashless, positionID, quotes)
+}
+
+// accountOperations is the account's operations in replay order. An
+// integrated custody only replays the ones that carry a position and never
+// computes cash, exactly like replayAccountUntil.
+func accountOperations(ctx context.Context, q Querier, accountID string) ([]Operation, bool, error) {
+	account, err := getRawAccount(ctx, q, accountID)
+	if err != nil {
+		return nil, false, err
+	}
+	query := `SELECT ` + operationColumns + ` FROM investment_operations WHERE account_id = ?`
+	cashless := account.Kind == AccountKindIntegrated
+	if cashless {
+		query += ` AND position_id IS NOT NULL`
+	}
+	rows, err := q.QueryContext(ctx, query+operationOrder, accountID)
+	if err != nil {
+		return nil, false, err
+	}
+	defer rows.Close()
 	operations := []Operation{}
 	for rows.Next() {
 		op, err := scanOperation(rows)
 		if err != nil {
-			rows.Close()
-			return nil, err
+			return nil, false, err
 		}
 		operations = append(operations, op)
 	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
+	return operations, cashless, rows.Err()
+}
 
+// newManualSeries replays an account's operations and keeps the value of one
+// holding after each day. quotes is the asset's price series when it has a
+// quote market, nil otherwise.
+func newManualSeries(operations []Operation, cashless bool, positionID string, quotes []AssetQuote) (*manualSeries, error) {
 	s := &manualSeries{}
 	ledger := newAccountLedger()
+	ledger.cashless = cashless
 	for i, op := range operations {
 		if err := applyOperation(&ledger, op); err != nil {
 			return nil, err
@@ -493,6 +546,7 @@ func loadManualSeries(ctx context.Context, q Querier, positionID string) (*manua
 		}
 		checkpoint := manualCheckpoint{day: Day(op.OccurredOn), valued: true}
 		if state := ledger.positions[positionID]; state != nil && state.quantity.IsPositive() {
+			var err error
 			checkpoint.value, checkpoint.valued = state.valuedValue(), state.valuationTotal != nil
 			if checkpoint.valuedOn, err = state.valuedDay(); err != nil {
 				return nil, err
@@ -500,11 +554,7 @@ func loadManualSeries(ctx context.Context, q Querier, positionID string) (*manua
 		}
 		s.checkpoints = append(s.checkpoints, checkpoint)
 	}
-	if quoteSource.Valid && quoteSource.String != "" {
-		quotes, err := ListAssetQuotes(ctx, q, assetID, nil)
-		if err != nil {
-			return nil, err
-		}
+	if len(quotes) > 0 {
 		s.quotes = quotes
 		s.timeline = newQuantityTimeline(s.events)
 	}
@@ -593,6 +643,8 @@ func (s *manualSeries) quotedValue(d time.Time, checkpoint manualCheckpoint) (de
 }
 
 func (s *manualSeries) flows(from, to time.Time) decimal.Decimal { return sumFlows(s.events, from, to) }
+
+func (s *manualSeries) flowEvents() []flowEvent { return s.events }
 
 func (s *manualSeries) inception() (time.Time, bool) {
 	for _, event := range s.events {

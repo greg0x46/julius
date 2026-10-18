@@ -3,6 +3,9 @@ package reporting
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/shopspring/decimal"
@@ -17,7 +20,15 @@ type Resolver interface {
 	On(context.Context, string, string, time.Time) (exchange.Rate, error)
 }
 
+type Issue struct {
+	Currency string `json:"currency"`
+	Reason   string `json:"reason"`
+	Date     string `json:"date,omitempty"`
+	Account  string `json:"account,omitempty"`
+}
+
 type Conversion struct {
+	Issue  *Issue
 	Amount *decimal.Decimal
 	Status string
 }
@@ -27,11 +38,17 @@ func Convert(ctx context.Context, rates Resolver, amount decimal.Decimal, curren
 		return Conversion{Amount: &amount, Status: "complete"}
 	}
 	if day == nil {
-		return Conversion{Status: "unavailable"}
+		return unavailable(currency, day, "historical_unavailable")
 	}
 	rate, err := rates.On(ctx, currency, ReferenceCurrency, *day)
 	if err != nil {
-		return Conversion{Status: "unavailable"}
+		reason := "provider_failure"
+		if errors.Is(err, exchange.ErrUnsupported) {
+			reason = "unsupported"
+		} else if errors.Is(err, exchange.ErrHistorical) {
+			reason = "historical_unavailable"
+		}
+		return unavailable(currency, day, reason)
 	}
 	value := rate.Convert(amount)
 	status := "complete"
@@ -39,6 +56,14 @@ func Convert(ctx context.Context, rates Resolver, amount decimal.Decimal, curren
 		status = "stale"
 	}
 	return Conversion{Amount: &value, Status: status}
+}
+
+func unavailable(currency string, day *time.Time, reason string) Conversion {
+	issue := &Issue{Currency: currency, Reason: reason}
+	if day != nil {
+		issue.Date = day.Format("2006-01-02")
+	}
+	return Conversion{Status: "unavailable", Issue: issue}
 }
 
 type Totals struct {
@@ -49,6 +74,7 @@ type Totals struct {
 }
 
 type Summary struct {
+	Issues       []Issue `json:"issues,omitempty"`
 	CurrencyCode string  `json:"currency_code"`
 	Status       string  `json:"status"`
 	Eligible     int     `json:"eligible"`
@@ -59,6 +85,7 @@ type Summary struct {
 }
 
 type Accumulator struct {
+	issues                              []Issue
 	eligible, converted, missing, stale int
 	inflow, outflow                     decimal.Decimal
 }
@@ -67,6 +94,18 @@ func (a *Accumulator) Add(c Conversion, direction money.Classification) {
 	a.eligible++
 	if c.Amount == nil {
 		a.missing++
+		if c.Issue != nil {
+			found := false
+			for _, issue := range a.issues {
+				if issue == *c.Issue {
+					found = true
+					break
+				}
+			}
+			if !found {
+				a.issues = append(a.issues, *c.Issue)
+			}
+		}
 		return
 	}
 	a.converted++
@@ -81,7 +120,7 @@ func (a *Accumulator) Add(c Conversion, direction money.Classification) {
 }
 
 func (a Accumulator) Summary() Summary {
-	s := Summary{CurrencyCode: ReferenceCurrency, Status: "complete", Eligible: a.eligible, Converted: a.converted, Missing: a.missing, Stale: a.stale}
+	s := Summary{Issues: append([]Issue(nil), a.issues...), CurrencyCode: ReferenceCurrency, Status: "complete", Eligible: a.eligible, Converted: a.converted, Missing: a.missing, Stale: a.stale}
 	if a.missing > 0 {
 		s.Status = "incomplete"
 		if a.converted == 0 {
@@ -103,6 +142,24 @@ type IncompleteError struct {
 }
 
 func (e *IncompleteError) Error() string {
+	if len(e.Coverage.Issues) > 0 {
+		messages := make([]string, 0, len(e.Coverage.Issues))
+		for _, issue := range e.Coverage.Issues {
+			label := issue.Currency
+			if issue.Account != "" {
+				label += " (" + issue.Account + ")"
+			}
+			switch issue.Reason {
+			case "unsupported":
+				messages = append(messages, fmt.Sprintf("%s: o provedor não oferece conversão para BRL. Sincronizar não resolve essa limitação.", label))
+			case "historical_unavailable":
+				messages = append(messages, fmt.Sprintf("%s: não há cotação para %s. Consulte os valores na moeda original ou escolha outro período.", label, issue.Date))
+			default:
+				messages = append(messages, fmt.Sprintf("%s: não foi possível consultar a cotação agora. Tente novamente mais tarde.", label))
+			}
+		}
+		return strings.Join(messages, " ")
+	}
 	if e.Detail != "" {
 		return e.Detail
 	}

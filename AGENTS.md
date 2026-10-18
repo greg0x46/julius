@@ -34,6 +34,7 @@ internal/
   transactions/ ledger/    ledger queries/mutations; multi-engine flows in one DB tx
   categories/ rules/ automation/   categorization, matching core, rule engine
   payables/ scenarios/ projections/ recurrences/ timeline/   debts, hypotheticals, projection
+  goals/                   targets over a global metric; progress recomputed on read
   networth/ investments/ quotes/ marketdata/                 net worth, investments, prices
   pluggy/ syncsvc/ worker/ datasources/ statementimport/     ingestion
   auth/ settings/          owner account + sessions; encrypted secrets

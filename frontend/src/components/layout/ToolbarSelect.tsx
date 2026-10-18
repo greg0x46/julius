@@ -13,7 +13,7 @@ interface ToolbarSelectProps<Value extends string> {
  * spoken and shown as a prefix on desktop ("Agrupar: Semana"); on a phone
  * only the chosen value fits, so the label goes visually hidden.
  */
-function ToolbarSelect<Value extends string>({ id, label, value, options, onChange }: ToolbarSelectProps<Value>) {
+export function ToolbarSelect<Value extends string>({ id, label, value, options, onChange }: ToolbarSelectProps<Value>) {
   return (
     <div className="list-toolbar-select">
       <label htmlFor={id}>{label}</label>

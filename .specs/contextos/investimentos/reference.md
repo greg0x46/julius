@@ -1,20 +1,21 @@
 # Investments
 
-Investment accounts represent custody; positions represent assets; goal
-portfolios group positions without creating a second balance. Each position
-belongs to a single portfolio or has no goal.
+Investment accounts represent custody; positions represent assets. Targets
+over the invested total live in the separate Goals area
+([`metas`](../metas/reference.md)); positions carry no goal or grouping.
 
 ## Domain and APIs
 
-`internal/investments` holds accounts, portfolios, manual positions, operations,
+`internal/investments` holds accounts, manual positions, operations,
 valuations and reconciliation. APIs live under `/api/investment-accounts`,
-`/api/investment-portfolios`, `/api/investment-positions`,
-`/api/investment-operations`, `/api/investment-reconciliations` and
-`/api/investment-summary`. The legacy `/api/investments` queries remain
+`/api/investment-positions`,
+`/api/investment-operations`, `/api/investment-reconciliations`,
+`/api/investment-summary` and the [period view](#period-view)
+`/api/investment-portfolio`. The legacy `/api/investments` queries remain
 available for synced assets and their imported history.
 
 Integrated investments keep the provider's identifiers, initially grouped by
-connection. Goals and reconciliations are local choices. A brokerage cash
+connection. Reconciliations are local choices. A brokerage cash
 balance already present in `financial_accounts` can be linked, without adding
 its balance to net worth again.
 
@@ -24,8 +25,9 @@ as in a manual account and listed next to the provider's positions, which stay
 read-only. The ledger of an integrated account replays only operations that
 carry a position and never computes cash, which remains whatever the
 institution reports. The sync writes only provider data and series quotes, so
-it never changes the quantity, cost, source, goal or valuations of a manual
-holding. In the UI, manual rows of an integrated account carry a "Manual" tag.
+it never changes the quantity, cost, source or valuations of a manual
+holding. The UI does not tag or split positions by origin; a synced position
+is read-only and offers only **Ver detalhes**.
 
 Manual operations use reais and decimal arithmetic. Purchases fold costs into
 the weighted average cost; sales write off proportional cost. Corrections
@@ -130,8 +132,7 @@ modifying the bank-reported balance.
 Net worth sums synced positions once, manual positions, and manual investment
 cash not yet represented in a linked financial account. Manual holdings in an
 integrated account count like any other manual holding (including in
-`ManualNetWorth`), without double-counting the provider's positions. Goal
-portfolios are not summed again. No appreciation is invented for historical
+`ManualNetWorth`), without double-counting the provider's positions. No appreciation is invented for historical
 snapshots without data.
 
 This version records operations; it does not place orders or move money at the
@@ -360,7 +361,7 @@ position holds with positive quantity, and the backfill writes history. The job
 enters the series.
 
 The value of a manual position whose asset has automatic quotes is **derived on
-read** (`Position.CurrentValue`, which feeds totals, goals and net worth):
+read** (`Position.CurrentValue`, which feeds totals and net worth):
 `quantity × latest series price`, rounded to cents, with
 `valuation_basis = market_quote`, `current_unit_price` equal to the price and
 `valued_on` equal to its day. None of this is persisted; an old quote still
@@ -387,6 +388,219 @@ not jump on a provider outage. When the latest quote is older than 10 days and
 newer than the last typed valuation, that day's yield is unavailable
 (`saldo_indisponivel`): it does not fall back to a valuation the quote already
 superseded.
+
+## Period view
+
+`GET /api/investment-portfolio?from=&to=&group_by=&source=&account_id=`
+(`investments.BuildPortfolio`) is the backend authority for a period of the
+book: positions as of `to`, their value, quantity and cost then, and what they
+earned in the period. It reuses the yield machinery above (`PositionYield`
+series, ledger replay, quotes, `valuation` conversion); manual and synced
+positions follow the same formula, so the origin does not change the method.
+The legacy `/api/investments` and `/yield` endpoints are untouched.
+
+- **Period.** `from` and `to` (`YYYY-MM-DD`, `to` defaults to today; a future `to` is clamped to
+  today and the response echoes the effective `to` with `to_clamped: true`; a
+  `from` after the effective `to` is a 400) are both inside the period; the opening value is the one at
+  the end of the day before `from`, and a flow dated `d` moves the position at
+  the end of `d`. Without `from` the period is each position's life since
+  inception (opening value zero). Per position, if the opening day has no price
+  the period starts on the first priced day (`partial_start`, `opening_on`).
+- **Which positions.** A position bought after `to` is left out; one open at
+  `to` and closed since is reported with its as-of quantity and value. One
+  closed at `to` (`closed_as_of_to`) stays in the numbers when it was worth
+  something or moved in the period: its result is the realized gain. A position
+  with no value and no movement in the period is omitted. Closed positions are
+  never filtered out of totals.
+- **Yield.** `yield = end_value − start_value − (contributions − withdrawals)`,
+  and `end_value = start_value + contributions − withdrawals + yield` holds at
+  position, group and total level. Contributions and withdrawals are the dated
+  money flows of the position (a purchase at all-in cost, a sale net of its
+  costs, a custody transfer at its frozen cost, a synced movement's amount); a
+  dividend paid out by a synced holding is a withdrawal, hence yield. Manual
+  `income` operations belong to the account, not to a position, and are not in
+  it.
+- **Held vs closed.** `totals` (portfolio and each group) carries `held`
+  (positions with `closed_as_of_to` false: the yield of what is still held) and
+  `closed` (true: the realized result of what is closed as of `to`), each with
+  `start_value`, `end_value`, `contributions`, `withdrawals`, `yield`,
+  `capital_base` and `yield_rate`. Each part reconciles and the two add up to
+  the totals field by field (the total `capital_base` is their sum); each rate
+  divides the part's own summed yield by its own summed weighted capital. The
+  top-level totals are the consolidated result of the period.
+- **Share.** Each available position has `share` (its end value over the
+  portfolio's, null when unavailable), consistent with the group `share`s.
+- **Percentage.** `yield_rate` is a ratio (0.05 = 5%): Modified Dietz,
+  `yield / capital_base`, with `capital_base = V0 + Σ flow × (to − day) /
+  (to − start)` in days. A group or the total divides its summed yield by its
+  summed weighted capital (`capital_base`), never an average of child rates.
+  Null when the base is not positive.
+- **Invested.** `invested` is the cost of what is held at `to`: for a manual
+  position the ledger's cost basis at `to`; for a synced one the net money put in
+  up to `to` (zero once closed), available only when the history is complete
+  (a first inflow is known, or a fixed income purchase is restored). Otherwise
+  it is null with `invested_unavailable_reason`. Group `invested` sums the known
+  ones; `invested_unknown_positions` counts the others.
+- **Unavailable.** A position whose period cannot be stated has
+  `unavailable_reason` (`sem_historico`, `historico_incompleto`,
+  `saldo_indisponivel`, or `cambio_indisponivel` for a currency without a rate)
+  and null figures. It is counted (`positions_total`, `positions_unavailable`,
+  `partial: true`) and excluded from every sum and from the percentage, never
+  counted as zero. With an explicit `from`, a synced position is computable
+  even when its purchase predates the provider's history, as long as quotes
+  price both ends (`history_complete: false`, `invested` null).
+  Its `closed_as_of_to` is still set when the quantity is known to be zero, so
+  the closed filter can hide it; it stays out of every sum either way. An
+  unknown quantity says nothing and leaves it listed.
+- **Costs and taxes.** Counted once: a manual position's purchase fees and
+  taxes are inside its contributions and a sale's are netted from its
+  withdrawals, so `costs` (the fees and taxes of the period's manual operations)
+  is informational. The yield of a synced position is gross of the IR/IOF the
+  provider provisions; `provisioned_taxes` (`taxes + taxes2`, only when the
+  snapshot is not after `to`) is informational and not deducted. The provider's
+  own `amount_profit` is `reported_profit` (native currency, with
+  `reported_as_of`), for conference only.
+- **Currency.** Every figure is converted to BRL with one rate per currency
+  (the day `to`), the same for opening value, closing value and each flow, so
+  the identity holds in BRL and the yield excludes exchange variation inside the
+  period. `native` keeps the position's own amounts; `native_rates` lists the
+  rates used. Money is then expressed in the reference currency like
+  `/api/investment-summary` (`currency_code`, `fx`).
+- **Scope.** `source` (`manual`|`synced`) is the only filter that changes what
+  is measured; it is echoed. `group_by` (`none`, `account`, `class`) is
+  subtotaled server-side: each group has its own totals and `share` of the
+  portfolio's end value; the top-level `totals` do not depend on it, nor on
+  `account_id`, which only narrows the listed groups. Cash is not part of any
+  figure. `asset_class` comes from the asset catalog (`unclassified` when a
+  position has no asset). Unavailable positions have no end value and so no part
+  of `share`.
+
+Response (`group_by=none` yields one group with key `all`):
+
+```json
+{
+  "from": "2026-09-10", "to": "2026-09-28", "to_clamped": false, "group_by": "account",
+  "source": null, "account_id": null, "currency_code": "BRL", "fx": {},
+  "native_rates": {},
+  "totals": {
+    "held": {}, "closed": {},
+    "start_value": "1050", "end_value": "600", "contributions": "0",
+    "withdrawals": "600", "yield": "150", "capital_base": "955.2631578947",
+    "yield_rate": "0.1570247934", "invested": "500",
+    "invested_unknown_positions": 0, "costs": "0", "provisioned_taxes": "0",
+    "positions_total": 1, "positions_unavailable": 0,
+    "positions_partial_start": 0, "partial": false
+  },
+  "groups": [{
+    "key": "<account id | asset class | all>", "label": "Corretora",
+    "account_id": "…", "asset_class": null, "share": "1", "totals": {},
+    "positions": [{
+      "id": "…", "source": "manual", "account_id": "…", "account_name": "…",
+      "asset_id": "…", "name": "…", "ticker": null, "asset_type": "Ação",
+      "asset_class": "variable_income", "currency_code": "BRL",
+      "quantity": "5", "closed_as_of_to": false, "unavailable_reason": null,
+      "opening_on": "2026-09-09", "partial_start": false, "history_complete": true,
+      "start_value": "1050", "end_value": "600", "contributions": "0",
+      "withdrawals": "600", "yield": "150", "capital_base": "…", "yield_rate": "…", "share": "1",
+      "native": {"start_value": "…", "end_value": "…", "contributions": "…",
+                 "withdrawals": "…", "yield": "…", "invested": "500"},
+      "invested": "500", "invested_unavailable_reason": null,
+      "costs": "0", "provisioned_taxes": null,
+      "reported_profit": null, "reported_as_of": null
+    }]
+  }]
+}
+```
+
+Start, end, contributions, withdrawals, yield, capital base, `native`,
+`opening_on` and `yield_rate` are null on an unavailable position; the shared
+fixture (`investment_period`) pins the shape.
+
+### Page
+
+`/investimentos` (`pages/InvestmentsPage.tsx`) is a single view; there is no
+manual/synced split in the UI (the legacy `/api/investments` listing is no
+longer shown here, only its detail pages, reached from a position's name or
+**Ver detalhes**). The shared `usePeriod()` window is mounted through
+`PeriodNavigator` in the page `context`, like Home and Transações.
+`presentation/investmentPeriod.ts#periodRequest` turns it into the request:
+"Todo o período" omits `from` (and ends today); a window that starts after today sends
+nothing and says "Este período ainda não começou". An end in the future is
+sent as is: the server cuts it at today and answers `to_clamped`, which the
+summary states ("Período em andamento"). The window moves the summary and the
+positions together. The page tabs (`PageTabs`) choose how
+the positions list is grouped: **Classe de ativo** (default), **Custódia** or
+**Sem agrupamento**.
+
+Components (`components/investments/`) and hook:
+
+- `useInvestmentPortfolioPeriod` (`hooks/`) reads the endpoint with
+  `group_by` (the UI never sends `source`); the previous answer stays while a new one loads
+  (`aria-busy`, dimmed rows). Its query key lives under the `investmentWorkspace`
+  root, so every ledger or asset write refreshes it.
+- `InvestmentPeriodView` owns the loading/error states and the list controls:
+  search and **Mostrar encerradas** shape the rows, the tab's grouping is sent to
+  the backend. The section header states how many positions the server measured.
+- `InvestmentPeriodSummary` shows **Carteira em `to`** (`totals.end_value`),
+  Rendimento (`totals.yield` together with `yield_rate`), Aportes, Resgates and
+  Custos (only when non-zero). The box carries no explanatory prose: the caveats
+  (cash excluded, IR/IOF provisioned and not deducted, period in progress,
+  positions that start late via `positions_partial_start`) sit in the popover of
+  an ⓘ icon beside the hero figure, whose accessible name includes them. The
+  disclosure **Detalhes do
+  cálculo** expands the five backend components and, under them, where the
+  result comes from: "Posições mantidas" (`totals.held`) plus
+  "Encerradas no período" (`totals.closed`, the realized result; hidden when
+  all zeros). When `partial`, the warning "Parcial: N de M posições sem
+  histórico suficiente" and the reasons by count go inside that same popover
+  (no tag), and the icon turns amber. A null `yield_rate` is "—" with its
+  reason, never 0%.
+- `InvestmentPositionsPeriod` renders the groups: a table from `xl` up (one
+  `<tbody>` per group, the group's subtotal as its first row), stacked rows and
+  collapsible headers below it. Groups start **collapsed**: the header carries the
+  subtotal and `share` (the figure with a thin bar, so concentration by class or
+  custody reads at a glance), and a toggle expands it to the rows (searching keeps
+  matching groups open). Columns: Ativo (ticker and quantity beneath), Classe (with
+  the instrument type beneath) and Custódia (each hidden when it is the grouping),
+  Valor atual (`end_value`), Valor investido (`invested`), Rendimento (R$ and
+  `yield_rate`) and Participação (the position's `share`, "—" when the backend has
+  none). On compact screens, Investido and Participação are
+  labelled facts under the asset instead of one dense sentence. Group toggles
+  are buttons with `aria-expanded`.
+- `InvestmentAccountsDrawer`, opened by the **Contas** button in the page header,
+  keeps account management reachable whatever the grouping: the list of accounts
+  with each one's current cash (**Disponível hoje**) and menu (Ver movimentações,
+  Editar/Excluir conta or Vincular caixa), and, per account, its movement history
+  (correct/delete). Creating (movimentação, posição, conta) is only in the page's
+  **Adicionar** menu; account menus hold management only. **Ver
+  movimentações** in an account group's or a manual position's menu opens the same
+  drawer on that account, or filtered to that position. Account groups and
+  position rows carry the same menus (`useInvestmentMenus`); a synced position
+  offers **Ver detalhes**, whose page lists its movements.
+
+Display rules:
+
+- Group money and percentages are the server's. Search (name or ticker,
+  accent-insensitive) and **Mostrar encerradas** are client-side row filters
+  only: totals and subtotals stay those of the full group, and the UI says so
+  ("A busca só esconde linhas…", "Totais e subtotais incluem N encerradas
+  ocultas"). A hidden closed position with no figures is
+  not in any total, so it gets its own note ("N encerrada oculta está sem valor
+  no período e fora dos totais") rather than being counted among those. `source` stays a backend filter but
+  the page does not use it.
+- The main figures are the consolidated period result (`totals`), which
+  includes positions closed as of `to`; the held/closed split comes from the
+  server and the client never sums it.
+- A position the backend could not measure shows "—" and a badge with the
+  reason (Sem histórico, Histórico incompleto, Sem saldo, Sem câmbio); an
+  unknown `invested` is "—" with `invested_unavailable_reason`. Other badges:
+  Encerrada, Início parcial (`partial_start`), Histórico incompleto
+  (`history_complete = false`). A foreign position also shows its native value.
+- `reported_profit` (with `reported_as_of`), the period components, costs and
+  the provisioned IR/IOF are in the popover of the position's Rendimento, as
+  "Informado pela instituição" for conference; they never feed a total.
+- Cash (saldo para investir) is not part of the period figures; each account's
+  cash in the accounts drawer is today's balance.
 
 ## Combined actions, review and filters
 
@@ -434,25 +648,22 @@ five days of difference; they require confirmation. Fees, taxes and income can
 also be linked, avoiding duplicating revenue and expenses. Unlinking restores
 the available portion.
 
-The Investimentos screen offers "Revisar lançamentos antigos", opening the
-statement with no period restriction. `POST /api/transactions/query` accepts
-`filters.origin` (`manual`, `synced`). No history is reclassified automatically.
+`POST /api/transactions/query` accepts `filters.origin` (`manual`, `synced`).
+No history is reclassified automatically.
 
-Positions accept the filters `account_id`, `portfolio_id`, `source`,
+Positions accept the filters `account_id`, `source`,
 `source_id` and `include_closed`. Operations accept `account_id`, `position_id`,
-`portfolio_id`, `source`, `source_id`, `from`, `to` and `reconciliation_state`
+`source`, `source_id`, `from`, `to` and `reconciliation_state`
 (`linked`, `unlinked`). Typed valuations are dated `valuation` operations,
 queryable through the same operation history; the quotes job never creates them.
 
 The investments area's total includes the effective cash of linked accounts. In
 net worth that same cash is already in the bank portion, so it is not summed a
-second time. In the per-goal view, purchases and sales are labeled as such,
-without confusing them with the custody's cash transfers.
+second time.
 
-Imported positions in other currencies keep their original currency and value.
-With no FX conversion in this version, they stay out of the investment totals,
-goals and the investments portion of net worth in reais. The UI flags when
-positions exist outside those totals.
+Imported positions in other currencies keep their original currency and value;
+the summary, net worth and the period view convert them with the day's rate
+(see [Reference valuation](#reference-valuation)).
 
 ## Database representation
 
@@ -468,13 +679,10 @@ date-only text as well as legacy timestamps. Integrated custody IDs remain opaqu
 UUIDs. `db.Open` rejects the old schema generation; conversion is separate work.
 
 Position responses expose nullable `total_cost`, the exact acquisition cost
-from the backend ledger. The frontend uses it for manual yield instead of
-reconstructing quantity × average_cost; the gain is computed on the exact
-cost and rounded only for display (including proportional costs after partial
-sales). Older
-responses without it show the existing unknown-cost state. Workspace net
-yield/cost/movement aggregates still run locally and are inventoried as a
-migration gap in the API contract doc.
+from the backend ledger (`average_cost` is a display value). The page no longer
+derives a gain from it: yield, invested amount and percentage come from the
+[period view](#period-view), which was the migration of the former browser-side
+aggregates.
 
 ## API contract verification
 
@@ -485,27 +693,24 @@ backend/frontend CI tests.
 
 ## Monetary precision
 
-Investment cash fields and portfolio targets keep decimal strings through editing
-and submission. Contribution totals and quantity × average-cost gain calculations
-use exact arithmetic; BRL rounding happens only at display ([policy](../../precisao-monetaria.md)).
+Investment cash fields keep decimal strings through editing
+and submission. Period figures arrive as decimal strings and ratios and are only
+formatted in the browser; BRL rounding happens only at display
+([policy](../../precisao-monetaria.md)).
 
 ## Reference valuation
 
 `GET /api/investment-summary` converts its existing BRL base into
 `finance.reference_currency` using current `internal/exchange` FX. Totals,
-per-account value/cash, per-goal value and goal targets share that rate and
-carry the chosen `currency_code` plus full `fx` provenance. Goal progress
-ratios do not change. Missing rates make the summary unavailable rather than
+per-account value/cash share that rate and carry the chosen `currency_code`
+plus full `fx` provenance. Missing rates make the summary unavailable rather than
 showing zero or an identity conversion. Stale stored rates are disclosed.
 
-The workspace uses the same exact rate for client-computed BRL yield,
-contribution, withdrawal and cost aggregates. Positions and operations, including
-their currencies and amounts, stay native. Synced foreign positions and
-foreign custody cash are valued in BRL with the day's `internal/exchange` rate
-(`investments.BuildSummary`, `ManualNetWorth`, goal values); a currency without a
-rate fails the summary rather than being omitted. Yield, contribution and cost
-aggregates computed in the browser still sum reais positions only. No positions, targets or provider balances are
+Positions and operations, including their currencies and amounts, stay native.
+Synced foreign positions and foreign custody cash are valued in BRL with the
+day's `internal/exchange` rate (`investments.BuildSummary`, `ManualNetWorth`); a
+currency without a rate fails the summary rather than being omitted. The period
+view converts every position with one rate per currency (day `to`) in the
+backend and shows the native value of a foreign position beside it. No
+positions, targets or provider balances are
 rewritten when switching reference currency.
-
-Account cards add converted position value and cash with full decimal precision;
-only the displayed total is rounded to cents, consistently with the workspace.

@@ -1,34 +1,12 @@
-/* Investimentos: SummaryStrip + one Section per account or goal (figures,
-   positions as rows on a phone / a flat table from md up, movements behind a
-   disclosure). Surfaces, rows, empty states and the summary come from
-   layout.css; this file only holds what is specific to the investment
-   screens. Written mobile-first. */
-
-.investments-list {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.investments-list + .investments-footnote,
-.section + .investments-hint {
-  margin-top: 1rem;
-}
+/* Investimentos: SummaryStrip for the period, positions grouped by the
+   backend (stacked rows on a phone / a flat table from lg up) and the
+   accounts section with movements behind a disclosure. Surfaces, rows, empty
+   states and the summary come from layout.css; this file only holds what is
+   specific to the investment screens. Written mobile-first. */
 
 /* One quiet line of explanation: what a view means, never an alert box. */
-.investments-hint,
 .investment-note {
   margin: 0 0 0.75rem;
-  color: var(--color-text-secondary);
-  font-size: var(--fs-small);
-}
-
-.investments-footnote {
-  margin: 0.5rem 0 0;
-  text-align: center;
-}
-
-.investments-footnote .ant-btn-link {
   color: var(--color-text-secondary);
   font-size: var(--fs-small);
 }
@@ -45,81 +23,6 @@
   overflow: hidden;
   clip: rect(0 0 0 0);
   white-space: nowrap;
-}
-
-/* ---- Figures strip inside an account or goal section --------------------- */
-
-.investment-figures {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.75rem 1rem;
-  margin: 0 0 0.75rem;
-}
-
-.investment-figure {
-  display: flex;
-  flex-direction: column;
-  gap: 0.125rem;
-  min-width: 0;
-}
-
-.investment-figure dt {
-  color: var(--color-text-secondary);
-  font-size: var(--fs-caption);
-}
-
-.investment-figure dd {
-  margin: 0;
-  color: var(--color-text);
-  font-size: var(--fs-row);
-  font-weight: 500;
-  font-variant-numeric: tabular-nums;
-}
-
-/* The explanation opens from the label; the dotted underline says so. */
-.investment-figure-hint {
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  cursor: pointer;
-  text-decoration: underline dotted;
-  text-underline-offset: 0.2em;
-}
-
-/* The label is 14px tall; on a phone the tap target grows without the type. */
-@media (max-width: 47.99rem) {
-  .investment-figure-hint {
-    position: relative;
-  }
-
-  .investment-figure-hint::after {
-    content: "";
-    position: absolute;
-    inset: -14px -8px;
-  }
-}
-
-.investment-figure-hint:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
-}
-
-@media (min-width: 48rem) {
-  .investment-figures {
-    grid-template-columns: repeat(3, minmax(0, max-content));
-    gap: 0.75rem 2rem;
-  }
-}
-
-.investment-goal {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  margin-bottom: 0.75rem;
-  color: var(--color-text-secondary);
-  font-size: var(--fs-small);
 }
 
 /* ---- Rows (compact): value 600 on the right, yield under it, "···" at the end */
@@ -162,54 +65,15 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* In the table's figure column the % sits under the amount, like the other quiet lines. */
-.investment-cell-end .investment-yield {
+/* In the table's figure columns the % sits under the amount, like the other quiet lines. */
+.investment-cell-end .investment-yield,
+.investment-period-table .investment-yield {
   flex-direction: column;
   align-items: flex-end;
   gap: 0;
 }
 
-/* ---- Movements disclosure: part of the section, not a nested card -------- */
-
-.investment-operations.ant-collapse {
-  margin-top: 0.5rem;
-  border-top: 1px solid var(--color-border);
-  border-radius: 0;
-  background: transparent;
-}
-
-.investment-operations .ant-collapse-item {
-  border: 0;
-}
-
-.investment-operations .ant-collapse-header {
-  padding-inline: 0 !important;
-  color: var(--color-text-secondary);
-  font-size: var(--fs-small);
-}
-
-.investment-operations .ant-collapse-content-box {
-  padding: 0 !important;
-}
-
-/* ---- Tables (md and up): flat, hairlines only ---------------------------- */
-
-.investment-table.ant-table-wrapper .ant-table {
-  background: transparent;
-}
-
-.investment-table.ant-table-wrapper .ant-table-tbody > tr > td {
-  border-bottom: 1px solid var(--color-border);
-  font-size: var(--fs-body);
-}
-
-.investment-table.ant-table-wrapper .ant-table-tbody > tr:last-child > td {
-  border-bottom: 0;
-}
-
-.investment-table.ant-table-wrapper .ant-table-tbody > tr:hover > td {
-  background: var(--color-hover);
-}
+/* ---- Tables ------------------------------------------------------------- */
 
 .investment-cell {
   display: flex;
@@ -321,4 +185,456 @@
   font-size: var(--fs-row);
   font-weight: 500;
   text-align: right;
+}
+
+/* ---- Period view ------------------------------------------------------------ */
+
+.investment-period-summary + .investment-positions-section,
+.investment-positions-section + .investment-accounts {
+  margin-top: 1rem;
+}
+
+.investment-period-summary .investment-yield-percent {
+  font-size: inherit;
+}
+
+.investment-hint {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  text-align: inherit;
+}
+
+.investment-hint {
+  text-align: right;
+}
+
+.investment-hint:focus-visible,
+.investment-group-toggle:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.investment-hint-content {
+  max-width: 18rem;
+  font-size: var(--fs-small);
+}
+
+.investment-hint-content p {
+  margin: 0 0 0.375rem;
+}
+
+.investment-summary-result {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.375rem;
+}
+
+.investment-summary-unavailable {
+  color: var(--color-text-secondary);
+}
+
+.investment-summary-info {
+  margin-left: 0.5rem;
+  color: var(--color-text-secondary);
+  font-size: 1rem;
+  vertical-align: middle;
+}
+
+.investment-summary-info-warning {
+  color: var(--color-warning-text);
+}
+
+.investment-hint:hover .investment-summary-info:not(.investment-summary-info-warning) {
+  color: var(--color-primary);
+}
+
+.investment-reconcile-disclosure {
+  width: min(32rem, 100%);
+}
+
+.investment-reconcile-disclosure > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  min-height: 28px;
+  color: var(--color-primary);
+  font-size: var(--fs-small);
+  font-weight: 500;
+  cursor: pointer;
+  list-style: none;
+}
+
+.investment-reconcile-disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+
+.investment-reconcile-disclosure > summary::before {
+  content: "";
+  width: 0.4rem;
+  height: 0.4rem;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform 0.15s;
+}
+
+.investment-reconcile-disclosure[open] > summary::before {
+  transform: rotate(45deg) translate(-1px, -1px);
+}
+
+.investment-hint-content ul {
+  margin: 0;
+  padding-left: 1.125rem;
+}
+
+.investment-reconcile {
+  display: grid;
+  gap: 0.25rem;
+  max-width: 28rem;
+  margin: 0.5rem 0 0;
+  font-size: var(--fs-small);
+}
+
+.investment-reconcile > div,
+.investment-details > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.investment-reconcile dt,
+.investment-details dt {
+  color: var(--color-text-secondary);
+}
+
+.investment-reconcile dd,
+.investment-details dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.investment-reconcile-total {
+  padding-top: 0.25rem;
+  border-top: 1px solid var(--color-border);
+  font-weight: 600;
+}
+
+.investment-details {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 15rem;
+  margin: 0;
+}
+
+.investment-details-reported {
+  flex-direction: column;
+  align-items: flex-start !important;
+  gap: 0 !important;
+  padding-top: 0.25rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.investment-list-options {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  min-height: 26px;
+}
+
+.investment-period-table .investment-col-quiet {
+  color: var(--color-text-secondary);
+  font-size: var(--fs-small);
+}
+
+.investment-nowrap,
+.investment-period-table thead th {
+  white-space: nowrap;
+}
+
+.investment-results.is-updating {
+  opacity: 0.6;
+  transition: opacity 0.15s;
+}
+
+.investment-row-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.investment-row-badges:empty {
+  display: none;
+}
+
+.investment-mobile-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  margin-top: 0.25rem;
+  color: var(--color-text);
+  font-size: var(--fs-small);
+  font-variant-numeric: tabular-nums;
+}
+
+.investment-mobile-metrics > span {
+  display: flex;
+  flex-direction: column;
+  gap: 0.0625rem;
+}
+
+.investment-mobile-metric-label {
+  color: var(--color-text-secondary);
+  font-size: var(--fs-caption);
+}
+
+.investment-group-empty {
+  padding: 0.75rem 0;
+  text-align: center;
+}
+
+.investment-group-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0;
+  border: 0;
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.investment-group-name {
+  font-weight: 600;
+}
+
+.investment-invested-partial {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.125rem;
+}
+
+/* Phone: each group is a header (toggle + subtotal) over its stacked rows. */
+.investment-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.investment-group-header {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.investment-group-header .investment-group-toggle {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 44px;
+}
+
+.investment-group-text {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.investment-group-title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+}
+
+.investment-group-header .investment-row-figures {
+  font-weight: 500;
+}
+
+/* Wide: one table, one body per group, the group's subtotal as its first row. */
+.investment-table-wrap {
+  overflow-x: auto;
+}
+
+.investment-period-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-body);
+}
+
+.investment-period-table th,
+.investment-period-table td {
+  padding: 0.625rem 0.75rem;
+  border-bottom: 1px solid var(--color-border);
+  text-align: left;
+  vertical-align: top;
+  font-weight: inherit;
+}
+
+.investment-period-table thead th {
+  color: var(--color-text-secondary);
+  font-size: var(--fs-small);
+  font-weight: 500;
+}
+
+.investment-period-table .investment-col-end {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The menu button's tap target (an ::after 8px past the button) must end inside the cell, or the table scrolls sideways. */
+.investment-period-table .investment-col-menu {
+  width: 3rem;
+  padding-inline: 0.25rem 0.5rem;
+  text-align: right;
+}
+
+.investment-group-row th,
+.investment-group-row td {
+  background: var(--color-hover);
+  vertical-align: middle;
+}
+
+.investment-group-row th {
+  font-weight: 600;
+}
+
+.investment-group-row th .investment-group-toggle {
+  flex-wrap: wrap;
+}
+
+.investment-position-row:hover th,
+.investment-position-row:hover td {
+  background: var(--color-hover);
+}
+
+.investment-group-toggle .investment-quiet,
+.investment-group-toggle .status-tag {
+  font-weight: 400;
+}
+
+/* ---- Accounts drawer ------------------------------------------------------ */
+
+.investment-account-list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.investment-account + .investment-account {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.investment-account-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.investment-account-cash {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.125rem;
+  color: var(--color-text-secondary);
+  font-size: var(--fs-caption);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.investment-account-cash .money {
+  color: var(--color-text);
+  font-size: var(--fs-row);
+  font-weight: 600;
+}
+
+.investment-drawer-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.investment-account-name.ant-btn {
+  height: auto;
+  padding: 0;
+  font-weight: 600;
+}
+
+.ant-drawer-body > .investment-account-cash {
+  align-items: flex-start;
+  margin-bottom: 1rem;
+}
+
+@media (max-width: 47.99rem) {
+  .investment-account-header {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .investment-account-cash {
+    grid-column: 1;
+    grid-row: 2;
+    align-items: flex-start;
+  }
+
+  .investment-account-header > .record-menu {
+    grid-column: 2;
+    grid-row: 1 / span 2;
+  }
+}
+
+.investment-group-toggle:disabled {
+  cursor: default;
+}
+
+/* Group share: the figure with a thin bar under it, so concentration reads at a glance. */
+.investment-share {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.25rem;
+  font-weight: 600;
+}
+
+.investment-share-bar {
+  display: block;
+  width: 4.5rem;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--color-border);
+  overflow: hidden;
+}
+
+.investment-share-bar > span {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--color-accent);
+}
+
+.investment-group-share {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  white-space: nowrap;
+}
+
+.investment-group-share .investment-share {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--color-text);
 }

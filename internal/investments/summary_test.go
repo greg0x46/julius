@@ -63,46 +63,6 @@ func TestSummaryCountsLinkedBrokerageCashOnce(t *testing.T) {
 	}
 }
 
-func TestSummaryGoalsRegroupValueWithoutAddingToTheTotal(t *testing.T) {
-	f := newBookFixture(t)
-	ctx := context.Background()
-	accountID := f.addManualAccount("Custódia")
-	syncedID := f.addFinancialInvestment("2000", "4", "500")
-	goal, err := investments.CreatePortfolio(ctx, f.conn, investments.PortfolioInput{Name: "Reserva", TargetAmount: bookDecPtr("4000")})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := investments.CreatePosition(ctx, f.conn, investments.PositionInput{
-		AccountID: accountID, Name: "CDB", AssetType: "Renda fixa", InitialValue: bookDecPtr("500"),
-	}); err != nil {
-		t.Fatalf("CreatePosition: %v", err)
-	}
-	synced, err := investments.GetPosition(ctx, f.conn, syncedID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := investments.UpdatePosition(ctx, f.conn, syncedID, investments.PositionUpdate{
-		Name: synced.Name, AssetType: synced.AssetType, Ticker: synced.Ticker, PortfolioID: &goal.ID,
-	}); err != nil {
-		t.Fatalf("assign synced: %v", err)
-	}
-	summary := f.summary()
-	if summary.TotalValue.String() != "2500" {
-		t.Fatalf("goal added to the total: %+v", summary)
-	}
-	if len(summary.Portfolios) != 2 {
-		t.Fatalf("portfolios = %+v", summary.Portfolios)
-	}
-	assigned, unassigned := summary.Portfolios[0], summary.Portfolios[1]
-	if assigned.PortfolioID == nil || *assigned.PortfolioID != goal.ID || assigned.CurrentValue.String() != "2000" ||
-		bookDecimalString(assigned.Progress) != "0.5" {
-		t.Fatalf("assigned bucket = %+v", assigned)
-	}
-	if unassigned.PortfolioID != nil || unassigned.CurrentValue.String() != "500" {
-		t.Fatalf("unassigned bucket = %+v", unassigned)
-	}
-}
-
 func TestSummaryAgreesWithManualNetWorth(t *testing.T) {
 	f := newBookFixture(t)
 	ctx := context.Background()
@@ -163,24 +123,5 @@ func TestImportedForeignCurrencyIsValuedWithoutChangingTheHolding(t *testing.T) 
 	position, err := investments.GetPosition(ctx, f.conn, id)
 	if err != nil || position.CurrentValue.String() != "2000" || position.CurrencyCode == nil || *position.CurrencyCode != "USD" {
 		t.Fatalf("native holding changed: %+v, %v", position, err)
-	}
-
-	goal, err := investments.CreatePortfolio(ctx, f.conn, investments.PortfolioInput{Name: "Foreign", TargetAmount: bookDecPtr("20000")})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := investments.UpdatePosition(ctx, f.conn, id, investments.PositionUpdate{Name: position.Name, AssetType: position.AssetType, PortfolioID: &goal.ID}); err != nil {
-		t.Fatal(err)
-	}
-	summary, err = f.valuedSummary("5")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if summary.Portfolios[0].CurrentValue.String() != "10000" || summary.Portfolios[0].Progress.String() != "0.5" {
-		t.Fatalf("goal = %+v", summary.Portfolios)
-	}
-	portfolio, err := investments.GetPortfolio(ctx, f.conn, goal.ID)
-	if err != nil || portfolio.CurrentValue.String() != "10000" {
-		t.Fatalf("portfolio: %+v, %v", portfolio, err)
 	}
 }

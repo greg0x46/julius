@@ -573,3 +573,30 @@ func TestFreshInverseCacheWinsOverExpiredDirectCache(t *testing.T) {
 		}
 	})
 }
+
+func TestFailureReasonSurvivesCooldownAndFallback(t *testing.T) {
+	dbtest.Each(t, func(t *testing.T, conn *sql.DB) {
+		for _, reason := range []error{ErrUnsupported, ErrHistorical, ErrProviderFailure} {
+			p := &fakeProvider{err: reason}
+			s, _ := newService(conn, p, sun)
+			for range 2 {
+				_, err := s.On(context.Background(), "ARS", "BRL", sat)
+				if !errors.Is(err, ErrUnavailable) || !errors.Is(err, reason) {
+					t.Fatalf("want %v: %v", reason, err)
+				}
+			}
+			if p.calls != 1 {
+				t.Fatal(p.calls)
+			}
+		}
+		p := &fakeProvider{err: ErrProviderFailure}
+		s, _ := newService(conn, p, sun)
+		if err := s.save(context.Background(), Rate{Base: "ARS", Quote: "BRL", Value: dec("0.005"), AsOf: fri, EffectiveOn: fri, Source: "frankfurter", FetchedAt: fri}); err != nil {
+			t.Fatal(err)
+		}
+		rate, err := s.On(context.Background(), "ARS", "BRL", sat)
+		if err != nil || !rate.Stale || rate.Source != "frankfurter" || rate.Convert(dec("1000")).String() != "5" {
+			t.Fatalf("%+v %v", rate, err)
+		}
+	})
+}

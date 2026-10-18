@@ -6,6 +6,7 @@ import {
   parseAccountBillList,
   parseAccountCardList,
   parseInvestmentList,
+  parseInvestmentPeriod,
   parseInvestmentAccountList,
   parseInvestmentPositionList,
   parseInvestmentOperationList,
@@ -29,6 +30,7 @@ const contracts = [
   ["positions", parseInvestmentPositionList],
   ["operations", parseInvestmentOperationList],
   ["investment_summary", parseInvestmentSummary],
+  ["investment_period", parseInvestmentPeriod],
   ["timeline", parseTimelineResponse],
   ["timeline_simulation", parseTimelineResponse],
   ["net_worth", parseNetWorthSeries],
@@ -60,6 +62,18 @@ describe("shared Go/TypeScript financial contracts", () => {
     "rejects non-contract money %s",
     (value) => expect(() => decimal(value)).toThrow(),
   );
+
+  it("keeps unavailable period figures null instead of zero and the decimals exact", () => {
+    const period = parseInvestmentPeriod(payloads.investment_period);
+    const positions = period.groups.flatMap((group) => group.positions);
+    const unavailable = positions.find((position) => position.unavailable_reason !== null);
+    expect(unavailable).toMatchObject({ end_value: null, yield: null, yield_rate: null, native: null, invested: null });
+    expectTypeOf(unavailable!.end_value).toEqualTypeOf<string | null>();
+    expect(period.totals.start_value).toBe("9007199254740993.123456789012345678");
+    expect(period.totals.yield_rate).toBe("0.0123456789");
+    expect(period.native_rates.USD.value).toBe("0.000000000000000001");
+    expect(period.totals.partial).toBe(true);
+  });
 
   it("preserves backend pending/posted eligibility and unknown nullable money", () => {
     const result = parseTransactionQueryResult(payloads.transactions);

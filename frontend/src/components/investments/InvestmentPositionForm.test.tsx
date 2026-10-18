@@ -39,7 +39,7 @@ beforeEach(() => {
 function renderForm(accounts: InvestmentAccount[] = [manualAccount]) {
   const onCreate = vi.fn();
   render(
-    <InvestmentPositionForm open position={null} accounts={accounts} portfolios={[]}
+    <InvestmentPositionForm open position={null} accounts={accounts}
       submitting={false} submitError={null} onCreate={onCreate} onUpdate={vi.fn()} onCancel={vi.fn()} />,
   );
   return onCreate;
@@ -91,7 +91,7 @@ describe("asset selection from the catalog", () => {
     const onCreate = vi.fn();
     const secondAccount = { ...manualAccount, id: "second-account", name: "Outra conta" };
     const props = {
-      open: true, position: null, accounts: [manualAccount, secondAccount], portfolios: [],
+      open: true, position: null, accounts: [manualAccount, secondAccount],
       submitting: false, submitError: null, onCreate, onUpdate: vi.fn(), onCancel: vi.fn(),
     };
     const view = render(<InvestmentPositionForm {...props} />);
@@ -232,7 +232,7 @@ describe("new asset inside the position form", () => {
     mocked.assets = [];
     const onCreate = vi.fn();
     const props = {
-      open: true, position: null, accounts: [manualAccount], portfolios: [],
+      open: true, position: null, accounts: [manualAccount],
       submitting: false, submitError: null, onCreate, onUpdate: vi.fn(), onCancel: vi.fn(),
     };
     const view = render(<InvestmentPositionForm {...props} />);

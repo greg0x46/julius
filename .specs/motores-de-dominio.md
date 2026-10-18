@@ -129,20 +129,18 @@ conditions (via the rules engine) and one or more actions (`ignore`,
 
 **Package:** `internal/payables`
 
-Tracks a **real target**: a total that exists (debt, receivable, or goal) and is
-paid down/reached by linked real entries, with settled/remaining/status always
-recomputed on read, never persisted.
+Tracks a **real target**: a total that exists (debt or receivable) and is paid
+down by linked real entries, with settled/remaining/status always recomputed on
+read, never persisted. `Kind` covers only `debt`/`receivable`, and the
+link-eligibility logic (`eligibility.go`) derives the accepted flow direction
+from it.
 
-Scope generalized beyond the current code: today `Kind` covers only
-`debt`/`receivable`; the direction is to include goals (e.g. "save R$10,000 by
-December") under the same engine — same total + real link + recomputed
-progress mechanics, with no real debt behind it. That requires extending `Kind`
-and the link-eligibility logic (`eligibility.go`), which today derives the
-accepted flow direction from the debt/receivable `Kind`.
-
-Name note: "Payables" stops describing the engine well once goals are included.
-Kept for now; alternatives ("Payment plan", "Commitment", "Financial target")
-are for a future refactor.
+Goals ("save R$10,000 by December") were considered as a third `Kind` and
+rejected: a payable is moved by *flows* linked to real transactions, while a
+goal measures a *stock* that another engine already owns (today the market
+value of investments). They share only "target + recomputed progress", so goals
+live in `internal/goals` (see "Not engines") and the name "Payables" stays
+accurate.
 
 ### 5. Scenarios
 
@@ -152,8 +150,7 @@ The **hypothetical layer**: projections authored by the user, never synced
 facts. One entity (`Scenario`/`ScenarioTransaction`), several kinds:
 
 - **Attached to a `Payable`**: the installment plan of a specific payable —
-  `debt_plan`/`receivable_plan` today; following the generalization of engine 4,
-  a future `goal_plan` would be just another `Kind` of this family.
+  `debt_plan`/`receivable_plan`.
 - **Free** (`standalone`): a "what if" without any `Payable` — "trip", "new job".
 - **Recurring** (`recurring`): a recurring commitment (salary, rent); see
   "Not engines".
@@ -209,6 +206,13 @@ below still holds as a domain yardstick; what is missing is its UI expression.
   (`internal/statementimport`), neither of which has anything to do with Pluggy. Ingestion never writes user
   decisions (cross-cutting principle 2).
 
+- **Goals** (`internal/goals`): a target amount and date over one global metric
+  (today `invested_value`, from `networth.Compute`). It stores only the target;
+  current value and progress are recomputed on read from the engine that owns
+  the figure, and a goal never adds to any total. Used by a single feature
+  (Metas) — fails criterion 1; new metrics are read from their owning engines,
+  not recomputed here.
+
 ## Cross-cutting principles (apply to every new engine)
 
 1. **Recompute on read; never persist a derived value.**
@@ -248,10 +252,7 @@ below still holds as a domain yardstick; what is missing is its UI expression.
 ## Open notes (for future evaluation, not decisions)
 
 1. Final name for the Ledger engine.
-2. Final name for generalized Payables (debt/receivable/goal).
-3. Whether generalized Payables needs a growing closed `Kind` (`goal` as one more
-   value) or a more open link-eligibility model — undecided.
-4. Installment sign: `scenarios.SignedAmount` **negates** a `debt_plan` amount
+2. Installment sign: `scenarios.SignedAmount` **negates** a `debt_plan` amount
    instead of forcing the flow direction, and nothing rejects an installment
    stored with a negative `Amount` — which would then read as an inflow in a
    debt plan. Behavior preserved from earlier code; choosing between validating

@@ -1,0 +1,67 @@
+import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { describe, expect, it } from "vitest";
+
+import { investmentPeriodFixture, periodTotals } from "../../test/investmentWorkspaceFixtures";
+import { InvestmentPeriodSummary } from "./InvestmentPeriodSummary";
+
+function renderSummary(overrides: Parameters<typeof investmentPeriodFixture>[0] = {}) {
+  const data = investmentPeriodFixture({ group_by: "none", ...overrides });
+  render(<InvestmentPeriodSummary data={data} positions={data.groups.flatMap((group) => group.positions)} updating={false} />);
+  return screen.getByRole("region", { name: /Carteira em/ });
+}
+
+const aboutValues = (strip: HTMLElement) =>
+  within(strip).getByRole("button", { name: /Sobre estes valores/ }).getAttribute("aria-label");
+
+describe("InvestmentPeriodSummary", () => {
+  it("keeps the caveats out of the box until asked", () => {
+    const strip = renderSummary();
+    expect(within(strip).queryByText(/O saldo para investir/)).toBeNull();
+    expect(aboutValues(strip)).toMatch(/O saldo para investir \(caixa\)/);
+  });
+
+  it("keeps the partial warning inside the info icon, not as a tag", () => {
+    const strip = renderSummary();
+    expect(within(strip).queryByText(/Parcial/)).toBeNull();
+    expect(aboutValues(strip)).toMatch(/^Parcial: 1 de 4 posições sem histórico suficiente.*Sobre estes valores/);
+  });
+
+  it("shows costs only when there are any", () => {
+    expect(within(renderSummary()).queryByText("Custos")).toBeNull();
+  });
+
+  it("shows costs and the unpaid provisioned taxes when they apply", () => {
+    const strip = renderSummary({ totals: { ...periodTotals, costs: "12.50" } });
+    expect(within(strip).getByText("Custos")).toBeVisible();
+    expect(within(strip).getByText("R$ 12,50")).toBeVisible();
+    expect(aboutValues(strip)).toMatch(/antes do IR\/IOF provisionado/);
+    expect(aboutValues(strip)).toMatch(/O saldo para investir \(caixa\)/);
+  });
+
+  it("does not claim a rentabilidade when the backend has no capital base", () => {
+    const strip = renderSummary({ totals: { ...periodTotals, yield_rate: null } });
+    expect(within(strip).getByRole("button", { name: /Rentabilidade indisponível/ })).toBeVisible();
+    expect(within(strip).queryByText(/%/)).toBeNull();
+  });
+
+  it("states a negative result with its sign", () => {
+    const strip = renderSummary({ totals: { ...periodTotals, yield: "-80.00", yield_rate: "-0.04" } });
+    expect(within(strip).getByText("-R$ 80,00")).toBeVisible();
+    expect(within(strip).getByText("-4,00%")).toBeVisible();
+  });
+
+  it("names the positions that start late and says nothing about partial when complete", () => {
+    const strip = renderSummary({
+      totals: { ...periodTotals, partial: false, positions_unavailable: 0, positions_partial_start: 2 },
+    });
+    expect(aboutValues(strip)).toMatch(/2 posições começam depois do primeiro dia do período/);
+    expect(within(strip).queryByText(/Parcial/)).toBeNull();
+  });
+
+  it("explains the start for a whole-period request", async () => {
+    const strip = renderSummary({ from: null });
+    await userEvent.click(within(strip).getByText("Detalhes do cálculo"));
+    expect(within(strip).getByText(/início de cada posição/)).toBeVisible();
+  });
+});

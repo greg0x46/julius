@@ -4,6 +4,20 @@ Notable changes per release. A section is added by `scripts/update-changelog.sh`
 only when a release is prepared, and the release job publishes that same text as
 the GitHub release notes. Newest release first.
 
+## v0.11.0 — 2026-10-18
+
+### Features
+
+- **goals:** Replace investment objetivos with metric-based goals
+- **investments:** Period-based portfolio view
+- **investments:** Group positions by class or custody, drop manual/synced split
+- **exchange:** Add Frankfurter v2 coverage and conversion diagnostics ([#128](https://github.com/greg0x46/julius/pull/128))
+
+### Fixes
+
+- **goals:** Roll back writes when progress cannot be computed
+- **goals:** Require exact target progress before marking goals reached
+
 ## v0.10.0 — 2026-10-18
 
 ### Features
