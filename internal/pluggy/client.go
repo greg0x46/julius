@@ -9,6 +9,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -47,7 +48,7 @@ type Adapter struct {
 	config Config
 	writer RawEnvelopeWriter
 	client *http.Client
-	sleep  func(time.Duration)
+	sleep  func(context.Context, time.Duration) error
 
 	apiKey      string
 	institution *string
@@ -59,7 +60,28 @@ func NewAdapter(config Config, writer RawEnvelopeWriter, httpClient *http.Client
 	if httpClient == nil {
 		httpClient = &http.Client{Timeout: config.ConnectTimeout + config.ReadTimeout}
 	}
-	return &Adapter{config: config, writer: writer, client: httpClient, sleep: time.Sleep}
+	return &Adapter{config: config, writer: writer, client: httpClient, sleep: sleepContext}
+}
+
+// maxResponseBytes bounds any provider response body held in memory.
+const maxResponseBytes = 32 << 20
+
+// sleepContext waits d or until ctx ends, whichever comes first.
+func sleepContext(ctx context.Context, d time.Duration) error {
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
+}
+
+// readBody reads at most maxResponseBytes; a larger body is an error.
+func readBody(r io.Reader) ([]byte, bool) {
+	content, _ := io.ReadAll(io.LimitReader(r, maxResponseBytes+1))
+	return content, len(content) <= maxResponseBytes
 }
 
 func (a *Adapter) authenticate(ctx context.Context) error {
@@ -81,7 +103,10 @@ func (a *Adapter) authenticate(ctx context.Context) error {
 		return &ProviderError{Code: "provider_unavailable", Stage: StageAuth, SafeMessage: "Financial provider is temporarily unavailable"}
 	}
 	defer resp.Body.Close()
-	content, _ := io.ReadAll(resp.Body)
+	content, withinLimit := readBody(resp.Body)
+	if !withinLimit {
+		return &ProviderError{Code: "invalid_provider_payload", Stage: StageAuth, SafeMessage: "Financial provider authentication response was invalid"}
+	}
 
 	if resp.StatusCode == http.StatusUnauthorized {
 		return &ProviderError{Code: "invalid_provider_credentials", Stage: StageAuth, SafeMessage: "Financial provider credentials are invalid"}
@@ -149,9 +174,14 @@ func (a *Adapter) read(
 
 		resp, err := a.client.Do(req)
 		if err != nil {
+			if ctx.Err() != nil {
+				return nil, "", ctx.Err()
+			}
 			lastNetErr = err
 			if attempt < a.config.MaxAttempts && isRetryableNetError(err) {
-				a.sleep(time.Duration(attempt) * 250 * time.Millisecond)
+				if err := a.sleep(ctx, time.Duration(attempt)*250*time.Millisecond); err != nil {
+					return nil, "", err
+				}
 				continue
 			}
 			return nil, "", &ProviderError{
@@ -160,10 +190,16 @@ func (a *Adapter) read(
 			}
 		}
 
-		content, _ := io.ReadAll(resp.Body)
+		content, withinLimit := readBody(resp.Body)
 		resp.Body.Close()
+		if !withinLimit {
+			return nil, "", &ProviderError{
+				Code: "invalid_provider_payload", Stage: stage, SafeMessage: "The provider returned data that could not be processed safely",
+				ExternalAccountID: externalAccountID,
+			}
+		}
 
-		rawImportID, writeErr := a.writer.Write(RawResponseEnvelope{
+		rawImportID, writeErr := a.writer.Write(ctx, RawResponseEnvelope{
 			Scope: scope, Method: http.MethodGet, Path: req.URL.String(), StatusCode: resp.StatusCode,
 			Headers: flattenHeader(resp.Header), Content: content, PageSequence: pageSequence,
 			RequestAttempt: attempt, ExternalAccountID: externalAccountID, ReceivedAt: time.Now().UTC(),
@@ -175,7 +211,9 @@ func (a *Adapter) read(
 		if resp.StatusCode == http.StatusTooManyRequests {
 			wait := retryWait(resp)
 			if attempt < a.config.MaxAttempts && wait <= a.config.MaxRateLimitWait {
-				a.sleep(wait)
+				if err := a.sleep(ctx, wait); err != nil {
+					return nil, "", err
+				}
 				continue
 			}
 			return nil, "", &ProviderError{
@@ -185,7 +223,9 @@ func (a *Adapter) read(
 		}
 		if resp.StatusCode >= 500 {
 			if attempt < a.config.MaxAttempts {
-				a.sleep(time.Duration(attempt) * 250 * time.Millisecond)
+				if err := a.sleep(ctx, time.Duration(attempt)*250*time.Millisecond); err != nil {
+					return nil, "", err
+				}
 				continue
 			}
 			return nil, "", &ProviderError{
@@ -235,7 +275,7 @@ func flattenHeader(h http.Header) map[string]string {
 // _interpret_item_status's checks that turn a login-error or
 // no-safely-updated-product item into a ProviderError instead of proceeding.
 func (a *Adapter) GetSource(ctx context.Context) (SourceSnapshot, string, error) {
-	payload, rawImportID, err := a.read(ctx, ScopeItem, "/items/"+a.config.ItemID, StageItem, 1, nil)
+	payload, rawImportID, err := a.read(ctx, ScopeItem, "/items/"+url.PathEscape(a.config.ItemID), StageItem, 1, nil)
 	if err != nil {
 		return SourceSnapshot{}, "", err
 	}
@@ -328,7 +368,7 @@ func isSuccessStatus(v any) bool {
 
 // GetAccounts mirrors PluggyAdapter.get_accounts.
 func (a *Adapter) GetAccounts(ctx context.Context) (AccountsPage, error) {
-	payload, rawImportID, err := a.read(ctx, ScopeAccounts, "/accounts?itemId="+a.config.ItemID, StageAccounts, 1, nil)
+	payload, rawImportID, err := a.read(ctx, ScopeAccounts, "/accounts?itemId="+url.QueryEscape(a.config.ItemID), StageAccounts, 1, nil)
 	if err != nil {
 		return AccountsPage{}, err
 	}
@@ -343,7 +383,7 @@ func (a *Adapter) GetAccounts(ctx context.Context) (AccountsPage, error) {
 
 // GetInvestments mirrors GetAccounts for the Investments product.
 func (a *Adapter) GetInvestments(ctx context.Context) (InvestmentsPage, error) {
-	payload, rawImportID, err := a.read(ctx, ScopeInvestments, "/investments?itemId="+a.config.ItemID, StageInvestments, 1, nil)
+	payload, rawImportID, err := a.read(ctx, ScopeInvestments, "/investments?itemId="+url.QueryEscape(a.config.ItemID), StageInvestments, 1, nil)
 	if err != nil {
 		return InvestmentsPage{}, err
 	}
@@ -392,7 +432,7 @@ func (a *Adapter) GetInvestmentTransactions(ctx context.Context, externalInvestm
 	var firstRawImportID string
 
 	for pageNumber := 1; pageNumber <= a.config.MaxPagesPerAccount; pageNumber++ {
-		path := "/investments/" + externalInvestmentID + "/transactions?page=" + strconv.Itoa(pageNumber)
+		path := "/investments/" + url.PathEscape(externalInvestmentID) + "/transactions?page=" + strconv.Itoa(pageNumber)
 		payload, rawImportID, err := a.read(ctx, ScopeInvestmentTransactions, path, StageInvestmentTransactions, pageNumber, &externalInvestmentID)
 		if err != nil {
 			return InvestmentTransactionsPage{}, err
@@ -431,7 +471,7 @@ func (a *Adapter) GetBills(ctx context.Context, externalAccountID string) (Bills
 	var firstRawImportID string
 
 	for pageNumber := 1; pageNumber <= a.config.MaxPagesPerAccount; pageNumber++ {
-		path := "/bills?accountId=" + externalAccountID + "&page=" + strconv.Itoa(pageNumber)
+		path := "/bills?accountId=" + url.QueryEscape(externalAccountID) + "&page=" + strconv.Itoa(pageNumber)
 		payload, rawImportID, err := a.read(ctx, ScopeBills, path, StageBills, pageNumber, &externalAccountID)
 		if err != nil {
 			return BillsPage{}, err
@@ -465,9 +505,9 @@ func (a *Adapter) IterTransactionPages(ctx context.Context, externalAccountID st
 	seenCursors := make(map[string]bool)
 
 	for pageSequence := 1; pageSequence <= a.config.MaxPagesPerAccount; pageSequence++ {
-		path := "/v2/transactions?accountId=" + externalAccountID
+		path := "/v2/transactions?accountId=" + url.QueryEscape(externalAccountID)
 		if cursor != nil {
-			path += "&after=" + *cursor
+			path += "&after=" + url.QueryEscape(*cursor)
 		}
 		payload, rawImportID, err := a.read(ctx, ScopeTransactions, path, StageTransactions, pageSequence, &externalAccountID)
 		if err != nil {

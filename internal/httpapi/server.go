@@ -1,7 +1,6 @@
 package httpapi
 
 import (
-	"context"
 	"database/sql"
 	"encoding/json"
 	"io/fs"
@@ -11,35 +10,14 @@ import (
 
 	"github.com/greg0x46/julius/internal/auth"
 	"github.com/greg0x46/julius/internal/exchange"
-	"github.com/greg0x46/julius/internal/investments"
 	"github.com/greg0x46/julius/internal/ledger"
 	"github.com/greg0x46/julius/internal/marketdata"
-	"github.com/greg0x46/julius/internal/payables"
-	"github.com/greg0x46/julius/internal/recurrences"
 	"github.com/greg0x46/julius/internal/settings"
-	"github.com/greg0x46/julius/internal/transactions"
 )
 
-// onIgnoredHook wires the "a transaction just became ignored" cleanup into
-// every inclusion-changing path this package exposes (manual PUT,
-// automation's apply-to-new and apply-retroactively), matching the reference
-// calling unlink_if_present from those same places.
-//
-// All three links it drops rest on the same fact: a transaction the user
-// excluded from the totals is no longer money the app counts, so it can
-// neither pay down a payable, carry a recurring commitment's occurrence nor
-// be the parcel that funded an investment operation. A detached occurrence
-// is untouched — that decision is about the occurrence, not about any
-// transaction.
-func onIgnoredHook(ctx context.Context, q transactions.Querier, transactionID string) error {
-	if err := payables.UnlinkIfPresent(ctx, q, transactionID); err != nil {
-		return err
-	}
-	if err := recurrences.UnlinkIfPresent(ctx, q, transactionID); err != nil {
-		return err
-	}
-	return investments.UnlinkTransactionIfPresent(ctx, q, transactionID)
-}
+// onIgnoredHook is the shared "transaction just became ignored" cleanup
+// (see ledger.OnIgnored) for every inclusion-changing path of this package.
+var onIgnoredHook = ledger.OnIgnored
 
 // NewServer protects API routes with per-browser authentication. The separate
 // secrets holder is used only to encrypt configuration, never to grant access.

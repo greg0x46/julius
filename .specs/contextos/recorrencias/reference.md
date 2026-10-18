@@ -86,7 +86,7 @@ as occurrence resolution: transfer-category payments retain both their current
 reconciliation and available occurrences, while ignored transactions offer neither.
 
 A transaction marked ignored loses its link (`UnlinkIfPresent`, in
-`onIgnoredHook` together with `payables`); a detached occurrence is unaffected,
+`ledger.OnIgnored` together with `payables`, also fired by sync updates); a detached occurrence is unaffected,
 because the decision is about the occurrence.
 
 ## HTTP routes
