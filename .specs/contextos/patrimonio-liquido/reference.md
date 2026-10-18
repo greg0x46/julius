@@ -17,12 +17,13 @@ across multiple contexts).
 
 `internal/networth` — snapshot calculation/backfill (`Breakdown`,
 `SnapshotRow`). A snapshot for "today" is written on every read; there is no
-background worker.
+background worker. Goals (`internal/goals`) read `Breakdown.InvestmentBalance`
+from `networth.Compute`; they add nothing to net worth.
 
 The current calculation includes positions and cash of manual investments via
 `investments.ManualNetWorth`, plus imported positions. Cash of an investment
-account linked to an existing financial account is not added again. Goal
-portfolios are groupings and add no net worth. Manual valuations are dated;
+account linked to an existing financial account is not added again. Manual
+valuations are dated;
 assets with automatic quotes are worth quantity × latest quote when it is newer
 than the valuation (`market_quote`); with neither, the value is the informed
 cost. The backfill still does not invent historical appreciation of

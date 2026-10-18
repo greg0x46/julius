@@ -1,20 +1,20 @@
 # Investments
 
-Investment accounts represent custody; positions represent assets; goal
-portfolios group positions without creating a second balance. Each position
-belongs to a single portfolio or has no goal.
+Investment accounts represent custody; positions represent assets. Targets
+over the invested total live in the separate Goals area
+([`metas`](../metas/reference.md)); positions carry no goal or grouping.
 
 ## Domain and APIs
 
-`internal/investments` holds accounts, portfolios, manual positions, operations,
+`internal/investments` holds accounts, manual positions, operations,
 valuations and reconciliation. APIs live under `/api/investment-accounts`,
-`/api/investment-portfolios`, `/api/investment-positions`,
+`/api/investment-positions`,
 `/api/investment-operations`, `/api/investment-reconciliations` and
 `/api/investment-summary`. The legacy `/api/investments` queries remain
 available for synced assets and their imported history.
 
 Integrated investments keep the provider's identifiers, initially grouped by
-connection. Goals and reconciliations are local choices. A brokerage cash
+connection. Reconciliations are local choices. A brokerage cash
 balance already present in `financial_accounts` can be linked, without adding
 its balance to net worth again.
 
@@ -24,7 +24,7 @@ as in a manual account and listed next to the provider's positions, which stay
 read-only. The ledger of an integrated account replays only operations that
 carry a position and never computes cash, which remains whatever the
 institution reports. The sync writes only provider data and series quotes, so
-it never changes the quantity, cost, source, goal or valuations of a manual
+it never changes the quantity, cost, source or valuations of a manual
 holding. In the UI, manual rows of an integrated account carry a "Manual" tag.
 
 Manual operations use reais and decimal arithmetic. Purchases fold costs into
@@ -130,8 +130,7 @@ modifying the bank-reported balance.
 Net worth sums synced positions once, manual positions, and manual investment
 cash not yet represented in a linked financial account. Manual holdings in an
 integrated account count like any other manual holding (including in
-`ManualNetWorth`), without double-counting the provider's positions. Goal
-portfolios are not summed again. No appreciation is invented for historical
+`ManualNetWorth`), without double-counting the provider's positions. No appreciation is invented for historical
 snapshots without data.
 
 This version records operations; it does not place orders or move money at the
@@ -360,7 +359,7 @@ position holds with positive quantity, and the backfill writes history. The job
 enters the series.
 
 The value of a manual position whose asset has automatic quotes is **derived on
-read** (`Position.CurrentValue`, which feeds totals, goals and net worth):
+read** (`Position.CurrentValue`, which feeds totals and net worth):
 `quantity × latest series price`, rounded to cents, with
 `valuation_basis = market_quote`, `current_unit_price` equal to the price and
 `valued_on` equal to its day. None of this is persisted; an old quote still
@@ -434,24 +433,22 @@ five days of difference; they require confirmation. Fees, taxes and income can
 also be linked, avoiding duplicating revenue and expenses. Unlinking restores
 the available portion.
 
-The Investimentos screen offers "Revisar lançamentos antigos", opening the
-statement with no period restriction. `POST /api/transactions/query` accepts
-`filters.origin` (`manual`, `synced`). No history is reclassified automatically.
+`POST /api/transactions/query` accepts `filters.origin` (`manual`, `synced`).
+No history is reclassified automatically.
 
-Positions accept the filters `account_id`, `portfolio_id`, `source`,
+Positions accept the filters `account_id`, `source`,
 `source_id` and `include_closed`. Operations accept `account_id`, `position_id`,
-`portfolio_id`, `source`, `source_id`, `from`, `to` and `reconciliation_state`
+`source`, `source_id`, `from`, `to` and `reconciliation_state`
 (`linked`, `unlinked`). Typed valuations are dated `valuation` operations,
 queryable through the same operation history; the quotes job never creates them.
 
 The investments area's total includes the effective cash of linked accounts. In
 net worth that same cash is already in the bank portion, so it is not summed a
-second time. In the per-goal view, purchases and sales are labeled as such,
-without confusing them with the custody's cash transfers.
+second time.
 
 Imported positions in other currencies keep their original currency and value.
-With no FX conversion in this version, they stay out of the investment totals,
-goals and the investments portion of net worth in reais. The UI flags when
+With no FX conversion in this version, they stay out of the investment totals
+and the investments portion of net worth in reais. The UI flags when
 positions exist outside those totals.
 
 ## Database representation
@@ -485,7 +482,7 @@ backend/frontend CI tests.
 
 ## Monetary precision
 
-Investment cash fields and portfolio targets keep decimal strings through editing
+Investment cash fields keep decimal strings through editing
 and submission. Contribution totals and quantity × average-cost gain calculations
 use exact arithmetic; BRL rounding happens only at display ([policy](../../precisao-monetaria.md)).
 
@@ -493,16 +490,15 @@ use exact arithmetic; BRL rounding happens only at display ([policy](../../preci
 
 `GET /api/investment-summary` converts its existing BRL base into
 `finance.reference_currency` using current `internal/exchange` FX. Totals,
-per-account value/cash, per-goal value and goal targets share that rate and
-carry the chosen `currency_code` plus full `fx` provenance. Goal progress
-ratios do not change. Missing rates make the summary unavailable rather than
+per-account value/cash share that rate and carry the chosen `currency_code`
+plus full `fx` provenance. Missing rates make the summary unavailable rather than
 showing zero or an identity conversion. Stale stored rates are disclosed.
 
 The workspace uses the same exact rate for client-computed BRL yield,
 contribution, withdrawal and cost aggregates. Positions and operations, including
 their currencies and amounts, stay native. Synced foreign positions and
 foreign custody cash are valued in BRL with the day's `internal/exchange` rate
-(`investments.BuildSummary`, `ManualNetWorth`, goal values); a currency without a
+(`investments.BuildSummary`, `ManualNetWorth`); a currency without a
 rate fails the summary rather than being omitted. Yield, contribution and cost
 aggregates computed in the browser still sum reais positions only. No positions, targets or provider balances are
 rewritten when switching reference currency.

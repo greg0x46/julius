@@ -6,7 +6,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type {
   InvestmentAccount,
   InvestmentAsset,
-  InvestmentPortfolio,
   InvestmentPosition,
   InvestmentPositionUpdate,
   InvestmentPositionWrite,
@@ -23,7 +22,6 @@ import { fromMoneyInput, toMoneyInput } from "./moneyDraft";
 type Draft = {
   accountId: string;
   assetId: string | null;
-  portfolioId: string | null;
   name: string;
   ticker: string;
   assetType: string;
@@ -38,7 +36,6 @@ function blankDraft(accounts: InvestmentAccount[]): Draft {
   return {
     accountId: accounts.find((account) => account.active)?.id ?? "",
     assetId: null,
-    portfolioId: null,
     name: "",
     ticker: "",
     assetType: "Ativo",
@@ -55,7 +52,6 @@ function draftFrom(position: InvestmentPosition | null, accounts: InvestmentAcco
   return {
     accountId: position.account_id,
     assetId: position.asset_id,
-    portfolioId: position.portfolio_id,
     name: position.name,
     ticker: position.ticker ?? "",
     assetType: position.asset_type,
@@ -107,7 +103,6 @@ export function InvestmentPositionForm({
   open,
   position,
   accounts,
-  portfolios,
   submitting,
   submitError,
   onCreate,
@@ -117,7 +112,6 @@ export function InvestmentPositionForm({
   open: boolean;
   position: InvestmentPosition | null;
   accounts: InvestmentAccount[];
-  portfolios: InvestmentPortfolio[];
   submitting: boolean;
   submitError: string | null;
   onCreate: (write: InvestmentPositionWrite) => void;
@@ -156,7 +150,6 @@ export function InvestmentPositionForm({
     [accounts],
   );
   const accountOptions = editableAccounts.map((account) => ({ value: account.id, label: account.name }));
-  const portfolioOptions = portfolios.map((portfolio) => ({ value: portfolio.id, label: portfolio.name }));
   // The asset this form just created stays selectable until the catalog refetch brings it in.
   const assets = createdAsset && !catalog.assets.some((asset) => asset.id === createdAsset.id)
     ? [...catalog.assets, createdAsset]
@@ -247,7 +240,6 @@ export function InvestmentPositionForm({
         name: draft.name.trim(),
         ticker: draft.ticker.trim() || null,
         asset_type: draft.assetType.trim(),
-        portfolio_id: draft.portfolioId,
         notes: draft.notes.trim() || null,
       });
       return;
@@ -260,7 +252,6 @@ export function InvestmentPositionForm({
       name: asset.name,
       ticker: asset.ticker,
       asset_type: asset.asset_type,
-      portfolio_id: draft.portfolioId,
       initial_quantity: draft.initialQuantity ?? undefined,
       initial_unit_cost: draft.initialUnitCost ?? undefined,
       initial_value: draft.initialValue ?? undefined,
@@ -393,18 +384,6 @@ export function InvestmentPositionForm({
           </div>
         </>
       )}
-      <FormField label="Objetivo (opcional)" htmlFor="investment-position-goal">
-        <Select
-          id="investment-position-goal"
-          value={draft.portfolioId ?? undefined}
-          options={portfolioOptions}
-          allowClear
-          placeholder="Sem objetivo"
-          showSearch
-          optionFilterProp="label"
-          onChange={(value: string | undefined) => setDraft((current) => ({ ...current, portfolioId: value ?? null }))}
-        />
-      </FormField>
       {!isEditing && (
         <>
           <div className="investment-form-pair">

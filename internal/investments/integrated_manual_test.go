@@ -109,13 +109,9 @@ func TestEditAndDeleteManualHoldingLeavesSyncedUntouched(t *testing.T) {
 	before := f.position(syncedID)
 
 	manual := f.openBitcoin(integrated, "1", "100")
-	goal, err := investments.CreatePortfolio(ctx, f.conn, investments.PortfolioInput{Name: "Cripto"})
-	if err != nil {
-		t.Fatal(err)
-	}
 	notes := "Carteira fria"
 	if _, err := investments.UpdatePosition(ctx, f.conn, manual.ID, investments.PositionUpdate{
-		Name: manual.Name, Ticker: manual.Ticker, AssetType: manual.AssetType, PortfolioID: &goal.ID, Notes: &notes,
+		Name: manual.Name, Ticker: manual.Ticker, AssetType: manual.AssetType, Notes: &notes,
 	}); err != nil {
 		t.Fatalf("UpdatePosition: %v", err)
 	}

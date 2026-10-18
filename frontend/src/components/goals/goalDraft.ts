@@ -1,0 +1,40 @@
+import dayjs, { type Dayjs } from "dayjs";
+
+import type { Goal, GoalMetric, GoalWrite } from "../../api/contracts";
+import { isPositiveDecimal } from "../../presentation/decimal";
+
+export type GoalDraft = {
+  name: string;
+  metric: GoalMetric;
+  targetAmount: string | null;
+  targetDate: Dayjs | null;
+  notes: string;
+};
+
+export function draftFromGoal(goal: Goal | null): GoalDraft {
+  if (!goal) return { name: "", metric: "invested_value", targetAmount: null, targetDate: null, notes: "" };
+  return {
+    name: goal.name,
+    metric: goal.metric,
+    targetAmount: goal.target_amount,
+    targetDate: goal.target_date ? dayjs(goal.target_date) : null,
+    notes: goal.notes ?? "",
+  };
+}
+
+/** The write the API accepts, or the message to show when the draft cannot be saved. */
+export function goalWriteFrom(draft: GoalDraft): { write: GoalWrite } | { error: string } {
+  if (draft.name.trim() === "") return { error: "Informe o nome da meta." };
+  if (draft.targetAmount === null || !isPositiveDecimal(draft.targetAmount)) {
+    return { error: "O valor da meta precisa ser maior que zero." };
+  }
+  return {
+    write: {
+      name: draft.name.trim(),
+      metric: draft.metric,
+      target_amount: draft.targetAmount,
+      target_date: draft.targetDate?.format("YYYY-MM-DD") ?? null,
+      notes: draft.notes.trim() === "" ? null : draft.notes.trim(),
+    },
+  };
+}

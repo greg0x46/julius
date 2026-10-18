@@ -56,6 +56,11 @@ const CategoriesPage = lazy(() =>
     default: module.CategoriesPage,
   })),
 );
+const GoalsPage = lazy(() =>
+  import("../pages/GoalsPage").then((module) => ({
+    default: module.GoalsPage,
+  })),
+);
 const InvestmentsPage = lazy(() =>
   import("../pages/InvestmentsPage").then((module) => ({
     default: module.InvestmentsPage,
@@ -118,6 +123,7 @@ export function AppRouter() {
             <Route path="recorrencias" element={<RecurringCommitmentsPage />} />
             <Route path="configuracoes/cenarios" element={<ScenariosPage />} />
             <Route path="patrimonio-liquido" element={<NetWorthPage />} />
+            <Route path="metas" element={<GoalsPage />} />
             <Route path="investimentos" element={<InvestmentsPage />} />
             <Route path="investimentos/:id" element={<InvestmentDetailPage />} />
             <Route path="configuracoes/categorias" element={<CategoriesPage />} />

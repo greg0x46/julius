@@ -1,4 +1,5 @@
 import {
+  AimOutlined,
   BankOutlined,
   FundOutlined,
   HomeOutlined,
@@ -44,6 +45,7 @@ const navItems: NavItem[] = [
   { path: "/pendencias", name: "Pendências", icon: <WalletOutlined /> },
   { path: "/recorrencias", name: "Recorrências", icon: <RedoOutlined /> },
   { path: "/investimentos", name: "Investimentos", icon: <RiseOutlined /> },
+  { path: "/metas", name: "Metas", icon: <AimOutlined /> },
   { path: "/patrimonio-liquido", name: "Patrimônio líquido", icon: <FundOutlined /> },
   { path: "/configuracoes", name: "Configurações", icon: <SettingOutlined /> },
 ];

@@ -12,7 +12,7 @@ export type InvestmentFigure = {
 };
 
 /**
- * The account and the goal views answer the same five questions, so they share
+ * The account view answers the same five questions on every card, so they share
  * one strip instead of drifting into two slightly different vocabularies. A
  * figure's explanation opens on tap or hover (and from the keyboard) from its
  * underlined label — a hover-only tooltip would be unreachable on a phone.

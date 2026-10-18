@@ -9,7 +9,6 @@ const position: InvestmentPosition = {
   source: "manual",
   account_id: "a1",
   asset_id: "asset-1",
-  portfolio_id: null,
   name: "Bitcoin",
   ticker: "BTC",
   asset_type: "Criptomoeda",

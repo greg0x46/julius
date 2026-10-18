@@ -51,12 +51,8 @@ func TestExecutePreservesManualHoldingsInIntegratedAccount(t *testing.T) {
 
 	dec := func(s string) decimal.Decimal { return decimal.RequireFromString(s) }
 	ptr := func(s string) *decimal.Decimal { v := dec(s); return &v }
-	goal, err := investments.CreatePortfolio(ctx, conn, investments.PortfolioInput{Name: "Cripto"})
-	if err != nil {
-		t.Fatal(err)
-	}
 	ether, err := investments.CreatePosition(ctx, conn, investments.PositionInput{
-		AccountID: integrated, Name: "Ethereum", Ticker: strp("ETH"), AssetType: "Criptoativo", PortfolioID: &goal.ID,
+		AccountID: integrated, Name: "Ethereum", Ticker: strp("ETH"), AssetType: "Criptoativo",
 		InitialQuantity: dec("1"), InitialUnitCost: dec("100"), OccurredOn: day1,
 	})
 	if err != nil {
@@ -112,8 +108,7 @@ func TestExecutePreservesManualHoldingsInIntegratedAccount(t *testing.T) {
 	if err != nil {
 		t.Fatalf("manual holding lost: %v", err)
 	}
-	if !reflect.DeepEqual(before, after) || after.Source != investments.PositionSourceManual ||
-		after.PortfolioID == nil || *after.PortfolioID != goal.ID {
+	if !reflect.DeepEqual(before, after) || after.Source != investments.PositionSourceManual {
 		t.Fatalf("manual holding changed:\nbefore %+v\nafter  %+v", before, after)
 	}
 	operationsAfter, err := investments.ListOperations(ctx, conn, investments.OperationFilter{AccountID: &integrated})

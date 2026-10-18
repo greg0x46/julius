@@ -197,8 +197,8 @@ migrations or tests.
 | `investment_asset_quotes` | [`investments/quotes.go`](../../internal/investments/quotes.go) | Dated unit prices |
 | `investment_assets` | [`investments/assets.go`](../../internal/investments/assets.go) | Local asset identity and classification |
 | `investment_operations` | [`investments/operations.go`](../../internal/investments/operations.go) | Manual investment ledger |
-| `investment_portfolios` | [`investments/portfolios.go`](../../internal/investments/portfolios.go) | User goals and portfolios |
-| `investment_position_portfolios` | [`investments/positions.go`](../../internal/investments/positions.go) | Portfolio annotations on holdings |
+| `investment_portfolios` | Legacy source only; dropped by native migration `0005_goals` | Former investment goals (rows are not carried into `goals`) |
+| `investment_position_portfolios` | Legacy source only; dropped by native migration `0005_goals` | Former goal annotations on holdings |
 | `investment_positions` | [`investments/positions.go`](../../internal/investments/positions.go) | Local holding identities |
 | `investment_reconciliations` | [`investments/reconciliations.go`](../../internal/investments/reconciliations.go) | Links to real financial movements |
 | `manual_transaction_idempotency` | [`ledger/manual.go`](../../internal/ledger/manual.go) | Retry-safe manual creation |
@@ -916,7 +916,26 @@ starts serialize and incomplete or unmapped schemas fail without activation.
 ## Tables introduced after legacy cutover
 
 These tables start empty during legacy conversion and are created by native
-migration `0002_transfer_links`; they are absent from the historical snapshots.
+migrations (`0002_transfer_links`, `0005_goals`); they are absent from the
+historical snapshots. Migration `0005_goals` also drops `investment_portfolios`
+and `investment_position_portfolios`: legacy conversion still copies them into
+the baseline, then the migration discards them, because investment goals were
+replaced by metric goals with no data to carry over.
+
+### `goals`
+
+| Column | SQLite | Postgres | Classification | Meaning |
+|---|---|---|---|---|
+| `id` | TEXT | UUID | identity | Goal identity |
+| `name` | TEXT | TEXT | free text | Goal name |
+| `metric` | TEXT | TEXT | enum | `invested_value`, `cash_balance` or `net_worth` (only the first is accepted by the domain today) |
+| `target_amount` | TEXT | NUMERIC | money | Target in BRL, strictly positive |
+| `target_date` | TEXT | DATE | calendar date | Optional deadline |
+| `notes` | TEXT | TEXT | free text | Optional |
+| `created_at` | TEXT | TIMESTAMPTZ | instant | Creation time |
+| `updated_at` | TEXT | TIMESTAMPTZ | instant | Last update time |
+
+No current value or progress is stored; both are recomputed on read.
 
 ### `transfer_links`
 

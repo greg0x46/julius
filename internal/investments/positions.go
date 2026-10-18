@@ -17,14 +17,10 @@ import (
 
 type PositionFilter struct {
 	AccountID     *string
-	PortfolioID   *string
 	IncludeClosed bool
 	Source        *string
 	SourceID      *string
 }
-
-const manualPositionColumn = "manual_position_id"
-const syncedPositionColumn = "financial_investment_id"
 
 // ListPositions answers with manual holdings and provider holdings in one
 // list. Manual numbers are always replayed from investment_operations, so a
@@ -61,9 +57,6 @@ func ListPositions(ctx context.Context, q Querier, filter PositionFilter) ([]Pos
 			continue
 		}
 		if filter.AccountID != nil && position.AccountID != *filter.AccountID {
-			continue
-		}
-		if filter.PortfolioID != nil && (position.PortfolioID == nil || *position.PortfolioID != *filter.PortfolioID) {
 			continue
 		}
 		if position.Closed && !filter.IncludeClosed {
@@ -121,10 +114,9 @@ func listManualPositions(ctx context.Context, q Querier, scope positionScope) ([
 	where, args := scope.where("p.id")
 	rows, err := q.QueryContext(ctx, `
 		SELECT p.id, p.account_id, p.asset_id, a.name, a.ticker, a.asset_type, a.quote_source, p.notes,
-		       p.created_at, p.updated_at, pp.portfolio_id
+		       p.created_at, p.updated_at
 		FROM investment_positions p
 		JOIN investment_assets a ON a.id = p.asset_id
-		LEFT JOIN investment_position_portfolios pp ON pp.manual_position_id = p.id
 		`+where+`
 		ORDER BY p.account_id, a.name, p.id`, args...)
 	if err != nil {
@@ -137,13 +129,13 @@ func listManualPositions(ctx context.Context, q Querier, scope positionScope) ([
 	quoted := map[string]bool{}
 	for rows.Next() {
 		var (
-			position                                Position
-			ticker, quoteSource, notes, portfolioID sql.NullString
-			createdAtRaw, updatedAtRaw              string
+			position                   Position
+			ticker, quoteSource, notes sql.NullString
+			createdAtRaw, updatedAtRaw string
 		)
 		var assetID string
 		if err := rows.Scan(dbtypes.ID(&position.ID), dbtypes.ID(&position.AccountID), dbtypes.ID(&assetID), &position.Name, &ticker, &position.AssetType,
-			&quoteSource, &notes, dbtypes.Time(&createdAtRaw), dbtypes.Time(&updatedAtRaw), dbtypes.ID(&portfolioID)); err != nil {
+			&quoteSource, &notes, dbtypes.Time(&createdAtRaw), dbtypes.Time(&updatedAtRaw)); err != nil {
 			return nil, err
 		}
 		quoted[assetID] = quoteSource.Valid && quoteSource.String != ""
@@ -158,10 +150,6 @@ func listManualPositions(ctx context.Context, q Querier, scope positionScope) ([
 		if notes.Valid {
 			v := notes.String
 			position.Notes = &v
-		}
-		if portfolioID.Valid {
-			v := portfolioID.String
-			position.PortfolioID = &v
 		}
 		createdAt, err := parseTimestamp(createdAtRaw)
 		if err != nil {
@@ -257,11 +245,10 @@ func applyLedgerState(position *Position, state *positionLedger, quote *AssetQuo
 func listSyncedPositions(ctx context.Context, q Querier, scope positionScope) ([]Position, error) {
 	where, args := scope.where("fi.id")
 	rows, err := q.QueryContext(ctx, `
-		SELECT fi.id, ia.id, fi.balance, fi.created_at, fi.updated_at, pp.portfolio_id,
+		SELECT fi.id, ia.id, fi.balance, fi.created_at, fi.updated_at,
 		       `+syncedHoldingColumns+`
 		FROM financial_investments fi
 		JOIN investment_accounts ia ON ia.source_id = fi.source_id
-		LEFT JOIN investment_position_portfolios pp ON pp.financial_investment_id = fi.id
 		`+where+`
 		ORDER BY ia.id, fi.id`, args...)
 	if err != nil {
@@ -274,12 +261,11 @@ func listSyncedPositions(ctx context.Context, q Querier, scope positionScope) ([
 	for rows.Next() {
 		var (
 			position                   Position
-			balance, portfolioID       sql.NullString
+			balance                    sql.NullString
 			createdAtRaw, updatedAtRaw string
 			row                        syncedHoldingRow
 		)
-		if err := rows.Scan(append([]any{dbtypes.ID(&position.ID), dbtypes.ID(&position.AccountID), dbtypes.Decimal(&balance), dbtypes.Time(&createdAtRaw), dbtypes.Time(&updatedAtRaw),
-			dbtypes.ID(&portfolioID)}, row.dests()...)...); err != nil {
+		if err := rows.Scan(append([]any{dbtypes.ID(&position.ID), dbtypes.ID(&position.AccountID), dbtypes.Decimal(&balance), dbtypes.Time(&createdAtRaw), dbtypes.Time(&updatedAtRaw)}, row.dests()...)...); err != nil {
 			return nil, err
 		}
 		holding, err := row.holding()
@@ -294,10 +280,6 @@ func listSyncedPositions(ctx context.Context, q Querier, scope positionScope) ([
 		position.Ticker = holding.Ticker()
 		position.AssetType = holding.AssetType()
 		position.CurrencyCode = holding.CurrencyCode
-		if portfolioID.Valid {
-			v := portfolioID.String
-			position.PortfolioID = &v
-		}
 		if balance.Valid {
 			value, err := decimal.NewFromString(balance.String)
 			if err != nil {
@@ -398,9 +380,6 @@ func CreatePosition(ctx context.Context, conn *sql.DB, in PositionInput) (Positi
 		id, in.AccountID, asset.ID, nullableString(trimOptional(in.Notes)), now, now); err != nil {
 		return Position{}, err
 	}
-	if err := setPortfolioAssignment(ctx, tx, manualPositionColumn, id, in.PortfolioID); err != nil {
-		return Position{}, err
-	}
 	if quantity.IsPositive() && total.IsPositive() {
 		occurredOn := in.OccurredOn
 		if occurredOn.IsZero() {
@@ -443,8 +422,8 @@ func openingHolding(in PositionInput) (quantity, total, unitPrice decimal.Decima
 	}
 }
 
-// UpdatePosition never touches money: it edits the local description and the
-// goal a holding belongs to. A provider holding only accepts the goal.
+// UpdatePosition never touches money: it edits the local description of a
+// manual holding. A provider holding has nothing local to edit.
 //
 // It reads the holding twice on purpose: once to learn the source and the
 // provider fields the caller may not change, and once after commit so the
@@ -457,24 +436,17 @@ func UpdatePosition(ctx context.Context, conn *sql.DB, id string, in PositionUpd
 	if err != nil {
 		return Position{}, err
 	}
+	if current.Source == PositionSourceSynced {
+		if changesProviderFields(current, in) {
+			return Position{}, ErrIntegratedReadOnly
+		}
+		return current, nil
+	}
 	tx, err := conn.BeginTx(ctx, nil)
 	if err != nil {
 		return Position{}, err
 	}
 	defer tx.Rollback()
-
-	if current.Source == PositionSourceSynced {
-		if changesProviderFields(current, in) {
-			return Position{}, ErrIntegratedReadOnly
-		}
-		if err := setPortfolioAssignment(ctx, tx, syncedPositionColumn, id, in.PortfolioID); err != nil {
-			return Position{}, err
-		}
-		if err := tx.Commit(); err != nil {
-			return Position{}, err
-		}
-		return GetPosition(ctx, conn, id)
-	}
 
 	name, assetType := strings.TrimSpace(in.Name), strings.TrimSpace(in.AssetType)
 	if name == "" || assetType == "" || current.AssetID == nil {
@@ -508,9 +480,6 @@ func UpdatePosition(ctx context.Context, conn *sql.DB, id string, in PositionUpd
 		UPDATE investment_positions SET notes = ?, updated_at = ?
 		WHERE id = ?`,
 		nullableString(trimOptional(in.Notes)), db.FormatTime(time.Now()), id); err != nil {
-		return Position{}, err
-	}
-	if err := setPortfolioAssignment(ctx, tx, manualPositionColumn, id, in.PortfolioID); err != nil {
 		return Position{}, err
 	}
 	if err := tx.Commit(); err != nil {
@@ -557,25 +526,5 @@ func DeletePosition(ctx context.Context, conn *sql.DB, id string) error {
 		return ErrPositionHasOperations
 	}
 	_, err = conn.ExecContext(ctx, `DELETE FROM investment_positions WHERE id = ?`, id)
-	return err
-}
-
-// setPortfolioAssignment rewrites the local goal annotation. It is a local
-// choice about grouping, so it never writes to the holding itself and never
-// records an operation.
-func setPortfolioAssignment(ctx context.Context, q Querier, column, positionID string, portfolioID *string) error {
-	if _, err := q.ExecContext(ctx, `DELETE FROM investment_position_portfolios WHERE `+column+` = ?`, positionID); err != nil {
-		return err
-	}
-	if portfolioID == nil || *portfolioID == "" {
-		return nil
-	}
-	if _, err := getRawPortfolio(ctx, q, *portfolioID); err != nil {
-		return err
-	}
-	now := db.FormatTime(time.Now())
-	_, err := q.ExecContext(ctx, `
-		INSERT INTO investment_position_portfolios (`+column+`, portfolio_id, created_at, updated_at)
-		VALUES (?, ?, ?, ?)`, positionID, *portfolioID, now, now)
 	return err
 }

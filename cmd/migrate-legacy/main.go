@@ -71,6 +71,8 @@ var skipped = map[string]bool{
 	"recurring_commitments": true, "recurring_commitment_conditions": true,
 	"recurring_commitment_scenario_map": true, "debts": true, "receivables": true,
 	"debt_transaction_links": true, "receivable_transaction_links": true,
+	// Replaced by goals (migration 0005); the old grouping has no equivalent.
+	"investment_portfolios": true, "investment_position_portfolios": true,
 }
 
 func orderedTables(conn *sql.DB) ([]string, error) {
@@ -180,10 +182,10 @@ func migrateLegacy(src, dst *sql.DB, dry bool, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	// Transfer annotations were introduced after the final legacy schema.
+	// Transfer annotations and goals were introduced after the final legacy schema.
 	legacyTables := make([]string, 0, len(tables))
 	for _, table := range tables {
-		if table != "transfer_links" && table != "transfer_transaction_links" {
+		if table != "transfer_links" && table != "transfer_transaction_links" && table != "goals" {
 			legacyTables = append(legacyTables, table)
 			continue
 		}
@@ -454,7 +456,7 @@ func copyTable(src *sql.Tx, tx *sql.Tx, table string, meta []column, postgres, d
 
 func validate(ctx context.Context, src, dst transactions.Querier, tables []string, out io.Writer) error {
 	for _, table := range tables {
-		if table == "transfer_links" || table == "transfer_transaction_links" {
+		if table == "transfer_links" || table == "transfer_transaction_links" || table == "goals" {
 			var count int
 			if err := dst.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+quote(table)).Scan(&count); err != nil {
 				return err
