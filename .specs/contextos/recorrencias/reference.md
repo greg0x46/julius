@@ -92,7 +92,9 @@ The `{id}` of every route below is the scenario id — the same one projection,
 the automation `reconcile` target and occurrence decisions use.
 
 `GET/POST /api/recurring-scenarios`,
-`PUT/PATCH/DELETE /api/recurring-scenarios/{id}`.
+`PUT/PATCH/DELETE /api/recurring-scenarios/{id}`. A `PUT` that changes the
+calendar deletes the manual decisions (links and detachments) whose date is no
+longer an occurrence of the new schedule, releasing their transactions.
 
 The write collection is a sibling of `/api/scenarios`, not a sub-collection
 `/api/scenarios/recurring`: a literal segment where `/api/scenarios/{id}`
