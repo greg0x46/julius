@@ -98,6 +98,18 @@ func BackfillWith(ctx context.Context, q Querier, today time.Time, rates valuati
 		return err
 	}
 
+	// The common read has nothing to fill: skip loading the whole ledger.
+	missing := false
+	for d := yesterday; !d.Before(windowStart); d = d.AddDate(0, 0, -1) {
+		if !existing[formatDate(d)] {
+			missing = true
+			break
+		}
+	}
+	if !missing {
+		return nil
+	}
+
 	currentCash, err := transactions.CashOnHandByCurrency(ctx, q, nil)
 	if err != nil {
 		return err

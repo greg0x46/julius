@@ -2,6 +2,8 @@ package networth_test
 
 import (
 	"context"
+	"database/sql"
+	"strings"
 	"testing"
 	"time"
 
@@ -250,6 +252,52 @@ func TestBackfillNeverOverwritesAnExistingSnapshot(t *testing.T) {
 	assertDecimalEqual(t, "yesterday.Breakdown.CashBalance", snap.Breakdown.CashBalance, "1")
 	if snap.IsBackfilled {
 		t.Errorf("IsBackfilled = true, want the pre-existing live row untouched")
+	}
+}
+
+// recordingQuerier remembers every statement it ran.
+type recordingQuerier struct {
+	networth.Querier
+	queries []string
+}
+
+func (r *recordingQuerier) QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error) {
+	r.queries = append(r.queries, query)
+	return r.Querier.QueryContext(ctx, query, args...)
+}
+
+func (r *recordingQuerier) QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row {
+	r.queries = append(r.queries, query)
+	return r.Querier.QueryRowContext(ctx, query, args...)
+}
+
+// With every day already stored, Backfill finds no gap and never loads the
+// ledger (balances and every cash movement) that only gaps need.
+func TestBackfillWithNoMissingDayDoesNotLoadTheLedger(t *testing.T) {
+	f := newFixture(t)
+	accountID := f.addAccount("", "1000.00")
+	today := time.Date(2024, 6, 15, 0, 0, 0, 0, time.UTC)
+	f.addCardTransaction(accountID, today.AddDate(0, 0, -3), "10.00", "CREDIT")
+	if err := networth.Backfill(context.Background(), f.conn, today); err != nil {
+		t.Fatal(err)
+	}
+	before, err := networth.List(context.Background(), f.conn, today.AddDate(0, 0, -10), today)
+	if err != nil || len(before) != 3 {
+		t.Fatalf("first run stored %d days, err %v; want 3", len(before), err)
+	}
+
+	recorder := &recordingQuerier{Querier: f.conn}
+	if err := networth.Backfill(context.Background(), recorder, today); err != nil {
+		t.Fatal(err)
+	}
+	for _, query := range recorder.queries {
+		if strings.Contains(query, "ft.amount_in_account_currency") || strings.Contains(query, "SELECT id, currency_code FROM financial_accounts") {
+			t.Fatalf("a run with no gap loaded the ledger: %s", query)
+		}
+	}
+	after, err := networth.List(context.Background(), f.conn, today.AddDate(0, 0, -10), today)
+	if err != nil || len(after) != len(before) {
+		t.Fatalf("rows changed: %d -> %d, err %v", len(before), len(after), err)
 	}
 }
 
