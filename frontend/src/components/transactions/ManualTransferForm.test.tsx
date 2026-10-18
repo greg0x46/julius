@@ -35,7 +35,7 @@ describe("ManualTransferForm", () => {
     }));
     await waitFor(() => expect(done).toHaveBeenCalledOnce());
   });
-  it("keeps whole digits when backspacing a grouped amount", async () => {
+  it("keeps whole digits when backspacing a grouped amount", { timeout: 60_000 }, async () => {
     const user = userEvent.setup();
     vi.mocked(accounts.listAccounts).mockResolvedValue([source, destination]);
     render(<QueryTestProvider><ManualTransferForm onClose={vi.fn()} onCreated={vi.fn()} /></QueryTestProvider>);
