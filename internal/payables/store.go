@@ -719,7 +719,6 @@ func UnlinkIfPresent(ctx context.Context, q transactions.Querier, transactionID 
 	}
 	_, err = q.ExecContext(ctx, `
 		DELETE FROM scenario_realizations
-		WHERE relation_type = 'allocation' AND transaction_id = ?
-		  AND scenario_id IN (SELECT id FROM scenarios WHERE payable_id IS NOT NULL)`, transactionID)
+		WHERE relation_type = 'allocation' AND transaction_id = ?`, transactionID)
 	return err
 }
