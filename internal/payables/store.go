@@ -375,7 +375,7 @@ func (sc *snapshotScan) snapshot() (transactionSnapshot, error) {
 func loadTransaction(ctx context.Context, q Querier, transactionID string) (transactionSnapshot, bool, error) {
 	var sc snapshotScan
 	err := q.QueryRowContext(ctx,
-		`SELECT `+transactionSnapshotColumns+` `+transactionSnapshotFrom+` WHERE ft.id = ?`, transactionID,
+		`SELECT `+transactionSnapshotColumns+` `+transactionSnapshotFrom+` WHERE ft.id = ? AND ft.deleted_at IS NULL`, transactionID,
 	).Scan(sc.dest()...)
 	if errors.Is(err, sql.ErrNoRows) {
 		return transactionSnapshot{}, false, nil
@@ -405,7 +405,7 @@ func loadTransactions(ctx context.Context, q Querier, transactionIDs []string) (
 	in, args := db.InClause(transactionIDs)
 	rows, err := q.QueryContext(ctx,
 		`SELECT ft.id, `+transactionSnapshotColumns+` `+transactionSnapshotFrom+
-			` WHERE ft.id IN (`+in+`)`, args...)
+			` WHERE ft.deleted_at IS NULL AND ft.id IN (`+in+`)`, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -625,13 +625,20 @@ func CreateLink(ctx context.Context, conn *sql.DB, kind Kind, payableID, transac
 	)
 	if err != nil {
 		// A UNIQUE violation here (transaction_id) means a concurrent
-		// caller won the race despite the already-linked check above —
-		// defense in depth, since SQLite's single-connection model (see
-		// internal/db) makes this practically unreachable.
-		return CreateLinkResult{Status: StatusConflict}, nil
+		// caller won the race despite the already-linked check above.
+		// Any other failure is not a conflict the caller can resolve.
+		if db.IsUniqueViolation(err) {
+			return CreateLinkResult{Status: StatusConflict}, nil
+		}
+		return CreateLinkResult{}, err
 	}
 	if err := createSettlement(ctx, tx, link); err != nil {
-		return CreateLinkResult{Status: StatusConflict}, nil
+		if db.IsUniqueViolationOn(err,
+			db.ConstraintOneCompleteEventTransactionSQLite,
+			db.ConstraintOneCompleteEventTransactionPostgres) {
+			return CreateLinkResult{Status: StatusConflict}, nil
+		}
+		return CreateLinkResult{}, err
 	}
 	if err := tx.Commit(); err != nil {
 		return CreateLinkResult{}, err
