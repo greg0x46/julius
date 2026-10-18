@@ -479,6 +479,7 @@ func TestPortfolioConvertsForeignPositionsConsistently(t *testing.T) {
 	holding.Name, holding.Code = strRef("Global"), strRef("GLBL")
 	id := f.addHolding(holding)
 	f.exec(`UPDATE financial_investments SET currency_code = 'USD' WHERE id = ?`, id)
+	holding.CurrencyCode = strRef("USD")
 	f.addMovement(id, "inflow", "100", "10", day(1))
 	f.recordQuote(holding, "2026-09-20T12:00:00Z", "110")
 
