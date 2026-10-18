@@ -1,14 +1,14 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { Alert, DatePicker, Input, InputNumber, Select, Spin } from "antd";
+import { Alert, DatePicker, Input, Select, Spin } from "antd";
 import dayjs from "dayjs";
 import { useState } from "react";
 import { createTransfer, type TransferMovement } from "../../api/transfers";
 import { invalidateAfterTransactionChange } from "../../api/queryKeys";
 import { useAccounts } from "../../hooks/useAccounts";
 import { transferRate } from "../../presentation/transferRate";
-import { formatMoney, parseMoney } from "../forms/moneyText";
 import { FormDrawer } from "../forms/FormDrawer";
 import { FormField } from "../forms/FormField";
+import { MoneyInput } from "../forms/MoneyInput";
 import { TransferDetail } from "./TransferDetail";
 
 const positive = (value: string) => /^(0|[1-9]\d*)(\.\d+)?$/.test(value) && /[1-9]/.test(value);
@@ -43,7 +43,7 @@ export function ManualTransferForm({ onClose, onCreated }: { onClose: () => void
   };
   const options = (exclude?: string) => active.filter((account) => account.id !== exclude).map((account) => ({ value: account.id, label: `${account.name} · ${account.currency_code}` }));
   const amountField = (id: string, label: string, currency: string, value: string, onChange: (value: string) => void, hint?: string) => <FormField label={label} htmlFor={id} hint={hint}>
-    <InputNumber<string> id={id} stringMode value={value || null} prefix={currency === "BRL" ? "R$" : currency} controls={false} inputMode="decimal" min="0" formatter={(text) => formatMoney(text, { userTyping: true })} parser={(text) => parseMoney(text)} onChange={(next) => onChange(next ?? "")} style={{ width: "100%" }} disabled={saving} aria-describedby={hint ? `${id}-hint` : undefined} />
+    <MoneyInput id={id} value={value || null} currencyCode={currency} min="0" onChange={(next) => onChange(next ?? "")} disabled={saving} aria-describedby={hint ? `${id}-hint` : undefined} />
   </FormField>;
   return <FormDrawer open title="Nova transferência" onClose={onClose} onSubmit={() => void submit()} submitLabel="Criar transferência" submitting={saving} submitDisabled={!ready || !!accounts.error} error={error}>
     {accounts.isLoading && <Spin aria-label="Carregando contas" />}
