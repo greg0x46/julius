@@ -39,6 +39,8 @@ another engine. See `motores-de-dominio.md` §4.
 - Target must be strictly positive; name required. Everything is in BRL and is
   **not** converted to the reference currency.
 - A list reads the metric once, so all goals in a response agree.
+- Create and update commit only after computing the response progress; a
+  valuation failure leaves the stored goal unchanged.
 
 Table `goals` (migration `0005_goals`, both dialects): `id`, `name`, `metric`,
 `target_amount`, `target_date`, `notes`, `created_at`, `updated_at`. The same

@@ -9,6 +9,7 @@ import (
 
 	"github.com/shopspring/decimal"
 
+	"github.com/greg0x46/julius/internal/db"
 	"github.com/greg0x46/julius/internal/db/dbtest"
 	"github.com/greg0x46/julius/internal/goals"
 	"github.com/greg0x46/julius/internal/investments"
@@ -174,4 +175,51 @@ func TestMissingGoal(t *testing.T) {
 	if err := goals.Delete(ctx, conn, id); !errors.Is(err, goals.ErrNotFound) {
 		t.Errorf("Delete = %v", err)
 	}
+}
+
+func TestWritesRollBackWhenProgressCannotBeValued(t *testing.T) {
+	dbtest.Each(t, func(t *testing.T, conn *sql.DB) {
+		ctx := context.Background()
+		existing, err := goals.Create(ctx, conn, input("1000"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		now := db.FormatTime(time.Now())
+		const accountID = "052e2a8b-6b4c-5c1d-90c3-2f8654bcd27c"
+		if _, err := conn.Exec(`INSERT INTO financial_accounts
+			(id, origin, name, account_type, currency_code, opening_balance, created_at, updated_at)
+			VALUES (?, 'manual', 'Synthetic USD', 'BANK', 'USD', '100', ?, ?)`, accountID, now, now); err != nil {
+			t.Fatal(err)
+		}
+
+		// Make FX reads fail without contacting the external rate provider.
+		if _, err := conn.Exec(`ALTER TABLE exchange_rates RENAME TO unavailable_exchange_rates`); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := goals.Create(ctx, conn, input("2000")); err == nil {
+			t.Fatal("Create succeeded despite failed valuation query")
+		}
+		changed := input("3000")
+		changed.Name = "Changed name"
+		if _, err := goals.Update(ctx, conn, existing.ID, changed); err == nil {
+			t.Fatal("Update succeeded despite failed valuation query")
+		}
+
+		// Restore valuation reads so the normal API verifies persisted state.
+		if _, err := conn.Exec(`ALTER TABLE unavailable_exchange_rates RENAME TO exchange_rates`); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := conn.Exec(`DELETE FROM financial_accounts WHERE id = ?`, accountID); err != nil {
+			t.Fatal(err)
+		}
+		list, err := goals.List(ctx, conn)
+		if err != nil || len(list) != 1 {
+			t.Fatalf("goals after failed writes = %+v, %v", list, err)
+		}
+		got := list[0]
+		if got.ID != existing.ID || got.Name != existing.Name || !got.TargetAmount.Equal(existing.TargetAmount) ||
+			!got.UpdatedAt.Equal(existing.UpdatedAt) {
+			t.Fatalf("failed update changed goal: got %+v, want %+v", got, existing)
+		}
+	})
 }

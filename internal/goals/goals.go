@@ -182,38 +182,62 @@ func List(ctx context.Context, q Querier) ([]Goal, error) {
 	return goals, nil
 }
 
-func Create(ctx context.Context, q Querier, in Input) (Goal, error) {
+func Create(ctx context.Context, conn *sql.DB, in Input) (Goal, error) {
 	name, err := in.validate()
 	if err != nil {
 		return Goal{}, err
 	}
+	tx, err := conn.BeginTx(ctx, nil)
+	if err != nil {
+		return Goal{}, err
+	}
+	defer tx.Rollback()
 	id := uuid.NewString()
 	now := db.FormatTime(time.Now())
-	if _, err := q.ExecContext(ctx, `
+	if _, err := tx.ExecContext(ctx, `
 		INSERT INTO goals (id, name, metric, target_amount, target_date, notes, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
 		id, name, string(in.Metric), money.CanonicalDecimal(in.TargetAmount), nullableDay(in.TargetDate), nullable(in.Notes), now, now); err != nil {
 		return Goal{}, err
 	}
-	return Get(ctx, q, id)
+	goal, err := Get(ctx, tx, id)
+	if err != nil {
+		return Goal{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return Goal{}, err
+	}
+	return goal, nil
 }
 
-func Update(ctx context.Context, q Querier, id string, in Input) (Goal, error) {
+func Update(ctx context.Context, conn *sql.DB, id string, in Input) (Goal, error) {
 	name, err := in.validate()
 	if err != nil {
 		return Goal{}, err
 	}
-	if _, err := rawGet(ctx, q, id); err != nil {
+	tx, err := conn.BeginTx(ctx, nil)
+	if err != nil {
 		return Goal{}, err
 	}
-	if _, err := q.ExecContext(ctx, `
+	defer tx.Rollback()
+	if _, err := rawGet(ctx, tx, id); err != nil {
+		return Goal{}, err
+	}
+	if _, err := tx.ExecContext(ctx, `
 		UPDATE goals SET name = ?, metric = ?, target_amount = ?, target_date = ?, notes = ?, updated_at = ?
 		WHERE id = ?`,
 		name, string(in.Metric), money.CanonicalDecimal(in.TargetAmount), nullableDay(in.TargetDate), nullable(in.Notes),
 		db.FormatTime(time.Now()), id); err != nil {
 		return Goal{}, err
 	}
-	return Get(ctx, q, id)
+	goal, err := Get(ctx, tx, id)
+	if err != nil {
+		return Goal{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return Goal{}, err
+	}
+	return goal, nil
 }
 
 func Delete(ctx context.Context, q Querier, id string) error {
