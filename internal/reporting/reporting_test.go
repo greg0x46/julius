@@ -2,6 +2,7 @@ package reporting_test
 
 import (
 	"context"
+	"fmt"
 	"errors"
 	"testing"
 	"time"
@@ -66,6 +67,8 @@ func TestReportingFailureReasons(t *testing.T) {
 		reason string
 	}{
 		{exchange.ErrUnsupported, "unsupported"},
+		// A malformed code is permanent, so "try again later" would be wrong.
+		{fmt.Errorf("%w: %q", exchange.ErrInvalidCurrency, "ARS1"), "unsupported"},
 		{exchange.ErrHistorical, "historical_unavailable"},
 		{exchange.ErrProviderFailure, "provider_failure"},
 	} {

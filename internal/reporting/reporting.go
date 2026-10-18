@@ -43,7 +43,7 @@ func Convert(ctx context.Context, rates Resolver, amount decimal.Decimal, curren
 	rate, err := rates.On(ctx, currency, ReferenceCurrency, *day)
 	if err != nil {
 		reason := "provider_failure"
-		if errors.Is(err, exchange.ErrUnsupported) {
+		if errors.Is(err, exchange.ErrUnsupported) || errors.Is(err, exchange.ErrInvalidCurrency) {
 			reason = "unsupported"
 		} else if errors.Is(err, exchange.ErrHistorical) {
 			reason = "historical_unavailable"
