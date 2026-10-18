@@ -152,6 +152,7 @@ func NewServer(db *sql.DB, frontend fs.FS, secrets *settings.Secrets, config aut
 	mux.HandleFunc("DELETE /api/investment-reconciliations/{id}", handleDeleteInvestmentReconciliation(db))
 
 	mux.HandleFunc("GET /api/investment-summary", handleGetInvestmentSummary(db))
+	mux.HandleFunc("GET /api/investment-portfolio", handleGetInvestmentPeriod(db))
 	mux.HandleFunc("GET /api/investment-monthly-movements", handleListInvestmentMonthlyMovements(db))
 
 	mux.HandleFunc("GET /api/automation-rules/condition-options", handleListConditionOptions(db))

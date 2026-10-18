@@ -51,6 +51,14 @@ export const queryKeys = {
   investmentWorkspacePart: (
     part: "accounts" | "positions" | "operations" | "reconciliations" | "summary",
   ) => [...roots.investmentWorkspace, part] as const,
+  // Under the workspace root so every ledger/asset write refreshes it too.
+  investmentPeriod: [...roots.investmentWorkspace, "period"] as const,
+  investmentPeriodFor: (params: {
+    from: string | null;
+    to: string;
+    groupBy: string;
+    source: string | null;
+  }) => [...roots.investmentWorkspace, "period", params] as const,
   investmentDetail: (investmentId: string) => [...roots.investments, investmentId] as const,
   investmentDetailTransactions: (investmentId: string) =>
     [...roots.investments, investmentId, "transactions"] as const,

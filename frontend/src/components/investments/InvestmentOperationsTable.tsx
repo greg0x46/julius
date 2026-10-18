@@ -5,7 +5,7 @@ import type { InvestmentOperation, InvestmentPosition } from "../../api/contract
 import { investmentOperationKindLabel } from "../../presentation/investmentWorkspaceLabels";
 import { EmptyState, ResponsiveList } from "../layout";
 import { Money } from "../shared/Money";
-import { formatDate } from "./investmentMath";
+import { formatDate } from "./investmentDate";
 import { RecordMenu, type RecordMenuItem } from "../shared/RecordMenu";
 import { useConfirm } from "../shared/useConfirm";
 
