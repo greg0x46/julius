@@ -17,8 +17,8 @@ across multiple contexts).
 
 `internal/networth` — snapshot calculation/backfill (`Breakdown`,
 `SnapshotRow`). A snapshot for "today" is written on every read; there is no
-background worker. Goals (`internal/goals`) read `Breakdown.InvestmentBalance`
-from `networth.Compute`; they add nothing to net worth.
+background worker. Goals (`internal/goals`) read the same investments line
+through `networth.InvestmentValue`; they add nothing to net worth.
 
 The current calculation includes positions and cash of manual investments via
 `investments.ManualNetWorth`, plus imported positions. Cash of an investment

@@ -33,8 +33,22 @@ const (
 	MetricInvestedValue Metric = "invested_value"
 )
 
-var metrics = map[Metric]func(networth.Breakdown) decimal.Decimal{
-	MetricInvestedValue: func(b networth.Breakdown) decimal.Decimal { return b.InvestmentBalance },
+// figures holds the metric values read once per request, so every goal in it
+// agrees. A metric is read only from the engine that owns it.
+type figures struct {
+	investedValue decimal.Decimal
+}
+
+var metrics = map[Metric]func(figures) decimal.Decimal{
+	MetricInvestedValue: func(f figures) decimal.Decimal { return f.investedValue },
+}
+
+func readFigures(ctx context.Context, q Querier) (figures, error) {
+	invested, err := networth.InvestmentValue(ctx, q)
+	if err != nil {
+		return figures{}, err
+	}
+	return figures{investedValue: invested}, nil
 }
 
 var (
@@ -124,10 +138,10 @@ func nullableDay(t *time.Time) any {
 	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC).Format("2006-01-02")
 }
 
-// withProgress fills the computed fields from a breakdown read once for all
-// the goals of a request, so they agree with each other.
-func withProgress(g Goal, b networth.Breakdown) Goal {
-	g.CurrentValue = metrics[g.Metric](b)
+// withProgress fills the computed fields from figures read once for all the
+// goals of a request, so they agree with each other.
+func withProgress(g Goal, f figures) Goal {
+	g.CurrentValue = metrics[g.Metric](f)
 	g.Progress = g.CurrentValue.Div(g.TargetAmount)
 	return g
 }
@@ -145,11 +159,11 @@ func Get(ctx context.Context, q Querier, id string) (Goal, error) {
 	if err != nil {
 		return Goal{}, err
 	}
-	b, err := networth.Compute(ctx, q)
+	f, err := readFigures(ctx, q)
 	if err != nil {
 		return Goal{}, err
 	}
-	return withProgress(g, b), nil
+	return withProgress(g, f), nil
 }
 
 func List(ctx context.Context, q Querier) ([]Goal, error) {
@@ -172,12 +186,12 @@ func List(ctx context.Context, q Querier) ([]Goal, error) {
 	if len(goals) == 0 {
 		return goals, nil
 	}
-	b, err := networth.Compute(ctx, q)
+	f, err := readFigures(ctx, q)
 	if err != nil {
 		return nil, err
 	}
 	for i := range goals {
-		goals[i] = withProgress(goals[i], b)
+		goals[i] = withProgress(goals[i], f)
 	}
 	return goals, nil
 }

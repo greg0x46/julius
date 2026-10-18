@@ -87,6 +87,13 @@ func investmentBalance(ctx context.Context, q Querier, valued *valuation.Valuati
 	return total, nil
 }
 
+// InvestmentValue is today's investments line of net worth in BRL, without
+// valuing cash or card balances: a missing rate on unrelated foreign cash
+// cannot make it unavailable.
+func InvestmentValue(ctx context.Context, q Querier) (decimal.Decimal, error) {
+	return investmentBalance(ctx, q, newValuation(q, time.Now()))
+}
+
 // Compute aggregates the current net worth from live data — never from a
 // stored snapshot: assets are cash (non-CREDIT account balances) +
 // investments; liabilities are the current credit card bill cycle +
