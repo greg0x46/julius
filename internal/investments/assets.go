@@ -137,10 +137,13 @@ func normalizeAssetInput(in AssetInput) (AssetInput, string, error) {
 }
 
 func assetKeyExists(ctx context.Context, q Querier, canonicalKey, exceptID string) (bool, error) {
+	// An empty exceptID must not reach a Postgres uuid comparison.
+	query, args := `SELECT COUNT(*) FROM investment_assets WHERE canonical_key = ?`, []any{canonicalKey}
+	if exceptID != "" {
+		query, args = query+` AND id <> ?`, append(args, exceptID)
+	}
 	var count int
-	err := q.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM investment_assets WHERE canonical_key = ? AND id <> ?`,
-		canonicalKey, exceptID).Scan(&count)
+	err := q.QueryRowContext(ctx, query, args...).Scan(&count)
 	return count > 0, err
 }
 
