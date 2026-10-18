@@ -27,8 +27,9 @@ function deleteDescription(payable: Payable): string {
   }; as transações em si permanecem inalteradas.`;
 }
 
-function ValidPayableDetail({ id, kind }: { id: string; kind: PayableKind }) {
-  const payable = usePayableDetail(id, kind);
+function ValidPayableDetail({ id, requestedKind }: { id: string; requestedKind: PayableKind }) {
+  const payable = usePayableDetail(id, requestedKind);
+  const { kind } = payable;
   const payables = usePayables(kind);
   const navigate = useNavigate();
   const feedback = useFeedback();
@@ -148,9 +149,9 @@ export function PayableDetailPage() {
   const { id = "" } = useParams();
   const [searchParams] = useSearchParams();
   const kindParam = searchParams.get("kind");
-  const kind: PayableKind = kindParam === "receivable" ? "receivable" : "debt";
+  const requestedKind: PayableKind = kindParam === "receivable" ? "receivable" : "debt";
   return isUuid(id) ? (
-    <ValidPayableDetail id={id} kind={kind} />
+    <ValidPayableDetail id={id} requestedKind={requestedKind} />
   ) : (
     <InvalidDetailPage title={pageTitle} backTo={backTo} backLabel={backLabel} invalidTitle="Endereço inválido" />
   );
