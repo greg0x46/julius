@@ -19,7 +19,7 @@ type TransactionSummary struct {
 
 // Summary is a whole scenario's derived state.
 //
-// AccumulatedDeviation is Σ amount − Σ realized across every installment
+// AccumulatedDeviation is Σ |amount| − Σ realized across every installment
 // whose ProjectedAt is on or before today. A positive value means the plan
 // is behind (less was actually allocated than planned so far); negative
 // means ahead. Installments not yet due don't count toward it: only what
@@ -57,7 +57,7 @@ func Summarize(ctx context.Context, q Querier, scenarioID string, today time.Tim
 		summary := summarizeTransaction(st, byTransaction[st.ID], today)
 		out.Transactions[i] = summary
 		if !st.ProjectedAt.After(today) {
-			out.AccumulatedDeviation = out.AccumulatedDeviation.Add(st.Amount.Sub(summary.RealizedTotal))
+			out.AccumulatedDeviation = out.AccumulatedDeviation.Add(st.Amount.Abs().Sub(summary.RealizedTotal))
 		}
 	}
 	return out, nil

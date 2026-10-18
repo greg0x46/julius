@@ -85,17 +85,21 @@ const (
 // realizedTotal (the sum of the allocated_amount of every allocation
 // realization on it) — both supplied by the caller, never read here, so this
 // stays a pure function callable from tests without a database.
+//
+// Allocations are positive magnitudes, so the planned amount is compared by
+// magnitude too: a standalone expense is authored negative.
 func (s ScenarioTransaction) Status(today time.Time, realizedTotal decimal.Decimal) Status {
+	planned := s.Amount.Abs()
 	switch {
 	case realizedTotal.IsZero() && today.After(s.ProjectedAt):
 		return StatusAtrasada
 	case realizedTotal.IsZero():
 		return StatusProjetada
-	case realizedTotal.LessThan(s.Amount):
+	case realizedTotal.LessThan(planned):
 		return StatusPagaParcialmente
-	case realizedTotal.Equal(s.Amount):
+	case realizedTotal.Equal(planned):
 		return StatusPaga
-	default: // realizedTotal > s.Amount
+	default: // realizedTotal > planned
 		return StatusPagaAMais
 	}
 }
