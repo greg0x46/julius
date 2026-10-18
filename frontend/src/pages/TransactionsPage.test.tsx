@@ -22,9 +22,9 @@ const emptyResult = {
   page: { number: 1, size: 50, total_items: 0, total_pages: 1 },
 };
 
-function renderPage() {
+function renderPage(search = "?period=all") {
   return render(
-    <MemoryRouter initialEntries={["/transacoes?period=all"]}>
+    <MemoryRouter initialEntries={[`/transacoes${search}`]}>
       <QueryTestProvider>
         <TransactionsPage />
       </QueryTestProvider>
@@ -151,5 +151,23 @@ describe("TransactionsPage", () => {
     expect(description).toHaveAttribute("aria-invalid", "true");
     expect(screen.getByText("Informe uma descrição.")).toBeVisible();
     await waitFor(() => expect(description).toHaveFocus());
+  });
+
+  it("falls back to the last page when the URL asks for a page past the end", async () => {
+    const lastPage = { number: 2, size: 50, total_items: 60, total_pages: 2 };
+    vi.mocked(transactionsApi.queryTransactions).mockImplementation(async (query) =>
+      query.page > lastPage.total_pages
+        ? { ...emptyResult, page: { ...lastPage, number: query.page } }
+        : { ...transactionResult, page: { ...lastPage, number: query.page } },
+    );
+
+    renderPage("?period=all&page=9");
+
+    await screen.findByRole("button", { name: /Ver detalhes de Mercado/ });
+    expect(transactionsApi.queryTransactions).toHaveBeenLastCalledWith(
+      expect.objectContaining({ page: 2 }),
+      expect.anything(),
+    );
+    expect(screen.getByText("Página 2 de 2")).toBeVisible();
   });
 });
