@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"time"
+	"unicode/utf8"
 )
 
 // httpClient is the shared shape every provider fetches through: a plain
@@ -67,8 +68,19 @@ type httpStatusError struct {
 	Body       string
 }
 
+// maxErrorBodyBytes bounds the body excerpt in the message, which is logged.
+const maxErrorBodyBytes = 200
+
 func (e *httpStatusError) Error() string {
-	return fmt.Sprintf("status %d: %s", e.StatusCode, e.Body)
+	body := e.Body
+	if len(body) > maxErrorBodyBytes {
+		cut := maxErrorBodyBytes
+		for cut > 0 && !utf8.RuneStart(body[cut]) {
+			cut--
+		}
+		body = body[:cut] + "..."
+	}
+	return fmt.Sprintf("status %d: %s", e.StatusCode, body)
 }
 
 // statusCode is the HTTP status behind err, or 0 when err is not a response

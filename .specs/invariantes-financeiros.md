@@ -58,9 +58,7 @@ its own issue.
    the ignored entry from the walk (duplicate/chargeback), and the backfill
    reverses it from the anchor (money that really left). Today's balance is the
    same in both; on days before the entry the two charts differ by its amount
-   (`TestIgnoredRowDivergesBetweenTimelineAndBackfill`). The header comment of
-   `networth.Backfill` still says an ignored entry is "never reversed", which
-   contradicts the code and the `cashDeltasDescending` comment.
+   (`TestIgnoredRowDivergesBetweenTimelineAndBackfill`).
 3. **Allocation is not unique per entry.** The complete-event index covers only
    `settlement` and `reconciliation`; the same entry can be allocated to more
    than one scenario installment, and `RealizeEvent` does not check the sum of

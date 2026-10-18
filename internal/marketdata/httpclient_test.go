@@ -6,8 +6,10 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 )
 
 // newTestHTTPClient returns a client on a limiter with a fake clock, so what
@@ -258,5 +260,22 @@ func TestHTTPClientMalformedBodyIsAnError(t *testing.T) {
 	_, err := getMap(client, url)
 	if err == nil || errors.Is(err, ErrUnavailable) {
 		t.Fatalf("error = %v, want a decode error", err)
+	}
+}
+
+// The message reaches logs, so it carries a short excerpt of the body; the
+// full body stays on the error for the provider to inspect.
+func TestHTTPStatusErrorMessageTruncatesTheBody(t *testing.T) {
+	body := strings.Repeat("é", 5000)
+	err := &httpStatusError{StatusCode: 502, Body: body}
+	message := err.Error()
+	if len(message) > 300 || !strings.HasPrefix(message, "status 502: ") || !utf8.ValidString(message) {
+		t.Fatalf("message is %d bytes (valid utf-8: %v)", len(message), utf8.ValidString(message))
+	}
+	if err.Body != body {
+		t.Fatal("the body was cut on the error value")
+	}
+	if short := (&httpStatusError{StatusCode: 404, Body: "nope"}).Error(); short != "status 404: nope" {
+		t.Fatalf("short body = %q", short)
 	}
 }

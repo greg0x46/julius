@@ -33,7 +33,8 @@ Manual operations use reais and decimal arithmetic. Purchases fold costs into
 the weighted average cost; sales write off proportional cost. Corrections
 reprocess history and reject negative cash or quantity. Valuations are manual
 and dated; when unavailable, the cost is labeled as cost, without inventing a
-quote or return. The ledger stores total cost and total valued amount; average
+quote or return. Selling a holding out also ends its typed valuation, so a later
+repurchase starts again at cost. The ledger stores total cost and total valued amount; average
 cost and unit quote are derived for display only, so value and gain suffer no
 decimal drift. For assets with automatic quotes the value comes from the price
 series (`market_quote`), computed on read: the quotes job never writes
@@ -216,6 +217,11 @@ picks class/type; with an empty `quote_symbol`, the symbol is derived from the
 code on save and stored on the asset. It only needs to be set when the quoted
 code differs from the asset's code.
 
+A provider holding shares the catalog asset of its identity only when the asset
+is kept in the same currency; otherwise it has no catalog asset (`asset_id`
+null, no quotes recorded or read), so a USD price never lands in a reais asset's
+series. Listing positions never creates assets.
+
 A fixed-income or crypto ETF traded on B3 uses `quote_source=b3` and keeps its
 financial class. For types without supported quotes, the form directs the user to
 manual valuations or the integrated institution's values.
@@ -266,9 +272,11 @@ only the markets it knows, so by default:
 Yahoo Finance is queried through the public chart endpoint
 (`query1.finance.yahoo.com/v8/finance/chart`, the same one yfinance uses). Asset
 not found, provider unavailable, timeout or rate limit cause the market's next
-provider to be tried. Only when every provider of the market fails by rate limit
-is the asset deferred: it is left for the next run and nothing is marked as
-queried.
+provider to be tried. When no provider answers and at least one of the failures
+is a rate limit, the asset is deferred (the caller matches the rate limit
+error inside the combined failure): it is left for the next run and nothing is
+marked as queried. Without any rate limit among them the request counts as a
+failure.
 
 Each stored price (`investment_asset_quotes.source`) records the provider that
 served it (`yahoo`, `brapi` or `coingecko`). The day's quote is cached in memory
