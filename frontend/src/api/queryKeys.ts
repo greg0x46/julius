@@ -167,14 +167,22 @@ export const invalidateAfterPayableLinkChange = (
 /** Any create/update/delete of a payable. */
 export const invalidateAfterPayableChange = (client: Client) => invalidate(client, roots.payables);
 
-/** Rules are saved; their retroactive pass also rewrites transactions. */
+/**
+ * A rule is saved: its reconcile action changes what the projector expects, and
+ * the retroactive pass also rewrites transactions and their reconciliations.
+ */
 export const invalidateAfterAutomationRuleChange = async (
   client: Client,
   options: { transactionsChanged: boolean },
 ) => {
-  await invalidate(client, roots.automationRules);
+  await invalidateAll(client, [roots.automationRules, ...projectionViews]);
   if (options.transactionsChanged) {
-    await invalidateAll(client, [roots.transactions, roots.transactionTransfers]);
+    await invalidateAll(client, [
+      roots.transactions,
+      roots.transactionTransfers,
+      roots.transactionReconciliation,
+      roots.recurringCommitments,
+    ]);
   }
 };
 
@@ -184,7 +192,15 @@ export const invalidateAutomationRules = (client: Client) =>
 
 /** A manual transaction create/update/delete. */
 export const invalidateAfterTransactionChange = (client: Client) =>
-  invalidateAll(client, [roots.transactions, roots.accounts, roots.timeline, roots.netWorth, roots.transactionTransfers]);
+  invalidateAll(client, [
+    roots.transactions,
+    roots.accounts,
+    roots.timeline,
+    roots.netWorth,
+    roots.transactionTransfers,
+    roots.recurringCommitments,
+    roots.transactionReconciliation,
+  ]);
 
 export const invalidateAfterManualAccountChange = (client: Client) =>
   invalidateAll(client, [roots.accounts, roots.transactions, roots.timeline, roots.netWorth]);
@@ -216,7 +232,8 @@ export const invalidateDataSourcesList = (client: Client) =>
   invalidate(client, queryKeys.dataSourcesList);
 export const invalidateTransactionReconciliation = (client: Client, transactionId: string) =>
   invalidate(client, queryKeys.transactionReconciliationOf(transactionId));
-export const invalidateRecurringCommitments = (client: Client) =>
-  invalidate(client, roots.recurringCommitments);
+/** A recurring commitment is planned cash flow, so any write to one moves the projection. */
+export const invalidateAfterRecurringCommitmentChange = (client: Client) =>
+  invalidateAll(client, [roots.recurringCommitments, ...projectionViews]);
 export const invalidateCategories = (client: Client) => invalidate(client, roots.categories);
 export const invalidateAuthSession = (client: Client) => invalidate(client, roots.authSession);
