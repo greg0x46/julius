@@ -49,7 +49,7 @@ marking it ignored — see the note on reporting exclusions in
 - Credit card (`cardflow.go`/`cardtotal.go`, moved from `internal/payables`):
   `CardDueDates`/`ProjectedEntryDate` (the date a card purchase becomes a cash
   outflow — the bill's due date, not `occurred_at`), `CreditAccountIDs`,
-  `CardMetadataByTransaction` and `CreditCardTransactionTotal(At)` (how much is
+  `CardTransactionSignals` and `CreditCardTransactionTotal(At)` (how much is
   owed in the open cycle, computed from eligible entries, never from
   `financial_accounts.balance`).
 - `balance.go` — `CashOnHandByCurrency`: money in non-credit accounts
@@ -156,7 +156,7 @@ only after those checks. Status alone never implies inclusion or settlement.
 | Consumer | Current treatment |
 | --- | --- |
 | `transactions.Query`, `SpendingByCategory`, `CategoryBreakdown` | Eligible pending and posted purchases contribute once per stored row; category spending is BRL-only. Explicit status filters can narrow the report. |
-| Report period (`effectiveDate`) | Default `occurred_at`: each installment uses its own provider date. `paid_at`: cards use a matching bill's due date, otherwise `occurred_at + 1 month`. Bank entries keep their transaction date. Grouping and ordering still use `occurred_at`. |
+| Report period (`effectiveDate`) | Default `occurred_at`: each installment uses its own provider date. `paid_at`: cards use a matching bill's due date, otherwise `occurred_at + 1 month` clamped to the month end (Jan 31 gives Feb 28). Due dates are calendar days anchored in the request timezone. Bank entries keep their transaction date. Grouping and ordering still use `occurred_at`. |
 | `CardDueDates.ProjectedEntryDate` (Timeline/projections) | Card cash is projected on the associated bill due date, then a forecast month or inferred cycle. `billForecastDate` informs this projection, not report period filtering. Payment legs use the bill they settle. |
 | `CreditCardTransactionTotal(At)` | Pending/posted entries count only in the current open cycle; ignored entries do not. Category transfer exclusion is bypassed so a payment assigned to that cycle still reduces debt. Forecast month alone does not establish a debt cycle. |
 | `CashOnHandByCurrency` / net-worth history | Synced bank cash uses provider balances; card balances are not cash. Backfill uses eligible synced non-credit entries, including pending, with inclusion/category exclusions bypassed. Manual bank balance/history uses posted movements only. |
