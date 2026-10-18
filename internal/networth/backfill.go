@@ -176,6 +176,9 @@ func BackfillWith(ctx context.Context, q Querier, today time.Time, rates valuati
 		if errors.Is(err, valuation.ErrMissingRate) {
 			// Possibly transient (provider down): store nothing so a later
 			// read retries this day instead of freezing it as unavailable.
+			if errors.Is(err, exchange.ErrProviderFailure) {
+				return nil // every older day would hit the same outage
+			}
 			continue
 		}
 		if err != nil {
@@ -188,6 +191,9 @@ func BackfillWith(ctx context.Context, q Querier, today time.Time, rates valuati
 		reference := time.Date(g.day.Year(), g.day.Month(), g.day.Day(), 12, 0, 0, 0, loc)
 		creditCard, err := transactions.CreditCardBalanceValued(ctx, q, reference, loc, valued)
 		if errors.Is(err, valuation.ErrMissingRate) {
+			if errors.Is(err, exchange.ErrProviderFailure) {
+				return nil
+			}
 			continue
 		}
 		if err != nil {

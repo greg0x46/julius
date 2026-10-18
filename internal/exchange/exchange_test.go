@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -341,6 +342,54 @@ func TestProviderErrorWithoutStoredRateIsUnavailable(t *testing.T) {
 		s.Latest(ctx, "USD", "BRL")
 		if p.calls != 2 {
 			t.Fatalf("provider calls = %d, want 2", p.calls)
+		}
+	})
+}
+
+// A provider outage is a property of the pair, not of one day or one request:
+// many days asked through several Services cost a single provider call.
+func TestProviderOutageCoolsDownThePairAcrossDaysAndServices(t *testing.T) {
+	dbtest.Each(t, func(t *testing.T, conn *sql.DB) {
+		p := &fakeProvider{err: fmt.Errorf("%w: status 503", ErrProviderFailure)}
+		ctx := context.Background()
+		for request := 0; request < 3; request++ {
+			s, _ := newService(conn, p, sun)
+			for back := 1; back <= 30; back++ {
+				_, err := s.On(ctx, "USD", "BRL", sun.AddDate(0, 0, -back))
+				if !errors.Is(err, ErrUnavailable) || !errors.Is(err, ErrProviderFailure) {
+					t.Fatalf("err = %v, want ErrUnavailable wrapping ErrProviderFailure", err)
+				}
+			}
+		}
+		if p.calls != 1 {
+			t.Fatalf("provider calls = %d, want 1", p.calls)
+		}
+
+		// Another pair is not held back, and the cooldown ends.
+		other, c := newService(conn, p, sun)
+		other.On(ctx, "EUR", "BRL", wed)
+		if p.calls != 2 {
+			t.Fatalf("provider calls for another pair = %d, want 2", p.calls)
+		}
+		c.t = c.t.Add(other.Cooldown)
+		other.On(ctx, "USD", "BRL", wed)
+		if p.calls != 3 {
+			t.Fatalf("provider calls after the cooldown = %d, want 3", p.calls)
+		}
+	})
+}
+
+// A day the provider has no history for says nothing about the other days.
+func TestHistoricalGapCoolsDownOnlyItsDay(t *testing.T) {
+	dbtest.Each(t, func(t *testing.T, conn *sql.DB) {
+		p := &fakeProvider{err: ErrHistorical}
+		s, _ := newService(conn, p, sun)
+		ctx := context.Background()
+		s.On(ctx, "ARS", "BRL", wed)
+		s.On(ctx, "ARS", "BRL", wed)
+		s.On(ctx, "ARS", "BRL", fri)
+		if p.calls != 2 {
+			t.Fatalf("provider calls = %d, want 2 (one per day)", p.calls)
 		}
 	})
 }

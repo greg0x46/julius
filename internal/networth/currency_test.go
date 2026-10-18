@@ -221,3 +221,30 @@ func TestBackfillRetriesDaysWhoseRateWasMissing(t *testing.T) {
 	}
 	assertDecimalEqual(t, "cash", row.Breakdown.CashBalance, "500")
 }
+
+// outageRates is a resolver whose provider is down.
+type outageRates struct{ calls int }
+
+func (o *outageRates) On(context.Context, string, string, time.Time) (exchange.Rate, error) {
+	o.calls++
+	return exchange.Rate{}, fmt.Errorf("%w: %w", exchange.ErrUnavailable, exchange.ErrProviderFailure)
+}
+
+func TestBackfillStopsAtTheFirstProviderFailure(t *testing.T) {
+	f := newFixture(t)
+	today := time.Date(2024, 6, 15, 0, 0, 0, 0, time.UTC)
+	usd := f.addAccount("BANK", "100")
+	f.setCurrency("financial_accounts", usd, "USD")
+	f.addCardTransaction(usd, today.AddDate(0, 0, -30), "1", "CREDIT")
+
+	rates := &outageRates{}
+	if err := networth.BackfillWith(context.Background(), f.conn, today, rates); err != nil {
+		t.Fatalf("a provider outage is not an error: %v", err)
+	}
+	if rates.calls != 1 {
+		t.Fatalf("rate lookups during an outage = %d, want 1 for the 30 missing days", rates.calls)
+	}
+	if _, ok := snapshotFor(t, f, today.AddDate(0, 0, -1)); ok {
+		t.Fatal("a day was stored without a rate")
+	}
+}
