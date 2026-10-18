@@ -22,8 +22,8 @@ import (
 	"github.com/greg0x46/julius/internal/db"
 	"github.com/greg0x46/julius/internal/httpapi"
 	"github.com/greg0x46/julius/internal/investments"
+	"github.com/greg0x46/julius/internal/ledger"
 	"github.com/greg0x46/julius/internal/marketdata"
-	"github.com/greg0x46/julius/internal/payables"
 	"github.com/greg0x46/julius/internal/pluggy"
 	"github.com/greg0x46/julius/internal/quotes"
 	"github.com/greg0x46/julius/internal/settings"
@@ -134,7 +134,7 @@ func main() {
 	defer cancel()
 	go worker.Run(ctx, conn, secrets, worker.Config{
 		Pluggy:                pluggy.DefaultConfig(),
-		OnTransactionUpserted: automation.NewTransactionHook(payables.UnlinkIfPresent),
+		OnTransactionUpserted: automation.NewTransactionHook(ledger.OnIgnored),
 	})
 
 	if scheduled {

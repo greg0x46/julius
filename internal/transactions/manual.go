@@ -192,7 +192,7 @@ func UpdateManual(ctx context.Context, conn Querier, transactionID string, in Ma
 //
 // onIgnored runs first, inside the same transaction, to detach whatever a
 // real inclusion change would detach (payable links, recurring
-// reconciliations — see httpapi.onIgnoredHook) — a soft-deleted transaction
+// reconciliations — see ledger.OnIgnored) — a soft-deleted transaction
 // must not keep counting toward a payable's settled amount or a recurring
 // commitment's occurrence.
 func DeleteManual(ctx context.Context, conn *sql.DB, transactionID string, onIgnored OnIgnoredHook) error {
