@@ -207,7 +207,7 @@ below still holds as a domain yardstick; what is missing is its UI expression.
   decisions (cross-cutting principle 2).
 
 - **Goals** (`internal/goals`): a target amount and date over one global metric
-  (today `invested_value`, from `networth.Compute`). It stores only the target;
+  (today `invested_value`, from `networth.InvestmentValue`). It stores only the target;
   current value and progress are recomputed on read from the engine that owns
   the figure, and a goal never adds to any total. Used by a single feature
   (Metas) — fails criterion 1; new metrics are read from their owning engines,

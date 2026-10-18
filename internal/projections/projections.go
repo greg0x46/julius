@@ -33,6 +33,9 @@ type SelectionMode string
 const (
 	SelectionActive   SelectionMode = "active"
 	SelectionExplicit SelectionMode = "explicit"
+	// SelectionActivePlus is the active scenarios plus the explicit IDs
+	// (deduplicated): a simulation layered over the normal Timeline.
+	SelectionActivePlus SelectionMode = "active_plus"
 )
 
 type ProjectionQuery struct {
@@ -140,6 +143,33 @@ func selectScenarios(ctx context.Context, q Querier, selection SelectionMode, id
 			return []scenarios.Scenario{}, nil
 		}
 		return scenarios.ListScenariosByIDs(ctx, q, unique(ids))
+	case SelectionActivePlus:
+		active := true
+		selected, err := scenarios.ListScenarios(ctx, q, scenarios.ListFilter{IsActive: &active})
+		if err != nil {
+			return nil, err
+		}
+		if len(ids) == 0 {
+			return selected, nil
+		}
+		have := make(map[string]struct{}, len(selected))
+		for _, scenario := range selected {
+			have[scenario.ID] = struct{}{}
+		}
+		var missing []string
+		for _, id := range unique(ids) {
+			if _, ok := have[id]; !ok {
+				missing = append(missing, id)
+			}
+		}
+		if len(missing) == 0 {
+			return selected, nil
+		}
+		extra, err := scenarios.ListScenariosByIDs(ctx, q, missing)
+		if err != nil {
+			return nil, err
+		}
+		return append(selected, extra...), nil
 	default:
 		return nil, fmt.Errorf("%w: %q", ErrInvalidSelection, selection)
 	}
