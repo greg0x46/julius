@@ -2,6 +2,7 @@ import { DollarOutlined, WalletOutlined } from "@ant-design/icons";
 import type { ReactNode } from "react";
 
 import type { Payable, PayableKind, PayableStatus } from "../api/contracts";
+import { floorPercent } from "./decimal";
 
 export const payableStatusLabel: Record<PayableKind, Record<PayableStatus, string>> = {
   debt: { open: "Aberta", settled: "Quitada" },
@@ -95,8 +96,5 @@ export function payableDetailPath(payable: Payable): string {
 
 /** How much is already settled, as a 0–100 integer rounded down, so only a settled payable reads 100%. */
 export function settledPercent(totalAmount: string, settledAmount: string): number {
-  const total = Number(totalAmount);
-  const settled = Number(settledAmount);
-  if (!(total > 0)) return 0;
-  return Math.floor(Math.min(100, Math.max(0, (settled / total) * 100)));
+  return floorPercent(settledAmount, totalAmount);
 }

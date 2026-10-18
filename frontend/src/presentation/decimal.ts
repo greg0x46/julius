@@ -45,6 +45,16 @@ export function compareDecimals(left: string, right: string): number {
   return difference < 0n ? -1 : difference > 0n ? 1 : 0;
 }
 
+/** `part` as a share of `total`, floored to an integer in 0–100; 0 when `total` is not positive. */
+export function floorPercent(part: string, total: string): number {
+  const a = scaled(part), b = scaled(total);
+  const scale = Math.max(a.scale, b.scale);
+  const numerator = a.digits * 10n ** BigInt(scale - a.scale);
+  const denominator = b.digits * 10n ** BigInt(scale - b.scale);
+  if (denominator <= 0n || numerator <= 0n) return 0;
+  return numerator >= denominator ? 100 : Number(numerator * 100n / denominator);
+}
+
 /** Non-negative shares floored to cents without a rounded intermediate. */
 export function divideDecimalFloor(value: string, divisor: number): string {
   if (!Number.isInteger(divisor) || divisor <= 0) throw new RangeError("divisor must be a positive integer");
