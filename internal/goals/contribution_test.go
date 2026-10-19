@@ -105,6 +105,10 @@ func TestMonthlyPlanIgnoresLaterValuationAndReturnUpdates(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	_, err = investments.CreateOperation(ctx, conn, investments.OperationInput{AccountID: account.ID, PositionID: &position.ID, Kind: investments.OperationValuation, Amount: value, OccurredOn: utc(2026, 9, 1)})
+	if err != nil {
+		t.Fatal(err)
+	}
 	target := utc(2026, 12, 31)
 	g, err := Create(ctx, conn, Input{Name: "Goal", Metric: MetricInvestedValue, TargetAmount: d("7000"), TargetDate: &target})
 	if err != nil {
