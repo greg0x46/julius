@@ -88,6 +88,7 @@ export function TimelineTooltip({
   entriesByDate,
   scale = "absolute",
   originalValues,
+  referenceDate,
 }: {
   active?: boolean;
   payload?: { value: number; name: string }[];
@@ -95,6 +96,7 @@ export function TimelineTooltip({
   entriesByDate?: Map<string, TimelineEntry[]>;
   scale?: EvolutionScale;
   originalValues?: Map<string, { balance: string; simulation?: string }>;
+  referenceDate?: string;
 }) {
   const format = useReportFormat();
   if (!active || !payload || payload.length === 0 || !label) return null;
@@ -105,7 +107,7 @@ export function TimelineTooltip({
       <strong>{formatDate(label)}</strong>
       {rows.map((entry) => (
         <div key={entry.name}>
-          {entry.name}: {scale === "percent" ? `${entry.value.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}% · ` : ""}{format(originalValues?.get(label)?.[entry.name === simulationLineName ? "simulation" : "balance"] ?? String(entry.value))}
+          {label === referenceDate && (entry.name === pastLineName || entry.name === futureLineName) ? "Saldo no fim do dia (inclui previsões)" : entry.name}: {scale === "percent" ? `${entry.value.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}% · ` : ""}{format(originalValues?.get(label)?.[entry.name === simulationLineName ? "simulation" : "balance"] ?? String(entry.value))}
         </div>
       ))}
       <DayEntries entries={entriesByDate?.get(label) ?? []} />
@@ -213,8 +215,9 @@ export function ProjectionTimeline({
   const simulationBaseline = simulation?.points[0]?.balance;
   const invalidBaseline = scale === "percent" && (baseline == null || changePercent(baseline, baseline) === null ||
     (simulation && (simulationBaseline == null || simulation.points[0]?.date !== series.points[0]?.date || changePercent(simulationBaseline, simulationBaseline) === null)));
+  const simulationValues = new Map(simulation?.points.map((point) => [point.date, point.balance]));
   const originalValues = new Map(series.points.map((point) => [point.date, { balance: point.balance,
-    simulation: simulation?.points.find((candidate) => candidate.date === point.date)?.balance }]));
+    simulation: simulationValues.get(point.date) }]));
   const chartValue = (value: string, base = baseline) => scale === "absolute" ? Number(value) : Number(base == null ? null : changePercent(value, base));
   const data = mergePoints(series, simulation ?? null, referenceDate).map((point) => scale === "absolute" ? point : {
     ...point,
@@ -285,13 +288,14 @@ export function ProjectionTimeline({
             tick={{ fontSize: 12, fill: balanceChartColor.axis }}
           />
           <YAxis
+            padding={{ top: 8, bottom: 8 }}
             tickFormatter={scale === "percent" ? (value: number) => `${value.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}%` : formatAxisMoney}
             tickLine={false}
             axisLine={false}
             width={axisWidth}
             tick={{ fontSize: 12, fill: balanceChartColor.axis }}
           />
-          <Tooltip content={<TimelineTooltip entriesByDate={entriesByDate} scale={scale} originalValues={originalValues} />} />
+          <Tooltip content={<TimelineTooltip entriesByDate={entriesByDate} scale={scale} originalValues={originalValues} referenceDate={referenceDate} />} />
           {/* Zero is the line that matters on this chart — where the balance
               crosses it is the whole point of looking. */}
           <ReferenceLine y={0} stroke={balanceChartColor.lowest} strokeOpacity={0.5} />
@@ -318,7 +322,7 @@ export function ProjectionTimeline({
               name={pastLineName}
               stroke={balanceChartColor.realized}
               strokeWidth={2}
-              dot={false}
+              dot={data.length === 1 ? { r: 3 } : false}
               connectNulls={false}
             />
           )}
@@ -330,7 +334,7 @@ export function ProjectionTimeline({
               stroke={balanceChartColor.projected}
               strokeWidth={2}
               strokeDasharray="5 4"
-              dot={false}
+              dot={data.length === 1 ? { r: 3 } : false}
               connectNulls={false}
             />
           )}
@@ -342,7 +346,7 @@ export function ProjectionTimeline({
               stroke={balanceChartColor.simulation}
               strokeWidth={2}
               strokeDasharray="2 3"
-              dot={false}
+              dot={data.length === 1 ? { r: 3 } : false}
             />
           )}
         </LineChart>

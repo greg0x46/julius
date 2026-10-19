@@ -256,3 +256,41 @@ test("investment contributions and withdrawals preserve bank cash and exclude re
     expect.objectContaining({ kind: "withdrawal", amount: "100.00", occurred_on: "2026-09-15" }),
   ]));
 });
+
+for (const width of [1280, 320]) {
+  test.describe(`financial evolution at ${width}px`, () => {
+    test.use({ viewport: { width, height: 900 }, hasTouch: width === 320 });
+    test("cash drill-down and wealth selections keep scales, values and layout coherent", async ({ page }, testInfo) => {
+      await login(page);
+      await createAccount(page, "Conta evolução sintética", "1000");
+      const date = await page.evaluate(() => {
+        const day = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(new Date());
+        localStorage.setItem("julius.periodo", JSON.stringify({ from: day, to: day }));
+        return day;
+      });
+      await page.goto("/");
+      const cash = page.getByRole("group", { name: "Saldo ao longo do tempo", exact: true });
+      await expect(cash.getByRole("checkbox", { name: "Saldo", exact: true })).toBeChecked();
+      const dot = cash.locator(".recharts-line-dots circle").first();
+      if (width === 320) await dot.tap(); else await dot.hover();
+      await expect(cash.locator(".timeline-chart-tooltip")).toContainText("R$ 1.000,00");
+      await cash.getByRole("radio", { name: "Variação %", exact: true }).check();
+      await cash.getByText(/Ver valores/).click();
+      await expect(cash.locator("tbody")).toContainText("0% · R$ 1.000,00");
+      await cash.locator("tbody button").first().click();
+      await expect(page).toHaveURL(new RegExp(`date_from=${date}&date_to=${date}`));
+      await page.goto("/patrimonio-liquido");
+      await expect(page.getByRole("checkbox", { name: "Patrimônio líquido", exact: true })).toBeChecked();
+      await page.getByRole("checkbox", { name: "Saldo observado", exact: true }).check();
+      await page.getByRole("radio", { name: "Variação %", exact: true }).check();
+      await page.getByText(/Ver valores/).click();
+      await expect(page.locator(".evolution-values tbody")).toContainText("0% · R$ 1.000,00");
+      await expect(page.getByRole("checkbox", { name: "Investimentos", exact: true })).toBeDisabled();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+      await testInfo.attach("financial evolution", { body: await page.screenshot({ fullPage: true }), contentType: "image/png" });
+      await page.getByRole("checkbox", { name: "Patrimônio líquido", exact: true }).uncheck();
+      await page.getByRole("checkbox", { name: "Saldo observado", exact: true }).uncheck();
+      await expect(page.getByText("Selecione ao menos uma métrica para ver a evolução.")).toBeVisible();
+    });
+  });
+}

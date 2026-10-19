@@ -68,7 +68,7 @@ export function NetWorthChart({ snapshots, footnote, from, to, history, historyS
     {historyState === "error" && <p role="status">Não foi possível carregar investimentos. <button type="button" onClick={onRetryHistory}>Tentar novamente</button></p>}
     <p className="net-worth-footnote" aria-live="polite">
       {scale === "percent" ? `Variação desde ${dateLabel(first)}. ` : `Valores em ${currency}. `}
-      Dados históricos, sem projeções. Lacunas indicam cobertura insuficiente.
+      Dados históricos até {dateLabel(last)}, sem projeções. Lacunas indicam cobertura insuficiente.
     </p>
     {selected.length === 0 && <p role="status">Selecione ao menos uma métrica para ver a evolução.</p>}
     {stocks.length > 0 && invalid.length > 0 && <p role="status">A variação % exige um valor inicial positivo para todas as métricas selecionadas em {dateLabel(first)}. Sem base válida: {stockOptions.filter((option) => invalid.includes(option.key)).map((option) => option.label).join(", ")}.</p>}
@@ -79,7 +79,7 @@ export function NetWorthChart({ snapshots, footnote, from, to, history, historyS
           <LineChart data={data} margin={{ top: 12, right: 16, left: 0, bottom: 4 }}>
             <CartesianGrid stroke={balanceChartColor.grid} vertical={false} />
             <XAxis dataKey="date" tickFormatter={(date: string) => dateLabel(date).slice(0, 5)} interval="preserveStartEnd" minTickGap={compact ? 28 : 40} tick={{ fontSize: 12 }} />
-            <YAxis width={axisWidth} tickFormatter={scale === "percent" ? percentLabel : formatAxisMoney} tick={{ fontSize: 12 }} />
+            <YAxis padding={{ top: 8, bottom: 8 }} width={axisWidth} tickFormatter={scale === "percent" ? percentLabel : formatAxisMoney} tick={{ fontSize: 12 }} />
             <Tooltip content={<WealthTooltip points={points} selected={selected} scale={scale} />} />
             {stocks.map((option) => <Line key={option.key} dataKey={option.key} name={option.label} type="linear" stroke={option.color} strokeWidth={2} dot={{ r: 2 }} activeDot={{ r: 4 }} connectNulls={false} />)}
           </LineChart>

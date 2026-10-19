@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/greg0x46/julius/internal/db"
 	"github.com/greg0x46/julius/internal/investments"
 )
 
@@ -64,5 +65,29 @@ func TestInvestmentHistoryReusesPeriodCalculation(t *testing.T) {
 	point := history["periods"].([]any)[0].(map[string]any)
 	if !reflect.DeepEqual(point["totals"], period["totals"]) || !reflect.DeepEqual(point["groups"], period["groups"]) {
 		t.Fatalf("history differs from portfolio calculation: %+v vs %+v", point, period)
+	}
+}
+
+func TestInvestmentHistoryUsesEachEndpointsReferenceRate(t *testing.T) {
+	srv, conn := newTestServer(t)
+	today := investments.ProviderDay(time.Now())
+	from := time.Date(today.Year(), today.Month()-1, 1, 0, 0, 0, 0, time.UTC)
+	monthEnd := time.Date(today.Year(), today.Month(), 0, 0, 0, 0, 0, time.UTC)
+	rates := map[string]string{from.Format("2006-01-02"): "0.2", monthEnd.Format("2006-01-02"): "0.25", today.Format("2006-01-02"): "0.3"}
+	for day, rate := range rates {
+		if _, err := conn.Exec(`INSERT INTO exchange_rates (base_currency, quote_currency, as_of, effective_on, rate, source, fetched_at) VALUES ('BRL','USD',?,?,?,?,?)`, day, day, rate, "synthetic", db.FormatTime(time.Now())); err != nil {
+			t.Fatal(err)
+		}
+	}
+	investmentCall(t, srv, http.MethodPut, "/api/preferences", map[string]any{"transactions_period_basis": "occurred_at", "reference_currency": "USD"}, http.StatusOK)
+	got := investmentCall(t, srv, http.MethodGet, "/api/investment-history?from="+from.Format("2006-01-02")+"&to="+today.Format("2006-01-02"), nil, http.StatusOK)
+	samples := append([]any{got["baseline"]}, got["periods"].([]any)...)
+	for _, raw := range samples {
+		sample := raw.(map[string]any)
+		fx := sample["fx"].(map[string]any)
+		assertMoney(t, "dated rate", fx["value"], rates[sample["to"].(string)])
+		if sample["currency_code"] != "USD" || fx["source"] != "synthetic" {
+			t.Fatalf("lost valuation provenance: %+v", sample)
+		}
 	}
 }

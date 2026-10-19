@@ -73,8 +73,8 @@ it("rejects a zero baseline without inventing a percentage curve", () => {
 });
 
 it("deduplicates the realized/forecast crossover and preserves actual money in percentage tooltips", () => {
-  render(<TimelineTooltip active label="2026-10-22" scale="percent" originalValues={new Map([["2026-10-22", { balance: "750.01" }]])}
+  render(<TimelineTooltip active label="2026-10-22" referenceDate="2026-10-22" scale="percent" originalValues={new Map([["2026-10-22", { balance: "750.01" }]])}
     payload={[{ name: "Saldo realizado", value: -25 }, { name: "Saldo projetado", value: -25 }]} />);
-  expect(screen.getByText(/Saldo realizado:/)).toHaveTextContent("-25% · R$ 750,01");
+  expect(screen.getByText(/Saldo no fim do dia \(inclui previsões\):/)).toHaveTextContent("-25% · R$ 750,01");
   expect(screen.queryByText(/Saldo projetado:/)).not.toBeInTheDocument();
 });

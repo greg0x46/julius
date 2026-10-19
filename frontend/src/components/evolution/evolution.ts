@@ -39,9 +39,10 @@ export function wealthPoints(snapshots: NetWorthSnapshot[], from: string, to: st
     points.set(period.to, point);
   }
   // Include missing calendar days: never bridge disconnected observations.
-  const start = new Date(`${from}T00:00:00Z`);
-  for (let day = start; day.toISOString().slice(0, 10) <= to; day = new Date(day.getTime() + 86400000)) {
-    const date = day.toISOString().slice(0, 10);
+  const start = new Date(`${from}T00:00:00Z`).getTime();
+  const end = new Date(`${to}T00:00:00Z`).getTime();
+  for (let time = start; time <= end; time += 86400000) {
+    const date = new Date(time).toISOString().slice(0, 10);
     if (!points.has(date)) points.set(date, { date, values: {} });
   }
   return [...points.values()].sort((a, b) => a.date.localeCompare(b.date));
