@@ -10,6 +10,8 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/greg0x46/julius/internal/db"
+	dbtypes "github.com/greg0x46/julius/internal/db/types"
+	"github.com/greg0x46/julius/internal/investments"
 )
 
 // insertInvestment inserts the minimal sync-schema chain plus one
@@ -94,13 +96,16 @@ func insertInvestmentMovement(t *testing.T, conn *sql.DB, investmentID, movement
 		rawImportID, syncRunID, sourceID, pageSequence, now); err != nil {
 		t.Fatalf("insert raw_import: %v", err)
 	}
+	// A date-only trade day on the provider's calendar, like Pluggy sends; a
+	// UTC timestamp would land a day ahead of it late in the evening in BRT.
+	tradeDate := investments.ProviderDay(time.Now()).Format(dbtypes.DateLayout)
 	transactionID := uuid.NewString()
 	if _, err := conn.Exec(`INSERT INTO financial_investment_transactions (
 			id, source_id, investment_id, external_id, movement_type, direction, quantity, value, amount,
 			occurred_at, trade_date, current_raw_import_id, normalized_hash, created_at, updated_at
 		) VALUES (?, ?, ?, ?, ?, ?, ?, '1.00', ?, ?, ?, ?, 'hash', ?, ?)`,
 		transactionID, sourceID, investmentID, transactionID, movementType, nullableDirection(direction),
-		quantity, amount, now, now, rawImportID, now, now); err != nil {
+		quantity, amount, now, tradeDate, rawImportID, now, now); err != nil {
 		t.Fatalf("insert investment transaction: %v", err)
 	}
 }
