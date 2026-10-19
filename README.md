@@ -59,6 +59,11 @@ authentication configuration that does not depend on the host:
   **Saldo hoje** shows the current cash balance.
   See the [monetary precision policy](.specs/precisao-monetaria.md).
 
+- **Monthly goal contribution** — Home shows a compact "Falta aportar este mês"
+  for the nearest future, unreached investment goal, with a link to Metas. The
+  month-opening plan subtracts net deposits once; synchronized/linked custody or
+  incomplete funding history shows an unavailable estimate.
+
 - **Build identifier** — every signed-in page has a small footer showing the
   release tag, `stage` or `dev`, with a link to the build commit when available.
 - **Typed database baseline** — a one-shot legacy converter preserves existing

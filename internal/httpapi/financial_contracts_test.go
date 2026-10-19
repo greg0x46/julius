@@ -204,7 +204,8 @@ func financialContractPayloads() map[string]any {
 			Accounts: []investments.SummaryAccount{{AccountID: id, Name: "Synthetic custody", Kind: investments.AccountKindManual, CurrentValue: amount, CashBalance: small}},
 		}),
 		"goals": map[string]any{"items": []goalDTO{goalToDTO(goals.Goal{
-			ID: id, Name: "Synthetic goal", Metric: goals.MetricInvestedValue, TargetAmount: amount, TargetDate: &day, Notes: text("Synthetic note"),
+			MonthlyContribution: &goals.MonthlyContribution{Month: "2026-09", Target: &small, NetContributed: &small, Remaining: &small},
+			ID:                  id, Name: "Synthetic goal", Metric: goals.MetricInvestedValue, TargetAmount: amount, TargetDate: &day, Notes: text("Synthetic note"),
 			CurrentValue: small, Progress: decimal.RequireFromString("0.25"), CreatedAt: instant, UpdatedAt: instant,
 			Projection: &goals.Projection{
 				Status: goals.StatusBehind, MonthsRemaining: 12, MonthlyReturn: &small, ReturnFrom: &day,

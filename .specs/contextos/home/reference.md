@@ -153,6 +153,14 @@ Home (`/`):
   refetch fails it keeps the last value; the error state shows only with no data
   at all. Nothing is persisted: the value follows any `timeline` invalidation.
   It is not a reserve nor a budget.
+- `MonthlyContributionIndicator` — compact link beside the daily allowance,
+  showing "Falta aportar este mês" in BRL for the one goal selected by
+  `GET /api/goals`. The backend owns its month-opening plan and net external
+  contributions (see [Goals](../metas/reference.md#current-month-contribution-on-home)).
+  Shows name and target month/year; zero means "Aporte do mês em dia".
+  Unknown funding/history shows "Estimativa indisponível"; loading/errors or
+  no eligible goal leave no reserved space. It uses the current month,
+  independently of Home's selected period, and does not change the chart.
 - `SpendingByCategoryCard` — spending by category, read from
   `GET /api/transactions/category-breakdown` (Transactions context).
 

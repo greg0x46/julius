@@ -4,10 +4,13 @@ import { createGoal, deleteGoal, listGoals, updateGoal } from "../api/goals";
 import type { GoalWrite } from "../api/contracts";
 import { invalidateAfterGoalChange, queryKeys } from "../api/queryKeys";
 
+import { useToday } from "./useToday";
+
 export function useGoals() {
+  const today = useToday().format("YYYY-MM-DD");
   const queryClient = useQueryClient();
   const goalsQuery = useQuery({
-    queryKey: queryKeys.goals,
+    queryKey: [...queryKeys.goals, today],
     queryFn: ({ signal }) => listGoals(signal),
   });
 

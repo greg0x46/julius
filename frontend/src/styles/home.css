@@ -403,3 +403,64 @@
   font-size: var(--fs-title);
   font-weight: 600;
 }
+
+.home-summary-indicators {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.home-summary-indicators > .section {
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+
+.monthly-contribution {
+  display: flex;
+  flex: 0 1 auto;
+  flex-direction: column;
+  gap: 0.125rem;
+  max-width: min(100%, 20rem);
+  min-width: 0;
+  padding: 0.5rem;
+  color: var(--color-text);
+  overflow-wrap: anywhere;
+}
+
+.monthly-contribution-label,
+.monthly-contribution-context {
+  color: var(--color-text-secondary);
+  font-size: var(--fs-caption);
+}
+
+.monthly-contribution .money {
+  white-space: normal;
+}
+
+.monthly-contribution:hover .money {
+  text-decoration: underline;
+}
+
+.monthly-contribution:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.monthly-contribution-goal {
+  display: flex;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.monthly-contribution-goal > :first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.monthly-contribution-goal > :last-child {
+  flex-shrink: 0;
+  white-space: nowrap;
+}

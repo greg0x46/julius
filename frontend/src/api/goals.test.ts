@@ -14,6 +14,7 @@ const goal: Goal = {
   current_value: "45210.5",
   progress: "0.452105",
   projection: null,
+  monthly_contribution: null,
   currency_code: "BRL",
   created_at: "2026-10-01T12:00:00Z",
   updated_at: "2026-10-01T12:00:00Z",
@@ -50,6 +51,12 @@ afterEach(() => {
 });
 
 describe("parseGoal", () => {
+  it("parses exact monthly contributions and rejects invalid data", () => {
+    const monthly = { month: "2026-10", target: "2000.01", net_contributed: "650", remaining: "1350.01", assumes_zero_return: true };
+    expect(parseGoal({ ...goal, monthly_contribution: monthly }).monthly_contribution).toEqual(monthly);
+    expect(() => parseGoal({ ...goal, monthly_contribution: { ...monthly, remaining: 1350.01 } })).toThrow(TypeError);
+    expect(() => parseGoal({ ...goal, monthly_contribution: { ...monthly, month: "2026-13" } })).toThrow(TypeError);
+  });
   it("keeps decimals as the exact strings the server sent", () => {
     expect(parseGoal(goal)).toEqual(goal);
     expect(parseGoalList({ items: [goal] })).toEqual([goal]);

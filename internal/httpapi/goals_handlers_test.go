@@ -7,7 +7,7 @@ import (
 
 var goalResponseKeys = []string{
 	"id", "name", "metric", "target_amount", "target_date", "notes",
-	"current_value", "progress", "projection", "currency_code", "created_at", "updated_at",
+	"current_value", "progress", "projection", "monthly_contribution", "currency_code", "created_at", "updated_at",
 }
 
 func TestGoalLifecycleOverHTTP(t *testing.T) {

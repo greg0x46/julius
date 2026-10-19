@@ -723,6 +723,16 @@ backend and shows the native value of a foreign position beside it. No
 positions, targets or provider balances are
 rewritten when switching reference currency.
 
+## Goal contribution funding
+
+`ReadContributionMonth` reads the previous month-end portfolio plus replayed
+unlinked manual custody cash and this month's manual deposits minus withdrawals
+through today. Trades, income, fees and custody transfers do not enter external
+principal; reconciliation bank legs are never summed again. Integrated or linked
+cash accounts, foreign custody, missing opening valuations and current-month
+initial balances mark funding unavailable. It deliberately does not substitute
+`MonthlyMovements` or provider position flows for external funding coverage.
+
 ## Financial evolution history
 
 `GET /api/investment-history?from=YYYY-MM-DD&to=YYYY-MM-DD` supplies the wealth
