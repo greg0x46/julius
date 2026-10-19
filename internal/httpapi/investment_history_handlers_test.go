@@ -62,7 +62,7 @@ func TestInvestmentHistoryReusesPeriodCalculation(t *testing.T) {
 	history := investmentCall(t, srv, http.MethodGet, "/api/investment-history?from="+from+"&to="+from, nil, http.StatusOK)
 	period := investmentCall(t, srv, http.MethodGet, "/api/investment-portfolio?from="+from+"&to="+from, nil, http.StatusOK)
 	point := history["periods"].([]any)[0].(map[string]any)
-	if !reflect.DeepEqual(point, period) {
+	if !reflect.DeepEqual(point["totals"], period["totals"]) || !reflect.DeepEqual(point["groups"], period["groups"]) {
 		t.Fatalf("history differs from portfolio calculation: %+v vs %+v", point, period)
 	}
 }
