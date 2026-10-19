@@ -43,6 +43,15 @@ that the installment belongs to the scenario named in the URL. A missing scenari
 or a mismatched/missing installment returns 404 before changing any data; deleting
 a realization also checks that it belongs to the named installment.
 
+Readjusting with `abater_do_final` keeps the plan's cadence, inferred from the
+most common gap between its installments (weekly, biweekly, otherwise monthly).
+
+Linking a real transaction to a standalone event (`PUT /api/scenarios/{id}/planned-transactions/{eventKey}/realization`)
+requires a considered BRL transaction flowing in the direction of the event's
+amount sign, like a recurring occurrence. Installment status and accumulated
+deviation compare allocations (positive magnitudes) with the amount's
+magnitude, so a fully realized standalone expense is `paga`.
+
 ## Frontend
 
 `/cenarios` — "Simule decisões hipotéticas" (standalone scenarios). The payment

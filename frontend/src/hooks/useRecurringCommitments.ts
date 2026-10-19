@@ -8,7 +8,7 @@ import {
   updateRecurringCommitment,
 } from "../api/recurringCommitments";
 import type { RecurringCommitmentWrite } from "../api/contracts";
-import { invalidateRecurringCommitments, queryKeys } from "../api/queryKeys";
+import { invalidateAfterRecurringCommitmentChange, queryKeys } from "../api/queryKeys";
 
 export const recurringCommitmentsQueryKey = queryKeys.recurringCommitments;
 
@@ -19,7 +19,7 @@ export function useRecurringCommitments() {
     queryFn: ({ signal }) => listRecurringCommitments(signal),
   });
 
-  const invalidate = () => invalidateRecurringCommitments(queryClient);
+  const invalidate = () => invalidateAfterRecurringCommitmentChange(queryClient);
 
   const createMutation = useMutation({
     mutationFn: (write: RecurringCommitmentWrite) => createRecurringCommitment(write),

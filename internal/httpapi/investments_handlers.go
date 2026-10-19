@@ -408,9 +408,14 @@ func handleListInvestmentTransactions(conn *sql.DB) http.HandlerFunc {
 				return
 			}
 			if t.OccurredAt, err = dbtypes.ParseNullTime(occurredAtRaw); err != nil {
-				continue
+				writeProblem(w, 503, "investments-unavailable", "Investimentos temporariamente indisponíveis", "Tente novamente em instantes.")
+				return
 			}
 			result = append(result, t)
+		}
+		if rows.Err() != nil {
+			writeProblem(w, 503, "investments-unavailable", "Investimentos temporariamente indisponíveis", "Tente novamente em instantes.")
+			return
 		}
 		writeJSON(w, http.StatusOK, result)
 	}

@@ -149,3 +149,37 @@ func TestLegacyForeignHoldingIsOnlyRefusedNewWrites(t *testing.T) {
 		}
 	})
 }
+
+// A provider holding in another currency never writes its price into a
+// catalog asset of the same ticker that is held in reais.
+func TestSyncedHoldingInAnotherCurrencyDoesNotQuoteAReaisAsset(t *testing.T) {
+	eachLedger(t, func(t *testing.T, f *ledgerFixture) {
+		ticker, source := "BTC", "crypto"
+		reais, err := investments.CreateAsset(f.ctx, f.conn, investments.AssetInput{Name: "Bitcoin", Ticker: &ticker, AssetType: "Criptomoeda", QuoteSource: &source})
+		if err != nil {
+			t.Fatal(err)
+		}
+		holding := investments.SyncedHolding{
+			ExternalID: "usd-btc", Name: strRef("BTC"), Code: strRef("BTC"), InvestmentType: strRef("CRYPTO"),
+			CurrencyCode: strRef("USD"), Quantity: decRef("1"), Amount: decRef("60000"), AsOfDate: instant("2026-09-05T12:00:00Z"),
+		}
+		if err := investments.RecordSyncedQuotes(f.ctx, f.conn, holding, nil); err != nil {
+			t.Fatalf("RecordSyncedQuotes: %v", err)
+		}
+		if got := f.quotes(reais.ID); len(got) != 0 {
+			t.Fatalf("a USD price reached the BRL asset: %+v", got)
+		}
+		if _, found, err := investments.FindSyncedAsset(f.ctx, f.conn, holding); err != nil || found {
+			t.Fatalf("FindSyncedAsset = found %v, err %v; want none for a holding in another currency", found, err)
+		}
+
+		// The same holding in reais still shares the asset.
+		holding.CurrencyCode = strRef("BRL")
+		if err := investments.RecordSyncedQuotes(f.ctx, f.conn, holding, nil); err != nil {
+			t.Fatal(err)
+		}
+		if got := f.quotes(reais.ID); len(got) != 1 {
+			t.Fatalf("quotes = %+v, want the BRL one", got)
+		}
+	})
+}

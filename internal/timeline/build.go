@@ -331,7 +331,7 @@ func BuildSeries(ctx context.Context, q Querier, params BuildParams) (Series, er
 	}
 	selection := projections.SelectionActive
 	if len(params.ScenarioIDs) > 0 {
-		selection = projections.SelectionExplicit
+		selection = projections.SelectionActivePlus
 	}
 	planned, err := projections.List(ctx, q, projections.ProjectionQuery{
 		From: from, To: to, Selection: selection, IDs: params.ScenarioIDs,

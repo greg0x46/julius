@@ -319,12 +319,16 @@ func listSyncedPositions(ctx context.Context, q Querier, scope positionScope) ([
 	// Provider holdings join the same canonical catalog as manual positions.
 	// This lets a BTC imported from one institution and a BTC held manually in
 	// another account share identity while provider balances stay read-only.
+	// Reading never creates the asset: until a sync recorded a quote there is
+	// none, and AssetID stays nil.
 	for i := range positions {
-		asset, err := ResolveSyncedAsset(ctx, q, holdings[i])
+		asset, found, err := FindSyncedAsset(ctx, q, holdings[i])
 		if err != nil {
 			return nil, err
 		}
-		positions[i].AssetID = &asset.ID
+		if found {
+			positions[i].AssetID = &asset.ID
+		}
 	}
 	return positions, nil
 }

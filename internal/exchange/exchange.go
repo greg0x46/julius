@@ -10,6 +10,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -101,6 +102,57 @@ type Service struct {
 	mu           sync.Mutex
 	failedAt     map[string]time.Time
 	failedErrors map[string]error
+	// outages is shared by every Service: a provider failure is about the
+	// provider and the pair, not about one day or one request.
+	outages *outageBook
+}
+
+// outageBook remembers which provider/pair just failed with
+// ErrProviderFailure, so a down provider costs one call per pair per cooldown
+// however many days or Services ask. Tests that need isolation get it from
+// their own provider value, which is part of the key.
+type outageBook struct {
+	mu    sync.Mutex
+	until map[outageKey]outage
+}
+
+type outageKey struct {
+	provider    any
+	base, quote string
+}
+
+type outage struct {
+	until time.Time
+	err   error
+}
+
+var sharedOutages = &outageBook{until: map[outageKey]outage{}}
+
+// outagePair identifies the provider by value; one that cannot be compared
+// (a map-backed stub) is not shared and is keyed by its Service instead.
+func (s *Service) outagePair(base, quote string) outageKey {
+	var identity any = s
+	if reflect.TypeOf(s.provider).Comparable() {
+		identity = s.provider
+	}
+	return outageKey{provider: identity, base: base, quote: quote}
+}
+
+func (b *outageBook) cooling(key outageKey, now time.Time) (bool, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	o, ok := b.until[key]
+	if ok && !now.Before(o.until) {
+		delete(b.until, key)
+		return false, nil
+	}
+	return ok, o.err
+}
+
+func (b *outageBook) record(key outageKey, until time.Time, err error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.until[key] = outage{until: until, err: err}
 }
 
 // New builds a Service. A nil provider uses Frankfurter.
@@ -117,6 +169,7 @@ func New(conn Querier, provider Provider) *Service {
 		Cooldown:     time.Minute,
 		failedAt:     make(map[string]time.Time),
 		failedErrors: make(map[string]error),
+		outages:      sharedOutages,
 	}
 }
 
@@ -167,8 +220,10 @@ func (s *Service) resolve(ctx context.Context, base, quote string, day time.Time
 			delete(s.failedErrors, key)
 		}
 	}
-	key := base + "/" + quote + "/" + formatDate(day)
-	if _, coolingDown := s.failedAt[key]; coolingDown {
+	key, outageID := base+"/"+quote+"/"+formatDate(day), s.outagePair(base, quote)
+	if down, outageErr := s.outages.cooling(outageID, now); down {
+		fetchErr = outageErr
+	} else if _, coolingDown := s.failedAt[key]; coolingDown {
 		fetchErr = s.failedErrors[key]
 	} else {
 		var rate Rate
@@ -178,8 +233,12 @@ func (s *Service) resolve(ctx context.Context, base, quote string, day time.Time
 			return s.finish(&rate, nil)
 		}
 		if ctx.Err() == nil {
-			s.failedAt[key] = s.now()
-			s.failedErrors[key] = fetchErr
+			if errors.Is(fetchErr, ErrProviderFailure) {
+				s.outages.record(outageID, now.Add(s.Cooldown), fetchErr)
+			} else {
+				s.failedAt[key] = s.now()
+				s.failedErrors[key] = fetchErr
+			}
 		}
 	}
 

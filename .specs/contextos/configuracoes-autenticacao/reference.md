@@ -67,7 +67,7 @@ are in the README.
 | POST /api/auth/logout | Revokes the current cookie, returns authenticated=false |
 | PUT /api/auth/password | Takes current_password/password, revokes all sessions, returns authenticated=false |
 | PUT /api/auth/config | Enables/disables authentication (see README "open mode") |
-| PUT /api/settings/pluggy | Stores pluggy_client_id/pluggy_client_secret encrypted; optional pluggy_item_id creates a connection in the same transaction; returns saved=true |
+| PUT /api/settings/pluggy | Stores pluggy_client_id/pluggy_client_secret encrypted; optional pluggy_item_id (trimmed; whitespace-only is 422) creates a connection in the same transaction unless it already exists, so repeating the call is idempotent; returns saved=true |
 | GET /api/settings/quotes | Returns enabled, time, timezone and last_refresh (or null); never returns the token |
 | PUT /api/settings/quotes | Partially updates enabled/time/timezone and optional brapi_token atomically; returns saved=true |
 | POST /api/settings/quotes/refresh | Runs a manual full refresh and returns its recorded outcome; 409 if another refresh is running, 503 if market data is unavailable |
@@ -157,3 +157,5 @@ request never relabels an old BRL number as USD. The API validates a consistent
 currency across a net-worth series. Native account, transaction, position and
 operation details retain their original currency. Investment secondary totals
 computed in the browser use the summary's exact FX rate; percentages are unchanged.
+
+Non-multipart request bodies are capped at 1 MiB (413 `body-too-large`); the statement upload keeps its own cap.

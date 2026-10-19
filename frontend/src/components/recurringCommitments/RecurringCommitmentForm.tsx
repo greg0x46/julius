@@ -199,6 +199,7 @@ function RecurringCommitmentFieldset({
           style={{ width: "100%" }}
           min={1}
           max={31}
+          precision={0}
           inputMode="numeric"
           value={draft.dayOfMonth}
           placeholder={String(draft.startDate.date())}

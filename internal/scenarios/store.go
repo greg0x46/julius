@@ -45,7 +45,28 @@ const scenarioColumns = `id, kind, name, payable_id, is_active, is_accounting_so
 // for enforcing kind-specific rules (payableID required, and its kind must
 // agree with kind) before calling this — the schema also enforces
 // payableID being non-null via a CHECK constraint as defense in depth.
+//
+// Given a *sql.DB it runs in its own transaction, so the insert and the
+// settlement backfill commit together or not at all. A backfill that collides
+// with another complete event returns ErrTransactionAlreadyRealized.
 func CreateScenario(ctx context.Context, q Querier, kind Kind, name string, payableID *string) (Scenario, error) {
+	if beginner, ok := q.(interface {
+		BeginTx(context.Context, *sql.TxOptions) (*sql.Tx, error)
+	}); ok {
+		tx, err := beginner.BeginTx(ctx, nil)
+		if err != nil {
+			return Scenario{}, err
+		}
+		defer tx.Rollback()
+		s, err := CreateScenario(ctx, tx, kind, name, payableID)
+		if err != nil {
+			return Scenario{}, err
+		}
+		if err := tx.Commit(); err != nil {
+			return Scenario{}, err
+		}
+		return s, nil
+	}
 	now := time.Now().UTC()
 	if kind != KindDebtPlan && kind != KindReceivablePlan && kind != KindStandalone && kind != KindRecurring {
 		return Scenario{}, errors.New("unknown scenario kind")
@@ -156,6 +177,9 @@ func backfillAccountingSettlements(ctx context.Context, q Querier, s Scenario) e
 				linked_amount, created_at
 			) VALUES (?, ?, ?, 'settlement', 'linked', 'manual', ?, ?)`,
 			uuid.NewString(), s.ID, seed.transactionID, seed.amount, seed.createdAt); err != nil {
+			if isCompleteEventTransactionConflict(err) {
+				return ErrTransactionAlreadyRealized
+			}
 			return err
 		}
 	}

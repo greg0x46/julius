@@ -14,6 +14,7 @@ import (
 	"github.com/greg0x46/julius/internal/db"
 	dbtypes "github.com/greg0x46/julius/internal/db/types"
 	"github.com/greg0x46/julius/internal/money"
+	"github.com/greg0x46/julius/internal/valuation"
 )
 
 // The partial unique indexes that allow one bank line to be split between
@@ -501,7 +502,7 @@ func ensureSyncedPivot(ctx context.Context, q Querier, movementID string) (id st
 	if err != nil {
 		return "", false, err
 	}
-	if !amountRaw.Valid || currency.String != "BRL" {
+	if !amountRaw.Valid || valuation.Currency(nullableCurrency(currency)) != "BRL" {
 		return "", false, ErrInvalidReconciliationLink
 	}
 	amount, err := decimal.NewFromString(amountRaw.String)
@@ -570,7 +571,7 @@ func investmentTransactionValue(ctx context.Context, q Querier, op Operation, id
 	if op.Kind == OperationDeposit {
 		expected = "inflow"
 	}
-	if !amount.Valid || currency.String != "BRL" || direction.String != expected {
+	if !amount.Valid || valuation.Currency(nullableCurrency(currency)) != "BRL" || direction.String != expected {
 		return decimal.Zero, ErrInvalidReconciliationLink
 	}
 	account, err := getRawAccount(ctx, q, op.AccountID)
@@ -585,4 +586,11 @@ func investmentTransactionValue(ctx context.Context, q Querier, op Operation, id
 		return decimal.Zero, ErrInvalidReconciliationLink
 	}
 	return value.Abs(), nil
+}
+
+func nullableCurrency(v sql.NullString) *string {
+	if !v.Valid {
+		return nil
+	}
+	return &v.String
 }

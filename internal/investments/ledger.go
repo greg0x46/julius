@@ -92,7 +92,10 @@ func (p *positionLedger) removeUnits(quantity decimal.Decimal) {
 	p.totalCost = p.costOf(remaining)
 	p.quantity = remaining
 	if p.quantity.IsZero() {
+		// Sold out: neither the cost nor the typed valuation outlives the
+		// holding, so a repurchase starts again at cost.
 		p.totalCost = decimal.Zero
+		p.valuationTotal, p.valuedQuantity, p.valuedOn = nil, decimal.Zero, nil
 	}
 }
 

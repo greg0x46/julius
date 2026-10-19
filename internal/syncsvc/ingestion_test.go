@@ -14,9 +14,11 @@ import (
 	"github.com/greg0x46/julius/internal/categories"
 	"github.com/greg0x46/julius/internal/db"
 	"github.com/greg0x46/julius/internal/db/dbtest"
+	"github.com/greg0x46/julius/internal/ledger"
 	"github.com/greg0x46/julius/internal/money"
 	"github.com/greg0x46/julius/internal/payables"
 	"github.com/greg0x46/julius/internal/pluggy"
+	"github.com/greg0x46/julius/internal/recurrences"
 	"github.com/greg0x46/julius/internal/syncsvc"
 	"github.com/greg0x46/julius/internal/transactions"
 )
@@ -29,6 +31,8 @@ type ingestion struct {
 	itemID    string
 	provider  *fakeProvider
 	hookCalls int
+	// onIgnored is the unlink callback handed to the rule hook (nil: none).
+	onIgnored transactions.OnIgnoredHook
 }
 
 func newIngestion(t *testing.T, conn *sql.DB, itemID string, accounts ...string) *ingestion {
@@ -67,7 +71,7 @@ func (f *ingestion) run(t *testing.T, records map[string][]pluggy.TransactionSna
 		insertRawImport(t, f.conn, rawID, runID, f.sourceID)
 		f.provider.transactionPages[account] = []pluggy.TransactionsPage{{RawImportID: rawID, Transactions: page}}
 	}
-	ruleHook := automation.NewTransactionHook(nil)
+	ruleHook := automation.NewTransactionHook(f.onIgnored)
 	hook := func(ctx context.Context, q transactions.Querier, transactionID, accountID string) error {
 		f.hookCalls++
 		return ruleHook(ctx, q, transactionID, accountID)
@@ -548,6 +552,53 @@ func TestSyncProviderCorrectionKeepsAutomaticDecisionButRuleMayReapply(t *testin
 			if category != want[0] || origin != want[1] {
 				t.Errorf("%s category=%s origin=%s, want %s/%s", externalID, category, origin, want[0], want[1])
 			}
+		}
+	})
+}
+
+// An ignore rule that starts matching on a provider correction must drop every
+// link the row carried, the same as ignoring it by hand (ledger.OnIgnored).
+func TestSyncUpdateIgnoredByRuleDropsRecurrenceLink(t *testing.T) {
+	dbtest.Each(t, func(t *testing.T, conn *sql.DB) {
+		ctx := context.Background()
+		f := newIngestion(t, conn, "item-1", "acc-1")
+		f.onIgnored = ledger.OnIgnored
+		rent := debit("tx-rent", "acc-1", "Aluguel", "-1500.00", "POSTED")
+		f.run(t, map[string][]pluggy.TransactionSnapshot{"acc-1": {rent}})
+		txID := f.transactionID(t, "tx-rent")
+
+		category := newCategory(t, conn, "Moradia")
+		day, err := time.Parse("2006-01-02", "2026-01-05")
+		if err != nil {
+			t.Fatal(err)
+		}
+		commitment, err := recurrences.Create(ctx, conn, recurrences.Write{
+			Name: "Aluguel", Kind: recurrences.KindExpense, Amount: decimal.RequireFromString("1500.00"),
+			CategoryID: category, Cadence: recurrences.CadenceMonthly, DayOfMonth: 5,
+			StartDate: day.AddDate(0, -1, 0), IsActive: true,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := recurrences.PutOverride(ctx, conn, commitment.ID, day, recurrences.StateLinked, &txID); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := automation.Create(ctx, conn, automation.Write{
+			Name: "Ignorar estorno", IsActive: true, LogicOperator: automation.LogicAnd,
+			Conditions: []automation.Condition{{Field: automation.FieldDescription, Operator: automation.OperatorEquals, Value: "Estorno"}},
+			Actions:    []automation.ActionWrite{{Type: automation.ActionIgnore}},
+		}); err != nil {
+			t.Fatal(err)
+		}
+
+		rent.Description = strp("Estorno")
+		f.run(t, map[string][]pluggy.TransactionSnapshot{"acc-1": {rent}})
+
+		if n := count(t, conn, `SELECT COUNT(*) FROM transaction_inclusion_decisions WHERE transaction_id = ? AND state = 'ignored'`, txID); n != 1 {
+			t.Fatalf("ignored decisions = %d, want 1", n)
+		}
+		if n := count(t, conn, `SELECT COUNT(*) FROM scenario_realizations WHERE transaction_id = ?`, txID); n != 0 {
+			t.Errorf("recurrence links on the ignored transaction = %d, want 0", n)
 		}
 	})
 }

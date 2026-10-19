@@ -151,12 +151,58 @@ func Update(ctx context.Context, conn *sql.DB, id string, write Write) (Recurrin
 	if n, _ := res.RowsAffected(); n == 0 {
 		return RecurringCommitment{}, ErrNotFound
 	}
+	if err := dropOrphanedOverrides(ctx, tx, c); err != nil {
+		return RecurringCommitment{}, err
+	}
 	if err := tx.Commit(); err != nil {
 		return RecurringCommitment{}, err
 	}
 	// CreatedAt is the one field the write does not carry, so it comes from
 	// the row rather than being invented here.
 	return Get(ctx, conn, id)
+}
+
+// dropOrphanedOverrides deletes the reconciliation rows of c whose date is no
+// longer one of its occurrences, so they stop claiming transactions. Pausing
+// is not a calendar change: the check uses the schedule, not IsActive.
+func dropOrphanedOverrides(ctx context.Context, q Querier, c RecurringCommitment) error {
+	rows, err := q.QueryContext(ctx, `
+		SELECT occurrence_date FROM scenario_realizations
+		WHERE scenario_id = ? AND relation_type = 'reconciliation'`, c.ID)
+	if err != nil {
+		return err
+	}
+	var orphans []string
+	schedule := c.Schedule()
+	for rows.Next() {
+		var raw string
+		if err := rows.Scan(dbtypes.Date(&raw)); err != nil {
+			rows.Close()
+			return err
+		}
+		day, err := parseDate(raw)
+		if err != nil {
+			rows.Close()
+			return err
+		}
+		if len(OccurrencesInRange(schedule, day, day)) == 0 {
+			orphans = append(orphans, raw)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return err
+	}
+	rows.Close()
+	for _, raw := range orphans {
+		if _, err := q.ExecContext(ctx, `
+			DELETE FROM scenario_realizations
+			WHERE scenario_id = ? AND relation_type = 'reconciliation' AND occurrence_date = ?`,
+			c.ID, raw); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // SetActive toggles is_active without touching any other field.

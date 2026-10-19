@@ -10,6 +10,7 @@ import {
   invalidateAfterPayableChange,
   invalidateAfterPayableLinkChange,
   invalidateAfterPayablePlanChange,
+  invalidateAfterRecurringCommitmentChange,
   invalidateAfterScenarioChange,
   invalidateAfterStatementImport,
   invalidateAfterTransactionChange,
@@ -158,7 +159,15 @@ describe("invalidation policies", () => {
 
     const tx = spyClient();
     await invalidateAfterTransactionChange(tx.client);
-    expect(keysOf(tx.invalidateQueries)).toEqual([["transactions"], ["accounts"], ["timeline"], ["netWorth"], ["transaction-transfer"]]);
+    expect(keysOf(tx.invalidateQueries)).toEqual([
+      ["transactions"],
+      ["accounts"],
+      ["timeline"],
+      ["netWorth"],
+      ["transaction-transfer"],
+      ["recurringCommitments"],
+      ["transactionReconciliation"],
+    ]);
 
     const rules = spyClient();
     await invalidateAutomationRules(rules.client);
@@ -168,11 +177,25 @@ describe("invalidation policies", () => {
   it("automation rule write refreshes transactions only after a retroactive pass", async () => {
     const without = spyClient();
     await invalidateAfterAutomationRuleChange(without.client, { transactionsChanged: false });
-    expect(keysOf(without.invalidateQueries)).toEqual([["automationRules"]]);
+    expect(keysOf(without.invalidateQueries)).toEqual([["automationRules"], ["timeline"], ["timeline-data-range"]]);
 
     const withRetro = spyClient();
     await invalidateAfterAutomationRuleChange(withRetro.client, { transactionsChanged: true });
-    expect(keysOf(withRetro.invalidateQueries)).toEqual([["automationRules"], ["transactions"], ["transaction-transfer"]]);
+    expect(keysOf(withRetro.invalidateQueries)).toEqual([
+      ["automationRules"],
+      ["timeline"],
+      ["timeline-data-range"],
+      ["transactions"],
+      ["transaction-transfer"],
+      ["transactionReconciliation"],
+      ["recurringCommitments"],
+    ]);
+  });
+
+  it("recurring commitment change refreshes commitments and the projection views", async () => {
+    const { client, invalidateQueries } = spyClient();
+    await invalidateAfterRecurringCommitmentChange(client);
+    expect(keysOf(invalidateQueries)).toEqual([["recurringCommitments"], ["timeline"], ["timeline-data-range"]]);
   });
 
   it("marks transactions stale without refetching", async () => {

@@ -34,8 +34,23 @@ const (
 	MetricInvestedValue Metric = "invested_value"
 )
 
-var metrics = map[Metric]func(networth.Breakdown) decimal.Decimal{
-	MetricInvestedValue: func(b networth.Breakdown) decimal.Decimal { return b.InvestmentBalance },
+// figures holds the metric values read once per request, so every goal in it
+// agrees. Only the investments are valued: an unrelated foreign-currency
+// account without a rate must not make goals fail.
+type figures struct {
+	investedValue decimal.Decimal
+}
+
+var metrics = map[Metric]func(figures) decimal.Decimal{
+	MetricInvestedValue: func(f figures) decimal.Decimal { return f.investedValue },
+}
+
+func readFigures(ctx context.Context, q Querier) (figures, error) {
+	invested, err := networth.InvestmentValue(ctx, q)
+	if err != nil {
+		return figures{}, err
+	}
+	return figures{investedValue: invested}, nil
 }
 
 var (
@@ -130,16 +145,16 @@ func nullableDay(t *time.Time) any {
 // now is the clock of the projections; tests replace it.
 var now = time.Now
 
-// withComputed fills the computed fields from a breakdown read once for all
+// withComputed fills the computed fields from figures read once for all
 // the goals of a request, so they agree with each other. The return the
 // projections compound is measured once too, and only when a goal has a date.
 func withComputed(ctx context.Context, q Querier, list []Goal) ([]Goal, error) {
-	b, err := networth.Compute(ctx, q)
+	f, err := readFigures(ctx, q)
 	if err != nil {
 		return nil, err
 	}
 	for i := range list {
-		list[i].CurrentValue = metrics[list[i].Metric](b)
+		list[i].CurrentValue = metrics[list[i].Metric](f)
 		list[i].Progress = list[i].CurrentValue.Div(list[i].TargetAmount)
 	}
 	if !needsProjection(list) {

@@ -194,6 +194,11 @@ func handleCreatePayableScenario(conn *sql.DB) http.HandlerFunc {
 		}
 
 		s, err := scenarios.CreateScenario(r.Context(), conn, scenarioKindFor(p.Kind), req.Name, &payableID)
+		if errors.Is(err, scenarios.ErrTransactionAlreadyRealized) {
+			writeProblem(w, http.StatusConflict, "transaction-already-realized", "Transação já utilizada",
+				"Um lançamento vinculado a esta pendência já satisfaz outro evento completo.")
+			return
+		}
 		if err != nil {
 			scenariosUnavailableProblem(w)
 			return

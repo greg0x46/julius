@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Alert, Button, Spin } from "antd";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import type { TransactionItem } from "../../api/contracts";
 import { invalidateAfterTransactionChange, queryKeys } from "../../api/queryKeys";
@@ -68,6 +68,15 @@ export function TransactionTransferScreen({ item }: { item: TransactionItem }) {
     classification: "outflow", description: feeSearch || null,
     account_ids: [source?.account.id, destination?.account.id].filter((id): id is string => !!id),
   }, "none", feePage);
+  // Linking elsewhere can shrink a list under the page being viewed.
+  const candidatePages = candidates.data?.page;
+  const feePages = fees.data?.page;
+  useEffect(() => {
+    if (candidatePages && candidatePages.total_items > 0 && page > candidatePages.total_pages) setPage(candidatePages.total_pages);
+  }, [candidatePages, page]);
+  useEffect(() => {
+    if (feePages && feePages.total_items > 0 && feePage > feePages.total_pages) setFeePage(feePages.total_pages);
+  }, [feePages, feePage]);
   const options = (candidates.data?.items ?? []).filter((row) => row.id !== item.id && row.account.id !== item.account.id && usable(row));
   const feeOptions = (fees.data?.items ?? []).filter((row) => row.id !== item.id && row.id !== counterpart?.id && usable(row) && row.totals_eligibility.included);
 

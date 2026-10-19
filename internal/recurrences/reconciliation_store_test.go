@@ -229,7 +229,7 @@ func TestOverrideForTransactionFindsTheOccurrenceItSettles(t *testing.T) {
 }
 
 // A transaction the user excludes from the totals can't be what carries a
-// commitment's money — see onIgnoredHook.
+// commitment's money — see ledger.OnIgnored.
 func TestUnlinkIfPresentDropsOnlyTheLink(t *testing.T) {
 	conn := newTestDB(t)
 	ctx := context.Background()

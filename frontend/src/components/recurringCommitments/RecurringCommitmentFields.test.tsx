@@ -54,4 +54,22 @@ describe("RecurringCommitmentFields", () => {
     expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({ amount }));
   });
 
+  it("never sends a fractional day of the month", () => {
+    vi.mocked(accountsApi.listAccounts).mockResolvedValue([]);
+    const onSubmit = vi.fn();
+    const commitment = {
+      id: "11111111-1111-4111-8111-111111111111", name: "Synthetic day", kind: "expense" as const,
+      amount: "10.00", category_id: "22222222-2222-4222-8222-222222222222", account_id: null,
+      cadence: "monthly" as const, day_of_month: 5, month_of_year: null,
+      start_date: "2026-01-01", end_date: null, is_active: true,
+      created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z",
+    };
+    const { container } = render(<QueryTestProvider><RecurringCommitmentFields formId="day-form" commitment={commitment} categories={[]} submitError={null} submitting={false} onSubmit={onSubmit} /></QueryTestProvider>);
+    const input = screen.getByLabelText("Dia do mês");
+    fireEvent.change(input, { target: { value: "6.5" } });
+    fireEvent.blur(input);
+    fireEvent.submit(container.querySelector("form")!);
+    expect(onSubmit).toHaveBeenCalledOnce();
+    expect(Number.isInteger(onSubmit.mock.calls[0]![0].day_of_month)).toBe(true);
+  });
 });

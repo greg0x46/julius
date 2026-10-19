@@ -10,7 +10,7 @@ import { invalidateAuthSession, queryKeys } from "../api/queryKeys";
 export function AuthGate({ children }: { children: ReactNode }) {
   const client = useQueryClient();
   const wasAuthenticated = useRef(false);
-  const { data, isLoading, error, refetch } = useQuery({
+  const { data, isLoading, refetch } = useQuery({
     queryKey: queryKeys.authSession, queryFn: ({ signal }) => getSession(signal),
     retry: false, refetchInterval: 60_000,
   });
@@ -34,8 +34,9 @@ export function AuthGate({ children }: { children: ReactNode }) {
       client.removeQueries({ predicate: (query) => query.queryKey[0] !== queryKeys.authSession[0] });
     }
   }, [client, data?.authenticated, data?.authentication_enabled]);
+  // A failed background refetch keeps the last known session; only a missing one is an error.
   if (isLoading) return <AppLoadingScreen />;
-  if (error || !data) return <UnavailableState onRetry={() => refetch()}>Não foi possível verificar sua sessão.</UnavailableState>;
+  if (!data) return <UnavailableState onRetry={() => refetch()}>Não foi possível verificar sua sessão.</UnavailableState>;
   if (data.authentication_enabled && !data.authenticated) return <LoginPage onDone={() => { void invalidateAuthSession(client); }} />;
   return <>{children}</>;
 }

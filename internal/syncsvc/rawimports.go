@@ -76,7 +76,7 @@ type RawImportWriter struct {
 	WorkerID  string
 }
 
-func (w *RawImportWriter) Write(envelope pluggy.RawResponseEnvelope) (string, error) {
+func (w *RawImportWriter) Write(ctx context.Context, envelope pluggy.RawResponseEnvelope) (string, error) {
 	headers, err := json.Marshal(allowlistedHeaders(envelope.Headers))
 	if err != nil {
 		return "", err
@@ -87,7 +87,6 @@ func (w *RawImportWriter) Write(envelope pluggy.RawResponseEnvelope) (string, er
 	if receivedAt.IsZero() {
 		receivedAt = time.Now().UTC()
 	}
-	ctx := context.Background()
 	tx, err := w.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return "", err

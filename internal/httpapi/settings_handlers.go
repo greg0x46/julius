@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/greg0x46/julius/internal/datasources"
 	"github.com/greg0x46/julius/internal/marketdata"
@@ -134,6 +135,11 @@ func handlePluggySettings(db *sql.DB, keys *settings.Secrets) http.HandlerFunc {
 			writeProblem(w, 422, "invalid-settings", "Credenciais inválidas", "Informe client ID e client secret da Pluggy.")
 			return
 		}
+		itemID := strings.TrimSpace(req.ItemID)
+		if req.ItemID != "" && itemID == "" {
+			writeProblem(w, 422, "invalid-settings", "Item ID inválido", "Informe o Item ID da conexão no Pluggy.")
+			return
+		}
 		key, ok := keys.Key()
 		if !ok {
 			writeProblem(w, 503, "settings-unavailable", "Configuração indisponível", "")
@@ -146,8 +152,8 @@ func handlePluggySettings(db *sql.DB, keys *settings.Secrets) http.HandlerFunc {
 			if err == nil {
 				err = settings.Set(r.Context(), tx, "pluggy.client_secret", req.ClientSecret, true, key)
 			}
-			if err == nil && req.ItemID != "" {
-				_, err = datasources.Create(r.Context(), tx, datasources.ProviderPluggy, req.ItemID, nil)
+			if err == nil && itemID != "" {
+				err = ensurePluggySource(r.Context(), tx, itemID)
 			}
 			if err == nil {
 				err = tx.Commit()
@@ -159,4 +165,21 @@ func handlePluggySettings(db *sql.DB, keys *settings.Secrets) http.HandlerFunc {
 		}
 		writeJSON(w, 200, map[string]bool{"saved": true})
 	}
+}
+
+// ensurePluggySource registers the item unless it already is. The existence
+// check runs first because a failed INSERT would abort a Postgres transaction
+// and take the credentials down with it.
+func ensurePluggySource(ctx context.Context, q datasources.Querier, itemID string) error {
+	existing, err := datasources.ListByProvider(ctx, q, datasources.ProviderPluggy)
+	if err != nil {
+		return err
+	}
+	for _, source := range existing {
+		if source.ExternalItemID == itemID {
+			return nil
+		}
+	}
+	_, err = datasources.Create(ctx, q, datasources.ProviderPluggy, itemID, nil)
+	return err
 }

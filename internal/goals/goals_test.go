@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
 
 	"github.com/greg0x46/julius/internal/db"
@@ -184,13 +185,7 @@ func TestWritesRollBackWhenProgressCannotBeValued(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		now := db.FormatTime(time.Now())
-		const accountID = "052e2a8b-6b4c-5c1d-90c3-2f8654bcd27c"
-		if _, err := conn.Exec(`INSERT INTO financial_accounts
-			(id, origin, name, account_type, currency_code, opening_balance, created_at, updated_at)
-			VALUES (?, 'manual', 'Synthetic USD', 'BANK', 'USD', '100', ?, ?)`, accountID, now, now); err != nil {
-			t.Fatal(err)
-		}
+		investmentID := insertForeignInvestment(t, conn)
 
 		// Make FX reads fail without contacting the external rate provider.
 		if _, err := conn.Exec(`ALTER TABLE exchange_rates RENAME TO unavailable_exchange_rates`); err != nil {
@@ -209,7 +204,7 @@ func TestWritesRollBackWhenProgressCannotBeValued(t *testing.T) {
 		if _, err := conn.Exec(`ALTER TABLE unavailable_exchange_rates RENAME TO exchange_rates`); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := conn.Exec(`DELETE FROM financial_accounts WHERE id = ?`, accountID); err != nil {
+		if _, err := conn.Exec(`DELETE FROM financial_investments WHERE id = ?`, investmentID); err != nil {
 			t.Fatal(err)
 		}
 		list, err := goals.List(ctx, conn)
@@ -222,4 +217,26 @@ func TestWritesRollBackWhenProgressCannotBeValued(t *testing.T) {
 			t.Fatalf("failed update changed goal: got %+v, want %+v", got, existing)
 		}
 	})
+}
+
+// insertForeignInvestment stores a synced USD holding, whose valuation needs
+// an exchange rate.
+func insertForeignInvestment(t *testing.T, conn *sql.DB) string {
+	t.Helper()
+	now := db.FormatTime(time.Now())
+	source, run, raw, investment := uuid.NewString(), uuid.NewString(), uuid.NewString(), uuid.NewString()
+	for _, statement := range []struct {
+		query string
+		args  []any
+	}{
+		{`INSERT INTO data_sources(id,provider,external_item_id,created_at,updated_at) VALUES(?, 'pluggy', ?, ?, ?)`, []any{source, source, now, now}},
+		{`INSERT INTO sync_runs(id,source_id,status,started_at,finished_at) VALUES(?, ?, 'completed', ?, ?)`, []any{run, source, now, now}},
+		{`INSERT INTO raw_imports(id,sync_run_id,source_id,scope,page_sequence,request_attempt,request_method,request_path,http_status,response_headers,payload,payload_sha256,received_at) VALUES(?, ?, ?, 'investments', 1, 1, 'GET', '/x', 200, '{}', ?, 'sha', ?)`, []any{raw, run, source, []byte{}, now}},
+		{`INSERT INTO financial_investments(id,source_id,external_id,name,investment_type,balance,currency_code,current_raw_import_id,normalized_hash,created_at,updated_at) VALUES(?, ?, ?, 'Synthetic USD fund', 'FIXED_INCOME', '100', 'USD', ?, 'hash', ?, ?)`, []any{investment, source, investment, raw, now, now}},
+	} {
+		if _, err := conn.Exec(statement.query, statement.args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return investment
 }

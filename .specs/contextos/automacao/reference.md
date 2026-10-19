@@ -29,6 +29,11 @@ Reconciliation candidates also carry the same description, account name and
 institution, and card number, so both actions evaluate the complete shared
 conditions.
 
+Writes validate condition values: `amount` must be
+`<non-zero reference>:<tolerance >= 0>` and `day_of_month`
+`<day 1-31>:<day 1-31>` (min > max wraps across the month turn); anything else is
+a 422 `invalid-automation-rule` instead of a rule that silently never matches.
+
 During sync, `NewTransactionHook` uses the entry's transaction `Querier` to
 apply rules and the payable-unlink hook. It opens no inner transaction: a
 failure in any action rolls back the entry, its decisions and its events
