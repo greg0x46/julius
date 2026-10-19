@@ -130,8 +130,12 @@ authentication configuration that does not depend on the host:
 - **Financial report** — a single time navigation (Actual → Today → Base
   Projection → Simulation): how much you will have on a future date, your
   lowest balance until then, and how hypothetical scenarios change that answer.
-- **Net worth** — net worth snapshots and history (assets − liabilities) over
-  time.
+- **Net worth** — interactive history of net worth (assets − liabilities),
+  observed cash and portfolio valuations over the shared selected period.
+  Compare absolute values on one currency scale or percentage changes from a
+  disclosed positive baseline. Reconstructed or incomplete history stays a gap;
+  investment yields appear separately as monthly flows with Modified Dietz return.
+  Home keeps its cash forecast, scale controls and historical-day drill-down.
 - **Goals** — set a target amount (and optional date) for the total market
   value of your investments and follow the progress, recomputed on every read. With a
   date, the goal is projected to it from the average monthly return of your investments and

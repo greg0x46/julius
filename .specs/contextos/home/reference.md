@@ -124,6 +124,16 @@ Home (`/`):
   neither decision converts monetary values to JavaScript numbers. The chart
   preserves the server's end-of-day balance for today, including commitments
   and card bills due today; "Saldo hoje" shows `starting_balance`, the cash now.
+  Shared `EvolutionControls` select Saldo (both realized/projected segments and
+  any simulation) and absolute/percentage scales. Absolute uses the response
+  currency; percentage uses the first requested day's positive balance (also
+  required for simulation on that same date). Zero, negative or missing bases
+  explain why the curve cannot be shown. Tooltips retain original decimal money
+  values and deduplicate the reference-day crossover, qualifying today's
+  end-of-day balance as including forecasts. `Ver valores` provides a
+  semantic table and keyboard buttons for historical-day transaction navigation.
+  Deselecting Saldo shows an intentional empty-selection message. This remains
+  a cash-flow timeline, never a historical wealth/portfolio source.
 - `DailyAllowanceCard` — daily spending allowance ("R$ X / dia"), below the
   period result, as a compact figure (`Money` size `row`; the page hero is only
   the period result). It runs its own query with `reference_date = from = today`

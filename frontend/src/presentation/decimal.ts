@@ -62,3 +62,13 @@ export function divideDecimalFloor(value: string, divisor: number): string {
   if (part.digits < 0n) throw new RangeError("value must not be negative");
   return text(part.digits * 100n / (10n ** BigInt(part.scale) * BigInt(divisor)), 2);
 }
+
+/** Percentage change, rounded only at the chart display boundary (four places). */
+export function changePercent(value: string, baseline: string): string | null {
+  if (!isPositiveDecimal(baseline)) return null;
+  const a = scaled(subtractDecimals(value, baseline)), b = scaled(baseline);
+  const scale = Math.max(a.scale, b.scale);
+  const numerator = a.digits * 10n ** BigInt(scale - a.scale) * 100000000n;
+  const denominator = b.digits * 10n ** BigInt(scale - b.scale);
+  return roundDecimal(text(numerator / denominator, 6), 4);
+}
