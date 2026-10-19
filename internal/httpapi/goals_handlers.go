@@ -16,19 +16,35 @@ import (
 // track; they are not re-expressed in the reference currency.
 const goalCurrency = "BRL"
 
+type monthlyContributionDTO struct {
+	Month             string  `json:"month"`
+	Target            *string `json:"target"`
+	NetContributed    *string `json:"net_contributed"`
+	Remaining         *string `json:"remaining"`
+	AssumesZeroReturn bool    `json:"assumes_zero_return"`
+}
+
+func monthlyContributionToDTO(m *goals.MonthlyContribution) *monthlyContributionDTO {
+	if m == nil {
+		return nil
+	}
+	return &monthlyContributionDTO{m.Month, optionalMoney(m.Target), optionalMoney(m.NetContributed), optionalMoney(m.Remaining), m.AssumesZeroReturn}
+}
+
 type goalDTO struct {
-	ID           string             `json:"id"`
-	Name         string             `json:"name"`
-	Metric       string             `json:"metric"`
-	TargetAmount string             `json:"target_amount"`
-	TargetDate   *string            `json:"target_date"`
-	Notes        *string            `json:"notes"`
-	CurrentValue string             `json:"current_value"`
-	Progress     string             `json:"progress"`
-	Projection   *goalProjectionDTO `json:"projection"`
-	CurrencyCode string             `json:"currency_code"`
-	CreatedAt    time.Time          `json:"created_at"`
-	UpdatedAt    time.Time          `json:"updated_at"`
+	MonthlyContribution *monthlyContributionDTO `json:"monthly_contribution"`
+	ID                  string                  `json:"id"`
+	Name                string                  `json:"name"`
+	Metric              string                  `json:"metric"`
+	TargetAmount        string                  `json:"target_amount"`
+	TargetDate          *string                 `json:"target_date"`
+	Notes               *string                 `json:"notes"`
+	CurrentValue        string                  `json:"current_value"`
+	Progress            string                  `json:"progress"`
+	Projection          *goalProjectionDTO      `json:"projection"`
+	CurrencyCode        string                  `json:"currency_code"`
+	CreatedAt           time.Time               `json:"created_at"`
+	UpdatedAt           time.Time               `json:"updated_at"`
 }
 
 // goalProjectionDTO is the goal at its target date: ratios and money are
@@ -63,18 +79,19 @@ func goalProjectionToDTO(p *goals.Projection) *goalProjectionDTO {
 
 func goalToDTO(g goals.Goal) goalDTO {
 	return goalDTO{
-		ID:           g.ID,
-		Name:         g.Name,
-		Metric:       string(g.Metric),
-		TargetAmount: money.CanonicalDecimal(g.TargetAmount),
-		TargetDate:   optionalDay(g.TargetDate),
-		Notes:        g.Notes,
-		CurrentValue: money.CanonicalDecimal(g.CurrentValue),
-		Progress:     money.CanonicalDecimal(g.Progress),
-		Projection:   goalProjectionToDTO(g.Projection),
-		CurrencyCode: goalCurrency,
-		CreatedAt:    g.CreatedAt,
-		UpdatedAt:    g.UpdatedAt,
+		MonthlyContribution: monthlyContributionToDTO(g.MonthlyContribution),
+		ID:                  g.ID,
+		Name:                g.Name,
+		Metric:              string(g.Metric),
+		TargetAmount:        money.CanonicalDecimal(g.TargetAmount),
+		TargetDate:          optionalDay(g.TargetDate),
+		Notes:               g.Notes,
+		CurrentValue:        money.CanonicalDecimal(g.CurrentValue),
+		Progress:            money.CanonicalDecimal(g.Progress),
+		Projection:          goalProjectionToDTO(g.Projection),
+		CurrencyCode:        goalCurrency,
+		CreatedAt:           g.CreatedAt,
+		UpdatedAt:           g.UpdatedAt,
 	}
 }
 

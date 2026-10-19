@@ -70,9 +70,10 @@ type Goal struct {
 	CurrentValue decimal.Decimal
 	Progress     decimal.Decimal
 	// Projection is set when the goal has a future target date.
-	Projection *Projection
-	CreatedAt  time.Time
-	UpdatedAt  time.Time
+	MonthlyContribution *MonthlyContribution
+	Projection          *Projection
+	CreatedAt           time.Time
+	UpdatedAt           time.Time
 }
 
 type Input struct {
@@ -167,6 +168,9 @@ func withComputed(ctx context.Context, q Querier, list []Goal) ([]Goal, error) {
 	}
 	for i := range list {
 		list[i].Projection = projectGoal(list[i], est, today)
+	}
+	if err := withMonthlyContribution(ctx, q, list, today); err != nil {
+		return nil, err
 	}
 	return list, nil
 }
