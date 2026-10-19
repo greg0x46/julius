@@ -4,6 +4,60 @@ Notable changes per release. A section is added by `scripts/update-changelog.sh`
 only when a release is prepared, and the release job publishes that same text as
 the GitHub release notes. Newest release first.
 
+## v0.12.0 — 2026-10-19
+
+### Features
+
+- **goals:** Project dated goals and redesign the goals cards
+
+### Fixes
+
+- Correct monetary precision, projections and reconciliation
+- Reject excessive installment generation before allocation
+- **categories:** Keep manual sibling installments when a rule applies
+- **timeline:** Keep active scenarios in a simulation
+- **investments:** Drop the typed valuation when a holding is sold out
+- **httpapi:** Make PUT /api/settings/pluggy idempotent and trim the Item ID
+- **transactions:** Treat paid_at bill due date as a calendar day and clamp the next-month estimate
+- **scenarios:** Create a plan and backfill its settlements atomically
+- **sync:** Drop recurrence and investment links when a sync update makes a rule ignore a transaction
+- **payables:** Drop standalone event allocations when a transaction is ignored
+- **httpapi:** Cap JSON request bodies at 1 MiB
+- **httpapi:** Reject huge page and page_size in transaction queries
+- **investments:** Never share a catalog asset across currencies for synced quotes
+- **httpapi:** Fail sync-run and investment-transaction reads on row errors
+- **payables:** Map only unique violations to link conflicts and refuse soft-deleted transactions
+- **frontend:** Label net worth chart days in UTC
+- **httpapi:** Match the realization unique violation by constraint, not error text
+- **investments:** List synced positions without writing and create assets race-safely
+- **sync:** Fail unclaimed runs with worker_unavailable and log credential errors once
+- **frontend:** Keep the app mounted when a background session refetch fails
+- **pluggy:** Escape item, account and cursor values in request URLs
+- **automation:** Validate amount and day_of_month condition values on write
+- **recurrences:** Drop overrides of dates a schedule update removes
+- **sync:** Tie provider waits and raw-import writes to the run context and cap response bodies
+- **exchange:** Cool down a failing provider per pair, not per day and request
+- **marketdata:** Truncate the response body in HTTP status errors
+- **goals:** Value only investments so unrelated foreign cash cannot fail goals
+- **investments:** Treat a provider investment without currency as reais in reconciliations
+- **reporting:** Report an invalid currency as unsupported, not as a provider failure
+- **frontend:** Use MoneyInput for manual transfer amounts
+- **scenarios:** Compare installment status and deviation by magnitude
+- **scenarios:** Validate transactions linked to standalone events
+- **frontend:** Clamp pagination to the last page when the list is shorter
+- **scenarios:** Keep the plan cadence when readjusting by term
+- **frontend:** Reuse the created commitment when an automation save is retried
+- **frontend:** Compute payable settled percent with exact decimals
+- **frontend:** Use the loaded payable's kind on the detail page
+- **frontend:** Restrict integer fields to whole numbers
+- **frontend:** Invalidate commitments, reconciliation and projection views after related writes
+- **frontend:** Require a non-zero expected amount in reconcile automations
+- **investments:** Don't compare an empty asset id on Postgres when creating an asset
+
+### Performance
+
+- **networth:** Skip loading the ledger when backfill has no gap
+
 ## v0.11.0 — 2026-10-18
 
 ### Features
