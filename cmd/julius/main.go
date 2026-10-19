@@ -13,6 +13,8 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strconv"
+	"strings"
 	"time"
 	_ "time/tzdata" // static binaries have no system zoneinfo for JULIUS_SYNC_SCHEDULE zones
 
@@ -45,13 +47,23 @@ func main() {
 		}
 		return
 	}
+	if len(os.Args) > 1 && os.Args[1] == "demo" {
+		if err := demoCommand(os.Args[2:]); err != nil {
+			log.Fatal(err)
+		}
+		return
+	}
 
 	defaultDB := db.DefaultPath()
 	dbPath := flag.String("db", defaultDB, "path to the SQLite database file, or a postgres://... / postgresql://... DSN to use Postgres instead (defaults to $JULIUS_DB if set)")
 	addr := flag.String("addr", "localhost:4200", "address to listen on")
 	flag.Parse()
 
-	config := auth.Config{PublicURL: os.Getenv("JULIUS_PUBLIC_URL")}
+	demo, err := parseDemo(os.Getenv("JULIUS_DEMO"))
+	if err != nil {
+		log.Fatal(err)
+	}
+	config := auth.Config{PublicURL: os.Getenv("JULIUS_PUBLIC_URL"), Demo: demo}
 	if err := config.Validate(); err != nil {
 		log.Fatal(err)
 	}
@@ -132,18 +144,24 @@ func main() {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go worker.Run(ctx, conn, secrets, worker.Config{
-		Pluggy:                pluggy.DefaultConfig(),
-		OnTransactionUpserted: automation.NewTransactionHook(ledger.OnIgnored),
-	})
+	if demo {
+		// No provider traffic at all: the demo's data is synthetic and its
+		// integrations are read-only (httpapi's demo guard).
+		log.Printf("demo mode: open access, sync and quote refresh disabled")
+	} else {
+		go worker.Run(ctx, conn, secrets, worker.Config{
+			Pluggy:                pluggy.DefaultConfig(),
+			OnTransactionUpserted: automation.NewTransactionHook(ledger.OnIgnored),
+		})
 
-	if scheduled {
-		log.Printf("sync scheduled daily at %02d:%02d %s", schedule.Hour, schedule.Minute, schedule.Location)
-		go worker.RunSchedule(ctx, conn, schedule)
+		if scheduled {
+			log.Printf("sync scheduled daily at %02d:%02d %s", schedule.Hour, schedule.Minute, schedule.Location)
+			go worker.RunSchedule(ctx, conn, schedule)
+		}
+
+		log.Printf("quote refresh enabled=%t daily at %s %s", quotesConfig.Enabled, quotesConfig.Time, quotesConfig.Timezone)
+		go quotes.RunSchedule(ctx, conn, marketService)
 	}
-
-	log.Printf("quote refresh enabled=%t daily at %s %s", quotesConfig.Enabled, quotesConfig.Time, quotesConfig.Timezone)
-	go quotes.RunSchedule(ctx, conn, marketService)
 
 	handler := httpapi.NewServer(conn, frontend, secrets, config, marketService)
 	log.Printf("listening on http://%s", *addr)
@@ -151,6 +169,18 @@ func main() {
 	if err := server.ListenAndServe(); err != nil {
 		log.Fatalf("serve: %v", err)
 	}
+}
+
+// parseDemo reads JULIUS_DEMO; empty means off.
+func parseDemo(value string) (bool, error) {
+	if strings.TrimSpace(value) == "" {
+		return false, nil
+	}
+	demo, err := strconv.ParseBool(strings.TrimSpace(value))
+	if err != nil {
+		return false, fmt.Errorf("JULIUS_DEMO deve ser true ou false")
+	}
+	return demo, nil
 }
 
 func openDatabase(path string) (*sql.DB, error) {

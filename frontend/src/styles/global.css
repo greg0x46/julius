@@ -129,6 +129,14 @@ body {
   min-height: 100vh;
 }
 
+.demo-notice {
+  padding: 0.5rem var(--page-gutter);
+  color: var(--color-text);
+  font-size: var(--fs-caption);
+  background: color-mix(in srgb, var(--color-accent) 14%, white);
+  border-bottom: 1px solid color-mix(in srgb, var(--color-accent) 35%, white);
+}
+
 .app-build-footer {
   padding: 0.5rem var(--page-gutter) calc(0.5rem + env(safe-area-inset-bottom));
   color: var(--color-text-secondary);

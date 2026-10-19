@@ -54,6 +54,17 @@ export function AuthenticationSettings() {
         <Skeleton active />
       </Section>
     );
+  if (session.demo)
+    return (
+      <Section title="Acesso">
+        <Alert
+          type="info"
+          showIcon
+          message="Ambiente de demonstração"
+          description="O acesso é aberto e não pode ser alterado aqui. Os dados são fictícios e redefinidos todos os dias."
+        />
+      </Section>
+    );
   if (!session.authentication_enabled)
     return (
       <Section title="Acesso">
