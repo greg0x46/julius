@@ -36,7 +36,16 @@ export interface GoalProjection {
   required_monthly_contribution: string;
 }
 
+export interface MonthlyContribution {
+  month: string;
+  target: string | null;
+  net_contributed: string | null;
+  remaining: string | null;
+  assumes_zero_return: boolean;
+}
+
 export interface Goal {
+  monthly_contribution: MonthlyContribution | null;
   id: string;
   name: string;
   metric: GoalMetric;
@@ -61,6 +70,7 @@ export interface GoalWrite {
 }
 
 const goalKeys = [
+  "monthly_contribution",
   "id",
   "name",
   "metric",
@@ -110,6 +120,15 @@ function parseProjection(value: unknown): GoalProjection | null {
   };
 }
 
+function parseMonthlyContribution(value: unknown): MonthlyContribution | null {
+  if (value === null) return null;
+  const item = requiredRecord(value, ["month", "target", "net_contributed", "remaining", "assumes_zero_return"], "Aporte mensal inválido.");
+  if (typeof item.month !== "string" || !/^\d{4}-(0[1-9]|1[0-2])$/.test(item.month) || typeof item.assumes_zero_return !== "boolean") {
+    throw new TypeError("Aporte mensal inválido.");
+  }
+  return { month: item.month, target: nullableDecimal(item.target), net_contributed: nullableDecimal(item.net_contributed), remaining: nullableDecimal(item.remaining), assumes_zero_return: item.assumes_zero_return };
+}
+
 export function parseGoal(value: unknown): Goal {
   const item = requiredRecord(value, goalKeys, "Meta inválida.");
   if (
@@ -128,6 +147,7 @@ export function parseGoal(value: unknown): Goal {
     throw new TypeError("Meta inválida.");
   }
   return {
+    monthly_contribution: parseMonthlyContribution(item.monthly_contribution),
     id: item.id,
     name: item.name,
     metric: item.metric as GoalMetric,

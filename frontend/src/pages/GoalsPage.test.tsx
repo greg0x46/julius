@@ -24,6 +24,7 @@ function goal(overrides: Partial<Goal> = {}): Goal {
     current_value: "45210.50",
     progress: "0.452105",
     projection: null,
+  monthly_contribution: null,
     currency_code: "BRL",
     created_at: "2026-10-01T12:00:00Z",
     updated_at: "2026-10-01T12:00:00Z",

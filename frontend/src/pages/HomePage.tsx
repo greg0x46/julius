@@ -1,3 +1,4 @@
+import { MonthlyContributionIndicator } from "../components/home/MonthlyContributionIndicator";
 import { DailyAllowanceCard } from "../components/home/DailyAllowanceCard";
 import { ProjectionSummaryCard } from "../components/home/ProjectionSummaryCard";
 import { SpendingByCategoryCard } from "../components/home/SpendingByCategoryCard";
@@ -30,7 +31,10 @@ export function HomePage() {
       <div className="dashboard-layout">
         <div className="dashboard-area-result dashboard-stack">
           <PeriodBalanceCard period={period} />
-          <DailyAllowanceCard />
+          <div className="home-summary-indicators">
+            <DailyAllowanceCard />
+            <MonthlyContributionIndicator />
+          </div>
         </div>
         <div className="dashboard-area-chart">
           <ProjectionSummaryCard period={period} />

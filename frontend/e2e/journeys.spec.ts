@@ -256,3 +256,33 @@ test("investment contributions and withdrawals preserve bank cash and exclude re
     expect.objectContaining({ kind: "withdrawal", amount: "100.00", occurred_on: "2026-09-15" }),
   ]));
 });
+
+for (const width of [320, 390, 1280]) {
+  test(`Home monthly contribution stays compact at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await login(page);
+    const today = new Date();
+    const parts = new Intl.DateTimeFormat("en", { year: "numeric", month: "2-digit", timeZone: "America/Sao_Paulo" }).formatToParts(today);
+    const monthKey = `${parts.find((p) => p.type === "year")!.value}-${parts.find((p) => p.type === "month")!.value}`;
+    await page.route("**/api/goals", (route) => route.fulfill({ json: { items: [{
+      id: "00000000-0000-4000-8000-000000000140", name: "Uma reserva de longo prazo com um nome muito extenso ".repeat(4),
+      metric: "invested_value", target_amount: "9999999999999", target_date: "2099-12-31", notes: null,
+      current_value: "0", progress: "0", projection: null, currency_code: "BRL",
+      created_at: today.toISOString(), updated_at: today.toISOString(),
+      monthly_contribution: { month: monthKey, target: "123456789.90", net_contributed: "0", remaining: "123456789.90", assumes_zero_return: true },
+    }] } }));
+    await page.goto("/");
+    const indicator = page.getByRole("link", { name: /Falta aportar este mês/ });
+    await expect(indicator).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy();
+    const bounds = await indicator.boundingBox();
+    expect(bounds!.width).toBeLessThanOrEqual(Math.min(width, 320));
+    expect(bounds!.height).toBeLessThan(200);
+    await indicator.click();
+    await expect(page).toHaveURL(/\/metas/);
+    await page.route("**/api/goals", (route) => route.fulfill({ json: { items: [] } }));
+    await page.goto("/");
+    await expect(page.getByRole("link", { name: /Falta aportar este mês/ })).toHaveCount(0);
+    await expect(page.locator(".home-summary-indicators")).toHaveCount(1);
+  });
+}
