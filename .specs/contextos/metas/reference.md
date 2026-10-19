@@ -19,8 +19,7 @@ no per-position or per-account goal, and positions carry no goal reference.
 Only the metric `invested_value` is accepted. The schema CHECK already admits
 `cash_balance` and `net_worth` (SQLite cannot widen a CHECK without rebuilding
 the table), but the domain rejects them until they are implemented. Not
-implemented: other metrics, projecting portfolio appreciation toward the target
-date, and a history/chart of progress.
+implemented: other metrics and a history/chart of progress.
 
 Goals are a separate package rather than a `payables.Kind`: a payable is paid
 down by *flows* linked to real transactions; a goal measures a *stock* owned by
@@ -30,17 +29,53 @@ another engine. See `motores-de-dominio.md` §4.
 
 `internal/goals` — CRUD plus the computed read model.
 
-- `invested_value`: `networth.Compute(...).InvestmentBalance` — the market value
+- `invested_value`: `networth.InvestmentValue` (the `InvestmentBalance` line of
+  `networth.Compute`, without valuing cash or cards) — the market value
   of every investment, gains and losses included. It is the investments line of
   net worth, so linked custody cash (already bank cash) is not counted twice and
-  foreign holdings are valued in BRL with the day's rate; a missing rate makes
-  the read fail instead of omitting the holding.
+  foreign holdings are valued in BRL with the day's rate; a missing rate on a
+  foreign holding makes the read fail instead of omitting it, but unrelated
+  foreign cash without a rate does not.
 - `progress = current_value / target_amount`; it may exceed 1 once reached.
 - Target must be strictly positive; name required. Everything is in BRL and is
   **not** converted to the reference currency.
 - A list reads the metric once, so all goals in a response agree.
 - Create and update commit only after computing the response progress; a
   valuation failure leaves the stored goal unchanged.
+
+### Projection
+
+A goal with a **future** `target_date` carries a `projection` (null without a
+date, or when the date is today or past). It is computed on read, never stored,
+and assumes no new contributions other than the one it solves for.
+
+- **Monthly return.** The average appreciation or depreciation of the
+  investments: `investments.BuildPortfolio` over the trailing 12 months ending
+  today (Modified Dietz, so contributions and withdrawals are not counted as
+  yield). Dietz averages capital over the whole window, so when the portfolio
+  held capital for only part of it the rate is rescaled to the history held
+  (from `PortfolioPosition.CapitalSince`). That period return is compounded to a
+  monthly rate: `(1 + R)^(30.4375 / days) − 1`. Negative when the portfolio lost
+  value. The same rate applies to every goal in a response (measured once).
+- **Not enough history.** Under 30 days of capital, no measurable position, or a
+  total loss gives `monthly_return: null`; the projection then assumes **zero**
+  appreciation (the contribution is the gap split evenly) and the UI says so.
+  `return_partial` flags positions left out of the return as unavailable.
+- **Horizon.** `months_remaining` counts calendar months from today to the
+  target date, a partial last month counting as one; horizons over 1200 months
+  yield no projection.
+- **Projected value** = `current_value × (1 + r)^n`; `projected_progress` is it
+  over the target (it may exceed 1).
+- **Required contribution** is the end-of-month deposit `C` such that
+  `current_value × (1 + r)^n + C × ((1 + r)^n − 1) / r = target` (`gap / n` when
+  `r` is zero). Exact decimal, not rounded; the UI rounds on display.
+- **Status**: `reached` (current value already at or above the target),
+  `on_track` (appreciation alone reaches it; contribution `0`), `behind`.
+
+The return is the portfolio's historical average and the contribution assumes
+it repeats; it is an estimate, not a promise, and the card says so. It measures
+investments with a period yield, so it can differ from `invested_value` (which
+also covers positions without history).
 
 Table `goals` (migration `0005_goals`, both dialects): `id`, `name`, `metric`,
 `target_amount`, `target_date`, `notes`, `created_at`, `updated_at`. The same
@@ -52,15 +87,25 @@ no data is carried over.
 `GET /api/goals`, `POST /api/goals`, `PUT /api/goals/{id}`,
 `DELETE /api/goals/{id}`. A goal DTO carries `id`, `name`, `metric`,
 `target_amount`, `target_date`, `notes`, `current_value`, `progress`,
-`currency_code`, `created_at`, `updated_at` (money as decimal strings).
+`projection`, `currency_code`, `created_at`, `updated_at` (money as decimal
+strings). `projection` is null or `{status, months_remaining, monthly_return,
+return_from, return_partial, projected_value, projected_progress,
+required_monthly_contribution}`; `monthly_return` and `return_from` are null
+without enough history.
 Problems: `invalid-goal-input` (400), `goal-not-found` (404),
 `exchange-unavailable` / `goals-unavailable` (503).
 
 ## Frontend
 
-Page **Metas** at `/metas`: list of goals with a progress bar, current value and
-target, create/edit/delete. All HTTP goes through `src/api`; the page shows the
-backend `current_value` and `progress` as-is.
+Page **Metas** at `/metas`: a two-column grid (one on phone) of goal cards,
+open goals first and reached ones last, each group by ascending target amount.
+A card shows icon, name, metric and "···" menu; progress ring, current value, target and a status tag; target date with
+months left, or "Sem data-alvo definida". A dashed "Adicionar nova meta"
+tile ends the grid; create/edit/delete. All HTTP goes through `src/api`; the page shows the
+backend `current_value`, `progress` and `projection` as-is. A dated goal shows
+the monthly contribution needed ("Nenhum" when appreciation alone is enough)
+plus the average monthly return and the projected value (and percent of the
+target) on the date with no new contributions.
 Completion requires `progress >= 1` using exact decimal comparison. The whole
-percentage and bar stay at most 99% below that boundary; reached goals fill the
-bar while their displayed percentage may exceed 100%.
+percentage and ring stay at most 99% below that boundary; reached goals fill the
+ring while their displayed percentage may exceed 100%.

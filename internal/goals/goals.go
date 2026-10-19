@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
 
+	"github.com/greg0x46/julius/internal/dates"
 	"github.com/greg0x46/julius/internal/db"
 	dbtypes "github.com/greg0x46/julius/internal/db/types"
 	"github.com/greg0x46/julius/internal/money"
@@ -33,8 +34,23 @@ const (
 	MetricInvestedValue Metric = "invested_value"
 )
 
-var metrics = map[Metric]func(networth.Breakdown) decimal.Decimal{
-	MetricInvestedValue: func(b networth.Breakdown) decimal.Decimal { return b.InvestmentBalance },
+// figures holds the metric values read once per request, so every goal in it
+// agrees. Only the investments are valued: an unrelated foreign-currency
+// account without a rate must not make goals fail.
+type figures struct {
+	investedValue decimal.Decimal
+}
+
+var metrics = map[Metric]func(figures) decimal.Decimal{
+	MetricInvestedValue: func(f figures) decimal.Decimal { return f.investedValue },
+}
+
+func readFigures(ctx context.Context, q Querier) (figures, error) {
+	invested, err := networth.InvestmentValue(ctx, q)
+	if err != nil {
+		return figures{}, err
+	}
+	return figures{investedValue: invested}, nil
 }
 
 var (
@@ -53,8 +69,10 @@ type Goal struct {
 	// CurrentValue / TargetAmount and may exceed 1 once the goal is reached.
 	CurrentValue decimal.Decimal
 	Progress     decimal.Decimal
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+	// Projection is set when the goal has a future target date.
+	Projection *Projection
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
 }
 
 type Input struct {
@@ -124,12 +142,33 @@ func nullableDay(t *time.Time) any {
 	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC).Format("2006-01-02")
 }
 
-// withProgress fills the computed fields from a breakdown read once for all
-// the goals of a request, so they agree with each other.
-func withProgress(g Goal, b networth.Breakdown) Goal {
-	g.CurrentValue = metrics[g.Metric](b)
-	g.Progress = g.CurrentValue.Div(g.TargetAmount)
-	return g
+// now is the clock of the projections; tests replace it.
+var now = time.Now
+
+// withComputed fills the computed fields from figures read once for all
+// the goals of a request, so they agree with each other. The return the
+// projections compound is measured once too, and only when a goal has a date.
+func withComputed(ctx context.Context, q Querier, list []Goal) ([]Goal, error) {
+	f, err := readFigures(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	for i := range list {
+		list[i].CurrentValue = metrics[list[i].Metric](f)
+		list[i].Progress = list[i].CurrentValue.Div(list[i].TargetAmount)
+	}
+	if !needsProjection(list) {
+		return list, nil
+	}
+	today := dates.Day(now())
+	est, err := estimateReturn(ctx, q, today)
+	if err != nil {
+		return nil, err
+	}
+	for i := range list {
+		list[i].Projection = projectGoal(list[i], est, today)
+	}
+	return list, nil
 }
 
 func rawGet(ctx context.Context, q Querier, id string) (Goal, error) {
@@ -145,11 +184,11 @@ func Get(ctx context.Context, q Querier, id string) (Goal, error) {
 	if err != nil {
 		return Goal{}, err
 	}
-	b, err := networth.Compute(ctx, q)
+	list, err := withComputed(ctx, q, []Goal{g})
 	if err != nil {
 		return Goal{}, err
 	}
-	return withProgress(g, b), nil
+	return list[0], nil
 }
 
 func List(ctx context.Context, q Querier) ([]Goal, error) {
@@ -172,14 +211,7 @@ func List(ctx context.Context, q Querier) ([]Goal, error) {
 	if len(goals) == 0 {
 		return goals, nil
 	}
-	b, err := networth.Compute(ctx, q)
-	if err != nil {
-		return nil, err
-	}
-	for i := range goals {
-		goals[i] = withProgress(goals[i], b)
-	}
-	return goals, nil
+	return withComputed(ctx, q, goals)
 }
 
 func Create(ctx context.Context, conn *sql.DB, in Input) (Goal, error) {

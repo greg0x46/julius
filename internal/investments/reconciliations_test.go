@@ -378,6 +378,33 @@ func TestProviderPivotIsSharedBetweenBankParcels(t *testing.T) {
 	}
 }
 
+// A provider investment without a currency is in reais, as everywhere else.
+func TestProviderMovementOfAnInvestmentWithNoCurrencyIsInReais(t *testing.T) {
+	f := newLedgerFixture(t)
+	bank := f.addBankTransaction("-1000", day(13))
+	movement := f.addInvestmentMovement()
+	f.exec(`UPDATE financial_investments SET currency_code = NULL`)
+	if _, err := f.linkProvider(bank, movement, "1000"); err != nil {
+		t.Fatalf("pivot from a movement with no currency: %v", err)
+	}
+
+	other := f.addInvestmentMovement()
+	f.exec(`UPDATE financial_investments SET currency_code = NULL`)
+	deposit := f.deposit("500", day(14))
+	if _, err := investments.CreateReconciliation(f.ctx, f.conn, investments.ReconciliationInput{
+		OperationID: deposit.ID, FinancialInvestmentTransactionID: &other, Amount: dec("500"),
+	}); err != nil {
+		t.Fatalf("link to a movement with no currency: %v", err)
+	}
+
+	// A foreign currency is still refused.
+	foreign := f.addInvestmentMovement()
+	f.exec(`UPDATE financial_investments SET currency_code = 'USD' WHERE id = (SELECT investment_id FROM financial_investment_transactions WHERE id = ?)`, foreign)
+	if _, err := f.linkProvider("", foreign, "1000"); !errors.Is(err, investments.ErrInvalidReconciliationLink) {
+		t.Fatalf("USD movement = %v, want ErrInvalidReconciliationLink", err)
+	}
+}
+
 func TestProviderPivotFollowsNormalizedDirection(t *testing.T) {
 	f := newLedgerFixture(t)
 	movement := f.addInvestmentMovement()

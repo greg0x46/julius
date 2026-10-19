@@ -622,6 +622,22 @@ func (l *portfolioLoader) position(ctx context.Context, valued *valuation.Valuat
 	return result, true, nil
 }
 
+// CapitalSince is the first day the position carried capital in the period:
+// its opening day when it opened with value, else the day of its first flow.
+// False when it never held any.
+func (p PortfolioPosition) CapitalSince() (time.Time, bool) {
+	if p.openingBRL.IsPositive() {
+		return p.OpeningOn, true
+	}
+	var first time.Time
+	for _, flow := range p.flowsBRL {
+		if first.IsZero() || flow.day.Before(first) {
+			first = flow.day
+		}
+	}
+	return first, !first.IsZero()
+}
+
 // convertOrNil converts an optional amount; a missing rate leaves it unknown.
 func convertOrNil(ctx context.Context, valued *valuation.Valuation, amount *decimal.Decimal, currency string) *decimal.Decimal {
 	if amount == nil {

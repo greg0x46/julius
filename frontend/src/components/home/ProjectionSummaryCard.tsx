@@ -15,6 +15,7 @@ import { useTimeline } from "../../hooks/useTimeline";
 import { useToday } from "../../hooks/useToday";
 import { formatDateOnly } from "../../presentation/dates";
 import { formatReportMoney } from "../../presentation/money";
+import { compareDecimals, isZeroDecimal } from "../../presentation/decimal";
 import { EmptyState, Section } from "../layout";
 import { Money } from "../shared/Money";
 
@@ -22,7 +23,7 @@ const dateFormat = "YYYY-MM-DD";
 
 function lowestPoint(points: TimelineDayPoint[]): TimelineDayPoint | null {
   return points.reduce<TimelineDayPoint | null>(
-    (lowest, point) => (lowest === null || Number(point.balance) < Number(lowest.balance) ? point : lowest),
+    (lowest, point) => (lowest === null || compareDecimals(point.balance, lowest.balance) < 0 ? point : lowest),
     null,
   );
 }
@@ -70,8 +71,8 @@ function BalanceFigure({ label, value, date }: { label: string; value: string; d
 function hasNoActivity(series: { starting_balance: string; points: TimelineDayPoint[]; entries: unknown[] }): boolean {
   return (
     series.entries.length === 0 &&
-    Number(series.starting_balance) === 0 &&
-    series.points.every((point) => Number(point.balance) === 0)
+    isZeroDecimal(series.starting_balance) &&
+    series.points.every((point) => isZeroDecimal(point.balance))
   );
 }
 

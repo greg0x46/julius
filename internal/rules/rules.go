@@ -87,21 +87,49 @@ func textMatches(candidateValue *string, operator ConditionOperator, value strin
 	return strings.Contains(nc, nv)
 }
 
+// ParseWithinPercent parses a "<reference>:<tolerance percent>" Value. ok is
+// false for a malformed value or a zero reference, which can never match.
+func ParseWithinPercent(value string) (reference, tolerance decimal.Decimal, ok bool) {
+	parts := strings.SplitN(value, ":", 2)
+	if len(parts) != 2 {
+		return decimal.Zero, decimal.Zero, false
+	}
+	reference, err := decimal.NewFromString(strings.TrimSpace(parts[0]))
+	if err != nil || reference.IsZero() {
+		return decimal.Zero, decimal.Zero, false
+	}
+	tolerance, err = decimal.NewFromString(strings.TrimSpace(parts[1]))
+	if err != nil {
+		return decimal.Zero, decimal.Zero, false
+	}
+	return reference, tolerance, true
+}
+
+// ParseDayRange parses a "<min>:<max>" Value. ok is false for a malformed
+// value; the bounds themselves are not range-checked here.
+func ParseDayRange(value string) (min, max int, ok bool) {
+	parts := strings.SplitN(value, ":", 2)
+	if len(parts) != 2 {
+		return 0, 0, false
+	}
+	min, err := strconv.Atoi(strings.TrimSpace(parts[0]))
+	if err != nil {
+		return 0, 0, false
+	}
+	max, err = strconv.Atoi(strings.TrimSpace(parts[1]))
+	if err != nil {
+		return 0, 0, false
+	}
+	return min, max, true
+}
+
 // Malformed amount conditions never match.
 func withinPercentMatches(candidateAmount *decimal.Decimal, value string) bool {
 	if candidateAmount == nil {
 		return false
 	}
-	parts := strings.SplitN(value, ":", 2)
-	if len(parts) != 2 {
-		return false
-	}
-	reference, err := decimal.NewFromString(strings.TrimSpace(parts[0]))
-	if err != nil || reference.IsZero() {
-		return false
-	}
-	tolerance, err := decimal.NewFromString(strings.TrimSpace(parts[1]))
-	if err != nil {
+	reference, tolerance, ok := ParseWithinPercent(value)
+	if !ok {
 		return false
 	}
 	diff := candidateAmount.Sub(reference).Abs()
@@ -118,16 +146,8 @@ func dayRangeMatches(candidateDay *int, value string) bool {
 	if candidateDay == nil {
 		return false
 	}
-	parts := strings.SplitN(value, ":", 2)
-	if len(parts) != 2 {
-		return false
-	}
-	min, err := strconv.Atoi(strings.TrimSpace(parts[0]))
-	if err != nil {
-		return false
-	}
-	max, err := strconv.Atoi(strings.TrimSpace(parts[1]))
-	if err != nil {
+	min, max, ok := ParseDayRange(value)
+	if !ok {
 		return false
 	}
 	day := *candidateDay

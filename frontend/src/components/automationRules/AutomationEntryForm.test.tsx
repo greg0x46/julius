@@ -81,18 +81,32 @@ describe("reconcile category action", () => {
     await choose("Selecione uma recorrência", commitment.name);
     expect(screen.getByText("Despesa: Aluguel")).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(screen.getByText("Informe um valor esperado maior que zero.")).toBeInTheDocument();
+    fireEvent.change(screen.getByRole("spinbutton", { name: "Valor esperado" }), { target: { value: "1500" } });
+    await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
     expect(onSubmit).toHaveBeenLastCalledWith(expect.objectContaining({ actionTypes: ["reconcile", "set_category"], categoryId: category.id }));
     clearCategory();
     await choose("Categoria", otherCategory.name);
     expect(screen.getByRole("combobox", { name: "Categoria a aplicar (opcional)" })).toHaveValue("");
     expect(screen.getByText("Sem categoria a aplicar")).toBeInTheDocument();
-  }, 30_000);
+  }, 60_000);
 
   it("defaults from a new commitment's category", async () => {
     renderForm(null);
     await userEvent.click(screen.getByRole("checkbox", { name: "Conciliar recorrência" }));
     await choose("Categoria", category.name);
     expect(screen.getByText("Despesa: Aluguel")).toBeInTheDocument();
+  });
+
+  it("never sends a fractional day of the month for the commitment", async () => {
+    const { onSubmit } = renderForm({ rule, linkedCommitment: commitment });
+    const input = screen.getByRole("spinbutton", { name: "Dia do mês" });
+    fireEvent.change(input, { target: { value: "6.5" } });
+    fireEvent.blur(input);
+    await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
+    expect(onSubmit).toHaveBeenCalledOnce();
+    expect(Number.isInteger(onSubmit.mock.calls[0]![0].reconcile.commitment.day_of_month)).toBe(true);
   });
 
   it("lists both actions on the same automation", () => {

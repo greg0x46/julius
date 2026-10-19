@@ -358,16 +358,33 @@ func FixedIncomeCode(subtype, issuerCNPJ *string, rate *decimal.Decimal, rateTyp
 	return &code
 }
 
+// ErrSyncedAssetCurrency means the catalog asset a provider holding's identity
+// resolves to is kept in another currency, so the holding cannot share it.
+var ErrSyncedAssetCurrency = errors.New("catalog asset is in another currency than the provider holding")
+
+// currency is the holding's currency, reais when the provider states none.
+func (h SyncedHolding) currency() string {
+	if present(h.CurrencyCode) {
+		return strings.ToUpper(strings.TrimSpace(*h.CurrencyCode))
+	}
+	return "BRL"
+}
+
 // ResolveSyncedAsset finds or creates the catalog asset a provider holding
 // belongs to — the same derivation listSyncedPositions uses, so a quote is
-// always stored against the asset the position reports.
+// always stored against the asset the position reports. An asset of the same
+// identity kept in another currency is not shared (ErrSyncedAssetCurrency):
+// its price series would mix currencies.
 func ResolveSyncedAsset(ctx context.Context, q Querier, h SyncedHolding) (Asset, error) {
-	currency := "BRL"
-	if present(h.CurrencyCode) {
-		currency = *h.CurrencyCode
-	}
 	name, ticker, kind := h.assetIdentity()
-	return ensureAsset(ctx, q, name, ticker, kind, currency)
+	asset, err := ensureAsset(ctx, q, name, ticker, kind, h.currency())
+	if err != nil {
+		return Asset{}, err
+	}
+	if asset.CurrencyCode != h.currency() {
+		return Asset{}, ErrSyncedAssetCurrency
+	}
+	return asset, nil
 }
 
 // unitPrice is the holding's price per unit on its as-of day. amount ÷
@@ -414,6 +431,9 @@ func RecordSyncedQuotes(ctx context.Context, q Querier, h SyncedHolding, rawImpo
 		return nil
 	}
 	asset, err := ResolveSyncedAsset(ctx, q, h)
+	if errors.Is(err, ErrSyncedAssetCurrency) {
+		return nil
+	}
 	if err != nil {
 		return err
 	}

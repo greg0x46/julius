@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strconv"
 	"testing"
 	"time"
@@ -18,7 +19,7 @@ type fakeWriter struct {
 	envelopes []RawResponseEnvelope
 }
 
-func (w *fakeWriter) Write(envelope RawResponseEnvelope) (string, error) {
+func (w *fakeWriter) Write(_ context.Context, envelope RawResponseEnvelope) (string, error) {
 	w.envelopes = append(w.envelopes, envelope)
 	return fmt.Sprintf("raw-%d", len(w.envelopes)), nil
 }
@@ -33,7 +34,7 @@ func newTestAdapter(t *testing.T, mux *http.ServeMux) (*Adapter, *fakeWriter) {
 	cfg.ItemID = "item-1"
 	cfg.MaxAttempts = 3
 	adapter := NewAdapter(cfg, writer, server.Client())
-	adapter.sleep = func(time.Duration) {} // no real waiting in tests
+	adapter.sleep = func(context.Context, time.Duration) error { return nil } // no real waiting in tests
 	return adapter, writer
 }
 
@@ -342,5 +343,95 @@ func TestAdapterGetInvestmentTransactionsRefusesATruncatedHistory(t *testing.T) 
 	}
 	if providerErr.ExternalAccountID == nil || *providerErr.ExternalAccountID != "inv-1" {
 		t.Errorf("ExternalAccountID = %v, want the investment named so the cap can be raised knowingly", providerErr.ExternalAccountID)
+	}
+}
+
+// The cursor comes out of a decoded query string and must be re-encoded when
+// it is sent back, along with ids interpolated into paths and queries.
+func TestAdapterEscapesCursorAndIDsInRequests(t *testing.T) {
+	const cursor = "a+b&c=d"
+	const accountID = "acc/1 x"
+	var seenCursor, seenAccount string
+	mux := http.NewServeMux()
+	mux.HandleFunc("/auth", authHandler)
+	mux.HandleFunc("/v2/transactions", func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		if q.Get("after") == "" {
+			json.NewEncoder(w).Encode(map[string]any{
+				"results": []map[string]any{},
+				"next":    "https://api.pluggy.ai/v2/transactions?accountId=" + url.QueryEscape(accountID) + "&after=" + url.QueryEscape(cursor),
+			})
+			return
+		}
+		seenCursor, seenAccount = q.Get("after"), q.Get("accountId")
+		if len(q) != 2 {
+			t.Errorf("query = %v, want only accountId and after", q)
+		}
+		json.NewEncoder(w).Encode(map[string]any{"results": []map[string]any{}, "next": nil})
+	})
+	var itemPath string
+	mux.HandleFunc("/items/", func(w http.ResponseWriter, r *http.Request) {
+		itemPath = r.URL.EscapedPath()
+		w.WriteHeader(http.StatusNotFound)
+	})
+	adapter, _ := newTestAdapter(t, mux)
+	adapter.config.ItemID = "item/../x?y"
+
+	if err := adapter.IterTransactionPages(context.Background(), accountID, func(TransactionsPage) error { return nil }); err != nil {
+		t.Fatalf("IterTransactionPages: %v", err)
+	}
+	if seenCursor != cursor || seenAccount != accountID {
+		t.Errorf("server saw after=%q accountId=%q, want %q / %q", seenCursor, seenAccount, cursor, accountID)
+	}
+	_, _, _ = adapter.GetSource(context.Background())
+	if itemPath != "/items/item%2F..%2Fx%3Fy" {
+		t.Errorf("item path = %q, want the id escaped as one segment", itemPath)
+	}
+}
+
+// A rate-limit wait of up to MaxRateLimitWait must not outlive the run.
+func TestAdapterRateLimitWaitStopsWhenContextIsCancelled(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/auth", authHandler)
+	mux.HandleFunc("/accounts", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Retry-After", "30")
+		w.WriteHeader(http.StatusTooManyRequests)
+	})
+	adapter, _ := newTestAdapter(t, mux)
+	adapter.sleep = sleepContext
+	adapter.config.MaxRateLimitWait = time.Minute
+
+	ctx, cancel := context.WithCancel(context.Background())
+	time.AfterFunc(100*time.Millisecond, cancel)
+	start := time.Now()
+	_, err := adapter.GetAccounts(ctx)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("err = %v, want context.Canceled", err)
+	}
+	if elapsed := time.Since(start); elapsed > 5*time.Second {
+		t.Errorf("returned after %s, want promptly after cancellation", elapsed)
+	}
+}
+
+func TestAdapterBodyReadIsBounded(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/auth", authHandler)
+	mux.HandleFunc("/accounts", func(w http.ResponseWriter, r *http.Request) {
+		chunk := make([]byte, 1<<20)
+		for i := 0; i <= maxResponseBytes>>20; i++ {
+			if _, err := w.Write(chunk); err != nil {
+				return
+			}
+		}
+	})
+	adapter, writer := newTestAdapter(t, mux)
+
+	if _, err := adapter.GetAccounts(context.Background()); err == nil {
+		t.Fatal("GetAccounts accepted an oversized body")
+	}
+	for _, e := range writer.envelopes {
+		if len(e.Content) > maxResponseBytes {
+			t.Errorf("persisted %d bytes, want at most %d", len(e.Content), maxResponseBytes)
+		}
 	}
 }

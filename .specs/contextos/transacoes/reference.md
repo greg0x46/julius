@@ -49,7 +49,7 @@ marking it ignored — see the note on reporting exclusions in
 - Credit card (`cardflow.go`/`cardtotal.go`, moved from `internal/payables`):
   `CardDueDates`/`ProjectedEntryDate` (the date a card purchase becomes a cash
   outflow — the bill's due date, not `occurred_at`), `CreditAccountIDs`,
-  `CardMetadataByTransaction` and `CreditCardTransactionTotal(At)` (how much is
+  `CardTransactionSignals` and `CreditCardTransactionTotal(At)` (how much is
   owed in the open cycle, computed from eligible entries, never from
   `financial_accounts.balance`).
 - `balance.go` — `CashOnHandByCurrency`: money in non-credit accounts
@@ -127,8 +127,9 @@ The persisted `exchange_rates` cache is unchanged. Fresh v1 `frankfurter` rows
 continue to work, including inverse conversion, with their original attribution;
 new or refreshed rows use `frankfurter-v2-blended`. Reports can therefore mix v1
 ECB and v2 blended observations. No cache reset, account migration or native
-amount rewrite occurs. Existing one-hour TTL, one-minute rate cooldown,
-historical final-row reuse and seven-day maximum lag remain. Failed lookups
+amount rewrite occurs. Existing one-hour TTL, one-minute rate cooldown (a
+provider failure cools down the whole pair, shared by every request; a missing
+history cools down only its day), historical final-row reuse and seven-day maximum lag remain. Failed lookups
 may reuse stored observations effective on/before the requested day, disclosed
 as stale; unsupported currencies without a stored rate are never converted.
 
@@ -156,7 +157,7 @@ only after those checks. Status alone never implies inclusion or settlement.
 | Consumer | Current treatment |
 | --- | --- |
 | `transactions.Query`, `SpendingByCategory`, `CategoryBreakdown` | Eligible pending and posted purchases contribute once per stored row; category spending is BRL-only. Explicit status filters can narrow the report. |
-| Report period (`effectiveDate`) | Default `occurred_at`: each installment uses its own provider date. `paid_at`: cards use a matching bill's due date, otherwise `occurred_at + 1 month`. Bank entries keep their transaction date. Grouping and ordering still use `occurred_at`. |
+| Report period (`effectiveDate`) | Default `occurred_at`: each installment uses its own provider date. `paid_at`: cards use a matching bill's due date, otherwise `occurred_at + 1 month` clamped to the month end (Jan 31 gives Feb 28). Due dates are calendar days anchored in the request timezone. Bank entries keep their transaction date. Grouping and ordering still use `occurred_at`. |
 | `CardDueDates.ProjectedEntryDate` (Timeline/projections) | Card cash is projected on the associated bill due date, then a forecast month or inferred cycle. `billForecastDate` informs this projection, not report period filtering. Payment legs use the bill they settle. |
 | `CreditCardTransactionTotal(At)` | Pending/posted entries count only in the current open cycle; ignored entries do not. Category transfer exclusion is bypassed so a payment assigned to that cycle still reduces debt. Forecast month alone does not establish a debt cycle. |
 | `CashOnHandByCurrency` / net-worth history | Synced bank cash uses provider balances; card balances are not cash. Backfill uses eligible synced non-credit entries, including pending, with inclusion/category exclusions bypassed. Manual bank balance/history uses posted movements only. |
@@ -189,6 +190,12 @@ the previous amount, and replay adds no expense
 - `POST /api/transactions/query`, `GET /api/transactions/spending-by-category`,
   `GET /api/transactions/category-breakdown`,
   `PUT /api/transactions/{id}/inclusion`, `PUT /api/transactions/{id}/category`.
+- Spending by category accepts an explicit `scenario_id` and reads its monthly
+  events through `projections.List`. Only unrealized outflows contribute, as
+  positive expense magnitudes in separate `source=projetado` rows. Debt plans,
+  signed standalone entries and recurring schedules follow the same direction
+  and realization rules as Timeline; incoming events never increase spending
+  (`TestSpendingProjectionUsesCanonicalDirectionAndRealization`).
 - In `POST /api/transactions/query`, `filters.classification` accepts `inflow`
   (positive amount), `outflow` (negative amount) and `unclassified`; the UI
   offers only inflows and outflows. Any other value is 400
@@ -226,7 +233,10 @@ the previous amount, and replay adds no expense
   and account timestamp are written atomically. Its response is the account.
   Currency and opening balance are locked once transactions (even deleted)
   or adjustments exist (409); account writes and transaction creation share
-  a row lock to serialize this check. Archive/reactivate via PUT `archived`.
+  a row lock to serialize this check. Opening balances compare as exact decimals,
+  so equivalent representations such as `100.00` and `100` still allow name
+  edits and archive/reactivate via PUT `archived`
+  (`TestManualAccountOpeningBalanceUsesDecimalEquality`).
   Archived accounts retain balances/history and reject creation/update of
   transactions targeting them (409), and new adjustments (409).
 - Investments: `GET /api/investments[/{id}][/transactions]`.

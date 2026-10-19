@@ -35,6 +35,18 @@ describe("ManualTransferForm", () => {
     }));
     await waitFor(() => expect(done).toHaveBeenCalledOnce());
   });
+  it("keeps whole digits when backspacing a grouped amount", { timeout: 60_000 }, async () => {
+    const user = userEvent.setup();
+    vi.mocked(accounts.listAccounts).mockResolvedValue([source, destination]);
+    render(<QueryTestProvider><ManualTransferForm onClose={vi.fn()} onCreated={vi.fn()} /></QueryTestProvider>);
+    for (const name of ["Valor enviado", "Valor recebido", "Tarifa registrada (opcional)"]) {
+      const input = await screen.findByRole("spinbutton", { name });
+      await user.type(input, "1234");
+      expect(input).toHaveValue("1.234");
+      await user.type(input, "{Backspace}");
+      expect(input).toHaveValue("123");
+    }
+  });
   it("explains the prerequisite when fewer than two manual accounts exist", async () => {
     vi.mocked(accounts.listAccounts).mockResolvedValue([source, bankAccount]);
     render(<QueryTestProvider><ManualTransferForm onClose={vi.fn()} onCreated={vi.fn()} /></QueryTestProvider>);

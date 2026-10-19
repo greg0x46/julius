@@ -81,9 +81,12 @@ not reconciled to another occurrence. It deliberately differs from
 `CandidatesByMonth` by **not** requiring the commitment's account or limiting
 the transaction to the occurrence's month (manual links have a 45-day reach).
 Neither path requires the commitment's category.
+The transaction-side reconciliation read uses the same cash-movement eligibility
+as occurrence resolution: transfer-category payments retain both their current
+reconciliation and available occurrences, while ignored transactions offer neither.
 
 A transaction marked ignored loses its link (`UnlinkIfPresent`, in
-`onIgnoredHook` together with `payables`); a detached occurrence is unaffected,
+`ledger.OnIgnored` together with `payables`, also fired by sync updates); a detached occurrence is unaffected,
 because the decision is about the occurrence.
 
 ## HTTP routes
@@ -92,7 +95,9 @@ The `{id}` of every route below is the scenario id — the same one projection,
 the automation `reconcile` target and occurrence decisions use.
 
 `GET/POST /api/recurring-scenarios`,
-`PUT/PATCH/DELETE /api/recurring-scenarios/{id}`.
+`PUT/PATCH/DELETE /api/recurring-scenarios/{id}`. A `PUT` that changes the
+calendar deletes the manual decisions (links and detachments) whose date is no
+longer an occurrence of the new schedule, releasing their transactions.
 
 The write collection is a sibling of `/api/scenarios`, not a sub-collection
 `/api/scenarios/recurring`: a literal segment where `/api/scenarios/{id}`

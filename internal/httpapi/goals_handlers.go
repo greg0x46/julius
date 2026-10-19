@@ -17,17 +17,48 @@ import (
 const goalCurrency = "BRL"
 
 type goalDTO struct {
-	ID           string    `json:"id"`
-	Name         string    `json:"name"`
-	Metric       string    `json:"metric"`
-	TargetAmount string    `json:"target_amount"`
-	TargetDate   *string   `json:"target_date"`
-	Notes        *string   `json:"notes"`
-	CurrentValue string    `json:"current_value"`
-	Progress     string    `json:"progress"`
-	CurrencyCode string    `json:"currency_code"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
+	ID           string             `json:"id"`
+	Name         string             `json:"name"`
+	Metric       string             `json:"metric"`
+	TargetAmount string             `json:"target_amount"`
+	TargetDate   *string            `json:"target_date"`
+	Notes        *string            `json:"notes"`
+	CurrentValue string             `json:"current_value"`
+	Progress     string             `json:"progress"`
+	Projection   *goalProjectionDTO `json:"projection"`
+	CurrencyCode string             `json:"currency_code"`
+	CreatedAt    time.Time          `json:"created_at"`
+	UpdatedAt    time.Time          `json:"updated_at"`
+}
+
+// goalProjectionDTO is the goal at its target date: ratios and money are
+// decimal strings. monthly_return is null when the history is too short to
+// state one, and the projection then assumes no appreciation.
+type goalProjectionDTO struct {
+	Status                      string  `json:"status"`
+	MonthsRemaining             int     `json:"months_remaining"`
+	MonthlyReturn               *string `json:"monthly_return"`
+	ReturnFrom                  *string `json:"return_from"`
+	ReturnPartial               bool    `json:"return_partial"`
+	ProjectedValue              string  `json:"projected_value"`
+	ProjectedProgress           string  `json:"projected_progress"`
+	RequiredMonthlyContribution string  `json:"required_monthly_contribution"`
+}
+
+func goalProjectionToDTO(p *goals.Projection) *goalProjectionDTO {
+	if p == nil {
+		return nil
+	}
+	return &goalProjectionDTO{
+		Status:                      string(p.Status),
+		MonthsRemaining:             p.MonthsRemaining,
+		MonthlyReturn:               optionalMoney(p.MonthlyReturn),
+		ReturnFrom:                  optionalDay(p.ReturnFrom),
+		ReturnPartial:               p.ReturnPartial,
+		ProjectedValue:              money.CanonicalDecimal(p.ProjectedValue),
+		ProjectedProgress:           money.CanonicalDecimal(p.ProjectedProgress),
+		RequiredMonthlyContribution: money.CanonicalDecimal(p.RequiredMonthlyContribution),
+	}
 }
 
 func goalToDTO(g goals.Goal) goalDTO {
@@ -40,6 +71,7 @@ func goalToDTO(g goals.Goal) goalDTO {
 		Notes:        g.Notes,
 		CurrentValue: money.CanonicalDecimal(g.CurrentValue),
 		Progress:     money.CanonicalDecimal(g.Progress),
+		Projection:   goalProjectionToDTO(g.Projection),
 		CurrencyCode: goalCurrency,
 		CreatedAt:    g.CreatedAt,
 		UpdatedAt:    g.UpdatedAt,

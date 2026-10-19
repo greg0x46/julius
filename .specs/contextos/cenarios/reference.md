@@ -38,6 +38,20 @@ scenarios.
 `POST/PUT/DELETE .../transactions[/{transactionId}]`,
 `POST/DELETE .../transactions/{transactionId}/realizations[/{realizationId}]`.
 
+Nested installment updates/deletions and realization creation/deletion validate
+that the installment belongs to the scenario named in the URL. A missing scenario
+or a mismatched/missing installment returns 404 before changing any data; deleting
+a realization also checks that it belongs to the named installment.
+
+Readjusting with `abater_do_final` keeps the plan's cadence, inferred from the
+most common gap between its installments (weekly, biweekly, otherwise monthly).
+
+Linking a real transaction to a standalone event (`PUT /api/scenarios/{id}/planned-transactions/{eventKey}/realization`)
+requires a considered BRL transaction flowing in the direction of the event's
+amount sign, like a recurring occurrence. Installment status and accumulated
+deviation compare allocations (positive magnitudes) with the amount's
+magnitude, so a fully realized standalone expense is `paga`.
+
 ## Frontend
 
 `/cenarios` — "Simule decisões hipotéticas" (standalone scenarios). The payment
@@ -49,3 +63,9 @@ Payables).
 Equal installment generation floors the exact quotient to BRL cents; the last
 installment keeps the full remainder, including fractional cents. It does not
 round division before flooring ([policy](../../precisao-monetaria.md)).
+
+Fixed-amount installment generation and reduce-term readjustment derive the
+count from exact integer quotient and remainder. Every installment stays at or
+below the chosen amount, including remainders beyond 16 decimal places.
+Generation and readjustment reject more than 10,000 installments per operation
+before allocating a plan or replacing existing installments; HTTP returns 422.

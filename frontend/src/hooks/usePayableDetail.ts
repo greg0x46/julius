@@ -15,14 +15,19 @@ export type PayableDetailState = {
   retrying: boolean;
 };
 
-export function usePayableDetail(payableId: string, kind: PayableKind) {
+/**
+ * `requestedKind` is only a hint (the `?kind=` of the link): once the payable
+ * loads, its own kind drives the vocabulary and the eligible-transaction direction.
+ */
+export function usePayableDetail(payableId: string, requestedKind: PayableKind) {
   const queryClient = useQueryClient();
-  const baseKey = queryKeys.payablesOfKind(kind);
   const detailQuery = useQuery({
-    queryKey: [...baseKey, payableId],
+    queryKey: [...queryKeys.payablesOfKind(requestedKind), payableId],
     queryFn: ({ signal }) => getPayable(payableId, signal),
   });
   const snapshot = detailQuery.data ?? null;
+  const kind = snapshot?.kind ?? requestedKind;
+  const baseKey = queryKeys.payablesOfKind(kind);
   const freshness: PayableDetailState["freshness"] = detailQuery.isPending
     ? "loading"
     : detailQuery.isError
@@ -68,6 +73,7 @@ export function usePayableDetail(payableId: string, kind: PayableKind) {
   });
 
   return {
+    kind,
     state,
     retry,
     search,

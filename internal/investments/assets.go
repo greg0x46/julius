@@ -137,10 +137,13 @@ func normalizeAssetInput(in AssetInput) (AssetInput, string, error) {
 }
 
 func assetKeyExists(ctx context.Context, q Querier, canonicalKey, exceptID string) (bool, error) {
+	// An empty exceptID must not reach a Postgres uuid comparison.
+	query, args := `SELECT COUNT(*) FROM investment_assets WHERE canonical_key = ?`, []any{canonicalKey}
+	if exceptID != "" {
+		query, args = query+` AND id <> ?`, append(args, exceptID)
+	}
 	var count int
-	err := q.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM investment_assets WHERE canonical_key = ? AND id <> ?`,
-		canonicalKey, exceptID).Scan(&count)
+	err := q.QueryRowContext(ctx, query, args...).Scan(&count)
 	return count > 0, err
 }
 
@@ -294,10 +297,18 @@ func ensureAsset(ctx context.Context, q Querier, rawName string, rawTicker *stri
 	if currency == "" {
 		currency = "BRL"
 	}
-	now, id := db.FormatTime(time.Now()), uuid.NewString()
-	_, err = q.ExecContext(ctx, `INSERT INTO investment_assets (id, canonical_key, name, ticker, asset_type, asset_class, currency_code, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, id, key, name, nullableString(ticker), kind, InferAssetClass(kind), currency, now, now)
+	// A concurrent request may insert the same identity between the lookup and
+	// here; DO NOTHING lets the loser read the winner's row.
+	now := db.FormatTime(time.Now())
+	if _, err = q.ExecContext(ctx, `INSERT INTO investment_assets (id, canonical_key, name, ticker, asset_type, asset_class, currency_code, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (canonical_key) DO NOTHING`, uuid.NewString(), key, name, nullableString(ticker), kind, InferAssetClass(kind), currency, now, now); err != nil {
+		return Asset{}, err
+	}
+	asset, found, err = findAssetByKey(ctx, q, key)
 	if err != nil {
 		return Asset{}, err
 	}
-	return GetAsset(ctx, q, id)
+	if !found {
+		return Asset{}, sql.ErrNoRows
+	}
+	return asset, nil
 }

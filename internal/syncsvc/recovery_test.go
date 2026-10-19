@@ -213,3 +213,51 @@ func TestFailRunIsFencedByOwner(t *testing.T) {
 		t.Errorf("sync_failures = %d, want 1", failures)
 	}
 }
+
+func TestFailUnclaimedRunsFailsOnlyRunsPastTheDeadline(t *testing.T) {
+	conn := newTestConn(t)
+	_, oldRun := newSyncRun(t, conn)
+	freshRun, claimedRun := uuid.NewString(), uuid.NewString()
+	for _, id := range []string{freshRun, claimedRun} {
+		sourceID := uuid.NewString()
+		now := db.FormatTime(time.Now())
+		if _, err := conn.Exec(`INSERT INTO data_sources (id, provider, external_item_id, created_at, updated_at)
+			VALUES (?, 'pluggy', ?, ?, ?)`, sourceID, "item-"+id, now, now); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := conn.Exec(`INSERT INTO sync_runs (id, source_id, status, started_at) VALUES (?, ?, 'in_progress', ?)`, id, sourceID, now); err != nil {
+			t.Fatal(err)
+		}
+	}
+	old := db.FormatTime(time.Now().Add(-time.Hour))
+	for _, id := range []string{oldRun, claimedRun} {
+		if _, err := conn.Exec(`UPDATE sync_runs SET started_at = ? WHERE id = ?`, old, id); err != nil {
+			t.Fatal(err)
+		}
+	}
+	claimRun(t, conn, claimedRun, "busy-worker", time.Now())
+
+	failed, err := syncsvc.FailUnclaimedRuns(context.Background(), conn, time.Now(), 10*time.Minute)
+	if err != nil {
+		t.Fatalf("FailUnclaimedRuns: %v", err)
+	}
+	if len(failed) != 1 || failed[0] != oldRun {
+		t.Fatalf("failed = %v, want [%s]", failed, oldRun)
+	}
+	if status, code := runStatus(t, conn, oldRun); status != "failed" || code.String != "worker_unavailable" {
+		t.Errorf("old run status=%s code=%v, want failed/worker_unavailable", status, code)
+	}
+	for _, id := range []string{freshRun, claimedRun} {
+		if status, _ := runStatus(t, conn, id); status != "in_progress" {
+			t.Errorf("run %s status = %s, want in_progress", id, status)
+		}
+	}
+	var failures int
+	conn.QueryRow(`SELECT COUNT(*) FROM sync_failures WHERE sync_run_id = ? AND stage = 'worker_unavailable' AND error_code = 'worker_unavailable'`, oldRun).Scan(&failures)
+	if failures != 1 {
+		t.Errorf("failures = %d, want 1", failures)
+	}
+	if again, err := syncsvc.FailUnclaimedRuns(context.Background(), conn, time.Now(), 10*time.Minute); err != nil || len(again) != 0 {
+		t.Fatalf("second sweep = %v err=%v, want none", again, err)
+	}
+}

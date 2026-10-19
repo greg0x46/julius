@@ -13,9 +13,21 @@ const goal: Goal = {
   notes: null,
   current_value: "45210.5",
   progress: "0.452105",
+  projection: null,
   currency_code: "BRL",
   created_at: "2026-10-01T12:00:00Z",
   updated_at: "2026-10-01T12:00:00Z",
+};
+
+const projection = {
+  status: "on_track",
+  months_remaining: 6,
+  monthly_return: "0.01",
+  return_from: "2026-01-01",
+  return_partial: false,
+  projected_value: "110000",
+  projected_progress: "1.1",
+  required_monthly_contribution: "0",
 };
 
 const write = {
@@ -43,6 +55,25 @@ describe("parseGoal", () => {
     expect(parseGoalList({ items: [goal] })).toEqual([goal]);
   });
 
+  it("parses a projection and keeps its decimals as sent", () => {
+    const projected: Goal = {
+      ...goal,
+      projection: {
+        status: "behind",
+        months_remaining: 14,
+        monthly_return: "0.0081234567",
+        return_from: "2026-01-01",
+        return_partial: false,
+        projected_value: "52000.123456789",
+        projected_progress: "0.52000123",
+        required_monthly_contribution: "3100.5",
+      },
+    };
+    expect(parseGoal(projected)).toEqual(projected);
+    const unmeasured = { ...projected.projection!, monthly_return: null, return_from: null };
+    expect(parseGoal({ ...projected, projection: unmeasured }).projection).toEqual(unmeasured);
+  });
+
   it.each([
     ["a numeric amount", { target_amount: 100000 }],
     ["an unknown metric", { metric: "net_worth_forecast" }],
@@ -50,6 +81,11 @@ describe("parseGoal", () => {
     ["a malformed date", { target_date: "31/12/2027" }],
     ["a missing progress", { progress: undefined }],
     ["an unexpected field", { portfolio_id: null }],
+    ["a missing projection", { projection: undefined }],
+    ["an unknown projection status", { projection: { ...projection, status: "late" } }],
+    ["a numeric contribution", { projection: { ...projection, required_monthly_contribution: 100 } }],
+    ["an extra projection field", { projection: { ...projection, confidence: "high" } }],
+    ["a zero horizon", { projection: { ...projection, months_remaining: 0 } }],
   ])("rejects %s", (_label, change) => {
     expect(() => parseGoal({ ...goal, ...change })).toThrow(TypeError);
   });

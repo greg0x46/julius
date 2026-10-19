@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"time"
 
 	"github.com/shopspring/decimal"
 )
@@ -102,8 +103,14 @@ func Readjust(ctx context.Context, conn *sql.DB, scenarioID string, remainingAmo
 	var drafts []GeneratedInstallment
 	switch strategy {
 	case StrategyReduceTerm:
-		drafts = reduceTermInstallments(balance, affected)
+		drafts, err = reduceTermInstallments(balance, affected, inferCadence(list))
+		if err != nil {
+			return nil, err
+		}
 	case StrategyRedistribute:
+		if len(affected) > MaxInstallments {
+			return nil, ErrTooManyInstallments
+		}
 		drafts = redistributeInstallments(balance, affected)
 	}
 
@@ -142,7 +149,7 @@ func Readjust(ctx context.Context, conn *sql.DB, scenarioID string, remainingAmo
 // remainder installment is still around, picking "last by date" can lock
 // onto that tiny remainder and blow the count up (e.g. 24 -> 95) instead of
 // the plan's actual installment value.
-func reduceTermInstallments(balance decimal.Decimal, affected []ScenarioTransaction) []GeneratedInstallment {
+func reduceTermInstallments(balance decimal.Decimal, affected []ScenarioTransaction, cadence Cadence) ([]GeneratedInstallment, error) {
 	referenceAmount := affected[0].Amount
 	for _, st := range affected[1:] {
 		if st.Amount.GreaterThan(referenceAmount) {
@@ -151,17 +158,52 @@ func reduceTermInstallments(balance decimal.Decimal, affected []ScenarioTransact
 	}
 	startDate := affected[0].ProjectedAt
 
-	amounts := splitByAmount(balance, referenceAmount)
+	amounts, err := splitByAmount(balance, referenceAmount)
+	if err != nil {
+		return nil, err
+	}
 	n := len(amounts)
 	installments := make([]GeneratedInstallment, n)
 	for i, amount := range amounts {
 		installments[i] = GeneratedInstallment{
 			Description: fmt.Sprintf("Parcela %d/%d (reajustada)", i+1, n),
 			Amount:      amount,
-			ProjectedAt: startDate.AddDate(0, i, 0),
+			ProjectedAt: cadence.step(startDate, i),
 		}
 	}
-	return installments
+	return installments, nil
+}
+
+// inferCadence recovers a plan's cadence from the gaps between its
+// installments, since it is not stored: the most common gap decides (up to 7
+// days weekly, up to 14 biweekly, otherwise monthly) and ties, or fewer than
+// two installments, fall back to monthly.
+func inferCadence(installments []ScenarioTransaction) Cadence {
+	days := make([]time.Time, len(installments))
+	for i, st := range installments {
+		days[i] = st.ProjectedAt
+	}
+	sort.Slice(days, func(i, j int) bool { return days[i].Before(days[j]) })
+	var weekly, biweekly, monthly int
+	for i := 1; i < len(days); i++ {
+		switch gap := int(days[i].Sub(days[i-1]).Hours() / 24); {
+		case gap <= 0:
+		case gap <= 7:
+			weekly++
+		case gap <= 14:
+			biweekly++
+		default:
+			monthly++
+		}
+	}
+	switch {
+	case weekly > biweekly && weekly > monthly:
+		return CadenceWeekly
+	case biweekly > weekly && biweekly > monthly:
+		return CadenceBiweekly
+	default:
+		return CadenceMonthly
+	}
 }
 
 // redistributeInstallments implements "redistribuir entre os meses": the

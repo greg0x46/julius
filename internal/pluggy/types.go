@@ -8,6 +8,7 @@
 package pluggy
 
 import (
+	"context"
 	"time"
 
 	"github.com/shopspring/decimal"
@@ -265,5 +266,5 @@ func (e *ProviderError) Error() string { return e.SafeMessage }
 // RawEnvelopeWriter mirrors RawEnvelopeWriter: persists a raw response
 // before it is trusted, returning the raw_imports row id.
 type RawEnvelopeWriter interface {
-	Write(envelope RawResponseEnvelope) (rawImportID string, err error)
+	Write(ctx context.Context, envelope RawResponseEnvelope) (rawImportID string, err error)
 }

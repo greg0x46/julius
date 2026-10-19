@@ -101,3 +101,17 @@ func TestRecurringAPIMoneyPrecision(t *testing.T) {
 		})
 	}
 }
+
+func TestTransactionQueryRejectsHugePaging(t *testing.T) {
+	srv, _ := newTestServer(t)
+	for _, body := range []map[string]any{
+		{"timezone": "UTC", "group_by": "none", "page": int64(9223372036854775807), "page_size": 50},
+		{"timezone": "UTC", "group_by": "none", "page": 2, "page_size": int64(9223372036854775807)},
+	} {
+		resp := doJSON(t, http.MethodPost, srv.URL+"/api/transactions/query", body)
+		resp.Body.Close()
+		if resp.StatusCode != 422 {
+			t.Fatalf("%v: status = %d, want 422", body, resp.StatusCode)
+		}
+	}
+}

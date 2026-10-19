@@ -194,6 +194,11 @@ func handleCreatePayableScenario(conn *sql.DB) http.HandlerFunc {
 		}
 
 		s, err := scenarios.CreateScenario(r.Context(), conn, scenarioKindFor(p.Kind), req.Name, &payableID)
+		if errors.Is(err, scenarios.ErrTransactionAlreadyRealized) {
+			writeProblem(w, http.StatusConflict, "transaction-already-realized", "Transação já utilizada",
+				"Um lançamento vinculado a esta pendência já satisfaz outro evento completo.")
+			return
+		}
 		if err != nil {
 			scenariosUnavailableProblem(w)
 			return
@@ -364,8 +369,32 @@ func handleCreateScenarioTransaction(conn *sql.DB) http.HandlerFunc {
 	}
 }
 
+func validateScenarioTransactionScope(w http.ResponseWriter, r *http.Request, conn *sql.DB) bool {
+	scenarioID := r.PathValue("id")
+	if _, err := scenarios.GetScenario(r.Context(), conn, scenarioID); errors.Is(err, scenarios.ErrScenarioNotFound) {
+		scenarioNotFoundProblem(w)
+		return false
+	} else if err != nil {
+		scenariosUnavailableProblem(w)
+		return false
+	}
+	st, err := scenarios.GetScenarioTransaction(r.Context(), conn, r.PathValue("transactionId"))
+	if errors.Is(err, scenarios.ErrTransactionNotFound) || (err == nil && st.ScenarioID != scenarioID) {
+		scenarioTransactionNotFoundProblem(w)
+		return false
+	}
+	if err != nil {
+		scenariosUnavailableProblem(w)
+		return false
+	}
+	return true
+}
+
 func handleUpdateScenarioTransaction(conn *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if !validateScenarioTransactionScope(w, r, conn) {
+			return
+		}
 		id := r.PathValue("transactionId")
 		var req scenarioTransactionWriteRequest
 		if err := decodeStrict(r, &req); err != nil {
@@ -477,6 +506,10 @@ func handleGenerateInstallments(conn *sql.DB) http.HandlerFunc {
 		} else {
 			drafts, err = scenarios.GenerateInstallmentsForAmount(remaining, *req.InstallmentAmount, startDate, cadence)
 		}
+		if errors.Is(err, scenarios.ErrTooManyInstallments) {
+			invalidScenarioTransactionProblem(w, "O plano não pode gerar mais de 10.000 parcelas por operação.")
+			return
+		}
 		if err != nil {
 			invalidScenarioTransactionProblem(w, "A dívida/conta a receber não possui valor restante para gerar parcelas.")
 			return
@@ -566,6 +599,9 @@ func handleReadjustInstallments(conn *sql.DB) http.HandlerFunc {
 
 		created, err := scenarios.Readjust(r.Context(), conn, scenarioID, remaining, strategy)
 		switch {
+		case errors.Is(err, scenarios.ErrTooManyInstallments):
+			invalidScenarioTransactionProblem(w, "O plano não pode gerar mais de 10.000 parcelas por operação.")
+			return
 		case errors.Is(err, scenarios.ErrNoAffectedInstallments):
 			writeProblem(w, 422, "scenario-readjust-nothing-to-do", "Nada para reajustar",
 				"Todas as parcelas já possuem alguma alocação.")
@@ -590,6 +626,9 @@ func handleReadjustInstallments(conn *sql.DB) http.HandlerFunc {
 
 func handleDeleteScenarioTransaction(conn *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if !validateScenarioTransactionScope(w, r, conn) {
+			return
+		}
 		id := r.PathValue("transactionId")
 		if err := scenarios.DeleteScenarioTransaction(r.Context(), conn, id); errors.Is(err, scenarios.ErrTransactionNotFound) {
 			scenarioTransactionNotFoundProblem(w)
@@ -682,6 +721,9 @@ func handleCreateRealization(conn *sql.DB) http.HandlerFunc {
 
 func handleDeleteRealization(conn *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if !validateScenarioTransactionScope(w, r, conn) {
+			return
+		}
 		transactionID, realizationID := r.PathValue("transactionId"), r.PathValue("realizationId")
 
 		realization, err := scenarios.GetRealization(r.Context(), conn, realizationID)

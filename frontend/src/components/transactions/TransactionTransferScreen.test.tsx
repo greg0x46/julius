@@ -69,4 +69,23 @@ describe("TransactionTransferScreen", () => {
     expect(await screen.findByRole("button", { name: "Vincular transferência" })).toBeDisabled();
     expect(transactions.deleteManualTransaction).not.toHaveBeenCalled();
   });
+  it("returns to the last page when the candidate list shrinks under the current page", async () => {
+    const user = userEvent.setup();
+    vi.mocked(transactions.queryTransactions).mockImplementation(async (query) => {
+      if (query.filters.classification !== "inflow") return { ...transactionResult, items: [source] };
+      return query.page > 1
+        ? { ...transactionResult, items: [], page: { number: query.page, size: 50, total_items: 1, total_pages: 1 } }
+        : { ...transactionResult, items: [destination], page: { number: 1, size: 50, total_items: 51, total_pages: 2 } };
+    });
+    show();
+    await user.click(await screen.findByRole("button", { name: "Próximas movimentações" }));
+    await waitFor(() => expect(transactions.queryTransactions).toHaveBeenCalledWith(
+      expect.objectContaining({ page: 2, filters: expect.objectContaining({ classification: "inflow" }) }), expect.anything()));
+    await waitFor(() => {
+      const inflowPages = vi.mocked(transactions.queryTransactions).mock.calls
+        .filter(([query]) => query.filters.classification === "inflow").map(([query]) => query.page);
+      expect(inflowPages.at(-1)).toBe(1);
+      expect(inflowPages).toContain(2);
+    });
+  });
 });

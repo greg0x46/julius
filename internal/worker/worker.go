@@ -32,9 +32,12 @@ import (
 // durations use the defaults (syncsvc.DefaultHeartbeatInterval,
 // syncsvc.DefaultLeaseTimeout).
 type Config struct {
-	PollInterval          time.Duration
-	HeartbeatInterval     time.Duration
-	LeaseTimeout          time.Duration
+	PollInterval      time.Duration
+	HeartbeatInterval time.Duration
+	LeaseTimeout      time.Duration
+	// UnclaimedDeadline fails runs nobody claimed within it (default
+	// syncsvc.DefaultClaimDeadline).
+	UnclaimedDeadline     time.Duration
 	Pluggy                pluggy.Config
 	OnTransactionUpserted syncsvc.TransactionUpsertedHook
 }
@@ -48,6 +51,9 @@ func (c Config) withDefaults() Config {
 	}
 	if c.LeaseTimeout <= 0 {
 		c.LeaseTimeout = syncsvc.DefaultLeaseTimeout
+	}
+	if c.UnclaimedDeadline <= 0 {
+		c.UnclaimedDeadline = syncsvc.DefaultClaimDeadline
 	}
 	return c
 }
@@ -133,27 +139,36 @@ func heartbeat(ctx context.Context, conn *sql.DB, runID, workerID string, interv
 	}
 }
 
-// pluggyCredentials reads the decrypted Pluggy API credentials from settings;
-// returns ok=false if the server key or Pluggy credentials are unavailable, in which
-// case the caller should wait rather than fail the run.
+// errCredentialsUnavailable means the Pluggy credentials are not configured.
+var errCredentialsUnavailable = errors.New("pluggy credentials not configured")
+
+// pluggyCredentials reads the decrypted Pluggy API credentials from settings.
+// A non-nil error means the caller should wait rather than claim; it never
+// contains secret values.
 //
 // These are application-wide: every connection is an item under the same
 // Pluggy application. Which item a run covers is not read here — it comes
 // from the run's own source_id, see ProcessClaim.
-func pluggyCredentials(ctx context.Context, conn *sql.DB, secrets *settings.Secrets) (clientID, clientSecret string, ok bool) {
+func pluggyCredentials(ctx context.Context, conn *sql.DB, secrets *settings.Secrets) (clientID, clientSecret string, err error) {
 	key, available := secrets.Key()
 	if !available {
-		return "", "", false
+		return "", "", errors.New("master key unavailable")
 	}
 	clientID, found, err := settings.Get(ctx, conn, "pluggy.client_id", key)
-	if err != nil || !found {
-		return "", "", false
+	if err != nil {
+		return "", "", fmt.Errorf("read pluggy.client_id: %w", err)
+	}
+	if !found {
+		return "", "", errCredentialsUnavailable
 	}
 	clientSecret, found, err = settings.Get(ctx, conn, "pluggy.client_secret", key)
-	if err != nil || !found {
-		return "", "", false
+	if err != nil {
+		return "", "", fmt.Errorf("read pluggy.client_secret: %w", err)
 	}
-	return clientID, clientSecret, true
+	if !found {
+		return "", "", errCredentialsUnavailable
+	}
+	return clientID, clientSecret, nil
 }
 
 // ProcessClaim mirrors process_claim: it executes a run workerID claimed,
@@ -170,9 +185,9 @@ func ProcessClaim(ctx context.Context, conn *sql.DB, secrets *settings.Secrets, 
 	defer wg.Wait()
 	defer cancel()
 
-	clientID, clientSecret, ok := pluggyCredentials(runCtx, conn, secrets)
-	if !ok {
-		return fmt.Errorf("pluggy credentials unavailable")
+	clientID, clientSecret, err := pluggyCredentials(runCtx, conn, secrets)
+	if err != nil {
+		return fmt.Errorf("pluggy credentials unavailable: %w", err)
 	}
 	// The item comes from the connection this run was created for, not from
 	// global config: with several connections registered, reading a single
@@ -205,13 +220,20 @@ func ProcessClaim(ctx context.Context, conn *sql.DB, secrets *settings.Secrets, 
 	return service.Execute(runCtx)
 }
 
-func recoverStale(ctx context.Context, conn *sql.DB, lease time.Duration) {
-	recovered, err := syncsvc.RecoverStaleRuns(ctx, conn, time.Now(), lease)
+func recoverStale(ctx context.Context, conn *sql.DB, cfg Config) {
+	recovered, err := syncsvc.RecoverStaleRuns(ctx, conn, time.Now(), cfg.LeaseTimeout)
 	if err != nil {
 		log.Printf("recover_stale_runs failed: %v", err)
 	}
 	for _, id := range recovered {
 		log.Printf("sync_run_recovered run_id=%s", id)
+	}
+	unclaimed, err := syncsvc.FailUnclaimedRuns(ctx, conn, time.Now(), cfg.UnclaimedDeadline)
+	if err != nil {
+		log.Printf("fail_unclaimed_runs failed: %v", err)
+	}
+	for _, id := range unclaimed {
+		log.Printf("sync_run_worker_unavailable run_id=%s", id)
 	}
 }
 
@@ -221,7 +243,7 @@ func Run(ctx context.Context, conn *sql.DB, secrets *settings.Secrets, cfg Confi
 	cfg = cfg.withDefaults()
 	workerID := WorkerID()
 	recoveryEvery := cfg.LeaseTimeout / 2
-	recoverStale(ctx, conn, cfg.LeaseTimeout)
+	recoverStale(ctx, conn, cfg)
 	recoveryDone := make(chan struct{})
 	go func() {
 		defer close(recoveryDone)
@@ -232,12 +254,13 @@ func Run(ctx context.Context, conn *sql.DB, secrets *settings.Secrets, cfg Confi
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				recoverStale(ctx, conn, cfg.LeaseTimeout)
+				recoverStale(ctx, conn, cfg)
 			}
 		}
 	}()
 	defer func() { <-recoveryDone }()
 
+	var credentialsLogged string
 	for {
 		select {
 		case <-ctx.Done():
@@ -249,10 +272,16 @@ func Run(ctx context.Context, conn *sql.DB, secrets *settings.Secrets, cfg Confi
 		// before credentials exist would sit claimed until its lease expired.
 		// Waiting to claim until we can actually proceed keeps every claimed
 		// run either running or finished.
-		if _, _, ok := pluggyCredentials(ctx, conn, secrets); !ok {
+		if _, _, err := pluggyCredentials(ctx, conn, secrets); err != nil {
+			// Log once per distinct reason, not on every poll.
+			if reason := err.Error(); reason != credentialsLogged {
+				log.Printf("worker_waiting_for_credentials: %v", err)
+				credentialsLogged = reason
+			}
 			sleep(ctx, cfg.PollInterval)
 			continue
 		}
+		credentialsLogged = ""
 
 		syncRunID, sourceID, ok, err := ClaimNextRun(ctx, conn, workerID)
 		if err != nil {

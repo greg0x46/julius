@@ -152,10 +152,8 @@ type PointRow = {
 
 function mergePoints(base: TimelineSeries, simulation: TimelineSeries | null, referenceDate: string): PointRow[] {
   const rows = base.points.map((p) => {
-    // starting_balance is the canonical balance at the reference date. Keep
-    // today's plotted point anchored to the same value as the summary card;
-    // the selected window must only change points after today.
-    const balance = p.date === referenceDate ? Number(base.starting_balance) : Number(p.balance);
+    // Points include planned movements due today; starting_balance is cash now.
+    const balance = Number(p.balance);
     // The reference day belongs to both halves so the solid past line and the
     // dashed future line meet instead of leaving a gap.
     return {
@@ -169,8 +167,7 @@ function mergePoints(base: TimelineSeries, simulation: TimelineSeries | null, re
   const simulationByDate = new Map(simulation.points.map((p) => [p.date, Number(p.balance)]));
   return rows.map((row) => ({
     ...row,
-    simulationBalance:
-      row.date === referenceDate ? Number(simulation.starting_balance) : simulationByDate.get(row.date),
+    simulationBalance: simulationByDate.get(row.date),
   }));
 }
 

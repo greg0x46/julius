@@ -54,6 +54,9 @@ authentication configuration that does not depend on the host:
 - **Exact money boundaries** — amounts stay decimal strings through entry,
   editing, calculation and HTTP. BRL display rounds to cents with ties away
   from zero; saved fractional cents and large values retain their precision.
+  Historical balance minima use exact comparisons to select their value and date.
+  The balance chart includes commitments due today in today's end-of-day point;
+  **Saldo hoje** shows the current cash balance.
   See the [monetary precision policy](.specs/precisao-monetaria.md).
 
 - **Build identifier** — every signed-in page has a small footer showing the
@@ -80,7 +83,8 @@ authentication configuration that does not depend on the host:
   (BRL by default), including USD/EUR, without a bank connection. Native balance
   is opening balance + posted movements + explicit adjustments. Edit, archive
   and reactivate accounts in **Contas e cartões**; currency and opening balance
-  lock after movements. Foreign amounts stay in their original currency and
+  lock after movements; equivalent decimal representations still allow name
+  and archive changes. Foreign amounts stay in their original currency and
   are valued in BRL in Net Worth and the investment summary with the day's
   exchange rate; a missing rate makes the figure unavailable.
 - **Reference currency** — choose the currency for consolidated Home, category,
@@ -115,14 +119,18 @@ authentication configuration that does not depend on the host:
 - **Scenarios** — user-authored hypothetical projections ("what if I travel",
   "what if I change jobs"), or the installment plan of a debt/receivable —
   they never affect real totals unless explicitly included in a query.
+  Fixed-amount installments preserve exact remainders without exceeding the
+  chosen installment amount. Generation and readjustment are limited to 10,000
+  installments per operation; requests exceeding the limit preserve the plan.
 - **Financial report** — a single time navigation (Actual → Today → Base
   Projection → Simulation): how much you will have on a future date, your
   lowest balance until then, and how hypothetical scenarios change that answer.
 - **Net worth** — net worth snapshots and history (assets − liabilities) over
   time.
 - **Goals** — set a target amount (and optional date) for the total market
-  value of your investments and follow the progress, recomputed on every read.
-  More metrics (cash balance, net worth) are planned.
+  value of your investments and follow the progress, recomputed on every read. With a
+  date, the goal is projected to it from the average monthly return of your investments and
+  shows the monthly contribution needed to reach the target. More metrics (cash balance, net worth) are planned.
 - **Investments** — a period view of your portfolio (same period selector as Home and Transactions): portfolio value at the end of
   the period, net yield and return, contributions and withdrawals, with positions grouped by account or asset class,
   searchable, and with positions the history cannot cover flagged instead of counted as zero. Integrated and manual investment
@@ -171,7 +179,12 @@ In **Metas**, create a goal with a name, a target amount in reais and an
 optional date. Today the only metric is **valor investido**: the market value of
 all your investments, gains and losses included (the investments line of net
 worth). Progress is the current value divided by the target and can pass 100%.
-Nothing is stored besides the target. See the
+With a future date, the goal also shows a projection: the average monthly
+appreciation (or depreciation) of your investments over the last 12 months, the
+value and percentage of the target expected on the date without new
+contributions, and the monthly contribution needed to reach it. It is an
+estimate that assumes the past return repeats. Nothing is stored besides the
+target. See the
 [goals reference](.specs/contextos/metas/reference.md).
 
 ## Tech stack

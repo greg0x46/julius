@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 	"testing/fstest"
 	"time"
@@ -334,7 +335,7 @@ func TestCreateAutomationRuleWithReconcileActionLinksCommitment(t *testing.T) {
 
 	body := map[string]any{
 		"name": "Concilia aluguel", "is_active": true, "logic_operator": "and",
-		"conditions": []map[string]string{{"field": "amount", "operator": "within_percent", "value": "10"}},
+		"conditions": []map[string]string{{"field": "amount", "operator": "within_percent", "value": "1500.00:10"}},
 		"actions":    []map[string]any{{"type": "reconcile", "scenario_id": commitmentID}},
 	}
 	resp := doJSON(t, http.MethodPost, srv.URL+"/api/automation-rules", body)
@@ -358,7 +359,7 @@ func TestCreateAutomationRuleReconcileActionRejectsUnknownCommitment(t *testing.
 	srv, _ := newTestServer(t)
 	body := map[string]any{
 		"name": "Concilia inexistente", "is_active": true, "logic_operator": "and",
-		"conditions": []map[string]string{{"field": "amount", "operator": "within_percent", "value": "10"}},
+		"conditions": []map[string]string{{"field": "amount", "operator": "within_percent", "value": "1500.00:10"}},
 		"actions":    []map[string]any{{"type": "reconcile", "scenario_id": "does-not-exist"}},
 	}
 	resp := doJSON(t, http.MethodPost, srv.URL+"/api/automation-rules", body)
@@ -368,13 +369,33 @@ func TestCreateAutomationRuleReconcileActionRejectsUnknownCommitment(t *testing.
 	}
 }
 
+func TestCreateAutomationRuleRejectsMalformedConditionValues(t *testing.T) {
+	srv, _ := newTestServer(t)
+	for _, c := range []map[string]string{
+		{"field": "amount", "operator": "within_percent", "value": "10"},
+		{"field": "amount", "operator": "within_percent", "value": "0:10"},
+		{"field": "day_of_month", "operator": "day_range", "value": "0:40"},
+	} {
+		body := map[string]any{
+			"name": "Mal formada", "is_active": true, "logic_operator": "and",
+			"conditions": []map[string]string{c},
+			"actions":    []map[string]any{{"type": "ignore"}},
+		}
+		resp := doJSON(t, http.MethodPost, srv.URL+"/api/automation-rules", body)
+		resp.Body.Close()
+		if resp.StatusCode != 422 {
+			t.Errorf("condition %v: status = %d, want 422", c, resp.StatusCode)
+		}
+	}
+}
+
 func TestDeleteRecurringCommitmentLinkedToRuleReturns409(t *testing.T) {
 	srv, _ := newTestServer(t)
 	commitmentID := createRecurringCommitmentForAutomation(t, srv)
 
 	body := map[string]any{
 		"name": "Concilia aluguel", "is_active": true, "logic_operator": "and",
-		"conditions": []map[string]string{{"field": "amount", "operator": "within_percent", "value": "10"}},
+		"conditions": []map[string]string{{"field": "amount", "operator": "within_percent", "value": "1500.00:10"}},
 		"actions":    []map[string]any{{"type": "reconcile", "scenario_id": commitmentID}},
 	}
 	resp := doJSON(t, http.MethodPost, srv.URL+"/api/automation-rules", body)
@@ -1200,5 +1221,37 @@ func TestCategoryBreakdownOverHTTP(t *testing.T) {
 		if resp.StatusCode != 400 {
 			t.Errorf("%s: status = %d, want 400", query, resp.StatusCode)
 		}
+	}
+}
+
+func TestOversizedJSONBodyIsRejected(t *testing.T) {
+	srv, _ := newTestServer(t)
+	resp := doJSON(t, "POST", srv.URL+"/api/categories", map[string]string{"name": strings.Repeat("a", 2<<20)})
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusRequestEntityTooLarge {
+		t.Fatalf("status = %d, want 413", resp.StatusCode)
+	}
+}
+
+func TestSyncRunFailuresWithCorruptTimestampReturn503(t *testing.T) {
+	srv, conn := newTestServer(t)
+	now := db.FormatTime(time.Now())
+	sourceID, runID := uuid.NewString(), uuid.NewString()
+	for _, stmt := range []struct {
+		query string
+		args  []any
+	}{
+		{`INSERT INTO data_sources (id, provider, external_item_id, created_at, updated_at) VALUES (?, 'pluggy', ?, ?, ?)`, []any{sourceID, sourceID, now, now}},
+		{`INSERT INTO sync_runs (id, source_id, status, started_at, finished_at) VALUES (?, ?, 'completed', ?, ?)`, []any{runID, sourceID, now, now}},
+		{`INSERT INTO sync_failures (id, sync_run_id, stage, error_code, safe_message, created_at) VALUES (?, ?, 'normalize', 'x', 'y', 'not-a-time')`, []any{uuid.NewString(), runID}},
+	} {
+		if _, err := conn.Exec(stmt.query, stmt.args...); err != nil {
+			t.Fatal(err)
+		}
+	}
+	resp := doJSON(t, http.MethodGet, srv.URL+"/api/sync-runs/"+runID, nil)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want 503", resp.StatusCode)
 	}
 }

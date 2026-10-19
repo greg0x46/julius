@@ -414,3 +414,48 @@ func TestRunRecoversStaleClaimWhileProcessingAnotherRun(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 }
+
+// Without Pluggy credentials Run never claims; a run left unclaimed past the
+// deadline must fail instead of blocking every later sync of its connection.
+func TestRunFailsOldUnclaimedRunWithoutCredentials(t *testing.T) {
+	conn := newTestConn(t)
+	sourceID, oldRun := insertSourceAndRun(t, conn, "item-1", "in_progress", time.Now().Add(-time.Hour))
+	secrets := settings.NewSecrets(bytes.Repeat([]byte{7}, 32))
+
+	cfg := worker.Config{
+		PollInterval: 10 * time.Millisecond, LeaseTimeout: 100 * time.Millisecond,
+		UnclaimedDeadline: time.Minute, Pluggy: pluggy.DefaultConfig(),
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		worker.Run(ctx, conn, secrets, cfg)
+		close(done)
+	}()
+	defer func() {
+		cancel()
+		<-done
+	}()
+
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		var status string
+		var code sql.NullString
+		if err := conn.QueryRow(`SELECT status, general_error_code FROM sync_runs WHERE id = ?`, oldRun).Scan(&status, &code); err != nil {
+			t.Fatal(err)
+		}
+		if status == "failed" && code.String == "worker_unavailable" {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("run status=%s code=%v, want failed/worker_unavailable", status, code)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	// The connection can sync again: a new run no longer hits the active-run index.
+	if _, err := conn.Exec(`INSERT INTO sync_runs (id, source_id, status, started_at) VALUES (?, ?, 'in_progress', ?)`,
+		uuid.NewString(), sourceID, db.FormatTime(time.Now())); err != nil {
+		t.Fatalf("new run after failing the stale one: %v", err)
+	}
+}
