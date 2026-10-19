@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { Fragment, useState, type ReactNode } from "react";
 import { Bar, BarChart, CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 import type { NetWorthSnapshot } from "../../api/contracts";
@@ -20,6 +20,12 @@ const stockOptions: MetricOption[] = [
 const dateLabel = (date: string) => date.split("-").reverse().join("/");
 const percentLabel = (value: number | string) => `${Number(value).toLocaleString("pt-BR", { maximumFractionDigits: 2 })}%`;
 
+function visibleNotes(point: EvolutionPoint, selected: string[]): string[] {
+  return [...new Set(point.notes)].filter((note) =>
+    note.startsWith("Investimentos:") ? selected.includes("investments") :
+      note.startsWith("Patrimônio e saldo:") ? selected.includes("netWorth") || selected.includes("cash") : true);
+}
+
 export function WealthTooltip({ active, label, points, selected, scale }: {
   active?: boolean; label?: string | number; points: EvolutionPoint[]; selected: string[]; scale: EvolutionScale;
 }) {
@@ -35,7 +41,7 @@ export function WealthTooltip({ active, label, points, selected, scale }: {
         {scale === "percent" && baseline != null && `${percentLabel(changePercent(value, baseline)!)} · `}{format(value)}
       </>}</div>;
     })}
-    {point.notes?.map((note) => <div key={note}>{note}</div>)}
+    {visibleNotes(point, selected).map((note) => <div key={note}>{note}</div>)}
   </div>;
 }
 
@@ -87,12 +93,12 @@ export function NetWorthChart({ snapshots, footnote, from, to, history, historyS
       </div>
       <details className="evolution-values"><summary>Ver valores · {scale === "absolute" ? currency : "% e valores originais"}</summary>
         <table><caption>Avaliações observadas; — indica lacuna</caption><thead><tr><th>Data</th>{stocks.map((option) => <th key={option.key}>{option.label}</th>)}</tr></thead>
-          <tbody>{points.filter((point) => stocks.some((option) => point.values[option.key] != null) || point.notes?.length).map((point) => <tr key={point.date}>
-            <th scope="row">{dateLabel(point.date)}{point.notes?.map((note) => <small key={note}> · {note}</small>)}</th>
+          <tbody>{points.filter((point) => stocks.some((option) => point.values[option.key] != null) || visibleNotes(point, selected).length).map((point) => <Fragment key={point.date}><tr>
+            <th scope="row">{dateLabel(point.date)}</th>
             {stocks.map((option) => <td key={option.key}>{point.values[option.key] == null ? "—" : <>
               {scale === "percent" && `${percentLabel(changePercent(point.values[option.key]!, points[0].values[option.key]!)!)} · `}{format(point.values[option.key]!)}
             </>}</td>)}
-          </tr>)}</tbody></table>
+          </tr>{visibleNotes(point, selected).length > 0 && <tr><td colSpan={stocks.length + 1} className="evolution-coverage-note">{visibleNotes(point, selected).join(" · ")}</td></tr>}</Fragment>)}</tbody></table>
       </details>
     </>)}
     {selected.includes("yield") && history && <div role="group" aria-label={`Rendimentos por mês em ${currency}`}>

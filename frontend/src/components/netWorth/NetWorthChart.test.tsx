@@ -112,11 +112,12 @@ it("explains invalid percent baselines instead of plotting fabricated starts", (
 it("shows only selected tooltip values, with actual money in percentage mode", () => {
   render(<WealthTooltip active label="2026-01-02" selected={["cash"]} scale="percent" points={[
     { date: "2026-01-01", values: { cash: "10", netWorth: "1000000" } },
-    { date: "2026-01-02", values: { cash: "-5", netWorth: "1000000" }, notes: ["Câmbio desatualizado"] },
+    { date: "2026-01-02", values: { cash: "-5", netWorth: "1000000" }, notes: ["Câmbio desatualizado", "Investimentos: histórico insuficiente ou parcial"] },
   ]} />);
   expect(screen.getByText(/Saldo observado:/)).toHaveTextContent("-150% · -R$ 5,00");
   expect(screen.queryByText(/Patrimônio líquido:/)).not.toBeInTheDocument();
   expect(screen.getByText("Câmbio desatualizado")).toBeInTheDocument();
+  expect(screen.queryByText("Investimentos: histórico insuficiente ou parcial")).not.toBeInTheDocument();
 });
 
 it("keeps yield as a separate period flow when stocks use percentages, with incomplete periods as gaps", () => {
