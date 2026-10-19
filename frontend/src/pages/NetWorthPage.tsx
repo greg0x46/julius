@@ -1,20 +1,34 @@
+import { useQuery } from "@tanstack/react-query";
+import { getInvestmentHistory } from "../api/investmentPortfolio";
+import { queryKeys } from "../api/queryKeys";
+import { PeriodNavigator } from "../components/filters/PeriodNavigator";
+import { periodPresets } from "../components/filters/periodPresets";
+import { usePeriod } from "../hooks/usePeriod";
+import { useToday } from "../hooks/useToday";
 import { hasNetWorthValue } from "../api/contracts";
 import { ApiError } from "../api/problems";
 import { ReportValuation } from "../components/shared/ReportValuation";
 import { Skeleton } from "antd";
 
 import { UnavailableState } from "../components/AsyncState";
-import { EmptyState, Page, Section } from "../components/layout";
+import { EmptyState, Page } from "../components/layout";
 import { NetWorthBreakdownCard } from "../components/netWorth/NetWorthBreakdownCard";
 import { NetWorthChart } from "../components/netWorth/NetWorthChart";
 import { useNetWorth } from "../hooks/useNetWorth";
 
 export function NetWorthPage() {
   const netWorth = useNetWorth();
-  // A single point has no evolution to plot — a line chart with one dot
-  // reads as broken, not "just started". Wait for at least two days of
-  // history before showing the chart.
-  const hasSeries = netWorth.series.filter(hasNetWorthValue).length > 1;
+  const { period, setPeriod } = usePeriod();
+  const today = useToday().format("YYYY-MM-DD");
+  const from = period.from ?? netWorth.series[0]?.captured_at.slice(0, 10) ?? today;
+  const to = period.to && period.to < today ? period.to : today;
+  const months = (Number(to.slice(0, 4)) - Number(from.slice(0, 4))) * 12 + Number(to.slice(5, 7)) - Number(from.slice(5, 7));
+  const validHistoryRange = from <= to && months < 120;
+  const history = useQuery({
+    queryKey: [...queryKeys.investmentWorkspace, "history", from, to],
+    queryFn: ({ signal }) => getInvestmentHistory(from, to, signal),
+    enabled: !!netWorth.latest && validHistoryRange,
+  });
   const hasStaleRates = netWorth.series.some((snapshot) => snapshot.fx?.stale);
   const hasBackfilledPoints = netWorth.series.some((s) => s.is_backfilled);
   const hasLegacyPoints = netWorth.series.some((s) => s.valuation_status === "legacy");
@@ -65,19 +79,16 @@ export function NetWorthPage() {
                 hint="Faltam cotações de câmbio para avaliar todos os saldos em reais."
               />
             )}
-            {hasSeries ? (
-              <NetWorthChart
-                snapshots={netWorth.series}
-                footnote={`Valores em ${netWorth.latest.currency_code ?? "BRL"}, com câmbio de cada dia. ${footnote}`}
-              />
-            ) : (
-              <Section title="Evolução do patrimônio líquido">
-                <EmptyState
-                  title="Ainda não há histórico para mostrar"
-                  hint="O gráfico aparece a partir do segundo dia com dados registrados."
-                />
-              </Section>
-            )}
+            <PeriodNavigator value={[period.from, period.to]} presets={periodPresets()} onChange={setPeriod} bare />
+            <NetWorthChart
+              snapshots={netWorth.series}
+              from={from}
+              to={to}
+              history={history.data}
+              historyState={!validHistoryRange ? "range" : history.isLoading ? "loading" : history.error ? "error" : undefined}
+              onRetryHistory={() => { void history.refetch(); }}
+              footnote={`Valores em ${netWorth.latest.currency_code ?? "BRL"}, com câmbio de cada dia. ${footnote}`}
+            />
           </div>
         </ReportValuation>
       )}

@@ -77,3 +77,20 @@
   border-radius: 50%;
   background: currentColor;
 }
+
+.evolution-controls, .evolution-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+}
+
+.evolution-controls { margin-bottom: 0.75rem; }
+.evolution-metrics .ant-checkbox-wrapper { padding: 0.25rem 0; }
+.evolution-controls small { color: var(--color-text-secondary); }
+.evolution-values { margin-top: 0.75rem; }
+.evolution-values summary { cursor: pointer; padding: 0.5rem 0; }
+.evolution-values table { width: 100%; border-collapse: collapse; font-size: 0.75rem; }
+.evolution-values th, .evolution-values td { padding: 0.375rem; text-align: right; overflow-wrap: anywhere; }
+.evolution-values th:first-child, .evolution-values td:first-child { text-align: left; }
+.timeline-chart-tooltip { max-width: min(22rem, calc(100vw - 3rem)); overflow-wrap: anywhere; }

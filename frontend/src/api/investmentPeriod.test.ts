@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { investmentPeriodFixture, periodSynced, periodUnavailable } from "../test/investmentWorkspaceFixtures";
 import { parseInvestmentPeriod } from "./contracts";
-import { getInvestmentPeriod } from "./investmentPortfolio";
+import { getInvestmentHistory, getInvestmentPeriod } from "./investmentPortfolio";
 import { expireSession } from "./transport";
 
 afterEach(() => {
@@ -131,5 +131,16 @@ describe("getInvestmentPeriod", () => {
     await expect(
       getInvestmentPeriod({ from: null, to: "2025-09-30", groupBy: "none", source: null }),
     ).rejects.toMatchObject({ kind: "response" });
+  });
+});
+
+describe("getInvestmentHistory", () => {
+  it("loads a bounded history in one request and parses coverage without replacing nulls", async () => {
+    const payload = { baseline: investmentPeriodFixture(), periods: [investmentPeriodFixture()] };
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(payload), { status: 200, headers: { "Content-Type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+    expect(await getInvestmentHistory("2026-01-01", "2026-01-31")).toEqual(payload);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(String(fetchMock.mock.calls[0][0])).toContain("/api/investment-history?from=2026-01-01&to=2026-01-31");
   });
 });
