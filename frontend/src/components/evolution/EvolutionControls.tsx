@@ -15,7 +15,7 @@ export function EvolutionControls({ options, selected, onSelected, scale, onScal
   return <div className="evolution-controls">
     <div role="group" aria-label="Métricas" className="evolution-metrics">
       {options.map((option) => <span key={option.key}>
-        <Checkbox checked={selected.includes(option.key)} disabled={!!option.unavailable} aria-describedby={option.unavailable ? `${id}-${option.key}` : undefined}
+        <Checkbox checked={selected.includes(option.key)} disabled={!!option.unavailable && !selected.includes(option.key)} aria-describedby={option.unavailable ? `${id}-${option.key}` : undefined}
           onChange={(event) => onSelected(event.target.checked ? [...selected, option.key] : selected.filter((key) => key !== option.key))}>
           <span className="timeline-chart-swatch" style={{ color: option.color }} aria-hidden="true" /> {option.label}
         </Checkbox>

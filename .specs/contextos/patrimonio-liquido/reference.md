@@ -76,8 +76,9 @@ points are sampled at the requested start and monthly endpoints, never joined
 across missing daily coverage. Portfolio value excludes custody cash and is not
 contributions or the net-worth investment component. A period with unavailable
 positions, partial starts or incomplete position history is omitted altogether,
-never shown as a complete subtotal or zero. Source errors/loading disable only
-investment controls; cash and net worth remain usable. Period changes clear old
+never shown as a complete subtotal or zero. Source errors/loading prevent new
+investment selections; selected metrics can still be deselected, with their
+unavailability explained. Cash and net worth remain usable. Period changes clear old
 investment results until the new request completes. History cache keys include
 report currency; a history response in a different currency is unavailable
 rather than being plotted on the wealth report's monetary axis.

@@ -142,3 +142,30 @@ it("does not compare cached portfolio values in another reporting currency", () 
   expect(screen.getByRole("checkbox", { name: "Investimentos" })).toBeDisabled();
   expect(screen.getAllByText(/Moeda diferente do relatório/)).toHaveLength(2);
 });
+
+it.each([
+  ["loading", "Carregando histórico"],
+  ["error", "Histórico indisponível"],
+  [undefined, "Sem histórico suficiente neste período"],
+] as const)("allows clearing selected investment metrics when history becomes %s", (historyState, explanation) => {
+  const period = structuredClone(investmentPeriodFixture({ from: "2026-01-01", to: "2026-01-31" }));
+  period.totals.partial = false;
+  period.totals.positions_partial_start = 0;
+  period.groups = [{ ...period.groups[0], positions: [{ ...periodSynced, partial_start: false, history_complete: true }] }];
+  const { rerender } = render(<NetWorthChart snapshots={[observed]} history={{ baseline: period, periods: [period] }} />);
+  fireEvent.click(screen.getByRole("checkbox", { name: "Investimentos" }));
+  fireEvent.click(screen.getByRole("checkbox", { name: "Rendimentos de investimentos" }));
+
+  rerender(<NetWorthChart snapshots={[observed]} historyState={historyState} />);
+  for (const name of ["Investimentos", "Rendimentos de investimentos"]) {
+    const metric = screen.getByRole("checkbox", { name });
+    expect(metric).toBeChecked();
+    expect(metric).toBeEnabled();
+    expect(metric).toHaveAccessibleDescription(`— ${explanation}`);
+    fireEvent.click(metric);
+    expect(metric).not.toBeChecked();
+    expect(metric).toBeDisabled();
+  }
+  fireEvent.click(screen.getByRole("checkbox", { name: "Patrimônio líquido" }));
+  expect(screen.getByText("Selecione ao menos uma métrica para ver a evolução.")).toBeInTheDocument();
+});
