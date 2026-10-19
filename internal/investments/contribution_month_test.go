@@ -4,11 +4,19 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
+	"github.com/greg0x46/julius/internal/db"
 	"github.com/greg0x46/julius/internal/investments"
 )
 
 func TestContributionMonthExcludesTradesTransfersIncomeAndReconciliationDuplicates(t *testing.T) {
 	eachLedger(t, func(t *testing.T, f *ledgerFixture) {
+		if f.bankID == "" {
+			f.bankID = uuid.NewString()
+			stamp := db.FormatTime(time.Now())
+			f.exec(`INSERT INTO financial_accounts (id, source_id, external_id, balance, currency_code, current_raw_import_id, normalized_hash, created_at, updated_at) VALUES (?, ?, ?, '5000', 'BRL', ?, 'hash', ?, ?)`, f.bankID, f.sourceID, f.bankID, f.rawImportID, stamp, stamp)
+		}
+
 		opening := time.Date(2026, 8, 31, 0, 0, 0, 0, time.UTC)
 		f.deposit("1000", opening)
 		position := f.addPosition(f.custodyID, "Stock")
