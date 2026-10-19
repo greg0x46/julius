@@ -57,16 +57,16 @@ func withMonthlyContribution(ctx context.Context, q Querier, list []Goal, today 
 	if est.Partial {
 		return nil
 	}
-	// One payment for each calendar month, including the current and target
-	// months. Target edits apply to the whole current month, without proration.
+	// Apply the existing partial-month horizon from month start. Target edits
+	// apply to the whole current month, without proration.
 	targetDate := list[i].TargetDate
-	months := (targetDate.Year()-start.Year())*12 + int(targetDate.Month()-start.Month()) + 1
+	months := monthsUntil(start, *targetDate)
 	if months > maxProjectionMonths {
 		return nil
 	}
 	p := project(funding.OpeningValue, list[i].TargetAmount, est.Monthly, months)
-	target := p.RequiredMonthlyContribution.Round(2)
-	remaining := decimal.Max(decimal.Zero, target.Sub(funding.NetPrincipal)).Round(2)
+	target := p.RequiredMonthlyContribution
+	remaining := decimal.Max(decimal.Zero, target.Sub(funding.NetPrincipal))
 	m.Target, m.NetContributed, m.Remaining = &target, &funding.NetPrincipal, &remaining
 	m.AssumesZeroReturn = est.Monthly == nil
 	return nil

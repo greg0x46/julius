@@ -89,3 +89,49 @@ func TestNextContributionGoalSelection(t *testing.T) {
 		t.Fatalf("empty selection %d", got)
 	}
 }
+
+func TestMonthlyPlanIgnoresLaterValuationAndReturnUpdates(t *testing.T) {
+	conn := dbtest.OpenSQLite(t)
+	ctx := context.Background()
+	old := now
+	now = func() time.Time { return utc(2026, 10, 19) }
+	defer func() { now = old }()
+	account, err := investments.CreateAccount(ctx, conn, investments.AccountInput{Name: "Custody"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	value := d("1000")
+	position, err := investments.CreatePosition(ctx, conn, investments.PositionInput{AccountID: account.ID, Name: "Reserve", AssetType: "Other", InitialValue: &value, OccurredOn: utc(2026, 9, 1)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	target := utc(2026, 12, 31)
+	g, err := Create(ctx, conn, Input{Name: "Goal", Metric: MetricInvestedValue, TargetAmount: d("7000"), TargetDate: &target})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if g.MonthlyContribution == nil || g.MonthlyContribution.Remaining == nil {
+		t.Fatal("missing plan")
+	}
+	before := *g.MonthlyContribution.Remaining
+	_, err = investments.CreateOperation(ctx, conn, investments.OperationInput{AccountID: account.ID, PositionID: &position.ID, Kind: investments.OperationValuation, Amount: d("1500"), OccurredOn: utc(2026, 10, 10)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	g, err = Get(ctx, conn, g.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if g.CurrentValue.String() != "1500" || !g.MonthlyContribution.Remaining.Equal(before) {
+		t.Fatalf("valuation moved plan: %+v", g)
+	}
+	// A date edit restates the same month-opening plan with the new horizon.
+	target = utc(2027, 3, 31)
+	g, err = Update(ctx, conn, g.ID, Input{Name: g.Name, Metric: g.Metric, TargetAmount: g.TargetAmount, TargetDate: &target})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if g.MonthlyContribution.Target.String() != "1000" {
+		t.Fatalf("edited horizon = %+v", g.MonthlyContribution)
+	}
+}
