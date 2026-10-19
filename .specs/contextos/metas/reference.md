@@ -77,6 +77,35 @@ it repeats; it is an estimate, not a promise, and the card says so. It measures
 investments with a period yield, so it can differ from `invested_value` (which
 also covers positions without history).
 
+### Current-month contribution on Home
+
+The goals list sets `monthly_contribution` on just one future, unreached goal
+with a supported projection horizon: nearest target date, then lowest target
+amount, then ID. All other goals carry null. Create/update responses compute
+that field for the returned goal alone.
+
+The plan is recomputed from **month-opening** investment value (previous day's
+portfolio end value plus replayed unlinked custody cash) and the trailing return
+estimate ending on that same day. It reuses the projection formula and its
+partial-month horizon, measured from the first of this month. The latest goal
+amount/date applies to the whole current month, including goals created or
+edited mid-month; there is no proration or saved contribution ledger.
+
+`remaining = max(0, target − net_contributed)`. Principal is manual deposits
+minus withdrawals dated from month start through today. Trades, custody
+transfers, income, fees and valuations never count as principal; bank links are
+not read a second time. Current-month deposits and later price/return updates
+do not move the opening plan. Historical corrections can restate it. Each month
+starts a new plan from the previous month's closing value. All arithmetic stays
+in exact BRL decimals, with final display rounding only.
+
+Synced custody, linked bank cash, foreign custody, unpriced opening history,
+partial return coverage or a current-month initial balance make all three money
+fields null: provider position flows cannot establish external funding and
+initial balances do not establish when money was contributed. These cases are
+explicitly unavailable, never assumed zero. Less than 30 days of otherwise
+complete return history uses zero return and sets `assumes_zero_return`.
+
 Table `goals` (migration `0005_goals`, both dialects): `id`, `name`, `metric`,
 `target_amount`, `target_date`, `notes`, `created_at`, `updated_at`. The same
 migration drops `investment_portfolios` and `investment_position_portfolios`;
@@ -87,11 +116,16 @@ no data is carried over.
 `GET /api/goals`, `POST /api/goals`, `PUT /api/goals/{id}`,
 `DELETE /api/goals/{id}`. A goal DTO carries `id`, `name`, `metric`,
 `target_amount`, `target_date`, `notes`, `current_value`, `progress`,
-`projection`, `currency_code`, `created_at`, `updated_at` (money as decimal
+`projection`, `monthly_contribution`, `currency_code`, `created_at`, `updated_at` (money as decimal
 strings). `projection` is null or `{status, months_remaining, monthly_return,
 return_from, return_partial, projected_value, projected_progress,
 required_monthly_contribution}`; `monthly_return` and `return_from` are null
 without enough history.
+`monthly_contribution` is null or `{month: YYYY-MM, target, net_contributed,
+remaining, assumes_zero_return}`; money fields are decimal strings or all null
+when unavailable. This is a month-opening estimate, distinct from the existing
+forward-looking `projection.required_monthly_contribution`.
+
 Problems: `invalid-goal-input` (400), `goal-not-found` (404),
 `exchange-unavailable` / `goals-unavailable` (503).
 
@@ -109,3 +143,9 @@ target) on the date with no new contributions.
 Completion requires `progress >= 1` using exact decimal comparison. The whole
 percentage and ring stay at most 99% below that boundary; reached goals fill the
 ring while their displayed percentage may exceed 100%.
+
+Home shows the selected goal as a compact `/metas` link beside the daily
+allowance, independent of its selected reporting period. Zero remainder says
+"Aporte do mês em dia", never that the goal is reached. Loading/query errors
+and no eligible goal render nothing; unknown funding shows an unavailable
+estimate. Goals queries refresh their day key at midnight.

@@ -139,3 +139,32 @@ func TestMonthlyPlanIgnoresLaterValuationAndReturnUpdates(t *testing.T) {
 		t.Fatalf("edited horizon = %+v", g.MonthlyContribution)
 	}
 }
+
+func TestMonthlyContributionKeepsFractionalPrincipalExact(t *testing.T) {
+	conn := dbtest.OpenSQLite(t)
+	ctx := context.Background()
+	old := now
+	now = func() time.Time { return utc(2026, 10, 19) }
+	defer func() { now = old }()
+	account, err := investments.CreateAccount(ctx, conn, investments.AccountInput{Name: "Custody"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	date := utc(2026, 12, 31)
+	g, err := Create(ctx, conn, Input{Name: "Fractional", Metric: MetricInvestedValue, TargetAmount: d("6000.015"), TargetDate: &date})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = investments.CreateOperation(ctx, conn, investments.OperationInput{AccountID: account.ID, Kind: investments.OperationDeposit, Amount: d("650.005"), OccurredOn: now()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	g, err = Get(ctx, conn, g.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := g.MonthlyContribution
+	if m == nil || m.Target == nil || m.Target.String() != "2000.005" || m.Remaining.String() != "1350" {
+		t.Fatalf("fractional month = %+v", m)
+	}
+}

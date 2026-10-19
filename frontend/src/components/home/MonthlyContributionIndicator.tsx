@@ -22,7 +22,7 @@ export function MonthlyContributionIndicator() {
       {contribution.remaining !== null && isZeroDecimal(contribution.remaining) && (
         <span className="monthly-contribution-context">Aporte do mês em dia</span>
       )}
-      <span className="monthly-contribution-context monthly-contribution-goal"><span>{goal.name}</span><span>· {date}</span></span>
+      <span className="monthly-contribution-context monthly-contribution-goal"><span>{goal.name}</span><span> · {date}</span></span>
       {contribution.remaining === null ? (
         <span className="monthly-contribution-context">Histórico de aportes incompleto ou ambíguo</span>
       ) : contribution.assumes_zero_return && (

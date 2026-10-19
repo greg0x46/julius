@@ -65,3 +65,26 @@ func TestContributionMonthDisclosesUnclassifiedOpeningPrincipal(t *testing.T) {
 		t.Fatalf("opening month = %+v, %v", got, err)
 	}
 }
+
+func TestContributionMonthDisclosesLinkedCashAndMissingOpeningValuation(t *testing.T) {
+	t.Run("linked cash", func(t *testing.T) {
+		f := newLedgerFixture(t)
+		f.exec(`UPDATE investment_accounts SET financial_account_id = ? WHERE id = ?`, f.bankID, f.custodyID)
+		got, err := investments.ReadContributionMonth(f.ctx, f.conn, day(20))
+		if err != nil || got.Available {
+			t.Fatalf("linked cash = %+v, %v", got, err)
+		}
+	})
+	t.Run("unpriced opening", func(t *testing.T) {
+		f := newLedgerFixture(t)
+		value := dec("1000")
+		_, err := investments.CreatePosition(f.ctx, f.conn, investments.PositionInput{AccountID: f.custodyID, Name: "Unpriced", AssetType: "Other", InitialValue: &value, OccurredOn: time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, err := investments.ReadContributionMonth(f.ctx, f.conn, day(20))
+		if err != nil || got.Available {
+			t.Fatalf("unpriced opening = %+v, %v", got, err)
+		}
+	})
+}
