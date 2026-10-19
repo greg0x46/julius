@@ -722,3 +722,31 @@ view converts every position with one rate per currency (day `to`) in the
 backend and shows the native value of a foreign position beside it. No
 positions, targets or provider balances are
 rewritten when switching reference currency.
+
+## Financial evolution history
+
+`GET /api/investment-history?from=YYYY-MM-DD&to=YYYY-MM-DD` supplies the wealth
+chart in one request. Both dates are required. Future `to` is clamped to the
+provider's current calendar day; a future start, reversed range or more than
+120 calendar months is rejected. It returns `baseline` (the existing portfolio
+DTO evaluated on the requested start day) and `periods` (the same DTO for each
+calendar month intersecting the range, with inclusive, possibly partial boundary
+months). Each sample uses `BuildPortfolio`, existing quote/ledger history and
+its own endpoint's reference FX, not today's rate. Nothing new is persisted.
+
+Full portfolio coverage metadata, native rates, nulls, yield and Modified Dietz
+semantics are retained. The chart omits samples with zero covered positions,
+unavailable positions, partial starts or incomplete position history. Stale FX
+is qualified. End values exclude custody cash; monthly yield remains a flow,
+not a stock or a portfolio-change proxy. As in the period view, within-period
+FX variation is excluded, provider IR/IOF provisions are not deducted, and
+historical prices follow the engine's last-available-quote policy. Sampling a
+month end does not claim a fresh quote existed on that exact day. An unavailable
+historical reporting FX rate fails this source with the existing Problem response;
+it does not replace the value with zero or block the separate wealth history.
+
+Pinning tests: `TestInvestmentHistoryPeriodsAndCoverage`,
+`TestInvestmentHistoryReusesPeriodCalculation`,
+`TestInvestmentHistoryUsesEachEndpointsReferenceRate`,
+`TestInvestmentHistoryRejectsInvalidRanges`, and frontend
+`components/evolution/evolution.test.ts` / `components/netWorth/NetWorthChart.test.tsx`.

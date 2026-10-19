@@ -361,3 +361,16 @@ export function getInvestmentPeriod(params: InvestmentPeriodParams, signal?: Abo
   if (params.source) query.set("source", params.source);
   return send(`/api/investment-portfolio?${query.toString()}`, { ...get, signal }, 200, parseInvestmentPeriod);
 }
+
+export function getInvestmentHistory(from: string, to: string, signal?: AbortSignal) {
+  const query = new URLSearchParams({ from, to });
+  return send(`/api/investment-history?${query}`, { ...get, signal }, 200, (value: unknown) => {
+    if (typeof value !== "object" || value === null || !("baseline" in value) || !("periods" in value) || !Array.isArray(value.periods))
+      throw new TypeError("Histórico de investimentos inválido.");
+    const baseline = parseInvestmentPeriod(value.baseline);
+    const periods = value.periods.map(parseInvestmentPeriod);
+    if (periods.some((period) => period.currency_code !== baseline.currency_code))
+      throw new TypeError("Moedas do histórico incompatíveis.");
+    return { baseline, periods };
+  });
+}

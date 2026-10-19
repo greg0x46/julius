@@ -1,3 +1,6 @@
+import { useState } from "react";
+import { EvolutionControls, type EvolutionScale } from "../evolution/EvolutionControls";
+import { changePercent } from "../../presentation/decimal";
 import { Alert } from "antd";
 import {
   CartesianGrid,
@@ -12,7 +15,7 @@ import {
 } from "recharts";
 
 import type { TimelineEntry, TimelineSeries } from "../../api/contracts";
-import { useReportFormat } from "../../hooks/useReportCurrency";
+import { useReportCurrency, useReportFormat } from "../../hooks/useReportCurrency";
 import { formatAxisMoney } from "../../presentation/chartAxis";
 import { yAxisWidth } from "../../presentation/chartAxisWidth";
 import { balanceChartColor } from "../../presentation/chartColors";
@@ -78,16 +81,22 @@ function DayEntries({ entries }: { entries: TimelineEntry[] }) {
   );
 }
 
-function TooltipContent({
+export function TimelineTooltip({
   active,
   payload,
   label,
   entriesByDate,
+  scale = "absolute",
+  originalValues,
+  referenceDate,
 }: {
   active?: boolean;
   payload?: { value: number; name: string }[];
   label?: string;
   entriesByDate?: Map<string, TimelineEntry[]>;
+  scale?: EvolutionScale;
+  originalValues?: Map<string, { balance: string; simulation?: string }>;
+  referenceDate?: string;
 }) {
   const format = useReportFormat();
   if (!active || !payload || payload.length === 0 || !label) return null;
@@ -98,7 +107,7 @@ function TooltipContent({
       <strong>{formatDate(label)}</strong>
       {rows.map((entry) => (
         <div key={entry.name}>
-          {entry.name}: {format(String(entry.value))}
+          {label === referenceDate && (entry.name === pastLineName || entry.name === futureLineName) ? "Saldo no fim do dia (inclui previsões)" : entry.name}: {scale === "percent" ? `${entry.value.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}% · ` : ""}{format(originalValues?.get(label)?.[entry.name === simulationLineName ? "simulation" : "balance"] ?? String(entry.value))}
         </div>
       ))}
       <DayEntries entries={entriesByDate?.get(label) ?? []} />
@@ -198,8 +207,26 @@ export function ProjectionTimeline({
   onSelectDay?: (date: string) => void;
 }) {
   const compact = useCompactScreen();
-  const data = mergePoints(series, simulation ?? null, referenceDate);
-  const axisWidth = yAxisWidth(
+  const currency = useReportCurrency();
+  const format = useReportFormat();
+  const [selected, setSelected] = useState<string[]>(["cash"]);
+  const [scale, setScale] = useState<EvolutionScale>("absolute");
+  const baseline = series.points[0]?.balance;
+  const simulationBaseline = simulation?.points[0]?.balance;
+  const invalidBaseline = scale === "percent" && (baseline == null || changePercent(baseline, baseline) === null ||
+    (simulation && (simulationBaseline == null || simulation.points[0]?.date !== series.points[0]?.date || changePercent(simulationBaseline, simulationBaseline) === null)));
+  const simulationValues = new Map(simulation?.points.map((point) => [point.date, point.balance]));
+  const originalValues = new Map(series.points.map((point) => [point.date, { balance: point.balance,
+    simulation: simulationValues.get(point.date) }]));
+  const chartValue = (value: string, base = baseline) => scale === "absolute" ? Number(value) : Number(base == null ? null : changePercent(value, base));
+  const data = mergePoints(series, simulation ?? null, referenceDate).map((point) => scale === "absolute" ? point : {
+    ...point,
+    balance: chartValue(originalValues.get(point.date)!.balance),
+    pastBalance: point.pastBalance === undefined ? undefined : chartValue(originalValues.get(point.date)!.balance),
+    futureBalance: point.futureBalance === undefined ? undefined : chartValue(originalValues.get(point.date)!.balance),
+    simulationBalance: originalValues.get(point.date)?.simulation === undefined ? undefined : chartValue(originalValues.get(point.date)!.simulation!, simulationBaseline),
+  });
+  const axisWidth = scale === "percent" ? 72 : yAxisWidth(
     data.flatMap((row) => [row.balance, row.simulationBalance].filter((v): v is number => v !== undefined)),
   );
   const todayPoint = series.points.find((p) => p.date === referenceDate);
@@ -227,6 +254,11 @@ export function ProjectionTimeline({
 
   return (
     <div className="timeline-chart" role="group" aria-label="Saldo ao longo do tempo">
+      <EvolutionControls options={[{ key: "cash", label: "Saldo", color: balanceChartColor.realized }]}
+        selected={selected} onSelected={setSelected} scale={scale} onScale={setScale} />
+      <p className="net-worth-footnote">{scale === "absolute" ? `Valores em ${currency}.` : `Variação desde ${series.points[0]?.date ? formatDate(series.points[0].date) : "o início do período"}.`} Linha contínua: realizado; tracejada: previsão. Valores convertidos à cotação de referência atual, sem representar câmbio histórico.</p>
+      {selected.length === 0 ? <p role="status">Selecione ao menos uma métrica para ver a evolução.</p> : invalidBaseline ?
+        <p role="status">A variação % exige um valor inicial positivo para todas as métricas selecionadas no início do período.</p> : <>
       {activeSeries.first_negative && (
         <Alert
           type="warning"
@@ -256,13 +288,14 @@ export function ProjectionTimeline({
             tick={{ fontSize: 12, fill: balanceChartColor.axis }}
           />
           <YAxis
-            tickFormatter={formatAxisMoney}
+            padding={{ top: 8, bottom: 8 }}
+            tickFormatter={scale === "percent" ? (value: number) => `${value.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}%` : formatAxisMoney}
             tickLine={false}
             axisLine={false}
             width={axisWidth}
             tick={{ fontSize: 12, fill: balanceChartColor.axis }}
           />
-          <Tooltip content={<TooltipContent entriesByDate={entriesByDate} />} />
+          <Tooltip content={<TimelineTooltip entriesByDate={entriesByDate} scale={scale} originalValues={originalValues} referenceDate={referenceDate} />} />
           {/* Zero is the line that matters on this chart — where the balance
               crosses it is the whole point of looking. */}
           <ReferenceLine y={0} stroke={balanceChartColor.lowest} strokeOpacity={0.5} />
@@ -276,7 +309,7 @@ export function ProjectionTimeline({
           )}
           <ReferenceDot
             x={activeSeries.lowest_balance.date}
-            y={Number(activeSeries.lowest_balance.balance)}
+            y={chartValue(activeSeries.lowest_balance.balance, simulation ? simulationBaseline : baseline)}
             r={5}
             fill={balanceChartColor.lowest}
             stroke="#fff"
@@ -289,7 +322,7 @@ export function ProjectionTimeline({
               name={pastLineName}
               stroke={balanceChartColor.realized}
               strokeWidth={2}
-              dot={false}
+              dot={data.length === 1 ? { r: 3 } : false}
               connectNulls={false}
             />
           )}
@@ -301,7 +334,7 @@ export function ProjectionTimeline({
               stroke={balanceChartColor.projected}
               strokeWidth={2}
               strokeDasharray="5 4"
-              dot={false}
+              dot={data.length === 1 ? { r: 3 } : false}
               connectNulls={false}
             />
           )}
@@ -313,12 +346,21 @@ export function ProjectionTimeline({
               stroke={balanceChartColor.simulation}
               strokeWidth={2}
               strokeDasharray="2 3"
-              dot={false}
+              dot={data.length === 1 ? { r: 3 } : false}
             />
           )}
         </LineChart>
       </ResponsiveContainer>
       <ChartLegend items={legend} />
+      <details className="evolution-values"><summary>Ver valores · {scale === "absolute" ? currency : "% e valores originais"}</summary>
+        <table><caption>Saldo realizado até hoje; previsão a partir de hoje. Hoje inclui compromissos ainda previstos.</caption><thead><tr><th>Data</th><th>Saldo</th>{simulation && <th>Simulação</th>}</tr></thead>
+          <tbody>{series.points.map((point) => <tr key={point.date}>
+            <th scope="row">{onSelectDay && point.date <= referenceDate ? <button type="button" onClick={() => onSelectDay(point.date)}>{formatDate(point.date)}</button> : formatDate(point.date)}{point.date >= referenceDate && " · previsão"}</th>
+            <td>{scale === "percent" && `${Number(changePercent(point.balance, baseline!)!).toLocaleString("pt-BR", { maximumFractionDigits: 2 })}% · `}{format(point.balance)}</td>
+            {simulation && <td>{originalValues.get(point.date)?.simulation == null ? "—" : <>{scale === "percent" && `${Number(changePercent(originalValues.get(point.date)!.simulation!, simulationBaseline!)!).toLocaleString("pt-BR", { maximumFractionDigits: 2 })}% · `}{format(originalValues.get(point.date)!.simulation!)}</>}</td>}
+          </tr>)}</tbody></table>
+      </details>
+      </>}
     </div>
   );
 }

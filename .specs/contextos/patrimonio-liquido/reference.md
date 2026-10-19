@@ -51,8 +51,44 @@ since they did not change the provider balance. See Transactions, Notes.
 
 ## Frontend
 
-`/patrimonio-liquido` — composition card + `NetWorthChart` (Recharts) with the
-evolution over time.
+`/patrimonio-liquido` — current composition card + `PeriodNavigator` using
+`usePeriod` (shared with Home and Transactions) + `NetWorthChart` (Recharts).
+The chart clamps its effective end to today; the composition remains today's
+snapshot. Net worth is selected by default. Compact checkboxes select observed
+cash, portfolio valuation and investment yield. No chart selection is persisted.
+
+Stock series share one monetary axis in the response currency. Percentage mode
+uses the exact first requested day's value for every selected stock; missing,
+zero or negative baselines explain unavailability rather than moving the
+baseline or inventing 0%. Later negative values remain valid. Both modes keep
+original decimal money in tooltips and the `Ver valores` semantic table.
+
+Cash and net worth use captured complete/stale snapshots, never the Home
+scenario-inclusive/current-FX timeline. Reconstructed, backfilled, legacy and
+unavailable rows are gaps; absent calendar days also break the line. One
+observation is a visible dot with a short explanation. Stale FX remains qualified
+in per-date tooltips/table and coverage notes. The coverage disclosure explains
+why reconstructed net worth omitting investments is not comparable.
+
+Portfolio valuation and monthly yield come from one bounded
+`GET /api/investment-history` request (see Investments reference). Portfolio
+points are sampled at the requested start and monthly endpoints, never joined
+across missing daily coverage. Portfolio value excludes custody cash and is not
+contributions or the net-worth investment component. A period with unavailable
+positions, partial starts or incomplete position history is omitted altogether,
+never shown as a complete subtotal or zero. Source errors/loading prevent new
+investment selections; selected metrics can still be deselected, with their
+unavailability explained. Cash and net worth remain usable. Period changes clear old
+investment results until the new request completes. History cache keys include
+report currency; a history response in a different currency is unavailable
+rather than being plotted on the wealth report's monetary axis.
+
+Yield is a separate monetary bar chart with inclusive period labels and a
+Modified Dietz table, independent of the stock percentage scale. No yield is
+derived from changes in portfolio valuation. Empty selections, absent coverage,
+invalid baselines and failed investment requests have explicit states and retry
+where applicable. Controls wrap on narrow screens; accessible values tables
+provide the information without pointer hover.
 
 ## API contract verification
 
