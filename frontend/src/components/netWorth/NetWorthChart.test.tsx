@@ -135,3 +135,10 @@ it("keeps yield as a separate period flow when stocks use percentages, with inco
   expect(screen.getByText(/A variação cambial dentro do período não está incluída/)).toBeInTheDocument();
   expect(screen.getByText("Ver rendimentos e retorno Modified Dietz")).toBeInTheDocument();
 });
+
+it("does not compare cached portfolio values in another reporting currency", () => {
+  const period = investmentPeriodFixture({ currency_code: "USD" });
+  render(<NetWorthChart snapshots={[observed]} history={{ baseline: period, periods: [period] }} />);
+  expect(screen.getByRole("checkbox", { name: "Investimentos" })).toBeDisabled();
+  expect(screen.getAllByText(/Moeda diferente do relatório/)).toHaveLength(2);
+});

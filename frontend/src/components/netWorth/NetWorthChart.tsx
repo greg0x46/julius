@@ -45,13 +45,15 @@ export function WealthTooltip({ active, label, points, selected, scale }: {
   </div>;
 }
 
-export function NetWorthChart({ snapshots, footnote, from, to, history, historyState, onRetryHistory }: {
+export function NetWorthChart({ snapshots, footnote, from, to, history: sourceHistory, historyState, onRetryHistory }: {
   snapshots: NetWorthSnapshot[]; footnote?: ReactNode; from?: string; to?: string;
   history?: InvestmentHistory; historyState?: "loading" | "error" | "range";
   onRetryHistory?: () => void;
 }) {
   const compact = useCompactScreen();
   const currency = useReportCurrency();
+  const currencyMismatch = sourceHistory !== undefined && sourceHistory.baseline.currency_code !== currency;
+  const history = currencyMismatch ? undefined : sourceHistory;
   const format = useReportFormat();
   const [selected, setSelected] = useState<string[]>(["netWorth"]);
   const [scale, setScale] = useState<EvolutionScale>("absolute");
@@ -62,7 +64,7 @@ export function NetWorthChart({ snapshots, footnote, from, to, history, historyS
   const { data, invalid } = scalePoints(points, stocks.map((option) => option.key), scale);
   const axisWidth = scale === "percent" ? 72 : yAxisWidth(data.flatMap((point) => stocks.map((option) => point[option.key]).filter((value): value is number => typeof value === "number")));
   const hasValues = data.some((point) => stocks.some((option) => point[option.key] != null));
-  const investmentUnavailable = historyState === "loading" ? "Carregando histórico" : historyState === "error" ? "Histórico indisponível" : historyState === "range" ? "Escolha até 120 meses, com início até hoje" :
+  const investmentUnavailable = currencyMismatch ? "Moeda diferente do relatório; atualize a página" : historyState === "loading" ? "Carregando histórico" : historyState === "error" ? "Histórico indisponível" : historyState === "range" ? "Escolha até 120 meses, com início até hoje" :
     history && [history.baseline, ...history.periods].some(reliablePortfolio) ? undefined : "Sem histórico suficiente neste período";
   const options = [...stockOptions.map((option) => ({ ...option, unavailable: option.key === "investments" ? investmentUnavailable : undefined })),
     { key: "yield", label: "Rendimentos de investimentos", color: "#7b4aa1", unavailable: investmentUnavailable }];

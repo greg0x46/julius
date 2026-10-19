@@ -25,14 +25,15 @@ export function NetWorthPage() {
   const months = (Number(to.slice(0, 4)) - Number(from.slice(0, 4))) * 12 + Number(to.slice(5, 7)) - Number(from.slice(5, 7));
   const validHistoryRange = from <= to && months < 120;
   const history = useQuery({
-    queryKey: [...queryKeys.investmentWorkspace, "history", from, to],
+    queryKey: [...queryKeys.investmentWorkspace, "history", netWorth.latest?.currency_code, from, to],
     queryFn: ({ signal }) => getInvestmentHistory(from, to, signal),
     enabled: !!netWorth.latest && validHistoryRange,
   });
-  const hasStaleRates = netWorth.series.some((snapshot) => snapshot.fx?.stale);
-  const hasBackfilledPoints = netWorth.series.some((s) => s.is_backfilled);
-  const hasLegacyPoints = netWorth.series.some((s) => s.valuation_status === "legacy");
-  const hasUnavailablePoints = netWorth.series.some((s) => s.valuation_status === "unavailable");
+  const periodSnapshots = netWorth.series.filter((snapshot) => snapshot.captured_at.slice(0, 10) >= from && snapshot.captured_at.slice(0, 10) <= to);
+  const hasStaleRates = periodSnapshots.some((snapshot) => snapshot.fx?.stale);
+  const hasBackfilledPoints = periodSnapshots.some((s) => s.is_backfilled);
+  const hasLegacyPoints = periodSnapshots.some((s) => s.valuation_status === "legacy");
+  const hasUnavailablePoints = periodSnapshots.some((s) => s.valuation_status === "unavailable");
 
   // One footnote, under the chart it qualifies, for what used to be a
   // paragraph above the figures plus an info Alert below the chart.
