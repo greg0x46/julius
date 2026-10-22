@@ -23,7 +23,7 @@ import (
 // therefore include payments or purchases that the user has ignored
 // locally. This is the single source of truth for "what's currently owed
 // on open credit cards" — every caller that needs that figure (the
-// payables total-owed summary, net worth's liability breakdown) must go
+// payables total-owed summary) must go
 // through this function so their numbers agree by construction.
 func CreditCardTransactionTotal(ctx context.Context, q Querier, currencyCode string) (decimal.Decimal, error) {
 	return CreditCardTransactionTotalAt(ctx, q, currencyCode, time.Now(), time.Local)
@@ -455,46 +455,4 @@ func stringFromNullString(value sql.NullString) *string {
 		return nil
 	}
 	return &value.String
-}
-
-// CreditCardBalanceValued is what every credit card owes on the cycle open at
-// `at`, each account in its own currency and each transaction valued once in
-// the BRL base. A currency without a rate fails the call; it is never dropped.
-// Accounts without a currency stay out, as they do for CreditCardTransactionTotal.
-func CreditCardBalanceValued(ctx context.Context, q Querier, at time.Time, loc *time.Location, valued *valuation.Valuation) (decimal.Decimal, error) {
-	if loc == nil {
-		return decimal.Zero, fmt.Errorf("credit card cycle timezone is nil")
-	}
-	bills, err := fetchCardBillClosingDates(ctx, q, loc)
-	if err != nil {
-		return decimal.Zero, err
-	}
-	rows, err := q.QueryContext(ctx, `SELECT id, currency_code FROM financial_accounts WHERE account_type = 'CREDIT' AND currency_code IS NOT NULL`)
-	if err != nil {
-		return decimal.Zero, fmt.Errorf("query credit card accounts: %w", err)
-	}
-	type account struct{ id, currency string }
-	var accounts []account
-	for rows.Next() {
-		var a account
-		if err := rows.Scan(dbtypes.ID(&a.id), &a.currency); err != nil {
-			rows.Close()
-			return decimal.Zero, err
-		}
-		accounts = append(accounts, a)
-	}
-	err = rows.Err()
-	rows.Close()
-	if err != nil {
-		return decimal.Zero, err
-	}
-	total := decimal.Zero
-	for _, a := range accounts {
-		amount, err := consideredCardTransactionTotal(ctx, q, a.id, a.currency, bills, at, loc, nil, valued)
-		if err != nil {
-			return decimal.Zero, err
-		}
-		total = total.Add(amount)
-	}
-	return total, nil
 }

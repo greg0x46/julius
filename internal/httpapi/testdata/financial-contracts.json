@@ -564,11 +564,8 @@
     "series": [
       {
         "currency_code": "BRL",
-        "stored_currency": "BRL",
-        "captured_at": "2026-07-30T12:34:56.123456789Z",
-        "valuation_version": 1,
-        "valuation_status": "unavailable",
-        "is_backfilled": false
+        "date": "2026-07-30T12:34:56.123456789Z",
+        "valuation_status": "unavailable"
       },
       {
         "currency_code": "BRL",
@@ -583,9 +580,7 @@
           "fetched_at": "2026-07-30T12:34:56.123456789Z",
           "stale": false
         },
-        "stored_currency": "BRL",
-        "captured_at": "2026-07-30T12:34:56.123456789Z",
-        "valuation_version": 1,
+        "date": "2026-07-30T12:34:56.123456789Z",
         "valuation_status": "complete",
         "valuation": {
           "base_currency": "BRL",
@@ -603,12 +598,7 @@
         },
         "cash_balance": "9007199254740993.123456789012345678",
         "investment_balance": "0.000000000000000001",
-        "credit_card_balance": "0",
-        "payables_debt": "0",
-        "total_assets": "9007199254740993.123456789012345679",
-        "total_liabilities": "0",
-        "net_worth": "9007199254740993.123456789012345679",
-        "is_backfilled": false
+        "total": "9007199254740993.123456789012345679"
       }
     ],
     "latest": {
@@ -624,9 +614,7 @@
         "fetched_at": "2026-07-30T12:34:56.123456789Z",
         "stale": false
       },
-      "stored_currency": "BRL",
-      "captured_at": "2026-07-30T12:34:56.123456789Z",
-      "valuation_version": 1,
+      "date": "2026-07-30T12:34:56.123456789Z",
       "valuation_status": "complete",
       "valuation": {
         "base_currency": "BRL",
@@ -644,12 +632,7 @@
       },
       "cash_balance": "9007199254740993.123456789012345678",
       "investment_balance": "0.000000000000000001",
-      "credit_card_balance": "0",
-      "payables_debt": "0",
-      "total_assets": "9007199254740993.123456789012345679",
-      "total_liabilities": "0",
-      "net_worth": "9007199254740993.123456789012345679",
-      "is_backfilled": false
+      "total": "9007199254740993.123456789012345679"
     }
   },
   "operations": {

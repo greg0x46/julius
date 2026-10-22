@@ -67,7 +67,7 @@ func TestTransfersCreateNoIncomeOrExpense(t *testing.T) {
 
 	// The reported balance is authoritative: the pair is already inside it.
 	assertDec(t, "cash after the pair", f.cash(), cashBefore.String())
-	assertDec(t, "net worth after the pair", f.netWorth().NetWorth, netWorthBefore.NetWorth.String())
+	assertDec(t, "net worth after the pair", f.netWorth().Total, netWorthBefore.Total.String())
 
 	combined := f.series(timeline.BuildParams{})
 	periodTotals := timeline.TotalsForPeriod(combined)
@@ -133,7 +133,7 @@ func TestCategorizationDoesNotAlterProviderBalances(t *testing.T) {
 	type balances struct{ cash, starting, netWorth, netWorthCash decimal.Decimal }
 	read := func() balances {
 		breakdown := f.netWorth()
-		return balances{f.cash(), f.series(timeline.BuildParams{}).StartingBalance, breakdown.NetWorth, breakdown.CashBalance}
+		return balances{f.cash(), f.series(timeline.BuildParams{}).StartingBalance, breakdown.Total, breakdown.CashBalance}
 	}
 	base := read()
 	assertDec(t, "CashOnHand (credit account excluded)", base.cash, "1500")
@@ -618,57 +618,36 @@ func TestRepeatedProcessingDoesNotDuplicateFinancialEffects(t *testing.T) {
 		}
 	})
 
-	t.Run("net worth snapshot", func(t *testing.T) {
-		for i := 0; i < 2; i++ {
-			if _, err := networth.Snapshot(f.ctx, f.conn); err != nil {
-				t.Fatalf("Snapshot: %v", err)
-			}
-		}
-		if n := f.count(`SELECT COUNT(*) FROM net_worth_snapshots WHERE is_backfilled = 0`); n != 1 {
-			t.Errorf("live snapshots = %d, want 1", n)
-		}
-	})
-
-	t.Run("net worth backfill", func(t *testing.T) {
-		rows := func() map[string]string {
-			out := map[string]string{}
-			r, err := f.conn.Query(`SELECT captured_at, net_worth FROM net_worth_snapshots WHERE is_backfilled = 1`)
+	t.Run("net worth series", func(t *testing.T) {
+		read := func() map[string]string {
+			points, err := networth.Series(f.ctx, f.conn, day(31))
 			if err != nil {
-				t.Fatalf("query snapshots: %v", err)
+				t.Fatalf("Series: %v", err)
 			}
-			defer r.Close()
-			for r.Next() {
-				var capturedAt, value string
-				if err := r.Scan(&capturedAt, &value); err != nil {
-					t.Fatalf("scan: %v", err)
-				}
-				out[capturedAt] = value
+			out := map[string]string{}
+			for _, p := range points {
+				out[p.Day.Format("2006-01-02")] = p.Breakdown.Total.String()
 			}
 			return out
 		}
-		if err := networth.Backfill(f.ctx, f.conn, day(31)); err != nil {
-			t.Fatalf("Backfill: %v", err)
+		first, second := read(), read()
+		if len(first) == 0 || len(first) != len(second) {
+			t.Fatalf("series sizes = %d then %d", len(first), len(second))
 		}
-		first := rows()
-		if len(first) == 0 {
-			t.Fatalf("Backfill wrote no rows")
-		}
-		// A changed balance would reconstruct different numbers; existing
-		// rows must keep the ones they were written with.
-		f.exec(`UPDATE financial_accounts SET balance = '9999.00' WHERE id = ?`, account)
-		if err := networth.Backfill(f.ctx, f.conn, day(31)); err != nil {
-			t.Fatalf("Backfill: %v", err)
-		}
-		second := rows()
-		if len(second) != len(first) {
-			t.Errorf("backfilled rows = %d, want %d", len(second), len(first))
-		}
-		for capturedAt, value := range first {
-			if second[capturedAt] != value {
-				t.Errorf("%s overwritten: %s -> %s", capturedAt, value, second[capturedAt])
+		for day, value := range first {
+			if second[day] != value {
+				t.Errorf("%s changed between reads: %s -> %s", day, value, second[day])
 			}
 		}
+		// Nothing is stored: a changed balance moves the whole history.
+		f.exec(`UPDATE financial_accounts SET balance = '9999.00' WHERE id = ?`, account)
+		moved := read()
 		f.exec(`UPDATE financial_accounts SET balance = '1000.00' WHERE id = ?`, account)
+		for day, value := range first {
+			if moved[day] == value {
+				t.Errorf("%s kept %s after the balance changed", day, value)
+			}
+		}
 	})
 
 	t.Run("investment reconciliation", func(t *testing.T) {
@@ -708,11 +687,11 @@ func TestRepeatedProcessingDoesNotDuplicateFinancialEffects(t *testing.T) {
 	})
 }
 
-// TestIgnoredRowDivergesBetweenTimelineAndBackfill pins a known divergence
+// TestIgnoredRowDivergesBetweenTimelineAndNetWorthSeries pins a known divergence
 // (see "Divergências" in the matrix): the timeline drops an ignored row from
-// its past walk, while the net-worth backfill reverses it out of the anchor.
+// its past walk, while the net-worth series reverses it out of the anchor.
 // Both keep today's reported balance; only past days disagree.
-func TestIgnoredRowDivergesBetweenTimelineAndBackfill(t *testing.T) {
+func TestIgnoredRowDivergesBetweenTimelineAndNetWorthSeries(t *testing.T) {
 	f := newFixture(t)
 	account := f.addAccount("1000.00", "")
 	f.addTx(account, "10.00", day(2), "POSTED")
@@ -732,14 +711,17 @@ func TestIgnoredRowDivergesBetweenTimelineAndBackfill(t *testing.T) {
 	}
 	assertDec(t, "timeline balance on 08-02 (ignored row dropped)", *timelineDay2, "1000")
 
-	if err := networth.Backfill(f.ctx, f.conn, day(31)); err != nil {
-		t.Fatalf("Backfill: %v", err)
+	points, err := networth.Series(f.ctx, f.conn, day(31))
+	if err != nil {
+		t.Fatalf("Series: %v", err)
 	}
-	var cashRaw string
-	if err := f.conn.QueryRow(`SELECT cash_balance FROM net_worth_snapshots WHERE captured_at = '2026-08-02'`).Scan(&cashRaw); err != nil {
-		t.Fatalf("backfilled snapshot: %v", err)
+	for _, p := range points {
+		if p.Day.Format("2006-01-02") == "2026-08-02" {
+			assertDec(t, "series cash on 08-02 (ignored row reversed)", p.Breakdown.CashBalance, "1300")
+			return
+		}
 	}
-	assertDec(t, "backfilled cash on 08-02 (ignored row reversed)", mustDec(t, cashRaw), "1300")
+	t.Fatalf("no series point for 2026-08-02")
 }
 
 // TestMatrixReferencesExistingTests keeps the matrix honest: every test it

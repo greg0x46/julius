@@ -407,6 +407,20 @@ func (s *syncedSeries) quantityAt(d time.Time) decimal.Decimal {
 }
 
 func (s *syncedSeries) value(d time.Time) (decimal.Decimal, bool) {
+	return s.valueWith(d, priceOn)
+}
+
+// valueHeld is value with the latest price however old: wealth keeps a
+// holding at the last price it was observed at until the next one, where a
+// rendimento must not let an old price stand for a later day.
+func (s *syncedSeries) valueHeld(d time.Time) (decimal.Decimal, bool) {
+	return s.valueWith(d, func(quotes []AssetQuote, d time.Time) (decimal.Decimal, bool) {
+		quote, ok := latestQuoteOn(quotes, d)
+		return quote.Price, ok
+	})
+}
+
+func (s *syncedSeries) valueWith(d time.Time, price func([]AssetQuote, time.Time) (decimal.Decimal, bool)) (decimal.Decimal, bool) {
 	if s.complete && s.firstInflow != nil && d.Before(*s.firstInflow) {
 		return decimal.Zero, true
 	}
@@ -417,11 +431,11 @@ func (s *syncedSeries) value(d time.Time) (decimal.Decimal, bool) {
 	if !quantity.IsPositive() {
 		return decimal.Zero, true
 	}
-	price, ok := priceOn(s.quotes, d)
+	unit, ok := price(s.quotes, d)
 	if !ok {
 		return decimal.Zero, false
 	}
-	return quantity.Mul(price).Round(2), true
+	return quantity.Mul(unit).Round(2), true
 }
 
 func (s *syncedSeries) flows(from, to time.Time) decimal.Decimal { return sumFlows(s.events, from, to) }

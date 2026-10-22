@@ -29,10 +29,6 @@ func TestReferenceCurrencyValuesReportsWithoutChangingRecords(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	_, err = conn.Exec(`INSERT INTO net_worth_snapshots (id,captured_at,total_assets,total_liabilities,net_worth,cash_balance,investment_balance,credit_card_balance,payables_debt,is_backfilled,created_at,updated_at) VALUES ('historical',?,'400','0','400','400','0','0','0',FALSE,?,?)`, yesterday, db.FormatTime(now), db.FormatTime(now))
-	if err != nil {
-		t.Fatal(err)
-	}
 	for _, code := range []string{"BRL", "USD", "BRL"} {
 		investmentCall(t, srv, http.MethodPut, "/api/preferences", map[string]any{"transactions_period_basis": "occurred_at", "reference_currency": code}, 200)
 		summary := investmentCall(t, srv, http.MethodGet, "/api/investment-summary", nil, 200)
@@ -75,17 +71,10 @@ func TestReferenceCurrencyValuesReportsWithoutChangingRecords(t *testing.T) {
 		assertMoney(t, "native reporting amount", item["reportable_amount"], "50")
 		worth := investmentCall(t, srv, http.MethodGet, "/api/net-worth", nil, 200)
 		latest := worth["latest"].(map[string]any)
-		if latest["currency_code"] != code || latest["stored_currency"] != "BRL" {
-			t.Fatalf("snapshot currency = %+v", latest)
+		if latest["currency_code"] != code {
+			t.Fatalf("wealth currency = %+v", latest)
 		}
-		assertMoney(t, "net worth cash", latest["cash_balance"], cash)
-		if code == "USD" {
-			historical := worth["series"].([]any)[0].(map[string]any)
-			assertMoney(t, "historical FX", historical["net_worth"], "100")
-			if historical["fx"].(map[string]any)["source"] != "synthetic" {
-				t.Fatal("lost FX provenance")
-			}
-		}
+		assertMoney(t, "wealth cash", latest["cash_balance"], cash)
 	}
 	var native, currency string
 	if err := conn.QueryRow(`SELECT balance,currency_code FROM financial_investments WHERE id=?`, holding).Scan(&native, &currency); err != nil {
@@ -101,13 +90,6 @@ func TestReferenceCurrencyValuesReportsWithoutChangingRecords(t *testing.T) {
 	}
 	if native != "-50" || currency != "BRL" {
 		t.Fatalf("transaction changed: %s %s", native, currency)
-	}
-	var stored, storedCode string
-	if err := conn.QueryRow(`SELECT net_worth,valuation_currency FROM net_worth_snapshots WHERE captured_at=?`, yesterday).Scan(&stored, &storedCode); err != nil {
-		t.Fatal(err)
-	}
-	if stored != "400" || storedCode != "BRL" {
-		t.Fatalf("snapshot rewritten: %s %s", stored, storedCode)
 	}
 	for _, invalid := range []any{nil, 123, "", "usd", "ZZZ", "XXX", " USD"} {
 		investmentCall(t, srv, http.MethodPut, "/api/preferences", map[string]any{"transactions_period_basis": "paid_at", "reference_currency": invalid}, 422)

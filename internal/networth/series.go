@@ -3,139 +3,87 @@ package networth
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"sort"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/shopspring/decimal"
 
-	"github.com/greg0x46/julius/internal/db"
+	"github.com/greg0x46/julius/internal/dates"
 	dbtypes "github.com/greg0x46/julius/internal/db/types"
 	"github.com/greg0x46/julius/internal/exchange"
+	"github.com/greg0x46/julius/internal/investments"
 	"github.com/greg0x46/julius/internal/money"
-	"github.com/greg0x46/julius/internal/payables"
 	"github.com/greg0x46/julius/internal/transactions"
 	"github.com/greg0x46/julius/internal/valuation"
 )
 
-// Backfill reconstructs and stores net_worth_snapshots for every past day in
-// [earliestCashTransactionDay, yesterday] that has no row yet — the full
-// depth of available transaction history, not an arbitrary cap. It is safe
-// to call on every request: days that already have a row (written by
-// Snapshot, an earlier Backfill run, or anything else) are left untouched —
-// the per-day INSERT below only ever fires for a captured_at gap, and even
-// then uses ON CONFLICT DO NOTHING as a second guard rather than overwriting
-// a real Compute-derived snapshot with a reconstructed approximation.
+// Series is the wealth at the end of every day from the first dated movement
+// (cash transaction or investment operation) through today, oldest first. It
+// is derived on every call and stores nothing. Today is Compute; each earlier
+// day is rebuilt from the same sources:
 //
-// Only three of Breakdown's four categories can be reconstructed for a past
-// day:
+//   - Cash: today's native balances walked backward, reversing every real
+//     movement of money in turn (see cashDeltasDescending).
+//   - Investments: investments.ValuesOn, the operation ledgers replayed with
+//     that day's valuation or quote, and provider holdings priced that day.
 //
-//   - CashBalance: today's non-CREDIT account balances, walked backward by
-//     reversing each eligible transaction's effect in turn (same
-//     eligibility rules for actual cash, including ignored bank movements).
-//   - CreditCardBalance: transactions.CreditCardTransactionTotalAt, which
-//     already accepts an arbitrary reference date — reused as-is per bill
-//     cycle, so it naturally reports 0 for a day before any known bill
-//     closing.
-//   - PayablesDebt: the same Links-based sum Compute uses, except a link is
-//     only counted once its transaction's occurred_at is on or before the
-//     day in question — a debt payment made next week hasn't happened yet
-//     as of a backfilled day last week.
-//
-// InvestmentBalance is NOT reconstructed and is always 0 on a backfilled
-// row. financial_investments.balance is a synced snapshot with no dated
-// history, and the only other number available — net contributions — nets
-// out to a residual gain/loss that was never observed at any specific past
-// date (see internal/httpapi's contributionInfo). Any of "hold today's
-// value flat", "use net-contributed as an approximation", or "reconstruct"
-// would fabricate a number this app has no way to actually know, so
-// backfilled points simply omit investments from both InvestmentBalance and
-// TotalAssets rather than present a guess as fact. SnapshotRow.IsBackfilled
-// is what lets the frontend flag this to the user instead of silently
-// showing a lower total on past days.
-func Backfill(ctx context.Context, q Querier, today time.Time) error {
-	return BackfillWith(ctx, q, today, exchange.New(q, nil))
+// Liabilities and future bills are not part of wealth, so nothing else is
+// reconstructed.
+func Series(ctx context.Context, q Querier, today time.Time) ([]Point, error) {
+	return SeriesWith(ctx, q, today, exchange.New(q, nil))
 }
 
-// BackfillWith is Backfill with the exchange rates supplied by the caller.
+// SeriesWith is Series with the exchange rates supplied by the caller.
 //
-// Each past day is valued with that day's own rates, and its row records them.
-// Past foreign balances are walked back in their native currency and converted
-// only at the end, so a movement is never valued at another day's rate. When a
-// rate cannot be resolved the day is skipped without storing anything, so a
-// later read retries it. A day that can never be valued (a foreign movement
-// with no amount in its account's currency lies after it) is stored once with
-// status "unavailable" and no figures, never as zero.
-func BackfillWith(ctx context.Context, q Querier, today time.Time, rates valuation.Resolver) error {
-	todayDay := formatDate(today)
-	todayBoundary, err := dbtypes.ParseDate(todayDay)
+// Each past day is valued with that day's own rates. Foreign balances are
+// walked back in their native currency and converted only at the end, so a
+// movement is never valued at another day's rate. A day that cannot be valued
+// is returned as "unavailable" with no figures, never as zero: a rate that is
+// missing (or a provider that is down), a foreign movement with no amount in
+// its account's currency lying after it, or a holding with no price that day.
+// Today's point is the exception: it fails the call, as Compute does.
+func SeriesWith(ctx context.Context, q Querier, today time.Time, rates valuation.Resolver) ([]Point, error) {
+	todayDay := dates.Day(today)
+	live, err := livePoint(ctx, q, today, rates)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	earliest, ok, err := earliestCashTransactionDay(ctx, q)
+	start, ok, err := firstDay(ctx, q)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	if !ok {
-		// No non-CREDIT transaction has ever been recorded, so cash — the
-		// one category every backfilled day requires — can't be
-		// reconstructed for any day at all.
-		return nil
-	}
-
-	windowStart := earliest
-	yesterday := todayBoundary.AddDate(0, 0, -1)
-	if windowStart.After(yesterday) {
-		return nil
-	}
-
-	existing, err := existingCapturedDays(ctx, q, windowStart, yesterday)
-	if err != nil {
-		return err
-	}
-
-	// The common read has nothing to fill: skip loading the whole ledger.
-	missing := false
-	for d := yesterday; !d.Before(windowStart); d = d.AddDate(0, 0, -1) {
-		if !existing[formatDate(d)] {
-			missing = true
-			break
-		}
-	}
-	if !missing {
-		return nil
+	yesterday := todayDay.AddDate(0, 0, -1)
+	if !ok || start.After(yesterday) {
+		return []Point{live}, nil
 	}
 
 	currentCash, err := transactions.CashOnHandByCurrency(ctx, q, nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	deltas, err := cashDeltasDescending(ctx, q)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	// First pass: walk the window backward accumulating the cash deltas, and
-	// collect the days that actually need a row. Nothing is queried per day
-	// here — the point of the backward walk is that one ordered load of
-	// every transaction answers every day at once.
-	type gap struct {
-		day, dayEnd time.Time
-		cash        money.Balances
+	// Walk the window backward accumulating the cash deltas: one ordered load
+	// of every transaction answers every day at once.
+	type day struct {
+		day  time.Time
+		cash money.Balances
 		// unreconstructable: a movement after this day cannot be reversed out
 		// of its account (a foreign account with no amount in its own
-		// currency), so no later-or-earlier figure of that cash is known.
+		// currency), so no earlier figure of that cash is known.
 		unreconstructable bool
 	}
-	var gaps []gap
+	var days []day
 	idx := 0
 	runningDelta := money.Balances{}
 	unreconstructable := false
-	for d := yesterday; !d.Before(windowStart); d = d.AddDate(0, 0, -1) {
+	for d := yesterday; !d.Before(start); d = d.AddDate(0, 0, -1) {
 		dayEnd := d.AddDate(0, 0, 1)
 		for idx < len(deltas) && !deltas[idx].occurredAt.Before(dayEnd) {
 			if deltas[idx].unreconstructable {
@@ -145,11 +93,6 @@ func BackfillWith(ctx context.Context, q Querier, today time.Time, rates valuati
 			}
 			idx++
 		}
-		if existing[formatDate(d)] {
-			continue
-		}
-		// Native balances per currency: nothing is converted until the day's
-		// own rates are known, so a movement is never valued at another day's rate.
 		cash := money.Balances{}
 		for _, currency := range currentCash.Currencies() {
 			cash[currency] = currentCash.Get(currency)
@@ -157,87 +100,101 @@ func BackfillWith(ctx context.Context, q Querier, today time.Time, rates valuati
 		for _, currency := range runningDelta.Currencies() {
 			cash[currency] = cash.Get(currency).Sub(runningDelta.Get(currency))
 		}
-		gaps = append(gaps, gap{day: d, dayEnd: dayEnd, cash: cash, unreconstructable: unreconstructable})
+		days = append(days, day{day: d, cash: cash, unreconstructable: unreconstructable})
 	}
-	if len(gaps) == 0 {
-		return nil
+	// Built newest first; the series and the investment ledgers run oldest first.
+	for i, j := 0, len(days)-1; i < j; i, j = i+1, j-1 {
+		days[i], days[j] = days[j], days[i]
 	}
-
-	// The payables side gets the same treatment: one load of every payable
-	// and every transaction behind its links answers all the days, instead
-	// of re-reading them once per day (see payables.RemainingTotalsAsOf).
-	dayEnds := make([]time.Time, len(gaps))
-	for i, g := range gaps {
-		dayEnds[i] = g.dayEnd
+	dayList := make([]time.Time, len(days))
+	for i, d := range days {
+		dayList[i] = d.day
 	}
-	debts, err := payables.RemainingTotalsAsOf(ctx, q, payables.KindDebt, dayEnds)
-	if err != nil {
-		return err
-	}
-
-	for i, g := range gaps {
-		valued := valuation.New(rates, g.day)
-		if g.unreconstructable {
-			// Deterministic, so it is stored: retrying cannot change it.
-			if err := insertBackfillSnapshot(ctx, q, formatDate(g.day), Breakdown{}.TotalsFor(), valued, ValuationUnavailable); err != nil {
-				return err
-			}
-			continue
-		}
-		cash, err := valueBalances(ctx, g.cash, valued)
-		if errors.Is(err, valuation.ErrMissingRate) {
-			// Possibly transient (provider down): store nothing so a later
-			// read retries this day instead of freezing it as unavailable.
-			if errors.Is(err, exchange.ErrProviderFailure) {
-				return nil // every older day would hit the same outage
-			}
-			continue
-		}
-		if err != nil {
-			return err
-		}
-		// The card side still costs a query per day: its cycle math keys off
-		// time.Local calendar days and has no as-of-many-days form, so
-		// there is nothing to hoist out of the loop here yet.
-		loc := time.Local
-		reference := time.Date(g.day.Year(), g.day.Month(), g.day.Day(), 12, 0, 0, 0, loc)
-		creditCard, err := transactions.CreditCardBalanceValued(ctx, q, reference, loc, valued)
-		if errors.Is(err, valuation.ErrMissingRate) {
-			if errors.Is(err, exchange.ErrProviderFailure) {
-				return nil
-			}
-			continue
-		}
-		if err != nil {
-			return err
-		}
-		breakdown := Breakdown{CashBalance: cash, CreditCardBalance: creditCard, PayablesDebt: debts[i]}.TotalsFor()
-		if err := insertBackfillSnapshot(ctx, q, formatDate(g.day), breakdown, valued, ValuationReconstructed); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// existingCapturedDays returns the set of captured_at values (YYYY-MM-DD)
-// already stored in [from, to], so Backfill can skip them without an
-// INSERT round trip per day.
-func existingCapturedDays(ctx context.Context, q Querier, from, to time.Time) (map[string]bool, error) {
-	rows, err := q.QueryContext(ctx, `SELECT captured_at FROM net_worth_snapshots WHERE captured_at >= ? AND captured_at <= ?`,
-		formatDate(from), formatDate(to))
+	held, err := investments.ValuesOn(ctx, q, dayList)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-	result := make(map[string]bool)
-	for rows.Next() {
-		var capturedAt string
-		if err := rows.Scan(dbtypes.Date(&capturedAt)); err != nil {
+
+	// Once the provider fails, stop asking it: every remaining foreign day
+	// would hit the same outage.
+	guard := &outageGuard{Resolver: rates}
+	points := make([]Point, 0, len(days)+1)
+	for i, d := range days {
+		valued := valuation.New(guard, d.day)
+		point := Point{Day: d.day, Status: ValuationUnavailable, Valuation: &valued.Metadata}
+		if d.unreconstructable || !held[i].Complete {
+			points = append(points, point)
+			continue
+		}
+		cash, err := valueBalances(ctx, d.cash, valued)
+		var invested decimal.Decimal
+		if err == nil {
+			invested, err = valueBalances(ctx, held[i].Balances, valued)
+		}
+		switch {
+		case err == nil:
+			point.Breakdown = Breakdown{CashBalance: cash, InvestmentBalance: invested}.TotalsFor()
+			point.Status = statusOf(valued)
+		case !errors.Is(err, valuation.ErrMissingRate):
 			return nil, err
 		}
-		result[capturedAt] = true
+		points = append(points, point)
 	}
-	return result, rows.Err()
+	return append(points, live), nil
+}
+
+// outageGuard remembers a provider failure so later days do not repeat it.
+type outageGuard struct {
+	valuation.Resolver
+	failure error
+}
+
+func (g *outageGuard) On(ctx context.Context, base, quote string, t time.Time) (exchange.Rate, error) {
+	if g.failure != nil {
+		return exchange.Rate{}, g.failure
+	}
+	rate, err := g.Resolver.On(ctx, base, quote, t)
+	if errors.Is(err, exchange.ErrProviderFailure) {
+		g.failure = err
+	}
+	return rate, err
+}
+
+func livePoint(ctx context.Context, q Querier, today time.Time, rates valuation.Resolver) (Point, error) {
+	valued := valuation.New(rates, today)
+	breakdown, err := ComputeValued(ctx, q, valued)
+	if err != nil {
+		return Point{}, err
+	}
+	return Point{Day: dates.Day(today), Status: statusOf(valued), Breakdown: breakdown, Valuation: &valued.Metadata}, nil
+}
+
+func statusOf(valued *valuation.Valuation) string {
+	if valued.Stale() {
+		return ValuationStale
+	}
+	return ValuationComplete
+}
+
+// firstDay is the earliest day any cash transaction or investment movement is
+// dated: the depth of history there is to reconstruct.
+func firstDay(ctx context.Context, q Querier) (time.Time, bool, error) {
+	cash, cashOK, err := earliestCashTransactionDay(ctx, q)
+	if err != nil {
+		return time.Time{}, false, err
+	}
+	invested, investedOK, err := investments.EarliestDay(ctx, q)
+	if err != nil {
+		return time.Time{}, false, err
+	}
+	switch {
+	case cashOK && investedOK && invested.Before(cash):
+		return invested, true, nil
+	case cashOK:
+		return cash, true, nil
+	default:
+		return invested, investedOK, nil
+	}
 }
 
 // valueBalances values native per-currency balances in the BRL base.
@@ -251,30 +208,6 @@ func valueBalances(ctx context.Context, balances money.Balances, valued *valuati
 		total = total.Add(value)
 	}
 	return total, nil
-}
-
-func insertBackfillSnapshot(ctx context.Context, q Querier, capturedAt string, breakdown Breakdown, valued *valuation.Valuation, status string) error {
-	now := db.FormatTime(time.Now())
-	rates, err := json.Marshal(valued.Rates)
-	if err != nil {
-		return err
-	}
-	_, err = q.ExecContext(ctx, `
-		INSERT INTO net_worth_snapshots (
-			id, captured_at, total_assets, total_liabilities, net_worth,
-			cash_balance, investment_balance, credit_card_balance, payables_debt,
-			is_backfilled, created_at, updated_at,
-			valuation_version, valuation_status, valued_at, rate_policy, valuation_rates
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, TRUE, ?, ?, ?, ?, ?, ?, ?)
-		ON CONFLICT (captured_at) DO NOTHING`,
-		uuid.NewString(), capturedAt,
-		money.CanonicalDecimal(breakdown.TotalAssets), money.CanonicalDecimal(breakdown.TotalLiabilities), money.CanonicalDecimal(breakdown.NetWorth),
-		money.CanonicalDecimal(breakdown.CashBalance), money.CanonicalDecimal(breakdown.InvestmentBalance), money.CanonicalDecimal(breakdown.CreditCardBalance),
-		money.CanonicalDecimal(breakdown.PayablesDebt),
-		now, now,
-		ValuationVersion, status, db.FormatTime(valued.ValuedAt), valued.RatePolicy, string(rates),
-	)
-	return err
 }
 
 // cashTransactionDelta is one non-CREDIT-account transaction's effect on
@@ -439,10 +372,5 @@ func earliestCashTransactionDay(ctx context.Context, q Querier) (day time.Time, 
 	if err != nil {
 		return time.Time{}, false, err
 	}
-	dayString := formatDate(earliest)
-	dayBoundary, err := dbtypes.ParseDate(dayString)
-	if err != nil {
-		return time.Time{}, false, err
-	}
-	return dayBoundary, true, nil
+	return dates.Day(earliest.UTC()), true, nil
 }

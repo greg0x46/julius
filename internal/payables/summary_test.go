@@ -247,8 +247,8 @@ func TestRemainingTotalSplitsByKind(t *testing.T) {
 	}
 }
 
-// TestRemainingTotalsAsOfMatchesPerDayCalls is the equivalence the net-worth
-// backfill's optimization rests on: answering many days from one in-memory
+// TestRemainingTotalsAsOfMatchesPerDayCalls is the equivalence the batched
+// past-day form rests on: answering many days from one in-memory
 // snapshot must give exactly what asking day by day gives. If the two ever
 // diverge, reconstructed history would stop matching what the same day
 // reports when queried on its own.

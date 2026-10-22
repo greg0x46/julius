@@ -12,7 +12,7 @@ engine — a passive catalog with no matching/computation/merging logic of its o
 One exception to "passive": the `transfer` kind carries a rule. A transaction
 with a category of this kind is **left out of income/expense totals** (reason
 `transfer_category`), because counting both legs of a transfer would count the
-same money twice. It does not affect balance, historical net worth or card
+same money twice. It does not affect balance, historical wealth or card
 debt. `expense`/`income` remain plain labels. The seed ships one category of
 this kind (`Transferência entre Contas Próprias`, `00004_categories.sql`); users
 can create more.

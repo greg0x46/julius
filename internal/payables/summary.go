@@ -38,7 +38,7 @@ type LinkSummary struct {
 //
 // Summarize is the one place that recomputation lives. Callers that need
 // the numbers — the HTTP layer's payable DTO, the scenario handlers'
-// "how much is left to plan", net worth's liability side — go through here
+// "how much is left to plan" — go through here
 // rather than re-deriving it, so they cannot drift apart.
 //
 // Links carries the rows the amounts came from rather than a bare count, so
@@ -70,7 +70,7 @@ func Summarize(ctx context.Context, q Querier, p Payable) (Summary, error) {
 // describes the same day.
 //
 // This is the single-payable, single-day form; RemainingTotalsAsOf is the
-// many-of-both form the net-worth backfill uses. Neither calls the other —
+// many-of-both form for reconstructing past days. Neither calls the other —
 // the batched one cannot afford to re-query per day — but both decide what
 // counts through the same summaryFrom/countsAsOf pair, which is what keeps
 // "this payable on that day" and "every payable on those days" from ever
@@ -245,7 +245,7 @@ func RemainingTotalAsOf(ctx context.Context, q Querier, kind Kind, dayEnd time.T
 //
 // The days need not be sorted and may repeat: each is answered
 // independently from the same in-memory snapshot, so callers walking
-// backward (the net-worth backfill) and callers asking for one scattered
+// backward and callers asking for one scattered
 // day get identical numbers.
 func RemainingTotalsAsOf(ctx context.Context, q Querier, kind Kind, dayEnds []time.Time) ([]decimal.Decimal, error) {
 	totals := make([]decimal.Decimal, len(dayEnds))
