@@ -31,8 +31,10 @@ converter skips it.
   positions at the latest quote or typed valuation, else cost, plus custody
   cash not already a linked bank account). `Total = Cash + Investments`.
 - `Series` / `SeriesWith`: the wealth at the end of every day from the first
-  dated movement (cash transaction or investment operation) through today,
-  oldest first, today being `Compute`.
+  cash transaction through today, oldest first, today being `Compute`. The
+  window starts at the first cash transaction because that is as far back as
+  cash can be rebuilt; holding balances flat before it would invent a figure,
+  so older investment operations do not extend the series.
   - Cash walks back from today's native balances, reversing each real movement
     (`cashDeltasDescending`): every eligible synced entry on a synced account
     (ignored and transfer-categorized ones too — the money moved), posted
@@ -47,10 +49,13 @@ converter skips it.
     price known that day (carried until the next one).
 - Valuation (`internal/valuation`): each day converts with its own rate. A past
   day that cannot be valued is `unavailable` and carries no figures, never a
-  zero: a missing rate or provider outage (the provider is asked once, not once
-  per day), a foreign movement with no amount in its account's currency lying
+  zero: a missing rate or provider outage (`internal/exchange` already leaves a
+  failed pair alone for a cooldown, and days whose rate is stored keep their
+  figures), a foreign movement with no amount in its account's currency lying
   after it, or a provider holding with no price at all. Today failing to value
-  is an error (503 `exchange-unavailable`).
+  is an error (503 `exchange-unavailable`). Today is the caller's calendar day, but
+  is valued on the latest day a rate can exist (the UTC day when the local date is
+  already ahead of it), and the point's `valuation.valued_at` says which.
 - Goals (`internal/goals`) read the same investments line through
   `networth.InvestmentValue`; they add nothing to wealth.
 
@@ -59,9 +64,9 @@ converter skips it.
 `GET /api/net-worth` → `{ series, latest }`, each point
 `{ date, currency_code, fx, valuation_status, valuation, cash_balance,
 investment_balance, total }`. `valuation_status` is `complete`, `stale` (a stale
-rate was used) or `unavailable` (figures absent). The points are stored in BRL
-terms and shown in the reference currency at each day's own FX, with that day's
-`fx` provenance; any missing rate makes the report unavailable (503).
+rate was used) or `unavailable` (figures absent). The points are derived in BRL
+and shown in the reference currency at the FX of the day they were valued on,
+with that day's `fx` provenance; any missing rate makes the report unavailable (503).
 
 ## Frontend
 

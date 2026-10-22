@@ -3,6 +3,7 @@ package httpapi
 import (
 	"database/sql"
 	"errors"
+	"log"
 	"net/http"
 	"time"
 
@@ -44,12 +45,21 @@ type netWorthResponseDTO struct {
 	Latest netWorthPointDTO   `json:"latest"`
 }
 
+// fxDay is the day a point's figures were valued on, which is the day its FX
+// must come from: today's point is valued on the latest day a rate can exist.
+func fxDay(p networth.Point) time.Time {
+	if p.Valuation != nil {
+		return p.Valuation.ValuedAt
+	}
+	return p.Day
+}
+
 func netWorthUnavailableProblem(w http.ResponseWriter) {
 	writeProblem(w, 503, "net-worth-unavailable", "Patrimônio temporariamente indisponível", "Tente novamente em instantes.")
 }
 
 // handleGetNetWorth returns wealth (cash plus investments) for every day since
-// the first dated movement, derived on this request, with today as "latest".
+// the first cash transaction, derived on this request, with today as "latest".
 // Nothing is stored, so the series always agrees with the rest of the app.
 func handleGetNetWorth(conn *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -60,12 +70,13 @@ func handleGetNetWorth(conn *sql.DB) http.HandlerFunc {
 			return
 		}
 		if err != nil {
+			log.Printf("net_worth_failed: %v", err)
 			netWorthUnavailableProblem(w)
 			return
 		}
 		latest := points[len(points)-1]
 
-		report, ok := reportValuation(w, r, conn, latest.Day)
+		report, ok := reportValuation(w, r, conn, fxDay(latest))
 		if !ok {
 			return
 		}
@@ -84,7 +95,7 @@ func handleGetNetWorth(conn *sql.DB) http.HandlerFunc {
 		for i, p := range points {
 			day := valuationDTO{CurrencyCode: report.CurrencyCode}
 			if p.Status != networth.ValuationUnavailable {
-				if day, ok = valuationForCurrency(w, r, fx, report.CurrencyCode, p.Day); !ok {
+				if day, ok = valuationForCurrency(w, r, fx, report.CurrencyCode, fxDay(p)); !ok {
 					return
 				}
 			}

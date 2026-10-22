@@ -109,28 +109,88 @@ func TestValuesOnPricesProviderHoldingsAndFlagsDaysWithoutAPrice(t *testing.T) {
 	wantBRL(t, "latest quote", got[4], "258.6")
 }
 
-func TestEarliestDayIsTheOldestDatedMovement(t *testing.T) {
+// TestValuesOnAgreesWithTodayAcrossSalesAndClosedPositions: partial and total
+// sales, and a closed position, follow the same rules as today's figure.
+func TestValuesOnAgreesWithTodayAcrossSalesAndClosedPositions(t *testing.T) {
 	f := newLedgerFixture(t)
-	if _, ok, err := investments.EarliestDay(f.ctx, f.conn); err != nil || ok {
-		t.Fatalf("empty book: ok = %v, err = %v", ok, err)
+	position := f.addPosition(f.custodyID, "Ações")
+	f.deposit("1000", day(1))
+	f.create(investments.OperationInput{
+		AccountID: f.custodyID, PositionID: &position, Kind: investments.OperationBuy,
+		OccurredOn: day(2), Amount: dec("600"), Quantity: decRef("6"), UnitPrice: decRef("100"),
+	})
+	f.create(investments.OperationInput{
+		AccountID: f.custodyID, PositionID: &position, Kind: investments.OperationSell,
+		OccurredOn: day(4), Amount: dec("300"), Quantity: decRef("2"), UnitPrice: decRef("150"),
+	})
+	got := valuesOn(t, f, day(3), day(4))
+	wantBRL(t, "before the sale (600 cost + 400 cash)", got[0], "1000")
+	wantBRL(t, "after selling 2 of 6 (400 cost + 700 cash)", got[1], "1100")
+
+	f.create(investments.OperationInput{
+		AccountID: f.custodyID, PositionID: &position, Kind: investments.OperationSell,
+		OccurredOn: day(6), Amount: dec("720"), Quantity: decRef("4"), UnitPrice: decRef("180"),
+	})
+	closed := valuesOn(t, f, day(5), day(6))
+	wantBRL(t, "still holding 4", closed[0], "1100")
+	wantBRL(t, "closed position, only cash (1420)", closed[1], "1420")
+	today, err := investments.ManualNetWorth(f.ctx, f.conn)
+	if err != nil {
+		t.Fatal(err)
 	}
-	f.deposit("10", day(4))
-	f.deposit("10", day(2))
-	earliest, ok, err := investments.EarliestDay(f.ctx, f.conn)
-	if err != nil || !ok || !earliest.Equal(day(2)) {
-		t.Fatalf("EarliestDay = %v %v %v, want %v", earliest, ok, err, day(2))
-	}
-	f.addMovement(f.addHolding(equity("1")), "inflow", "1", "1", day(1))
-	if earliest, _, _ = investments.EarliestDay(f.ctx, f.conn); !earliest.Equal(day(1)) {
-		t.Fatalf("a provider movement is dated too: %v", earliest)
+	if !closed[1].Balances.Get("BRL").Equal(today) {
+		t.Errorf("last day %s differs from ManualNetWorth %s", closed[1].Balances.Get("BRL"), today)
 	}
 }
 
-func TestValuesOnFlagsAProviderHoldingThatWasNeverPriced(t *testing.T) {
+// TestValuesOnIgnoresOperationsDatedAfterTheDay: a future-dated operation is
+// not in the book yet.
+func TestValuesOnIgnoresOperationsDatedAfterTheDay(t *testing.T) {
 	f := newLedgerFixture(t)
-	id := f.addHolding(equity("5"))
-	f.exec(`UPDATE financial_investments SET balance = '500' WHERE id = ?`, id)
-	if got := valuesOn(t, f, day(3))[0]; got.Complete {
-		t.Errorf("a holding with no price at all is complete: %+v", got)
+	f.deposit("100", day(1))
+	f.deposit("50", day(20))
+	got := valuesOn(t, f, day(5), day(20))
+	wantBRL(t, "before the later deposit", got[0], "100")
+	wantBRL(t, "on it", got[1], "150")
+}
+
+// A manual holding inside an integrated custody counts like any other, with no
+// custody cash of its own.
+func TestValuesOnCountsAManualHoldingInAnIntegratedAccount(t *testing.T) {
+	f := newLedgerFixture(t)
+	f.addHolding(equity("1")) // a provider row with no balance is not part of the book
+	if err := investments.EnsureIntegratedAccounts(f.ctx, f.conn); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := investments.CreatePosition(f.ctx, f.conn, investments.PositionInput{
+		AccountID: "integrated:" + f.sourceID, Name: "Bitcoin", AssetType: "Criptoativo",
+		InitialQuantity: dec("0.5"), InitialUnitCost: dec("1000"), OccurredOn: day(1),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	got := valuesOn(t, f, day(0), day(2))
+	wantBRL(t, "before it was opened", got[0], "0")
+	wantBRL(t, "0.5 x 1000", got[1], "500")
+	today, err := investments.ManualNetWorth(f.ctx, f.conn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got[1].Balances.Get("BRL").Equal(today) {
+		t.Errorf("%s differs from ManualNetWorth %s", got[1].Balances.Get("BRL"), today)
+	}
+}
+
+// A provider holding in another currency stays native: the caller converts it
+// with the day's own rate.
+func TestValuesOnKeepsAForeignProviderHoldingNative(t *testing.T) {
+	f := newLedgerFixture(t)
+	holding := lca()
+	holding.CurrencyCode = strRef("USD")
+	id := f.addHolding(holding)
+	f.exec(`UPDATE financial_investments SET balance = '258.6', currency_code = 'USD' WHERE id = ?`, id)
+	f.recordQuote(holding, "2026-09-28T00:03:22Z", "258.6")
+	got := valuesOn(t, f, calendarDay("2026-09-28"))[0]
+	if !got.Complete || !got.Balances.Get("USD").Equal(dec("258.6")) || !got.Balances.Get("BRL").IsZero() {
+		t.Errorf("got %+v, want 258.6 USD and no BRL", got)
 	}
 }

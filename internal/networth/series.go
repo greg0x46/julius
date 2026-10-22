@@ -19,8 +19,10 @@ import (
 	"github.com/greg0x46/julius/internal/valuation"
 )
 
-// Series is the wealth at the end of every day from the first dated movement
-// (cash transaction or investment operation) through today, oldest first. It
+// Series is the wealth at the end of every day from the first cash transaction
+// through today, oldest first. That is as far back as cash can be rebuilt:
+// before it the balances are not known, and holding them flat would invent a
+// figure, so investments older than the first transaction are not plotted. It
 // is derived on every call and stores nothing. Today is Compute; each earlier
 // day is rebuilt from the same sources:
 //
@@ -46,12 +48,20 @@ func Series(ctx context.Context, q Querier, today time.Time) ([]Point, error) {
 // Today's point is the exception: it fails the call, as Compute does.
 func SeriesWith(ctx context.Context, q Querier, today time.Time, rates valuation.Resolver) ([]Point, error) {
 	todayDay := dates.Day(today)
-	live, err := livePoint(ctx, q, today, rates)
+	// The rate of "today" is the latest one that exists: a rate source has none
+	// for a day still ahead in UTC, which a clock east of UTC reaches first.
+	valuedDay := todayDay
+	if utcToday := dates.Day(today.UTC()); valuedDay.After(utcToday) {
+		valuedDay = utcToday
+	}
+	valued := valuation.New(rates, valuedDay)
+	breakdown, err := ComputeValued(ctx, q, valued)
 	if err != nil {
 		return nil, err
 	}
+	live := Point{Day: todayDay, Status: statusOf(valued), Breakdown: breakdown, Valuation: &valued.Metadata}
 
-	start, ok, err := firstDay(ctx, q)
+	start, ok, err := earliestCashTransactionDay(ctx, q)
 	if err != nil {
 		return nil, err
 	}
@@ -115,12 +125,9 @@ func SeriesWith(ctx context.Context, q Querier, today time.Time, rates valuation
 		return nil, err
 	}
 
-	// Once the provider fails, stop asking it: every remaining foreign day
-	// would hit the same outage.
-	guard := &outageGuard{Resolver: rates}
 	points := make([]Point, 0, len(days)+1)
 	for i, d := range days {
-		valued := valuation.New(guard, d.day)
+		valued := valuation.New(rates, d.day)
 		point := Point{Day: d.day, Status: ValuationUnavailable, Valuation: &valued.Metadata}
 		if d.unreconstructable || !held[i].Complete {
 			points = append(points, point)
@@ -143,58 +150,11 @@ func SeriesWith(ctx context.Context, q Querier, today time.Time, rates valuation
 	return append(points, live), nil
 }
 
-// outageGuard remembers a provider failure so later days do not repeat it.
-type outageGuard struct {
-	valuation.Resolver
-	failure error
-}
-
-func (g *outageGuard) On(ctx context.Context, base, quote string, t time.Time) (exchange.Rate, error) {
-	if g.failure != nil {
-		return exchange.Rate{}, g.failure
-	}
-	rate, err := g.Resolver.On(ctx, base, quote, t)
-	if errors.Is(err, exchange.ErrProviderFailure) {
-		g.failure = err
-	}
-	return rate, err
-}
-
-func livePoint(ctx context.Context, q Querier, today time.Time, rates valuation.Resolver) (Point, error) {
-	valued := valuation.New(rates, today)
-	breakdown, err := ComputeValued(ctx, q, valued)
-	if err != nil {
-		return Point{}, err
-	}
-	return Point{Day: dates.Day(today), Status: statusOf(valued), Breakdown: breakdown, Valuation: &valued.Metadata}, nil
-}
-
 func statusOf(valued *valuation.Valuation) string {
 	if valued.Stale() {
 		return ValuationStale
 	}
 	return ValuationComplete
-}
-
-// firstDay is the earliest day any cash transaction or investment movement is
-// dated: the depth of history there is to reconstruct.
-func firstDay(ctx context.Context, q Querier) (time.Time, bool, error) {
-	cash, cashOK, err := earliestCashTransactionDay(ctx, q)
-	if err != nil {
-		return time.Time{}, false, err
-	}
-	invested, investedOK, err := investments.EarliestDay(ctx, q)
-	if err != nil {
-		return time.Time{}, false, err
-	}
-	switch {
-	case cashOK && investedOK && invested.Before(cash):
-		return invested, true, nil
-	case cashOK:
-		return cash, true, nil
-	default:
-		return invested, investedOK, nil
-	}
 }
 
 // valueBalances values native per-currency balances in the BRL base.

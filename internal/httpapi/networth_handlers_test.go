@@ -113,10 +113,13 @@ func TestGetNetWorthFollowsTheDataOnEveryRead(t *testing.T) {
 			t.Fatalf("exec %q: %v", query, err)
 		}
 	}
+	// A dated cash movement gives the history somewhere to start.
+	exec(`INSERT INTO financial_accounts(id,origin,name,account_type,currency_code,opening_balance,created_at,updated_at) VALUES('bank','manual','Cash','BANK','BRL','0',?,?)`, now, now)
+	exec(`INSERT INTO account_balance_adjustments(id,account_id,amount,description,created_at) VALUES('mark','bank','0','Marco',?)`, db.FormatTime(time.Now().AddDate(0, 0, -3)))
 	exec(`INSERT INTO investment_accounts (id,name,kind,currency_code,created_at,updated_at) VALUES ('manual','Manual','manual','BRL',?,?)`, now, now)
 	exec(`INSERT INTO investment_operations (id,account_id,kind,occurred_on,amount,created_at,updated_at) VALUES ('opening','manual','initial_balance','2026-09-01','700',?,?)`, now, now)
-	if total, points := read(); total != "700" || points < 2 {
-		t.Fatalf("after a deposit: total = %q over %d points, want 700 and history back to the deposit (nothing is cached or stored)", total, points)
+	if total, points := read(); total != "700" || points < 4 {
+		t.Fatalf("after a deposit: total = %q over %d points, want 700 and history back to the first cash movement (nothing is cached or stored)", total, points)
 	}
 }
 
@@ -169,7 +172,7 @@ func TestGetNetWorthValuesForeignCashAndRecordsTheRates(t *testing.T) {
 // day's provenance.
 func TestGetNetWorthRevaluesEachPastDayInTheReferenceCurrency(t *testing.T) {
 	srv, conn := newTestServer(t)
-	now := time.Now()
+	now := time.Now().UTC() // rates exist per UTC day, whatever the server's zone
 	stamp := db.FormatTime(now)
 	today, yesterday := now.Format("2006-01-02"), now.AddDate(0, 0, -1).Format("2006-01-02")
 	exec := func(query string, args ...any) {
@@ -187,12 +190,18 @@ func TestGetNetWorthRevaluesEachPastDayInTheReferenceCurrency(t *testing.T) {
 
 	worth := investmentCall(t, srv, http.MethodGet, "/api/net-worth", nil, 200)
 	series := worth["series"].([]any)
-	if len(series) != 2 {
-		t.Fatalf("series = %d points, want yesterday and today", len(series))
+	byDay := map[string]map[string]any{}
+	for _, row := range series {
+		point := row.(map[string]any)
+		byDay[point["date"].(string)[:10]] = point
 	}
-	past := series[0].(map[string]any)
+	past := byDay[yesterday]
+	if past == nil {
+		t.Fatalf("no point for %s in %d points", yesterday, len(series))
+	}
 	assertMoney(t, "yesterday at yesterday's rate", past["total"], "100")
-	assertMoney(t, "today at today's rate", series[1].(map[string]any)["total"], "80")
+	// Today is valued on the latest day a rate can exist, whatever the server's zone.
+	assertMoney(t, "today at today's rate", worth["latest"].(map[string]any)["total"], "80")
 	if past["currency_code"] != "USD" || past["fx"].(map[string]any)["source"] != "synthetic" {
 		t.Fatalf("lost FX provenance: %+v", past)
 	}

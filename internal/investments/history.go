@@ -18,32 +18,6 @@ type DayValues struct {
 	Complete bool
 }
 
-// EarliestDay is the first day any investment operation or provider movement
-// is dated, false when the book has no history.
-func EarliestDay(ctx context.Context, q Querier) (time.Time, bool, error) {
-	var operation, traded, occurred *time.Time
-	if err := q.QueryRowContext(ctx, `SELECT MIN(occurred_on) FROM investment_operations`).Scan(dbtypes.Date(&operation)); err != nil {
-		return time.Time{}, false, err
-	}
-	if err := q.QueryRowContext(ctx, `SELECT MIN(trade_date) FROM financial_investment_transactions`).Scan(dbtypes.Date(&traded)); err != nil {
-		return time.Time{}, false, err
-	}
-	if err := q.QueryRowContext(ctx, `SELECT MIN(occurred_at) FROM financial_investment_transactions`).Scan(dbtypes.Time(&occurred)); err != nil {
-		return time.Time{}, false, err
-	}
-	var earliest time.Time
-	found := false
-	for _, day := range []*time.Time{operation, traded, occurred} {
-		if day == nil {
-			continue
-		}
-		if d := MovementDay(*day); !found || d.Before(earliest) {
-			earliest, found = d, true
-		}
-	}
-	return earliest, found, nil
-}
-
 // ValuesOn is the investment book at the end of each of days (ascending, one
 // calendar day each), derived from the operation ledgers, the price series and
 // the provider movements. It applies the same rules as ManualNetWorth for the

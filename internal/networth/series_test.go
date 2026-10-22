@@ -257,40 +257,90 @@ func TestSeriesLeavesADayWithoutARateUnavailable(t *testing.T) {
 	}
 }
 
-// pastOutageRates values today but has a provider that is down for any other day.
-type pastOutageRates struct{ calls int }
+// pastOutageRates has a provider that is down for every day before daysAgo(5).
+type pastOutageRates struct{}
 
-func (o *pastOutageRates) On(_ context.Context, _, _ string, day time.Time) (exchange.Rate, error) {
-	if day.Equal(today) {
-		return exchange.Rate{Value: decimal.NewFromInt(5)}, nil
+func (pastOutageRates) On(_ context.Context, _, _ string, day time.Time) (exchange.Rate, error) {
+	if day.Before(daysAgo(5)) {
+		return exchange.Rate{}, fmt.Errorf("%w: %w", exchange.ErrUnavailable, exchange.ErrProviderFailure)
 	}
-	o.calls++
-	return exchange.Rate{}, fmt.Errorf("%w: %w", exchange.ErrUnavailable, exchange.ErrProviderFailure)
+	return exchange.Rate{Value: decimal.NewFromInt(5)}, nil
 }
 
-// TestSeriesStopsAskingAFailedProvider: past foreign days are unavailable and
-// the provider is asked once, not once per day.
-func TestSeriesStopsAskingAFailedProvider(t *testing.T) {
+// TestSeriesKeepsRecentDaysWhenTheProviderFailsOnOlderOnes: an outage on the
+// days a rate was never stored must not take down the days that have one.
+func TestSeriesKeepsRecentDaysWhenTheProviderFailsOnOlderOnes(t *testing.T) {
 	f := newFixture(t)
 	usd := f.addAccount("", "100")
 	f.setCurrency("financial_accounts", usd, "USD")
-	f.addTransaction(usd, daysAgo(30), "1", "CREDIT")
 	f.addTransaction(usd, daysAgo(10), "1", "CREDIT")
 
-	rates := &pastOutageRates{}
-	points, err := networth.SeriesWith(context.Background(), f.conn, today, rates)
+	points, err := networth.SeriesWith(context.Background(), f.conn, today, pastOutageRates{})
 	if err != nil {
 		t.Fatalf("a past-day outage is not an error: %v", err)
 	}
-	if rates.calls != 1 {
-		t.Fatalf("rate lookups during an outage = %d, want 1 for the 20 foreign days", rates.calls)
+	for _, ago := range []int{0, 1, 4, 5} {
+		if p, ok := pointOn(t, points, daysAgo(ago)); !ok || p.Status != networth.ValuationComplete {
+			t.Errorf("%d days ago has a rate but is %q (found %v)", ago, p.Status, ok)
+		}
 	}
-	if p, _ := pointOn(t, points, daysAgo(5)); p.Status != networth.ValuationUnavailable {
-		t.Fatalf("a day that needed the failed provider: %q", p.Status)
+	for _, ago := range []int{6, 9} {
+		if p, _ := pointOn(t, points, daysAgo(ago)); p.Status != networth.ValuationUnavailable {
+			t.Errorf("%d days ago had no rate but is %q", ago, p.Status)
+		}
 	}
-	if p, _ := pointOn(t, points, today); p.Status != networth.ValuationComplete {
-		t.Fatalf("today: %q", p.Status)
+}
+
+// TestSeriesToleratesAClockAheadOfUTC: east of UTC the local date runs ahead of
+// the UTC date, and no rate exists for a day that has not begun in UTC. Today
+// is valued on the latest day a rate can exist instead of failing the request.
+func TestSeriesToleratesAClockAheadOfUTC(t *testing.T) {
+	f := newFixture(t)
+	usd := f.addAccount("", "100")
+	f.setCurrency("financial_accounts", usd, "USD")
+	// 05:00 on the next calendar day at +14:00 is still the current day in UTC.
+	utc := time.Now().UTC()
+	ahead := time.Date(utc.Year(), utc.Month(), utc.Day()+1, 5, 0, 0, 0, time.FixedZone("UTC+14", 14*3600))
+
+	points := f.series(ahead, map[string]string{"USD/BRL": "5"})
+	last := points[len(points)-1]
+	assertDecimalEqual(t, "today", last.Breakdown.Total, "500")
+	utcToday := time.Now().UTC().Truncate(24 * time.Hour)
+	if !last.Valuation.ValuedAt.Equal(utcToday) {
+		t.Errorf("valued on %s, want the UTC day %s", last.Valuation.ValuedAt, utcToday)
 	}
+	if last.Day.Format("2006-01-02") != ahead.Format("2006-01-02") {
+		t.Errorf("the point is dated %s, want the caller's calendar day %s", last.Day.Format("2006-01-02"), ahead.Format("2006-01-02"))
+	}
+}
+
+// TestSeriesStartsAtTheFirstCashTransaction: before it the balances are not
+// known, so an older investment operation does not extend the series with a
+// flat, invented cash figure.
+func TestSeriesStartsAtTheFirstCashTransaction(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	bank := f.addAccount("BANK", "900")
+	f.addTransaction(bank, daysAgo(3), "1.00", "CREDIT")
+	account, err := investments.CreateAccount(ctx, f.conn, investments.AccountInput{Name: "Corretora"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := investments.CreateOperation(ctx, f.conn, investments.OperationInput{
+		AccountID: account.ID, Kind: investments.OperationDeposit, OccurredOn: daysAgo(10), Amount: decimal.RequireFromString("100"),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	points := f.series(today, nil)
+	if _, ok := pointOn(t, points, daysAgo(4)); ok {
+		t.Error("the series reaches back past the first cash transaction")
+	}
+	p, ok := pointOn(t, points, daysAgo(3))
+	if !ok {
+		t.Fatal("no point on the first cash transaction's day")
+	}
+	assertDecimalEqual(t, "investments carried from the older operation", p.Breakdown.InvestmentBalance, "100")
 }
 
 func TestSeriesFailsWhenTodayCannotBeValued(t *testing.T) {
