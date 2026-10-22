@@ -21,9 +21,9 @@ across multiple contexts).
 
 `internal/networth`. **Nothing is stored**: today's figure and every past day are
 derived on each read, so a corrected transaction, an edited operation or a late
-quote reaches the whole history at once. (The old `net_worth_snapshots` table is
-no longer written or read; it was left in place, unmigrated, until someone
-decides what to do with the observations it holds.)
+quote reaches the whole history at once. The old `net_worth_snapshots` table was dropped by migration `0006` (both
+dialects); its stored observations are not carried over, and the legacy
+converter skips it.
 
 - `Compute` / `ComputeValued`: today. Cash is `transactions.CashOnHandValued`
   (non-`CREDIT` accounts), investments are `investmentBalance` (provider

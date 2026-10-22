@@ -180,7 +180,7 @@ func List(ctx context.Context, q Querier, kind *Kind) ([]Payable, error) {
 // reference's order_by(...linked_at.desc())).
 //
 // There is deliberately no single-payable form: every read path here — the
-// HTTP list endpoint, RemainingTotal, the past-day totals — summarizes a
+// HTTP list endpoint, RemainingTotal — summarizes a
 // set, and offering a convenient per-payable loader is what invites the
 // query-per-payable loop this shape exists to prevent. Unexported because
 // the rows reach anyone outside this package on Summary.Links.
@@ -286,8 +286,7 @@ func (s transactionSnapshot) linkEffectiveAmount() decimal.Decimal {
 // LinkedTransactionSummary is what a link's read paths need off the
 // transaction behind it, beyond the effective amount: the fields a
 // PayableLinkedTransaction response renders, plus OccurredAt, which is not
-// display-only — SummarizeAsOf's cutoff (countsAsOf) decides whether a link
-// counted on a past day from exactly this value. It reaches callers on
+// display-only — an entry with no occurred_at is dated by nothing. It reaches callers on
 // LinkSummary.Transaction, filled from the same row the link's effective
 // amount came from.
 type LinkedTransactionSummary struct {

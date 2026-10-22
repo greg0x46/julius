@@ -97,63 +97,6 @@ func TestSummarizeSettledWhenFullyPaid(t *testing.T) {
 	}
 }
 
-// TestSummarizeAsOfCountsOnlyEarlierLinks is the historical-reconstruction
-// contract net worth's backfill depends on: a payment made after the day
-// being reconstructed hasn't happened yet as of that day. Every field of the
-// returned Summary describes that same day — Links included, not just the
-// amounts.
-func TestSummarizeAsOfCountsOnlyEarlierLinks(t *testing.T) {
-	f := newFixture(t)
-	ctx := context.Background()
-	acc := f.addAccount("BRL")
-
-	p, err := payables.Create(ctx, f.conn, payables.KindDebt, "Cartão", dec(t, "1000.00"), dec(t, "1000.00"))
-	if err != nil {
-		t.Fatalf("Create: %v", err)
-	}
-	for _, d := range []string{"2026-03-10", "2026-05-10"} {
-		tx := f.addTransaction(payment(acc, "300.00", day(t, d)))
-		if _, err := payables.CreateLink(ctx, f.conn, payables.KindDebt, p.ID, tx); err != nil {
-			t.Fatalf("CreateLink %s: %v", d, err)
-		}
-	}
-
-	summary, err := payables.SummarizeAsOf(ctx, f.conn, p, day(t, "2026-04-01"))
-	if err != nil {
-		t.Fatalf("SummarizeAsOf: %v", err)
-	}
-	if !summary.Settled.Equal(dec(t, "300.00")) || !summary.Remaining.Equal(dec(t, "700.00")) {
-		t.Errorf("settled/remaining = %s/%s, want 300.00/700.00 (May's payment is still in the future)",
-			summary.Settled, summary.Remaining)
-	}
-	if len(summary.Links) != 1 {
-		t.Fatalf("len(Links) = %d, want 1 — Links must describe the same day as the amounts", len(summary.Links))
-	}
-	if !summary.Links[0].Transaction.OccurredAt.Equal(day(t, "2026-03-10")) {
-		t.Errorf("surviving link = %v, want March's", summary.Links[0].Transaction.OccurredAt)
-	}
-}
-
-// TestSummarizeAsOfAlwaysCountsStartingSettled pins the one component with no
-// date of its own: a pre-app-tracking baseline can't be back-projected out of
-// existence, however far back the reconstruction walks.
-func TestSummarizeAsOfAlwaysCountsStartingSettled(t *testing.T) {
-	f := newFixture(t)
-	ctx := context.Background()
-
-	p, err := payables.Create(ctx, f.conn, payables.KindDebt, "Cartão", dec(t, "1000.00"), dec(t, "400.00"))
-	if err != nil {
-		t.Fatalf("Create: %v", err)
-	}
-	summary, err := payables.SummarizeAsOf(ctx, f.conn, p, day(t, "2020-01-01"))
-	if err != nil {
-		t.Fatalf("SummarizeAsOf: %v", err)
-	}
-	if !summary.Settled.Equal(dec(t, "600.00")) || !summary.Remaining.Equal(dec(t, "400.00")) {
-		t.Errorf("settled/remaining = %s/%s, want 600.00/400.00", summary.Settled, summary.Remaining)
-	}
-}
-
 // TestRemainingTotalNeedsNoStatusFilter pins the claim that let the
 // total-owed handler drop the explicit "skip settled payables" pass it used
 // to carry: a settled payable's remaining is zero by construction, so
@@ -197,25 +140,6 @@ func TestRemainingTotalNeedsNoStatusFilter(t *testing.T) {
 	}
 }
 
-// TestRemainingTotalAsOfSkipsPayablesCreatedLater pins the rule that a
-// payable which did not exist yet was not a liability yet — regardless of how
-// far its starting-settled baseline could otherwise be back-projected.
-func TestRemainingTotalAsOfSkipsPayablesCreatedLater(t *testing.T) {
-	f := newFixture(t)
-	ctx := context.Background()
-
-	if _, err := payables.Create(ctx, f.conn, payables.KindDebt, "Cartão", dec(t, "1000.00"), dec(t, "1000.00")); err != nil {
-		t.Fatalf("Create: %v", err)
-	}
-	total, err := payables.RemainingTotalAsOf(ctx, f.conn, payables.KindDebt, day(t, "2020-01-01"))
-	if err != nil {
-		t.Fatalf("RemainingTotalAsOf: %v", err)
-	}
-	if !total.IsZero() {
-		t.Errorf("RemainingTotalAsOf = %s, want 0 — the payable did not exist on that day", total)
-	}
-}
-
 // TestRemainingTotalSplitsByKind pins that debts and receivables are
 // opposite halves of the same table: each aggregate must see only its own
 // kind, which is what lets the two homepage widgets share one function.
@@ -244,65 +168,5 @@ func TestRemainingTotalSplitsByKind(t *testing.T) {
 	}
 	if !toReceive.Equal(dec(t, "300.00")) {
 		t.Errorf("RemainingTotal(receivable) = %s, want 300.00 (the debt is not a receivable)", toReceive)
-	}
-}
-
-// TestRemainingTotalsAsOfMatchesPerDayCalls is the equivalence the batched
-// past-day form rests on: answering many days from one in-memory
-// snapshot must give exactly what asking day by day gives. If the two ever
-// diverge, reconstructed history would stop matching what the same day
-// reports when queried on its own.
-func TestRemainingTotalsAsOfMatchesPerDayCalls(t *testing.T) {
-	f := newFixture(t)
-	ctx := context.Background()
-	acc := f.addAccount("BRL")
-
-	p, err := payables.Create(ctx, f.conn, payables.KindDebt, "Cartão", dec(t, "1000.00"), dec(t, "1000.00"))
-	if err != nil {
-		t.Fatalf("Create: %v", err)
-	}
-	// Create stamps the real wall clock, and a payable that did not exist on
-	// the day being reconstructed contributes nothing — so it has to actually
-	// predate the window under test.
-	f.backdatePayable(p.ID, day(t, "2025-12-01"))
-
-	for _, d := range []string{"2026-03-10", "2026-05-10", "2026-07-20"} {
-		tx := f.addTransaction(payment(acc, "250.00", day(t, d)))
-		if _, err := payables.CreateLink(ctx, f.conn, payables.KindDebt, p.ID, tx); err != nil {
-			t.Fatalf("CreateLink %s: %v", d, err)
-		}
-	}
-
-	// Deliberately unsorted and with a repeat: the batched form answers each
-	// day independently, so order must not matter.
-	dayEnds := []time.Time{
-		day(t, "2026-06-01"), day(t, "2026-04-01"), day(t, "2026-08-01"),
-		day(t, "2026-04-01"), day(t, "2026-01-01"),
-	}
-
-	got, err := payables.RemainingTotalsAsOf(ctx, f.conn, payables.KindDebt, dayEnds)
-	if err != nil {
-		t.Fatalf("RemainingTotalsAsOf: %v", err)
-	}
-	if len(got) != len(dayEnds) {
-		t.Fatalf("len = %d, want %d — one total per requested day, in order", len(got), len(dayEnds))
-	}
-	for i, dayEnd := range dayEnds {
-		want, err := payables.RemainingTotalAsOf(ctx, f.conn, payables.KindDebt, dayEnd)
-		if err != nil {
-			t.Fatalf("RemainingTotalAsOf %v: %v", dayEnd, err)
-		}
-		if !got[i].Equal(want) {
-			t.Errorf("day %s: batched = %s, per-day = %s", dayEnd.Format("2006-01-02"), got[i], want)
-		}
-	}
-
-	// Pin the actual reconstruction too, so the test still fails if both
-	// paths drift together.
-	if !got[1].Equal(dec(t, "750.00")) {
-		t.Errorf("as of 2026-04-01 remaining = %s, want 750.00 (only March's payment had happened)", got[1])
-	}
-	if !got[4].Equal(dec(t, "1000.00")) {
-		t.Errorf("as of 2026-01-01 remaining = %s, want 1000.00 (nothing had been paid)", got[4])
 	}
 }

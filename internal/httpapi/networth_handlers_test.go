@@ -118,10 +118,6 @@ func TestGetNetWorthFollowsTheDataOnEveryRead(t *testing.T) {
 	if total, points := read(); total != "700" || points < 2 {
 		t.Fatalf("after a deposit: total = %q over %d points, want 700 and history back to the deposit (nothing is cached or stored)", total, points)
 	}
-	var stored int
-	if err := conn.QueryRow(`SELECT COUNT(*) FROM net_worth_snapshots`).Scan(&stored); err != nil || stored != 0 {
-		t.Fatalf("reading wealth stored %d snapshots (err %v)", stored, err)
-	}
 }
 
 func TestGetNetWorthValuesForeignCashAndRecordsTheRates(t *testing.T) {
