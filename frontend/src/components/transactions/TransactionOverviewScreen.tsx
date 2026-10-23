@@ -1,5 +1,5 @@
-import { LinkOutlined, RedoOutlined, SwapOutlined } from "@ant-design/icons";
-import { Alert, Button, Switch, Typography } from "antd";
+import { LinkOutlined, RedoOutlined, SwapOutlined } from "../ui/icons";
+import { Alert, Button, Switch, Typography } from "../ui";
 import { useQuery } from "@tanstack/react-query";
 import { getTransactionTransfer } from "../../api/transfers";
 import { queryKeys } from "../../api/queryKeys";

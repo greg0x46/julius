@@ -1,5 +1,5 @@
-import { DeleteOutlined, PlusOutlined } from "@ant-design/icons";
-import { Button, Flex, Input, Select } from "antd";
+import { DeleteOutlined, PlusOutlined } from "../ui/icons";
+import { Button, Flex, Input, Select } from "../ui";
 
 import type { RuleCondition, RuleConditionField, RuleConditionOperator } from "../../api/contracts";
 

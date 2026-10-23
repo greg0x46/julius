@@ -1,4 +1,4 @@
-import { DollarOutlined, WalletOutlined } from "@ant-design/icons";
+import { DollarOutlined, WalletOutlined } from "../components/ui/icons";
 import type { ReactNode } from "react";
 
 import type { Payable, PayableKind, PayableStatus } from "../api/contracts";

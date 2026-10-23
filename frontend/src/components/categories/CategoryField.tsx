@@ -1,5 +1,5 @@
-import { DownOutlined } from "@ant-design/icons";
-import { Button, Spin } from "antd";
+import { DownOutlined } from "../ui/icons";
+import { Button, Spin } from "../ui";
 import { useState } from "react";
 
 import { renderCategoryIcon } from "../../presentation/categoryLabels";

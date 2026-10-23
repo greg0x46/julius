@@ -28,13 +28,13 @@ describe("RecurringCommitmentFields", () => {
   it("validates on submit (the empty draft is refused with a message)", () => {
     const form = renderFields(false);
     fireEvent.submit(form);
-    expect(form.querySelector(".ant-alert")).not.toBeNull();
+    expect(form.querySelector(".ui-alert")).not.toBeNull();
   });
 
   it("ignores a submit — Enter in a field — while a write is already in flight", () => {
     const form = renderFields(true);
     fireEvent.submit(form);
-    expect(form.querySelector(".ant-alert")).toBeNull();
+    expect(form.querySelector(".ui-alert")).toBeNull();
   });
   it.each(["1.005", "9007199254740993.123456789", "0.000000000000000001"])("saves an unchanged exact amount %s", (amount) => {
     vi.mocked(accountsApi.listAccounts).mockResolvedValue([]);

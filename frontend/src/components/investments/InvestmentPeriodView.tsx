@@ -1,4 +1,4 @@
-import { Alert, Button, Skeleton, Switch } from "antd";
+import { Alert, Button, Skeleton, Switch } from "../ui";
 import { useMemo, useState } from "react";
 
 import type {

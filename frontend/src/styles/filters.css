@@ -7,13 +7,13 @@
 
 /* ---- FilterPanel --------------------------------------------------------- */
 
-.filter-panel .ant-drawer-header {
+.filter-panel .ui-drawer-header {
   padding: 0.5rem 0.75rem 0.5rem 1.25rem;
   border-bottom: 1px solid var(--color-border);
 }
 
-.filter-panel .ant-drawer-header-title,
-.filter-panel .ant-drawer-title {
+.filter-panel .ui-drawer-header-title,
+.filter-panel .ui-drawer-title {
   min-width: 0;
   width: 100%;
 }
@@ -56,14 +56,14 @@
 }
 
 /* A 40px square: comfortable under a thumb, quiet next to the title. */
-.filter-panel-close.ant-btn {
+.filter-panel-close.ui-btn {
   width: 40px;
   height: 40px;
   flex-shrink: 0;
   color: var(--color-text-secondary);
 }
 
-.filter-panel .ant-drawer-body {
+.filter-panel .ui-drawer-body {
   padding: 0;
 }
 
@@ -76,7 +76,7 @@
   padding: 1.25rem 1.25rem 1.5rem;
 }
 
-.filter-panel .ant-drawer-footer {
+.filter-panel .ui-drawer-footer {
   padding: 0.75rem 1.25rem;
   padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));
   border-top: 1px solid var(--color-border);
@@ -90,21 +90,21 @@
   gap: 0.75rem;
 }
 
-.filter-panel-footer .ant-btn-primary {
+.filter-panel-footer .ui-btn-primary {
   min-width: 7rem;
 }
 
-.filter-panel-clear.ant-btn {
+.filter-panel-clear.ui-btn {
   padding-inline: 0;
   color: var(--color-text-secondary);
 }
 
-.filter-panel-clear.ant-btn:not(:disabled):hover {
+.filter-panel-clear.ui-btn:not(:disabled):hover {
   color: var(--color-text);
 }
 
 /* The bottom sheet: rounded top edge, the sheet's own handle-free look. */
-.filter-panel-compact .ant-drawer-content {
+.filter-panel-compact.ui-drawer {
   border-radius: var(--radius-sheet) var(--radius-sheet) 0 0;
 }
 
@@ -167,37 +167,37 @@
   gap: 0.25rem 1.25rem;
 }
 
-.filter-checks-inline .filter-checkbox.ant-checkbox-wrapper {
+.filter-checks-inline .filter-checkbox.ui-checkbox-wrapper {
   min-height: 32px;
   color: var(--color-text-secondary);
   font-size: 0.8125rem;
 }
 
-.filter-checks-inline .filter-checkbox.ant-checkbox-wrapper-checked {
+.filter-checks-inline .filter-checkbox.ui-checkbox-wrapper:has(input:checked) {
   color: var(--color-text);
 }
 
-.filter-checkbox.ant-checkbox-wrapper {
+.filter-checkbox.ui-checkbox-wrapper {
   min-height: 36px;
   align-items: center;
   margin-inline-start: 0;
   color: var(--color-text);
 }
 
-.filter-checkbox .ant-checkbox + span {
+.filter-checkbox > span {
   padding-inline-end: 0;
 }
 
 /* ---- SegmentedControl ---------------------------------------------------- */
 
-.segmented-control.ant-segmented {
+.segmented-control.ui-segmented {
   max-width: 100%;
   padding: 3px;
   background: var(--color-bg);
   color: var(--color-text-secondary);
 }
 
-.segmented-control .ant-segmented-item {
+.segmented-control label {
   min-height: 34px;
   line-height: 34px;
   font-weight: 500;
@@ -206,25 +206,25 @@
 
 /* Labels may shrink to an ellipsis rather than force the control wider
    than its field. */
-.segmented-control .ant-segmented-item-label {
+.segmented-control label > span {
   min-width: 0;
   padding-inline: 0.5rem;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.segmented-control .ant-segmented-item-selected,
-.segmented-control .ant-segmented-thumb {
+.segmented-control label[data-active="true"],
+.segmented-control .ui-segmented-thumb {
   color: var(--color-text);
   background: var(--color-surface);
   box-shadow: 0 0 0 1px var(--color-border);
 }
 
-.segmented-control .ant-segmented-item-selected {
+.segmented-control label[data-active="true"] {
   font-weight: 600;
 }
 
-.segmented-control .ant-segmented-item:not(.ant-segmented-item-selected):hover {
+.segmented-control label:not(label[data-active="true"]):hover {
   color: var(--color-text);
 }
 
@@ -284,7 +284,7 @@
 }
 
 /* Popover: the search stays put, only the list scrolls. */
-.filter-combobox-popover .ant-popover-inner {
+.filter-combobox-popover.ui-popover {
   padding: 0;
 }
 
@@ -324,7 +324,7 @@
   font-size: 0.8125rem;
 }
 
-.filter-combobox-popover-footer .ant-btn {
+.filter-combobox-popover-footer .ui-btn {
   padding-inline: 0;
 }
 
@@ -408,21 +408,21 @@
 
 /* The phone sheet: search fixed under the title, list scrolling, its
    Cancelar / Confirmar fixed at the bottom. */
-.filter-combobox-sheet .ant-drawer-content {
+.filter-combobox-sheet.ui-drawer {
   border-radius: var(--radius-sheet) var(--radius-sheet) 0 0;
 }
 
-.filter-combobox-sheet .ant-drawer-header {
+.filter-combobox-sheet .ui-drawer-header {
   padding: 0.75rem 1rem;
 }
 
-.filter-combobox-sheet .ant-drawer-body {
+.filter-combobox-sheet .ui-drawer-body {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   padding: 0;
 }
 
-.filter-combobox-sheet .ant-drawer-footer {
+.filter-combobox-sheet .ui-drawer-footer {
   padding: 0;
   padding-bottom: env(safe-area-inset-bottom);
 }
@@ -459,9 +459,9 @@
   gap: 0.375rem;
 }
 
-.money-range .ant-input-affix-wrapper {
+.money-range .ui-input-affix-wrapper {
   min-height: 40px;
-  font-variant-numeric: tabular-nums;
+  font-variui-numeric: tabular-nums;
 }
 
 .money-range-error {
@@ -538,7 +538,7 @@
     flex-wrap: nowrap;
   }
 
-  .filter-chips-row .list-toolbar-chips .ant-tag {
+  .filter-chips-row .list-toolbar-chips .ui-tag {
     max-width: none;
     flex: none;
   }
@@ -554,11 +554,11 @@
     padding: 1.25rem 1.5rem 1.75rem;
   }
 
-  .filter-panel .ant-drawer-header {
+  .filter-panel .ui-drawer-header {
     padding-left: 1.5rem;
   }
 
-  .filter-panel .ant-drawer-footer {
+  .filter-panel .ui-drawer-footer {
     padding-inline: 1.5rem;
   }
 }

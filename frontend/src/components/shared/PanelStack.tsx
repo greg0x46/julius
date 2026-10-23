@@ -1,5 +1,5 @@
-import { CloseOutlined, LeftOutlined, RightOutlined } from "@ant-design/icons";
-import { Button, Collapse, Drawer, Typography } from "antd";
+import { CloseOutlined, LeftOutlined, RightOutlined } from "../ui/icons";
+import { Button, Collapse, Drawer, Typography } from "../ui";
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
@@ -7,18 +7,7 @@ import { useCompactScreen } from "./useCompactScreen";
 
 const FooterSlotContext = createContext<HTMLElement | null>(null);
 
-/**
- * One container, one visible level at a time.
- *
- * PanelStack is the shell around a small stack of screens (see
- * useScreenStack): a header with a single back control, a scrolling body
- * and a sticky action bar. The caller decides which screen is showing and
- * swaps `children`; the shell never opens on top of itself.
- *
- * On a compact viewport it is a full-screen page; from `md` up it is a side
- * panel. Both are the same antd Drawer, so focus trapping, Escape and the
- * mask come from the design system rather than a second implementation.
- */
+/** One visible screen per panel, with a header and a shared footer slot. */
 export function PanelStack({
   open,
   onClose,

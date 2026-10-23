@@ -51,7 +51,7 @@ since they did not change the provider balance. See Transactions, Notes.
 
 ## Frontend
 
-`/patrimonio-liquido` — composition card + `NetWorthChart` (Recharts) with the
+`/patrimonio-liquido` — composition card + `NetWorthChart` (local responsive SVG) with the
 evolution over time.
 
 ## API contract verification
@@ -103,3 +103,7 @@ A backfilled day whose rate could not be resolved is not stored at all, so the
 next read retries it. `valuation_rates` records each rate used (value,
 inversion, effective day, source, staleness); `GET /api/net-worth` returns it as
 `valuation` next to `valuation_version` and `valuation_status`.
+
+The chart retains gaps for unavailable valuations, the original decimal strings
+in tooltips, UTC calendar-day labels and an accessible date selector. Numeric
+coordinates never feed financial calculations.

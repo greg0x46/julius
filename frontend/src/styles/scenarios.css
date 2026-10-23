@@ -17,7 +17,7 @@
   margin: 0;
   color: var(--color-text-secondary);
   font-size: var(--fs-small);
-  font-variant-numeric: tabular-nums;
+  font-variui-numeric: tabular-nums;
 }
 
 /* The type filter says what it filters, with a visible label. */

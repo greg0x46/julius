@@ -120,7 +120,8 @@ Because every merge into `stage` is applied to the persistent dev database
 - Don't depend on production data or credentials existing in dev; use
   synthetic data in tests and in the *How to validate in dev* steps.
 
-**Frontend**: Ant Design + TanStack Query. All HTTP goes through
+**Frontend**: React + TanStack Query, with local HTML/CSS/SVG components in
+`src/components/ui/` (no external UI or chart library). All HTTP goes through
 `src/api/transport.ts`/`client.ts` (CSRF header, 401 handling); don't call
 `fetch` directly. Money is formatted/computed on decimal strings in
 `src/presentation/money.ts`. UI copy is Brazilian Portuguese; code, comments

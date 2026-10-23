@@ -16,7 +16,7 @@ interface StatusTagProps {
 
 /**
  * The one way to show a record's status: a small text chip (12px/500) with a
- * tinted background and toned text. No border, no icon, no antd preset
+ * tinted background and toned text. No border or icon
  * colours.
  *
  * Only for non-default states. The common case carries no tag at all — an

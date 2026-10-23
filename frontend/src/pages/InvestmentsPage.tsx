@@ -1,6 +1,6 @@
 import { ApiError } from "../api/problems";
-import { BankOutlined, PieChartOutlined, SwapOutlined } from "@ant-design/icons";
-import { Alert } from "antd";
+import { BankOutlined, PieChartOutlined, SwapOutlined } from "../components/ui/icons";
+import { Alert } from "../components/ui";
 import { useMemo, useState } from "react";
 
 import type {

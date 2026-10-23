@@ -1,4 +1,4 @@
-import { ExclamationCircleOutlined, InfoCircleOutlined } from "@ant-design/icons";
+import { ExclamationCircleOutlined, InfoCircleOutlined } from "../ui/icons";
 import { useState } from "react";
 
 import type { InvestmentPeriod, InvestmentPeriodPart, InvestmentPeriodPosition } from "../../api/contracts";

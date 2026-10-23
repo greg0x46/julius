@@ -1,5 +1,5 @@
-import { CloseOutlined } from "@ant-design/icons";
-import { Alert, Button, Drawer } from "antd";
+import { CloseOutlined } from "../ui/icons";
+import { Alert, Button, Drawer } from "../ui";
 import { useId, type FormEvent, type ReactNode } from "react";
 
 import { useCompactScreen } from "../shared/useCompactScreen";

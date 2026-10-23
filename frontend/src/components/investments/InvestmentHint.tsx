@@ -1,4 +1,4 @@
-import { Popover } from "antd";
+import { Popover } from "../ui";
 import type { ReactNode } from "react";
 
 /**

@@ -1,5 +1,5 @@
-import { CaretDownOutlined, CaretRightOutlined } from "@ant-design/icons";
-import { Grid } from "antd";
+import { CaretDownOutlined, CaretRightOutlined } from "../ui/icons";
+import { Grid } from "../ui";
 import { useId, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 

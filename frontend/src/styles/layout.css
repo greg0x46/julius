@@ -1,23 +1,4 @@
-/* The page structure every screen composes — see components/layout:
 
-     [<] Título                         [ contexto ] [ ação ]
-     descrição (só em tela larga)
-     [ tabs ]
-     [ busca ] [ filtros ]          [ agrupar ] [ ordenar ]
-     ┌──────────────────────────────────────────────────┐
-     │ resumo / totais                                  │
-     ├──────────────────────────────────────────────────┤
-     │ listagem                                         │
-     └──────────────────────────────────────────────────┘
-
-   Written mobile-first: the base rules are the phone layout and the
-   min-width queries widen it. The phone breakpoint is
-   `max-width: 47.99rem` / `min-width: 48rem` (antd's `md`, 768px, with no
-   1px overlap between the two). */
-
-/* Everything that sticks beneath the app bar uses `var(--app-bar-height)`
-   (global.css: 64px, 56px on a phone — the same two numbers the ProLayout
-   token in App.tsx carries). */
 
 /* The side gutter (`--page-gutter`, global.css) is shared by the header, the
    content and the surfaces that bleed out of it on a phone (see "Surfaces").
@@ -165,27 +146,27 @@
 /* ---- Page action: the primary command in the title row (PageAction). On a
    phone it is a quiet 40px text button — icon plus a short label — ------- */
 
-.page-actions .ant-btn {
+.page-actions .ui-btn {
   height: 40px;
 }
 
-.ant-btn.page-action {
+.ui-btn.page-action {
   box-shadow: none;
 }
 
-.ant-btn.page-action.ant-btn-text {
+.ui-btn.page-action.ui-btn-text {
   padding-inline: 0.75rem;
   color: var(--color-primary);
   font-weight: 600;
 }
 
-.ant-btn.page-action.ant-btn-text:not(:disabled):hover {
+.ui-btn.page-action.ui-btn-text:not(:disabled):hover {
   color: var(--color-primary-hover);
   background: var(--color-hover);
 }
 
 /* PageContainer's content column: the same gutter as the header above. */
-.app-page .ant-pro-page-container-children-container {
+.app-page .ui-page-content {
   padding-block: 1rem 2rem;
   padding-inline: var(--page-inline-start) var(--page-inline-end);
 }
@@ -211,26 +192,17 @@
   font-size: 0.8125rem;
 }
 
-/* Rounded top edge, its own header (no default antd padding fighting ours)
-   and a discreet drag handle. Every other sheet in the app is deliberately
-   handle-free (see filters.css) because a rounded top edge already reads as
-   "sheet" once there's a list to scroll; this is the one sheet whose whole
-   job is a single decision, not a list, so the handle earns its keep as an
-   immediate, wordless "this is a sheet, pick one" cue. */
-/* The className prop lands on .ant-drawer-content itself (antd puts it
-   there, not on a wrapper), so this owns the radius directly rather than
-   through a descendant selector. */
-.bottom-sheet.ant-drawer-content {
+.bottom-sheet.ui-drawer {
   border-radius: var(--radius-sheet) var(--radius-sheet) 0 0;
   overflow: hidden;
 }
 
-.bottom-sheet .ant-drawer-header {
+.bottom-sheet .ui-drawer-header {
   padding: 0;
   border-bottom: 0;
 }
 
-.bottom-sheet .ant-drawer-body {
+.bottom-sheet .ui-drawer-body {
   padding: 0 0.75rem calc(1rem + env(safe-area-inset-bottom));
 }
 
@@ -258,7 +230,7 @@
   font-weight: 600;
 }
 
-.bottom-sheet-close.ant-btn {
+.bottom-sheet-close.ui-btn {
   width: 44px;
   height: 44px;
   flex-shrink: 0;
@@ -284,7 +256,7 @@
    RecordMenu). 32px to the eye, a 44px target (the ::after) — so, like the
    other icon-only controls, it never grows the row it sits in. ---------- */
 
-.record-menu.ant-btn {
+.record-menu.ui-btn {
   position: relative;
   flex: none;
   min-width: 32px;
@@ -292,19 +264,19 @@
   color: var(--color-text-secondary);
 }
 
-.record-menu.ant-btn::after {
+.record-menu.ui-btn::after {
   content: "";
   position: absolute;
   inset: -8px;
 }
 
-.record-menu.ant-btn:hover,
-.record-menu.ant-btn:focus-visible {
+.record-menu.ui-btn:hover,
+.record-menu.ui-btn:focus-visible {
   color: var(--color-text);
 }
 
 /* In a section's title line the larger target would push the figure inward. */
-.section-trailing .record-menu.ant-btn {
+.section-trailing .record-menu.ui-btn {
   margin-block: -0.25rem;
   margin-right: -0.5rem;
 }
@@ -380,11 +352,11 @@
   gap: 0.5rem;
 }
 
-.bottom-action-bar-row > .ant-btn {
+.bottom-action-bar-row > .ui-btn {
   min-height: 48px;
 }
 
-.bottom-action-bar-row > .ant-btn:only-child {
+.bottom-action-bar-row > .ui-btn:only-child {
   width: 100%;
 }
 
@@ -392,7 +364,7 @@
    above, shared by every page that opts in via Page's `hasBottomActionBar`
    instead of each page repeating its own padding-bottom rule. */
 @media (max-width: 47.99rem) {
-  .app-page-has-bottom-bar .ant-pro-page-container-children-container {
+  .app-page-has-bottom-bar .ui-page-content {
     padding-bottom: calc(5rem + env(safe-area-inset-bottom));
   }
 }
@@ -403,7 +375,7 @@
    edge-to-edge sheet (no radius, no side borders, hairline top and bottom).
    The negative margin matches the gutter `.app-page` declares. --------- */
 
-.data-card.ant-card,
+.data-card.ui-card,
 .section,
 .summary-strip {
   border: 1px solid var(--color-border);
@@ -413,7 +385,7 @@
 }
 
 @media (max-width: 47.99rem) {
-  .data-card.ant-card,
+  .data-card.ui-card,
   .section,
   .summary-strip {
     margin-inline: calc(-1 * var(--page-gutter));
@@ -446,7 +418,7 @@
 .section-trailing {
   color: var(--color-text-secondary);
   font-size: var(--fs-small);
-  font-variant-numeric: tabular-nums;
+  font-variui-numeric: tabular-nums;
   white-space: nowrap;
 }
 
@@ -491,7 +463,7 @@
   color: var(--color-text);
   font-size: clamp(1.5rem, 8vw, var(--fs-hero));
   font-weight: 600;
-  font-variant-numeric: tabular-nums;
+  font-variui-numeric: tabular-nums;
   line-height: 1.15;
   overflow-wrap: normal;
   white-space: nowrap;
@@ -541,7 +513,7 @@
   color: var(--color-text);
   font-size: var(--fs-row);
   font-weight: 500;
-  font-variant-numeric: tabular-nums;
+  font-variui-numeric: tabular-nums;
   text-align: right;
 }
 
@@ -633,7 +605,7 @@ a.list-row:hover {
   color: var(--color-text);
   font-size: var(--fs-row);
   font-weight: 600;
-  font-variant-numeric: tabular-nums;
+  font-variui-numeric: tabular-nums;
   text-align: right;
 }
 
@@ -676,13 +648,13 @@ a.list-row:hover {
 
 /* One variant: outlined. A filled button here would compete with (or repeat)
    the page's own action in the title row. */
-.empty-state-action .ant-btn.ant-btn-primary:not(:disabled) {
+.empty-state-action .ui-btn.ui-btn-primary:not(:disabled) {
   border-color: var(--color-border-strong);
   color: var(--color-text);
   background: var(--color-surface);
 }
 
-.empty-state-action .ant-btn.ant-btn-primary:not(:disabled):hover {
+.empty-state-action .ui-btn.ui-btn-primary:not(:disabled):hover {
   border-color: var(--color-primary);
   color: var(--color-primary);
   background: var(--color-surface);
@@ -737,8 +709,8 @@ a.list-row:hover {
   min-width: 0;
 }
 
-.list-toolbar-search .ant-input-affix-wrapper,
-.list-toolbar-select .ant-select,
+.list-toolbar-search .ui-input-affix-wrapper,
+.list-toolbar-select .ui-select,
 .list-toolbar-filter-button {
   min-height: 40px;
 }
@@ -781,7 +753,7 @@ a.list-row:hover {
   }
 
   /* The select follows its chosen label, capped so the search keeps room. */
-  .list-toolbar-select .ant-select {
+  .list-toolbar-select .ui-select {
     min-width: 0;
     max-width: 9rem;
   }
@@ -803,11 +775,11 @@ a.list-row:hover {
   white-space: nowrap;
 }
 
-.list-toolbar-select .ant-select {
+.list-toolbar-select .ui-select {
   min-width: 7.5rem;
 }
 
-.list-toolbar-select .ant-select .ant-select-selector {
+.list-toolbar-select .ui-select .ui-select-selector {
   min-height: 40px;
 }
 
@@ -829,7 +801,7 @@ a.list-row:hover {
   min-height: 26px;
 }
 
-.list-toolbar-chips .ant-tag {
+.list-toolbar-chips .ui-tag {
   max-width: 100%;
   margin: 0;
   overflow: hidden;
@@ -841,7 +813,7 @@ a.list-row:hover {
 
 /* ---- Data card: summary on top, content below --------------------------- */
 
-.data-card > .ant-card-body {
+.data-card > .ui-card-body {
   padding: 0;
 }
 
@@ -871,19 +843,6 @@ a.list-row:hover {
   padding: 0;
 }
 
-/* The ProTable inside a flush card brings its own card chrome; drop it so
-   the table reads as the card's content, not a card inside a card. */
-.data-card-flush .ant-pro-card,
-.data-card-flush .ant-pro-table-list-toolbar {
-  border: 0;
-  border-radius: 0;
-  box-shadow: none;
-}
-
-.data-card-flush .ant-pro-card > .ant-pro-card-body {
-  padding: 0;
-}
-
 @media (max-width: 47.99rem) {
   .data-card-summary {
     border-radius: 0;
@@ -907,13 +866,6 @@ a.list-row:hover {
 
   .page-back-link::after {
     inset: -8px -4px;
-  }
-
-  /* pro-layout floats its collapse chevron on the sider's edge, right where
-     the hanging back chevron sits; below the page header it collides with
-     nothing. */
-  .ant-pro-layout .ant-pro-sider-collapsed-button {
-    top: 104px;
   }
 
   .page-header-slots {
@@ -983,7 +935,7 @@ a.list-row:hover {
     font-size: var(--fs-small);
   }
 
-  .list-toolbar-select .ant-select {
+  .list-toolbar-select .ui-select {
     min-width: 9rem;
   }
 
@@ -1020,8 +972,6 @@ a.list-row:hover {
   }
 }
 
-/* ---- Extra wide (antd `xl`): the hero and the figures side by side. ----- */
-
 @media (min-width: 75rem) {
   .summary-strip {
     flex-flow: row wrap;
@@ -1054,33 +1004,7 @@ a.list-row:hover {
   }
 }
 
-/* ---- App shell on a phone: a 56px app bar (App.tsx hands pro-layout the
-   same number), a hamburger with a 44px hit area, and a nav drawer whose
-   head is a 56px bar of its own — small logo and name, no portrait — over
-   48px menu items. Each rule repeats a class of pro-layout's own selector
-   to win over its generated CSS. -------------------------------------- */
-
 @media (max-width: 47.99rem) {
-  .ant-pro-layout .ant-pro-global-header .ant-pro-global-header-collapsed-button {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 44px;
-    height: 100%;
-    margin-inline: -13px 0;
-  }
-
-  /* The brand is centred in the bar here, not standing on its bottom edge
-     like the desktop cutout, and the tagline is too small to read. */
-  .ant-pro-layout .ant-pro-global-header .ant-pro-global-header-logo {
-    align-self: center;
-  }
-
-  .ant-pro-layout .ant-pro-global-header .app-mobile-brand img,
-  .ant-pro-layout .ant-pro-sider-logo .app-mobile-brand img {
-    width: auto;
-    height: 36px;
-  }
 
   .app-mobile-brand .app-brand-title {
     font-size: 1.25rem;
@@ -1088,29 +1012,5 @@ a.list-row:hover {
 
   .app-mobile-brand .app-brand-subtitle {
     display: none;
-  }
-
-  .ant-pro-layout .ant-pro-sider-logo {
-    display: flex;
-    align-items: center;
-    height: 56px;
-    padding: 0 1rem;
-    border-bottom: 1px solid var(--color-border);
-  }
-
-  .ant-pro-layout .ant-pro-sider-logo > a {
-    height: 100%;
-  }
-
-  /* The drawer closes with its mask, Escape or the hamburger; pro-layout's
-     own collapse chevron on the drawer's edge only floated beside the menu. */
-  .ant-pro-layout .ant-pro-sider-collapsed-button {
-    display: none;
-  }
-
-  .ant-pro-layout .ant-pro-sider .ant-menu-item,
-  .ant-drawer .ant-menu-item {
-    height: 48px;
-    line-height: 48px;
   }
 }

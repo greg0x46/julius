@@ -1,4 +1,4 @@
-import { Select } from "antd";
+import { Select } from "../ui";
 import { useMemo } from "react";
 
 import type { Account } from "../../api/contracts";

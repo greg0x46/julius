@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { App as AntdApp, Input } from "antd";
+import { App as FeedbackApp, Input } from "../ui";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import * as compactScreen from "../shared/useCompactScreen";
@@ -200,17 +200,17 @@ describe("useFeedback", () => {
     return <button onClick={() => feedback.success("Salvo")}>go</button>;
   }
 
-  it("shows a toast inside an antd <App>", async () => {
+  it("shows a toast inside a feedback provider", async () => {
     render(
-      <AntdApp>
+      <FeedbackApp>
         <Probe />
-      </AntdApp>,
+      </FeedbackApp>,
     );
     await userEvent.click(screen.getByRole("button", { name: "go" }));
     await waitFor(() => expect(screen.getByText("Salvo")).toBeInTheDocument());
   });
 
-  it("does not crash without an antd <App> (component tests)", async () => {
+  it("does not crash without a feedback provider (component tests)", async () => {
     render(<Probe />);
     await userEvent.click(screen.getByRole("button", { name: "go" }));
     expect(screen.getByRole("button", { name: "go" })).toBeInTheDocument();

@@ -1,6 +1,6 @@
 import { PluggySettings } from "../components/PluggySettings";
 import { SettingsPageContainer as PageContainer } from "../components/SettingsPageContainer";
-import { Collapse, Skeleton } from "antd";
+import { Collapse, Skeleton } from "../components/ui";
 import { useNavigate } from "react-router-dom";
 
 import { SyncNowAction, SyncRunNotice } from "../components/CreateSyncRunAction";

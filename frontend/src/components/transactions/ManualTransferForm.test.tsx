@@ -21,12 +21,12 @@ describe("ManualTransferForm", () => {
     render(<QueryTestProvider><ManualTransferForm onClose={vi.fn()} onCreated={done} /></QueryTestProvider>);
     await user.click(await screen.findByRole("combobox", { name: "Conta de origem" }));
     await user.click(await screen.findByText("Conta BRL · BRL"));
-    await user.click(screen.getByRole("spinbutton", { name: "Valor enviado" }));
+    await user.click(screen.getByRole("textbox", { name: "Valor enviado" }));
     await user.paste("9007199254740993.01");
     await user.click(screen.getByRole("combobox", { name: "Conta de destino" }));
-    await user.click((await screen.findAllByText("Conta USD · USD")).find((element) => !element.closest(".ant-select-dropdown-hidden"))!);
-    await user.type(screen.getByRole("spinbutton", { name: "Valor recebido" }), "100");
-    await user.type(screen.getByRole("spinbutton", { name: "Tarifa registrada (opcional)" }), "10");
+    await user.click((await screen.findAllByText("Conta USD · USD")).find((element) => !element.closest(".ui-select-dropdown-hidden"))!);
+    await user.type(screen.getByRole("textbox", { name: "Valor recebido" }), "100");
+    await user.type(screen.getByRole("textbox", { name: "Tarifa registrada (opcional)" }), "10");
     await user.click(screen.getByRole("button", { name: "Criar transferência" }));
     await waitFor(() => expect(transfers.createTransfer).toHaveBeenCalledWith({
       source: expect.objectContaining({ account_id: source.id, amount: "-9007199254740993.01" }),
@@ -40,7 +40,7 @@ describe("ManualTransferForm", () => {
     vi.mocked(accounts.listAccounts).mockResolvedValue([source, destination]);
     render(<QueryTestProvider><ManualTransferForm onClose={vi.fn()} onCreated={vi.fn()} /></QueryTestProvider>);
     for (const name of ["Valor enviado", "Valor recebido", "Tarifa registrada (opcional)"]) {
-      const input = await screen.findByRole("spinbutton", { name });
+      const input = await screen.findByRole("textbox", { name });
       await user.type(input, "1234");
       expect(input).toHaveValue("1.234");
       await user.type(input, "{Backspace}");

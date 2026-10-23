@@ -1,33 +1,51 @@
-import { Skeleton } from "antd";
+import { Skeleton } from "../ui";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 
 import { ReportValuation } from "../shared/ReportValuation";
 import { ReportingDetails } from "../shared/ReportingDetails";
 import { reportingLabel } from "../../presentation/reporting";
-import type { CategoryBreakdown, CategoryDirection, CategorySpendingItem } from "../../api/contracts";
+import type {
+  CategoryBreakdown,
+  CategoryDirection,
+  CategorySpendingItem,
+} from "../../api/contracts";
 import { useCategoryBreakdown } from "../../hooks/useCategoryBreakdown";
 import type { Period } from "../../hooks/usePeriod";
-import { categoryPalette, otherCategoriesColor, uncategorizedColor } from "../../presentation/chartColors";
+import {
+  categoryPalette,
+  otherCategoriesColor,
+  uncategorizedColor,
+} from "../../presentation/chartColors";
 import { formatReportMoney, sumBRL } from "../../presentation/money";
 import { UnavailableState } from "../AsyncState";
 import { filtersToSearchParams } from "../filters/filterUrl";
 import { PageTabs, Section } from "../layout";
 
-const percentFormatter = new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+const percentFormatter = new Intl.NumberFormat("pt-BR", {
+  minimumFractionDigits: 1,
+  maximumFractionDigits: 1,
+});
 
 /** Categories listed individually; the rest fold into one "Outras" row. */
 const maxListedCategories = categoryPalette.length;
 
 function percent(amount: number, total: number) {
   const value = total > 0 ? (amount / total) * 100 : 0;
-  return value > 0 && value < 0.1 ? "<0,1%" : `${percentFormatter.format(value)}%`;
+  return value > 0 && value < 0.1
+    ? "<0,1%"
+    : `${percentFormatter.format(value)}%`;
 }
 
-function transactionLink(period: Period, classification: CategoryDirection, item?: CategorySpendingItem) {
+function transactionLink(
+  period: Period,
+  classification: CategoryDirection,
+  item?: CategorySpendingItem,
+) {
   const params = filtersToSearchParams({
-    ...(period.from === null ? { period: "all" } : { date_from: period.from, date_to: period.to }),
+    ...(period.from === null
+      ? { period: "all" }
+      : { date_from: period.from, date_to: period.to }),
     classification,
     category_ids: item?.category_id ? [item.category_id] : [],
     uncategorized: item ? item.category_id === null : null,
@@ -63,7 +81,10 @@ function toSlices(items: CategorySpendingItem[]): Slice[] {
     name: item.category_name,
     amount: item.amount,
     value: Number(item.amount),
-    color: item.category_id === null ? uncategorizedColor : categoryPalette[nextColor++ % categoryPalette.length],
+    color:
+      item.category_id === null
+        ? uncategorizedColor
+        : categoryPalette[nextColor++ % categoryPalette.length],
     item,
   }));
   if (rest.length > 0) {
@@ -99,20 +120,32 @@ function CategorySkeleton() {
   );
 }
 
-function Breakdown({ data, period, direction }: { data: CategoryBreakdown; period: Period; direction: CategoryDirection }) {
+function Breakdown({
+  data,
+  period,
+  direction,
+}: {
+  data: CategoryBreakdown;
+  period: Period;
+  direction: CategoryDirection;
+}) {
   const [active, setActive] = useState<string | null>(null);
   const navigate = useNavigate();
   const total = Number(data.total);
   const label = direction === "outflow" ? "saídas" : "entradas";
-  const format = (value: string) => formatReportMoney(value, data.currency_code);
+  const format = (value: string) =>
+    formatReportMoney(value, data.currency_code);
   const slices = toSlices(data.items);
-  const linkFor = (slice: Slice) => transactionLink(period, direction, slice.item);
+  const linkFor = (slice: Slice) =>
+    transactionLink(period, direction, slice.item);
 
   if (total <= 0 || slices.length === 0) {
     return (
       <div className="category-empty">
         <strong>{format("0.00")}</strong>
-        <p>Nenhuma {direction === "outflow" ? "saída" : "entrada"} neste período.</p>
+        <p>
+          Nenhuma {direction === "outflow" ? "saída" : "entrada"} neste período.
+        </p>
       </div>
     );
   }
@@ -122,51 +155,57 @@ function Breakdown({ data, period, direction }: { data: CategoryBreakdown; perio
       <div className="category-donut">
         <div className="category-donut-total">
           <span>Total de {label}</span>
-          <strong title={format(data.total ?? "0")} style={{ fontSize: donutFigureSize(format(data.total ?? "0")) }}>
+          <strong
+            title={format(data.total ?? "0")}
+            style={{ fontSize: donutFigureSize(format(data.total ?? "0")) }}
+          >
             {format(data.total ?? "0")}
           </strong>
         </div>
-        <ResponsiveContainer width="100%" height={200}>
-          <PieChart>
-            <Pie
-              data={slices}
-              dataKey="value"
-              nameKey="name"
-              innerRadius="72%"
-              outerRadius="95%"
-              isAnimationActive={false}
-              stroke="#fff"
-              strokeWidth={2}
-              onMouseEnter={(_, index) => setActive(slices[index].key)}
-              onMouseLeave={() => setActive(null)}
-              onClick={(_, index) => navigate(linkFor(slices[index]))}
-            >
-              {slices.map((slice) => (
-                <Cell
-                  key={slice.key}
-                  fill={slice.color}
-                  opacity={active === null || active === slice.key ? 1 : 0.35}
-                  style={{ cursor: "pointer" }}
-                />
-              ))}
-            </Pie>
-            <Tooltip
-              content={({ active: visible, payload }) => {
-                const slice = payload?.[0]?.payload as Slice | undefined;
-                return visible && slice ? (
-                  <div className="timeline-chart-tooltip">
-                    <strong>{slice.name}</strong>
-                    <div>
-                      {format(slice.amount)} · {percent(slice.value, total)}
-                    </div>
-                  </div>
-                ) : null;
-              }}
-            />
-          </PieChart>
-        </ResponsiveContainer>
+        <svg
+          viewBox="0 0 200 200"
+          width="100%"
+          height={200}
+          role="img"
+          aria-label={`Distribuição de ${label} por categoria`}
+        >
+          {slices.map((slice, index) => {
+            const start = slices
+              .slice(0, index)
+              .reduce((sum, item) => sum + item.value / total, 0);
+            const fraction = slice.value / total;
+            return (
+              <circle
+                key={slice.key}
+                cx={100}
+                cy={100}
+                r={82}
+                pathLength={1}
+                fill="none"
+                stroke={slice.color}
+                strokeWidth={22}
+                strokeDasharray={`${Math.max(0, fraction - 0.003)} ${1 - Math.max(0, fraction - 0.003)}`}
+                strokeDashoffset={-start}
+                transform="rotate(-90 100 100)"
+                opacity={active === null || active === slice.key ? 1 : 0.35}
+                style={{ cursor: "pointer" }}
+                onMouseEnter={() => setActive(slice.key)}
+                onMouseLeave={() => setActive(null)}
+                onClick={() => navigate(linkFor(slice))}
+              >
+                <title>
+                  {slice.name}: {format(slice.amount)} ·{" "}
+                  {percent(slice.value, total)}
+                </title>
+              </circle>
+            );
+          })}
+        </svg>
       </div>
-      <ul className="category-breakdown-list" aria-label={`Categorias de ${label}`}>
+      <ul
+        className="category-breakdown-list"
+        aria-label={`Categorias de ${label}`}
+      >
         {slices.map((slice) => (
           <li key={slice.key} data-active={active === slice.key}>
             <Link
@@ -176,7 +215,11 @@ function Breakdown({ data, period, direction }: { data: CategoryBreakdown; perio
               onMouseEnter={() => setActive(slice.key)}
               onMouseLeave={() => setActive(null)}
             >
-              <span className="category-breakdown-swatch" style={{ background: slice.color }} aria-hidden="true" />
+              <span
+                className="category-breakdown-swatch"
+                style={{ background: slice.color }}
+                aria-hidden="true"
+              />
               <span className="category-breakdown-name">{slice.name}</span>
               <span className="category-breakdown-amount">
                 <strong>{format(slice.amount)}</strong>
@@ -192,7 +235,10 @@ function Breakdown({ data, period, direction }: { data: CategoryBreakdown; perio
 
 export function SpendingByCategoryCard({ period }: { period: Period }) {
   const [direction, setDirection] = useState<CategoryDirection>("outflow");
-  const { data, isLoading, error, refetch } = useCategoryBreakdown(period, direction);
+  const { data, isLoading, error, refetch } = useCategoryBreakdown(
+    period,
+    direction,
+  );
 
   return (
     <Section
@@ -218,11 +264,28 @@ export function SpendingByCategoryCard({ period }: { period: Period }) {
         {isLoading ? (
           <CategorySkeleton />
         ) : error || !data ? (
-          <UnavailableState onRetry={() => void refetch()}>Não foi possível carregar as categorias.</UnavailableState>
+          <UnavailableState onRetry={() => void refetch()}>
+            Não foi possível carregar as categorias.
+          </UnavailableState>
         ) : data.total === null ? (
-          <div role="status"><p>{data.reporting ? reportingLabel(data.reporting) : "Total indisponível"}</p><ReportingDetails report={data.reporting} totals={data.totals} /></div>
+          <div role="status">
+            <p>
+              {data.reporting
+                ? reportingLabel(data.reporting)
+                : "Total indisponível"}
+            </p>
+            <ReportingDetails report={data.reporting} totals={data.totals} />
+          </div>
         ) : (
-          <ReportValuation valuation={data}><ReportingDetails report={data.reporting} totals={data.totals} /><Breakdown key={`${period.from}-${period.to}-${direction}`} data={data} period={period} direction={direction} /></ReportValuation>
+          <ReportValuation valuation={data}>
+            <ReportingDetails report={data.reporting} totals={data.totals} />
+            <Breakdown
+              key={`${period.from}-${period.to}-${direction}`}
+              data={data}
+              period={period}
+              direction={direction}
+            />
+          </ReportValuation>
         )}
       </div>
     </Section>

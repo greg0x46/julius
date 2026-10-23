@@ -1,4 +1,4 @@
-import { Alert } from "antd";
+import { Alert } from "../ui";
 import { useState } from "react";
 
 import type { InvestmentOperation, InvestmentOperationWrite } from "../../api/contracts";

@@ -1,4 +1,4 @@
-import dayjs from "dayjs";
+import { calendar } from "../../presentation/calendar";
 import { describe, expect, it } from "vitest";
 
 import { draftFromGoal, goalWriteFrom, type GoalDraft } from "./goalDraft";
@@ -7,7 +7,7 @@ const valid: GoalDraft = {
   name: "  Cem mil  ",
   metric: "invested_value",
   targetAmount: "100000.00",
-  targetDate: dayjs("2027-12-31"),
+  targetDate: calendar("2027-12-31"),
   notes: "  ",
 };
 

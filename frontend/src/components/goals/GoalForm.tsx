@@ -1,4 +1,4 @@
-import { DatePicker, Input, Select } from "antd";
+import { DatePicker, Input, Select } from "../ui";
 import { useEffect, useState } from "react";
 
 import { goalMetrics, type Goal, type GoalWrite } from "../../api/contracts";

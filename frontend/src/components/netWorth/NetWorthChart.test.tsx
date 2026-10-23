@@ -1,24 +1,8 @@
-import { render, screen } from "@testing-library/react";
-import type { ReactNode } from "react";
-import { afterEach, expect, it, vi } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, expect, it } from "vitest";
 
 import type { NetWorthSnapshot } from "../../api/contracts";
 import { NetWorthChart } from "./NetWorthChart";
-
-vi.mock("recharts", () => ({
-  ResponsiveContainer: ({ children }: { children: ReactNode }) => children,
-  LineChart: ({ data, children }: { data: unknown; children: ReactNode }) => (
-    <div>
-      <pre data-testid="points">{JSON.stringify(data)}</pre>
-      {children}
-    </div>
-  ),
-  Line: ({ connectNulls }: { connectNulls: boolean }) => <span data-testid="line">{String(connectNulls)}</span>,
-  CartesianGrid: () => null,
-  Tooltip: () => null,
-  XAxis: () => null,
-  YAxis: () => null,
-}));
 
 it("leaves days that cannot be valued as gaps, not zeros", () => {
   const valued: NetWorthSnapshot = {
@@ -38,16 +22,29 @@ it("leaves days that cannot be valued as gaps, not zeros", () => {
     <NetWorthChart
       snapshots={[
         valued,
-        { captured_at: "2020-01-02", is_backfilled: true, valuation_version: 1, valuation_status: "unavailable" },
-        { ...valued, captured_at: "2020-01-03", valuation_version: 0, valuation_status: "legacy", net_worth: "2100" },
+        {
+          captured_at: "2020-01-02",
+          is_backfilled: true,
+          valuation_version: 1,
+          valuation_status: "unavailable",
+        },
+        {
+          ...valued,
+          captured_at: "2020-01-03",
+          valuation_version: 0,
+          valuation_status: "legacy",
+          net_worth: "2100",
+        },
         { ...valued, captured_at: "2020-01-04", net_worth: "2600" },
       ]}
     />,
   );
-  const points = JSON.parse(screen.getByTestId("points").textContent!);
-  // A legacy row is a real (BRL-only) observation, so it is plotted; only the unavailable day is a gap.
-  expect(points.map((point: { netWorth: number | null }) => point.netWorth)).toEqual([2500, null, 2100, 2600]);
-  expect(screen.getByTestId("line")).toHaveTextContent("false");
+  const line = document.querySelector('[data-series="netWorth"]')!;
+  expect(line.getAttribute("d")?.match(/M/g)).toHaveLength(2);
+  fireEvent.change(screen.getByRole("combobox"), { target: { value: "1" } });
+  expect(screen.queryByText(/Patrimônio líquido:/)).not.toBeInTheDocument();
+  fireEvent.change(screen.getByRole("combobox"), { target: { value: "2" } });
+  expect(screen.getByText(/Patrimônio líquido:.*2.100,00/)).toBeInTheDocument();
   expect(screen.getByRole("img")).toHaveAccessibleName(/lacunas/);
 });
 
@@ -73,7 +70,11 @@ it("labels a midnight-UTC calendar day as that day in a western timezone", () =>
     total_liabilities: "0",
   };
   render(<NetWorthChart snapshots={[snapshot]} />);
-  const points = JSON.parse(screen.getByTestId("points").textContent!);
-  expect(points[0].date).toBe("18/08");
-  expect(screen.getByRole("img")).toHaveAttribute("aria-label", expect.stringContaining("de 18/08 a 18/08"));
+  expect(
+    screen.getByRole("option", { name: "18/08/2026" }),
+  ).toBeInTheDocument();
+  expect(screen.getByRole("img")).toHaveAttribute(
+    "aria-label",
+    expect.stringContaining("de 18/08 a 18/08"),
+  );
 });

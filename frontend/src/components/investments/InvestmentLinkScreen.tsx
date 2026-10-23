@@ -1,7 +1,7 @@
-import { PlusOutlined } from "@ant-design/icons";
+import { PlusOutlined } from "../ui/icons";
 import { useQueries } from "@tanstack/react-query";
-import { Alert, Button, InputNumber, List, Space, Typography } from "antd";
-import dayjs from "dayjs";
+import { Alert, Button, InputNumber, List, Space, Typography } from "../ui";
+import { calendar } from "../../presentation/calendar";
 import { useState } from "react";
 
 import { listInvestmentTransactions } from "../../api/investments";
@@ -30,7 +30,7 @@ function absolute(value: string): string {
 const positive = isPositiveDecimal;
 
 function operationDate(transaction: TransactionItem): string {
-  return transaction.occurred_at ? dayjs(transaction.occurred_at).format("YYYY-MM-DD") : dayjs().format("YYYY-MM-DD");
+  return transaction.occurred_at ? calendar(transaction.occurred_at).format("YYYY-MM-DD") : calendar().format("YYYY-MM-DD");
 }
 
 function joinLabel(parts: Array<string | null | undefined>): string {
@@ -195,7 +195,7 @@ export function InvestmentLinkScreen({
         (candidate.movementId !== null && link.financial_investment_transaction_id === candidate.movementId),
     );
   const dateDistance = (candidate: Candidate) =>
-    candidate.date ? Math.abs(dayjs(candidate.date).diff(dayjs(operationDate(transaction)), "day")) : Number.MAX_SAFE_INTEGER;
+    candidate.date ? Math.abs(calendar(candidate.date).diff(calendar(operationDate(transaction)), "day")) : Number.MAX_SAFE_INTEGER;
   const suggested = (candidate: Candidate) =>
     dateDistance(candidate) <= 5 && isZeroDecimal(subtractDecimals(candidate.available, available));
   const candidates = [...importedCandidates, ...operationCandidates]

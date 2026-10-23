@@ -105,7 +105,7 @@ transaction to the last planned installment), used by the "whole period" option.
 ## Frontend
 
 The authenticated shell (`frontend/src/app/App.tsx`) renders `BuildFooter` once
-through `ProLayout.footerRender` on every page. Its right-aligned, muted caption
+through the local `App` shell on every page. Its right-aligned, muted caption
 shows `Julius <build label> · <7-character SHA>` with a link to the full commit
 in GitHub. Missing/invalid SHA omits the separator and link; missing label falls
 back to `dev`. Vite supplies Git/default metadata at build time; CI supplies
@@ -181,3 +181,12 @@ exclusions are unchanged. Responses include `currency_code` and full `fx`
 provenance; missing FX makes the report unavailable and stale FX is disclosed.
 Home money figures, daily allowance, accessible links and chart tooltips read
 that response currency. Category reports use the same current-rate policy.
+
+## Local chart rendering
+
+The projection uses shared SVG `LinePlot`: realized balances remain solid,
+projected and simulated balances dashed, with today/zero references and the
+lowest-balance marker. Pointer/touch inspection and a keyboard-accessible date
+selector expose the original decimal values and entries; realized days still
+open transactions. Category breakdown uses local SVG rings and its linked list.
+No chart library or external UI runtime is required.

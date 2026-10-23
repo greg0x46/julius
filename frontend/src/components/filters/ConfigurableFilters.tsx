@@ -1,4 +1,4 @@
-import { Button, Checkbox, Tag } from "antd";
+import { Button, Checkbox, Tag } from "../ui";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { FilterButton } from "../layout/FilterButton";

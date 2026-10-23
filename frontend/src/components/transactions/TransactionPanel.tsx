@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { Alert, Button } from "antd";
+import { Alert, Button } from "../ui";
 import { useEffect, useState } from "react";
 
 import type {

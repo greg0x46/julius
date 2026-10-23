@@ -101,14 +101,6 @@ body {
   box-shadow: 0 0 0 4px var(--color-surface);
 }
 
-/* antd's Menu sets outline: none on its items, which hid keyboard focus in
-   the sidebar and the mobile nav drawer. */
-.ant-menu-item:focus-visible,
-.ant-menu-item a:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: -2px;
-}
-
 .skip-link {
   position: fixed;
   z-index: 2000;
@@ -151,45 +143,13 @@ body {
   }
 }
 
-/* App shell hierarchy: product (global header) -> navigation (sidebar) ->
-   page context (PageHeader) -> content (workspace + cards). Each level
-   gets its own surface so the boundary between "chrome" and "content" is
-   visible instead of one undifferentiated white page. */
-
-/* Global header's background is set via ProLayout's token prop in App.tsx
-   (token.header.colorBgHeader) — that's the value pro-layout's own
-   CSS-in-JS actually reads, so a plain CSS override here would lose the
-   cascade fight against it. */
-
-/* Sidebar: its own surface, separated from the main column by a hairline. */
-.ant-pro-sider.ant-pro-sider-mix {
-  background: var(--color-surface);
-  border-right: 1px solid var(--color-border);
-}
-
-/* PageHeader: title + page-level actions, still a light/white surface,
-   separated from the workspace below it by a hairline. */
-.ant-pro-page-container-warp-page-header {
-  background: var(--color-surface);
-  padding-block: 1rem;
-  border-bottom: 1px solid var(--color-border);
-}
-
-/* Workspace: the off-white backdrop cards sit on. */
-.ant-pro-grid-content {
-  background: var(--color-bg);
-}
-
-.ant-pro-page-container-children-container {
+.ui-page-content {
   padding-top: 1.5rem;
 }
 
 @media (max-width: 47.99rem) {
-  .ant-pro-page-container-warp-page-header {
-    padding-block: 0.75rem;
-  }
 
-  .ant-pro-page-container-children-container {
+  .ui-page-content {
     padding-top: 1rem;
   }
 }
@@ -206,15 +166,6 @@ body {
   padding-inline: 0.25rem;
   font-size: 1rem;
   font-weight: 600;
-}
-
-.ant-pro-global-header .app-mobile-brand,
-.ant-pro-global-header .app-brand-title {
-  color: #ffffff;
-}
-
-.ant-pro-sider-logo .app-mobile-brand {
-  color: var(--color-text);
 }
 
 /* Title + subtitle stack, used both by the mobile brand above and by
@@ -288,75 +239,12 @@ body {
   font-size: 0.9375rem;
 }
 
-/* App.tsx's headerTitleRender wraps logo+title in a plain <a> (needed to
-   pick up pro-layout's own flex/align-items styling for that selector) —
-   left unstyled, its color would default to the theme's link color
-   (green) instead of the white the header token sets on the title. */
-.ant-pro-global-header-logo a {
-  color: var(--color-surface);
-}
-
-.ant-pro-sider-logo img {
-  width: 48px;
-  height: 48px;
-}
-
-/* Sized to the 64px header bar itself (see the bottom-alignment rule
-   below) rather than a fixed square, so the head sits just under the top
-   edge with a small margin instead of a small badge floating in the bar.
-   width: auto preserves the source image's aspect ratio. */
-.ant-pro-global-header-logo img {
-  width: auto;
-  height: 58px;
-}
-
-/* Pinned to the bottom of the 64px header bar instead of vertically
-   centered, so the cutout reads as standing on the header's edge rather
-   than floating in the middle of it. The logo+title block is only as
-   tall as its content (48px), so align-self has to go on that block —
-   putting it on the img alone has no effect, since the img already fills
-   its immediate flex parent (the <a>) with no slack to move within. */
-.ant-pro-global-header-logo {
-  align-self: flex-end;
-}
-
-/* Both scoped to their container (two classes) so they beat the plainer
-   .ant-pro-global-header-logo/.ant-pro-sider-logo img rules regardless of
-   source order — no fragile cascade-order dependency like before. */
-
-/* Top bar: same treatment as the desktop header logo, bottom-anchored via
-   the .ant-pro-global-header-logo rule above, head near the top edge. */
-.ant-pro-global-header .app-mobile-brand img {
-  width: auto;
-  height: 58px;
-}
-
-/* Drawer: not boxed in by the 64px header, so this can go much bigger.
-   Prefixed with .ant-pro-layout to out-specificity pro-layout's own
-   generated `.ant-pro-layout .ant-pro-sider-logo > a > img { height: 22px }`
-   rule (3 classes vs. its 2) — without it, that rule silently wins and the
-   logo renders at 22px no matter what height is set here. */
-.ant-pro-layout .ant-pro-sider-logo .app-mobile-brand img {
-  width: auto;
-  height: 110px;
-}
-
 /* PageContainer's PageHeader packs title + subtitle into one nowrap flex
    row sized by the surrounding chrome, so on narrow viewports the page
    title itself — the single most important element on the screen — gets
    ellipsized (e.g. "Contas e cartões" becomes "Contas e car..."). Let
    both wrap and stack instead of truncating. */
 @media (max-width: 47.99rem) {
-  .ant-page-header-heading-title,
-  .ant-page-header-heading-sub-title {
-    overflow: visible;
-    white-space: normal;
-    text-overflow: clip;
-  }
-
-  .ant-page-header-heading-left {
-    flex-wrap: wrap;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -410,38 +298,21 @@ body {
   font-size: 1rem;
 }
 
-/* Compact screens: form controls render at 16px so iOS Safari doesn't zoom
-   the page when one is focused. The control HEIGHTS come from the antd
-   theme (theme/tokens.ts createTheme); antd has no token for font size here. */
-/* antd sets font-size on the inner <input>s with selectors as specific as
-   `.ant-select .ant-select-selection-search-input` and loads them after this
-   sheet, so a bare `.ant-select-selection-search-input` loses. The `:root`
-   prefix (no `!important`) lifts every selector above antd's. */
 @media (max-width: 47.99rem) {
-  :root .ant-input,
-  :root .ant-input-affix-wrapper,
-  :root .ant-input-affix-wrapper > input.ant-input,
-  :root .ant-input-number,
-  :root .ant-input-number .ant-input-number-input,
-  :root .ant-select,
-  /* antd: `.ant-select-single:not(.ant-select-customize-input) .ant-select-selector
-     .ant-select-selection-search-input` (4 classes), so this one has five. */
-  :root .ant-select.ant-select .ant-select-selector .ant-select-selection-search-input,
-  :root .ant-select .ant-select-selection-item,
-  :root .ant-select .ant-select-selection-placeholder,
-  :root .ant-picker,
-  :root .ant-picker .ant-picker-input > input,
-  :root textarea.ant-input {
+  :root .ui-input,
+  :root .ui-input-affix-wrapper,
+  :root .ui-input-affix-wrapper > input.ui-input,
+  :root .ui-select,
+
+  :root .ui-select .ui-select-selection-item,
+  :root .ui-select .ui-select-selection-placeholder,
+  :root textarea.ui-input {
     font-size: 16px;
   }
 }
 
-/* ---- One table skin. The colours come from the antd Table tokens
-   (theme/tokens.ts); the header label size has no token. Domain
-   stylesheets must not restyle `th`. ----------------------------------- */
-
-.ant-table-wrapper .ant-table .ant-table-thead > tr > th,
-.ant-table-wrapper .ant-table .ant-table-thead > tr > td {
+.ui-table-wrapper .ui-table thead > tr > th,
+.ui-table-wrapper .ui-table thead > tr > td {
   font-size: var(--fs-caption);
   font-weight: 500;
 }
@@ -449,8 +320,7 @@ body {
 /* ---- Segmented: the selected thumb reads off a hairline ring, not a shadow
    (the track is a shade darker than the page, see theme/tokens.ts). ---- */
 
-.ant-segmented .ant-segmented-thumb,
-.ant-segmented .ant-segmented-item-selected {
+.ui-segmented label[data-active="true"] {
   box-shadow: 0 0 0 1px var(--color-border);
 }
 
@@ -458,45 +328,33 @@ body {
 
 @media (max-width: 47.99rem) {
   /* Segmented items (PageTabs, ManualTransactionForm, filter controls). */
-  :root .ant-segmented .ant-segmented-item {
+  :root .ui-segmented label {
     min-height: 40px;
   }
 
-  :root .ant-segmented .ant-segmented-item-label {
+  :root .ui-segmented label > span {
     min-height: 40px;
     line-height: 40px;
   }
 
-  /* Tabs: the label is 22px tall inside a 46px tab; the pseudo-element makes
-     the role="tab" element itself the 44px target. */
-  .ant-tabs-tab-btn {
-    position: relative;
-  }
-
-  .ant-tabs-tab-btn::after {
-    content: "";
-    position: absolute;
-    inset: -11px -4px;
-  }
-
   /* Switch: 44x22 to the eye, a 44px-tall target. */
-  .ant-switch::after {
+  .ui-switch::after {
     content: "";
     position: absolute;
     inset: -12px -4px;
   }
 
   /* Checkbox and radio rows: the whole label is the target. */
-  .ant-checkbox-wrapper,
-  .ant-radio-wrapper {
+  .ui-checkbox-wrapper,
+  .ui-radio-wrapper {
     align-items: center;
     min-height: 40px;
   }
 
   /* Text buttons and links that carry a label (icon-only ones size
      themselves: RecordMenu, close, back). */
-  .ant-btn-link:not(.ant-btn-icon-only),
-  .ant-btn-text:not(.ant-btn-icon-only) {
+  .ui-btn-link:not(.ui-btn-icon-only),
+  .ui-btn-text:not(.ui-btn-icon-only) {
     min-height: 40px;
   }
 }
@@ -505,7 +363,7 @@ body {
    colour; `moneyTone` decides which one applies (flow: inflow tinted, outflow
    default; result/balance: negative is the single danger red). */
 .money {
-  font-variant-numeric: tabular-nums;
+  font-variui-numeric: tabular-nums;
   white-space: nowrap;
 }
 

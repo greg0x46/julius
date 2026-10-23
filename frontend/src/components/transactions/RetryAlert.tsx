@@ -1,4 +1,4 @@
-import { Alert, Button } from "antd";
+import { Alert, Button } from "../ui";
 
 /** A write's failure (or its "saved, refresh pending" aftermath) with the one action that recovers from it. */
 export function RetryAlert({

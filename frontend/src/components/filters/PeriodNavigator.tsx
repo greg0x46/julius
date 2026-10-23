@@ -1,5 +1,5 @@
-import { CalendarOutlined, CaretDownFilled, LeftOutlined, RightOutlined } from "@ant-design/icons";
-import { Button, Input, Popover } from "antd";
+import { CalendarOutlined, CaretDownFilled, LeftOutlined, RightOutlined } from "../ui/icons";
+import { Button, Input, Popover } from "../ui";
 import { useState } from "react";
 
 import { periodNavigation } from "./periodNavigation";

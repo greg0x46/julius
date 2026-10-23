@@ -1,5 +1,5 @@
 import { ReportValuation } from "../shared/ReportValuation";
-import dayjs from "dayjs";
+import { calendar } from "../../presentation/calendar";
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
 
@@ -9,7 +9,7 @@ import type { Period } from "../../hooks/usePeriod";
 import { useHomePeriodBounds } from "../../hooks/useHomePeriodBounds";
 import { useTimeline } from "../../hooks/useTimeline";
 import { formatReportMoney } from "../../presentation/money";
-import { Skeleton } from "antd";
+import { Skeleton } from "../ui";
 
 import { UnavailableState } from "../AsyncState";
 import { Section, SummaryStrip } from "../layout";
@@ -38,7 +38,7 @@ export function PeriodBalanceCard({ period }: { period: Period }) {
     useHomePeriodBounds(period);
   // Only the day span matters here, not the exact instant, so this needs
   // none of ProjectionSummaryCard's midnight-rollover handling.
-  const referenceDate = useMemo(() => dayjs().format(dateFormat), []);
+  const referenceDate = useMemo(() => calendar().format(dateFormat), []);
   const params = useMemo(
     () => ({
       referenceDate,

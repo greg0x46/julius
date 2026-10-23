@@ -16,15 +16,10 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
-    "@ant-design/icons": "^6.3.4",
-    "@ant-design/pro-layout": "^7.22.7",
-    "@ant-design/pro-table": "^3.21.0",
     "@tanstack/react-query": "^5.104.1",
-    "antd": "^5.29.3",
     "react": "19.3.0",
     "react-dom": "19.3.0",
-    "react-router-dom": "7.18.4",
-    "recharts": "^3.10.1"
+    "react-router-dom": "7.18.4"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
@@ -45,10 +40,5 @@
     "typescript-eslint": "8.71.1",
     "vite": "8.3.4",
     "vitest": "4.1.11"
-  },
-  "overrides": {
-    "path-to-regexp": "^8.4.2",
-    "js-yaml": "^4.3.2",
-    "nanoid": "^3.3.18"
   }
 }

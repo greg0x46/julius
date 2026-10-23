@@ -1,4 +1,4 @@
-import { Skeleton } from "antd";
+import { Skeleton } from "../components/ui";
 import { useParams } from "react-router-dom";
 
 import { isUuid } from "../api/contracts";

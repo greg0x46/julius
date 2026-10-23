@@ -1,4 +1,4 @@
-import { Alert, Button } from "antd";
+import { Alert, Button } from "../components/ui";
 import { useRef, useState } from "react";
 
 import type { AutomationAction, AutomationRule, RetroactiveApplyResult } from "../api/contracts";

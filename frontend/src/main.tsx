@@ -1,5 +1,3 @@
-import dayjs from "dayjs";
-import "dayjs/locale/pt-br";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -7,7 +5,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { createAppQueryClient } from "./app/queryClient";
 import { AppRouter } from "./app/router";
 import { ThemeProvider } from "./app/ThemeProvider";
-import "antd/dist/reset.css";
+import "./styles/ui.css";
 import "./styles/global.css";
 import "./styles/forms.css";
 import "./styles/sync-runs.css";
@@ -28,7 +26,6 @@ import "./styles/scenarios.css";
 import "./styles/statement-imports.css";
 import "./styles/settings.css";
 
-dayjs.locale("pt-br");
 
 const root = document.getElementById("root");
 

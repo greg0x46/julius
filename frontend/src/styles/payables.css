@@ -62,17 +62,17 @@
 
 /* Wide: one table, whose first and last cells line up with the page gutter.
    Its header skin comes from the theme, like every other table. */
-.payables-table .ant-table-tbody > tr > td {
+.payables-table tbody > tr > td {
   font-size: var(--fs-body, 0.875rem);
 }
 
-.payables-table .ant-table-tbody > tr > td:first-child,
-.payables-table .ant-table-thead > tr > th:first-child {
+.payables-table tbody > tr > td:first-child,
+.payables-table thead > tr > th:first-child {
   padding-inline-start: var(--page-gutter, 1.5rem);
 }
 
-.payables-table .ant-table-tbody > tr > td:last-child,
-.payables-table .ant-table-thead > tr > th:last-child {
+.payables-table tbody > tr > td:last-child,
+.payables-table thead > tr > th:last-child {
   padding-inline-end: var(--page-gutter, 1.5rem);
 }
 
@@ -104,7 +104,7 @@
   white-space: nowrap;
   color: var(--color-text-secondary, #5d697c);
   font-size: var(--fs-small, 0.8125rem);
-  font-variant-numeric: tabular-nums;
+  font-variui-numeric: tabular-nums;
 }
 
 /* ---- Pendência: detail ------------------------------------------------- */
@@ -176,13 +176,13 @@
 
 /* The section header's action: a quiet text button, not the page's loudest
    control. It keeps a 40px target on a phone. */
-.payable-add-action.ant-btn {
+.payable-add-action.ui-btn {
   color: var(--color-primary, #0f7d58);
   font-weight: 500;
 }
 
 @media (max-width: 47.99rem) {
-  .payable-add-action.ant-btn {
+  .payable-add-action.ui-btn {
     min-height: 40px;
   }
 }
@@ -200,14 +200,14 @@
 }
 
 .payable-entry-realization .payable-entry-amount {
-  font-variant-numeric: tabular-nums;
+  font-variui-numeric: tabular-nums;
 }
 
 .payable-entry-realization-text {
   overflow-wrap: anywhere;
 }
 
-.payable-entry-link.ant-btn {
+.payable-entry-link.ui-btn {
   height: auto;
   margin-top: 0.25rem;
   padding-inline: 0;
@@ -216,7 +216,7 @@
 /* "Alocar a uma parcela" is a link-sized control: on a phone it gets a 40px
    row to land on, with the text still hugging the gutter. */
 @media (max-width: 47.99rem) {
-  .payable-entry-link.ant-btn {
+  .payable-entry-link.ui-btn {
     min-height: 40px;
     margin-top: 0;
   }
@@ -231,13 +231,13 @@
 
 /* The shared `···` (see RecordMenu) has a 44px target; negative margins keep
    it from pushing the row's figures inward. */
-.payable-entry-menu.ant-btn {
+.payable-entry-menu.ui-btn {
   margin-block: -0.5rem;
   margin-inline-end: -0.5rem;
 }
 
 @media (max-width: 47.99rem) {
-  .payable-entry-menu.ant-btn {
+  .payable-entry-menu.ui-btn {
     margin-block: -0.25rem;
   }
 }
@@ -250,11 +250,11 @@
 
 /* The rows' padding and alignment are shared with the payables card, above.
    The table's header skin comes from the theme. */
-.recurrences-table .ant-table-tbody > tr > td {
+.recurrences-table tbody > tr > td {
   font-size: var(--fs-body, 0.875rem);
 }
 
-.recurrences-table .ant-table-tbody > tr > td:nth-child(2) {
+.recurrences-table tbody > tr > td:nth-child(2) {
   padding-inline-start: var(--page-gutter, 1.5rem);
 }
 
@@ -286,7 +286,7 @@
   font-weight: 600;
 }
 
-.recurrence-extra-delete.ant-btn {
+.recurrence-extra-delete.ui-btn {
   align-self: flex-start;
   margin-top: 0.5rem;
   padding-inline: 0;
