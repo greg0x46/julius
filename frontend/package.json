@@ -19,7 +19,7 @@
     "@ant-design/icons": "^6.3.4",
     "@ant-design/pro-layout": "^7.22.7",
     "@ant-design/pro-table": "^3.21.0",
-    "@tanstack/react-query": "^5.104.3",
+    "@tanstack/react-query": "^5.104.5",
     "antd": "^5.29.3",
     "react": "19.3.1",
     "react-dom": "19.3.1",
