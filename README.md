@@ -206,7 +206,7 @@ target. See the
 ### Prerequisites
 
 - Go 1.26+
-- Node.js 24+
+- Node.js 24.15+ (or 26+)
 - A [Pluggy](https://pluggy.ai) account with a client ID/secret and at least
   one `item_id` for the account you want to sync — see Pluggy's
   [Get your API keys](https://docs.pluggy.ai/docs/get-your-api-keys) guide, and
