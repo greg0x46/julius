@@ -1,6 +1,6 @@
 module github.com/greg0x46/julius
 
-go 1.26.9
+go 1.26.10
 
 require (
 	github.com/google/uuid v1.6.0
