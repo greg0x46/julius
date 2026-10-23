@@ -28,7 +28,7 @@ func TestSnapshotCurrencyMigrationPreservesHistory(t *testing.T) {
 				t.Fatal(err)
 			}
 			seedOldSnapshot(t, conn)
-			if _, err := provider.Up(ctx); err != nil {
+			if _, err := provider.UpTo(ctx, 4); err != nil {
 				t.Fatal(err)
 			}
 			var amount, code string
@@ -68,7 +68,7 @@ func TestSnapshotValuationMigrationMarksExistingRowsLegacy(t *testing.T) {
 				t.Fatal(err)
 			}
 			seedOldSnapshot(t, conn)
-			if _, err := provider.Up(ctx); err != nil {
+			if _, err := provider.UpTo(ctx, 4); err != nil {
 				t.Fatal(err)
 			}
 			var amount, status, rates string
@@ -83,6 +83,39 @@ func TestSnapshotValuationMigrationMarksExistingRowsLegacy(t *testing.T) {
 			}
 			if _, err := conn.Exec(`UPDATE net_worth_snapshots SET valuation_status = 'guessed'`); err == nil {
 				t.Fatal("an unknown valuation status was accepted")
+			}
+		})
+	}
+}
+
+func TestDropNetWorthSnapshotsMigration(t *testing.T) {
+	for _, backend := range dbtest.Backends() {
+		t.Run(backend.Name, func(t *testing.T) {
+			conn := backend.Open(t)
+			dialect := goose.DialectSQLite3
+			if backend.Name == "postgres" {
+				dialect = goose.DialectPostgres
+			}
+			provider, err := goose.NewProvider(dialect, conn, os.DirFS("migrations/"+backend.Name))
+			if err != nil {
+				t.Fatal(err)
+			}
+			ctx := context.Background()
+			if _, err := provider.DownTo(ctx, 5); err != nil {
+				t.Fatal(err)
+			}
+			seedOldSnapshot(t, conn)
+			if _, err := provider.Up(ctx); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := conn.Exec(`SELECT 1 FROM net_worth_snapshots`); err == nil {
+				t.Fatal("net_worth_snapshots survived the migration")
+			}
+			if _, err := provider.DownTo(ctx, 5); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := conn.Exec(`SELECT 1 FROM net_worth_snapshots`); err != nil {
+				t.Fatalf("rolling back must restore the table: %v", err)
 			}
 		})
 	}

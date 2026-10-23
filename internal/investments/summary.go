@@ -11,7 +11,7 @@ import (
 )
 
 // BuildSummary is the single reading of the investment book. TotalValue
-// includes provider holdings and the effective custody cash once. Net worth
+// includes provider holdings and the effective custody cash once. Wealth
 // uses ManualNetWorth instead because linked cash is already bank cash there.
 //
 // Holdings and cash in other currencies are valued in BRL at today's rate and

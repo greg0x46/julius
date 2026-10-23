@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { LinePlot } from "../ui/LinePlot";
 
-import { hasNetWorthValue, type NetWorthSnapshot } from "../../api/contracts";
+import { hasNetWorthValue, type NetWorthPoint } from "../../api/contracts";
 import { balanceChartColor } from "../../presentation/chartColors";
 import { useReportFormat } from "../../hooks/useReportCurrency";
 import { Section } from "../layout";
@@ -9,7 +9,7 @@ import { useCompactScreen } from "../shared/useCompactScreen";
 
 type ChartPoint = { date: string; netWorth: string | null };
 
-// captured_at is a calendar day at midnight UTC; local time would slide it back a day.
+// date is a calendar day at midnight UTC; local time would slide it back a day.
 function dateLabel(value: string): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
@@ -20,11 +20,11 @@ function dateLabel(value: string): string {
   });
 }
 
-function toChartData(snapshots: NetWorthSnapshot[]): ChartPoint[] {
+function toChartData(points: NetWorthPoint[]): ChartPoint[] {
   // A day that cannot be valued is a gap in the line, never a zero.
-  return snapshots.map((s) => ({
-    date: s.captured_at.slice(0, 10),
-    netWorth: hasNetWorthValue(s) ? s.net_worth : null,
+  return points.map((s) => ({
+    date: s.date.slice(0, 10),
+    netWorth: hasNetWorthValue(s) ? s.total : null,
   }));
 }
 
@@ -42,7 +42,7 @@ function TooltipContent({
   return (
     <div className="timeline-chart-tooltip">
       <strong>{label}</strong>
-      <div>Patrimônio líquido: {format(payload[0].value)}</div>
+      <div>Patrimônio: {format(payload[0].value)}</div>
     </div>
   );
 }
@@ -54,32 +54,32 @@ function TooltipContent({
 // "it went up" but never by how much; its ticks are rounded like Início's.
 // `footnote` is the one place for what the series does not cover.
 export function NetWorthChart({
-  snapshots,
+  points,
   footnote,
 }: {
-  snapshots: NetWorthSnapshot[];
+  points: NetWorthPoint[];
   footnote?: ReactNode;
 }) {
   const compact = useCompactScreen();
-  const data = toChartData(snapshots);
+  const data = toChartData(points);
   const first = data[0] ? dateLabel(data[0].date) : "";
   const last = data.length ? dateLabel(data[data.length - 1].date) : "";
   return (
-    <Section title="Evolução do patrimônio líquido">
+    <Section title="Evolução do patrimônio">
       <div
         className="timeline-chart"
         role="group"
-        aria-label={`Evolução do patrimônio líquido, de ${first} a ${last}, com lacunas nos dias sem avaliação disponível`}
+        aria-label={`Evolução do patrimônio, de ${first} a ${last}, com lacunas nos dias sem avaliação disponível`}
       >
         <LinePlot
           dates={data.map((row) => row.date)}
           height={compact ? 240 : 320}
-          label={`Evolução do patrimônio líquido, de ${first} a ${last}, com lacunas nos dias sem avaliação disponível`}
+          label={`Evolução do patrimônio, de ${first} a ${last}, com lacunas nos dias sem avaliação disponível`}
           formatDate={dateLabel}
           series={[
             {
               key: "netWorth",
-              label: "Patrimônio líquido",
+              label: "Patrimônio",
               color: balanceChartColor.realized,
               values: data.map((row) => row.netWorth),
             },

@@ -59,7 +59,7 @@ func (v valuationDTO) series(s *timelineSeriesDTO) {
 }
 
 func (v valuationDTO) breakdown(b *netWorthBreakdownDTO) {
-	v.fields(&b.CashBalance, &b.InvestmentBalance, &b.CreditCardBalance, &b.PayablesDebt, &b.TotalAssets, &b.TotalLiabilities, &b.NetWorth)
+	v.fields(&b.CashBalance, &b.InvestmentBalance, &b.Total)
 }
 
 // summary re-expresses a BRL consolidated report summary in the reference currency.

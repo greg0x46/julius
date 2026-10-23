@@ -1,11 +1,15 @@
-# Net Worth
+# Wealth (Patrimônio)
 
 > Living reference — what exists and works today. Keep it updated when the
-> feature changes. No dedicated feature spec so far.
+> feature changes. The folder, package (`internal/networth`) and route
+> (`/api/net-worth`) keep their historical "net worth" names.
 
 ## What it is
 
-Snapshots and history of net worth (assets − liabilities) over time.
+Patrimônio is what the user has **already realized**: cash plus investments,
+valued in BRL. It is not net worth: no credit card, debt, receivable or future
+bill enters it, because credit is not wealth and future obligations have not
+happened. Payables and cards keep their own screens and totals.
 
 ## State vs. ideal
 
@@ -15,44 +19,60 @@ across multiple contexts).
 
 ## Backend
 
-`internal/networth` — snapshot calculation/backfill (`Breakdown`,
-`SnapshotRow`). A snapshot for "today" is written on every read; there is no
-background worker. Goals (`internal/goals`) read the same investments line
-through `networth.InvestmentValue`; they add nothing to net worth.
+`internal/networth`. **Nothing is stored**: today's figure and every past day are
+derived on each read, so a corrected transaction, an edited operation or a late
+quote reaches the whole history at once. The old `net_worth_snapshots` table was dropped by migration `0006` (both
+dialects); its stored observations are not carried over, and the legacy
+converter skips it.
 
-The current calculation includes positions and cash of manual investments via
-`investments.ManualNetWorth`, plus imported positions. Cash of an investment
-account linked to an existing financial account is not added again. Manual
-valuations are dated;
-assets with automatic quotes are worth quantity × latest quote when it is newer
-than the valuation (`market_quote`); with neither, the value is the informed
-cost. The backfill still does not invent historical appreciation of
-investments.
-
-Every figure is valued in BRL (`internal/valuation`): cash, credit-card
-liabilities (each eligible cycle transaction once, in its own effective
-currency), synced and manual investments, and manual investment cash are
-converted with `internal/exchange` for the valuation day. BRL 2,000 plus USD 100
-at 5.00 is BRL 2,500. Native balances, holdings and transaction amounts are
-never rewritten, and a currency without a rate fails the valuation (503
-`exchange-unavailable` for the live snapshot) instead of being dropped or taken
-at 1:1. Timeline starts from the same native balances at the same day's rate, so
-both agree. A cash account with a balance but a missing or invalid
-`currency_code` fails the computation with an error naming the account instead of
-being treated as BRL. Manual bank-account balances derive from opening balance,
-posted undeleted transactions and adjustment deltas. Their movements and dated
-adjustments enter historical reconstruction; opening balance is the baseline.
-Manual transactions on synced accounts still never enter reconstruction,
-since they did not change the provider balance. See Transactions, Notes.
+- `Compute` / `ComputeValued`: today. Cash is `transactions.CashOnHandValued`
+  (non-`CREDIT` accounts), investments are `investmentBalance` (provider
+  holdings at their balance, plus `investments.ManualNetWorthValued`: manual
+  positions at the latest quote or typed valuation, else cost, plus custody
+  cash not already a linked bank account). `Total = Cash + Investments`.
+- `Series` / `SeriesWith`: the wealth at the end of every day from the first
+  cash transaction through today, oldest first, today being `Compute`. The
+  window starts at the first cash transaction because that is as far back as
+  cash can be rebuilt; holding balances flat before it would invent a figure,
+  so older investment operations do not extend the series.
+  - Cash walks back from today's native balances, reversing each real movement
+    (`cashDeltasDescending`): every eligible synced entry on a synced account
+    (ignored and transfer-categorized ones too — the money moved), posted
+    movements and dated adjustments of manual accounts. Manual entries on synced
+    accounts never changed the provider balance and are left out. Foreign
+    balances are walked back in their own currency and converted at the end.
+  - Investments come from `investments.ValuesOn`: each account's operations are
+    replayed once through the days, a manual position takes the latest quote on
+    or before the day (or the typed valuation, or its cost) by the same rule as
+    today's `CurrentValue`, custody cash counts unless linked to a bank account,
+    and a provider holding is today's quantity rebuilt backwards times the last
+    price known that day (carried until the next one).
+- Valuation (`internal/valuation`): each day converts with its own rate. A past
+  day that cannot be valued is `unavailable` and carries no figures, never a
+  zero: a missing rate or provider outage (`internal/exchange` already leaves a
+  failed pair alone for a cooldown, and days whose rate is stored keep their
+  figures), a foreign movement with no amount in its account's currency lying
+  after it, or a provider holding with no price at all. Today failing to value
+  is an error (503 `exchange-unavailable`). Today is the caller's calendar day, but
+  is valued on the latest day a rate can exist (the UTC day when the local date is
+  already ahead of it), and the point's `valuation.valued_at` says which.
+- Goals (`internal/goals`) read the same investments line through
+  `networth.InvestmentValue`; they add nothing to wealth.
 
 ## HTTP routes
 
-`GET /api/net-worth`.
+`GET /api/net-worth` → `{ series, latest }`, each point
+`{ date, currency_code, fx, valuation_status, valuation, cash_balance,
+investment_balance, total }`. `valuation_status` is `complete`, `stale` (a stale
+rate was used) or `unavailable` (figures absent). The points are derived in BRL
+and shown in the reference currency at the FX of the day they were valued on,
+with that day's `fx` provenance; any missing rate makes the report unavailable (503).
 
 ## Frontend
 
-`/patrimonio-liquido` — composition card + `NetWorthChart` (local responsive SVG) with the
-evolution over time.
+`/patrimonio` (the old `/patrimonio-liquido` redirects) — a hero strip with
+today's total, cash and investments, plus `NetWorthChart` (local responsive SVG) with the
+evolution. Unavailable days are gaps in the line, not zeros.
 
 ## API contract verification
 
@@ -61,49 +81,6 @@ Wire semantics and calculation ownership are inventoried in
 checked against Go DTOs and the production TypeScript parsers by the existing
 backend/frontend CI tests.
 
-## Snapshot valuation and revaluation policy
-
-Migration `0003_snapshot_currency` tags every existing snapshot with explicit
-`valuation_currency = BRL` in both dialects, without changing its amounts.
-Snapshots and backfill continue to write BRL valuations, enforced by a database
-constraint. Changing the reference preference never rebuilds or rewrites a
-historical snapshot. Today's upsert retains its existing refresh behavior.
-
-On read, `/api/net-worth` converts each stored BRL breakdown using
-`internal/exchange.On` for `captured_at`, returning the chosen `currency_code`,
-`stored_currency = BRL` and that day's full `fx` provenance alongside the figures.
-The chosen reference currency is read once for the whole response. Today's
-snapshot uses today's FX. Historical revaluation can therefore change when
-cached FX is refreshed, but the stored BRL observation is preserved. There is
-no automatic history rebuild: old observations retain their original coverage,
-and reconstructed days still omit historical investment balances.
-
-Any missing historical rate makes the report unavailable (503); there is no
-mixed-currency curve, silently omitted day, or 1:1 fallback. The chart labels
-its valuation currency and explains that historical FX uses each day.
-
-## Snapshot valuation metadata
-
-Migration `0004_snapshot_valuation` adds `valuation_version`, `valuation_status`,
-`valued_at`, `rate_policy` and `valuation_rates` (JSON text) to
-`net_worth_snapshots`. Rows that existed before it keep version 0 and status
-`legacy`, with no valuation context: their amounts are untouched and cover only
-BRL accounts and holdings, so they are never relabeled as valued. Statuses:
-
-- `complete` / `stale`: a live read (`Snapshot`); `stale` when any rate used was stale.
-- `reconstructed`: a backfilled day, valued with that day's own rates. Foreign
-  cash is walked back in its native currency and converted only at the end;
-  investments are still not reconstructed.
-- `unavailable`: a past day that can never be valued (a movement on a foreign
-  account has no amount in the account's currency, so earlier balances are
-  unknown). Stored once, without figures; the API omits the breakdown and the
-  chart draws a gap, never a zero.
-
-A backfilled day whose rate could not be resolved is not stored at all, so the
-next read retries it. `valuation_rates` records each rate used (value,
-inversion, effective day, source, staleness); `GET /api/net-worth` returns it as
-`valuation` next to `valuation_version` and `valuation_status`.
-
-The chart retains gaps for unavailable valuations, the original decimal strings
-in tooltips, UTC calendar-day labels and an accessible date selector. Numeric
+The chart retains gaps for unavailable valuations, exact decimal strings in
+tooltips, UTC calendar-day labels and an accessible date selector. Numeric
 coordinates never feed financial calculations.

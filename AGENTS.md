@@ -35,7 +35,7 @@ internal/
   categories/ rules/ automation/   categorization, matching core, rule engine
   payables/ scenarios/ projections/ recurrences/ timeline/   debts, hypotheticals, projection
   goals/                   targets over a global metric; progress recomputed on read
-  networth/ investments/ quotes/ marketdata/                 net worth, investments, prices
+  networth/ investments/ quotes/ marketdata/                 wealth (cash + investments), investments, prices
   pluggy/ syncsvc/ worker/ datasources/ statementimport/     ingestion
   auth/ settings/          owner account + sessions; encrypted secrets
   invariants/              cross-engine tests pinning the financial rules

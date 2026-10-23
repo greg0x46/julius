@@ -2,7 +2,7 @@ import { apiFetch } from "./transport";
 import { parseNetWorthSeries, parseProblem, type NetWorthSeries, type Problem } from "./contracts";
 import { ApiError, isAbortError } from "./problems";
 
-const defaultMessage = "Não foi possível carregar o patrimônio líquido.";
+const defaultMessage = "Não foi possível carregar o patrimônio.";
 
 export async function getNetWorth(signal?: AbortSignal): Promise<NetWorthSeries> {
   let response: Response;

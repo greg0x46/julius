@@ -4,23 +4,17 @@ import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import * as netWorthApi from "../api/netWorth";
-import type { NetWorthSnapshot } from "../api/contracts";
+import type { NetWorthPoint } from "../api/contracts";
 import { useNetWorth } from "./useNetWorth";
 
 vi.mock("../api/netWorth");
 
-const snapshot: NetWorthSnapshot = {
-  captured_at: "2026-08-18T00:00:00Z",
-  is_backfilled: false,
-  valuation_version: 0,
-  valuation_status: "legacy",
+const snapshot: NetWorthPoint = {
+  date: "2026-08-18T00:00:00Z",
+  valuation_status: "complete",
   cash_balance: "1000.00",
   investment_balance: "500.00",
-  credit_card_balance: "300.00",
-  payables_debt: "200.00",
-  total_assets: "1500.00",
-  total_liabilities: "500.00",
-  net_worth: "1150.00",
+  total: "1500.00",
 };
 
 function setup() {

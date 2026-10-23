@@ -767,8 +767,8 @@ func (req manualTransactionRequest) toManualInput() (transactions.ManualInput, b
 	// day with no time-of-day, and occurred_at is stored and later rendered
 	// as an instant (see presentation/dates.ts's formatLocalDay). A UTC
 	// midnight stamp reads as the previous day everywhere west of Greenwich
-	// — the same failure mode networth.creditCardBalanceAsOf already works
-	// around by anchoring on time.Local noon instead.
+	// — the same failure mode the card cycle math works around by anchoring
+	// on time.Local noon instead.
 	occurredAt := time.Date(day.Year(), day.Month(), day.Day(), 12, 0, 0, 0, time.Local)
 	return transactions.ManualInput{
 		AccountID:   req.AccountID,

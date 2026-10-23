@@ -30,9 +30,9 @@ another engine. See `motores-de-dominio.md` §4.
 `internal/goals` — CRUD plus the computed read model.
 
 - `invested_value`: `networth.InvestmentValue` (the `InvestmentBalance` line of
-  `networth.Compute`, without valuing cash or cards) — the market value
+  `networth.Compute`, without valuing cash) — the market value
   of every investment, gains and losses included. It is the investments line of
-  net worth, so linked custody cash (already bank cash) is not counted twice and
+  wealth, so linked custody cash (already bank cash) is not counted twice and
   foreign holdings are valued in BRL with the day's rate; a missing rate on a
   foreign holding makes the read fail instead of omitting it, but unrelated
   foreign cash without a rate does not.

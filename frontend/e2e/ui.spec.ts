@@ -24,7 +24,7 @@ test("local components render every primary workspace and settings route", async
     ["/recorrencias", "Recorrências"],
     ["/investimentos", "Investimentos"],
     ["/metas", "Metas"],
-    ["/patrimonio-liquido", "Patrimônio líquido"],
+    ["/patrimonio", "Patrimônio"],
     ["/configuracoes", "Configurações"],
     ["/configuracoes/geral", "Geral"],
     ["/configuracoes/seguranca", "Segurança"],

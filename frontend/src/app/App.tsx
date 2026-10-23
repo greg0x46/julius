@@ -30,8 +30,8 @@ const navItems: { path: string; name: string; icon: ReactNode }[] = [
   { path: "/investimentos", name: "Investimentos", icon: <RiseOutlined /> },
   { path: "/metas", name: "Metas", icon: <AimOutlined /> },
   {
-    path: "/patrimonio-liquido",
-    name: "Patrimônio líquido",
+    path: "/patrimonio",
+    name: "Patrimônio",
     icon: <FundOutlined />,
   },
   { path: "/configuracoes", name: "Configurações", icon: <SettingOutlined /> },
