@@ -15,7 +15,7 @@ import (
 
 // CashOnHandByCurrency is how much cash sits in the user's non-credit
 // accounts: provider-reported balances plus derived manual balances (see
-// AccountBalance), one total per currency. Net worth's asset side reads it
+// AccountBalance), one total per currency. Wealth's cash side reads it
 // through CashOnHandIn.
 //
 // The reported balance is authoritative here, and deliberately so. A

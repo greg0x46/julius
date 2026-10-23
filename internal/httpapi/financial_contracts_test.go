@@ -137,14 +137,14 @@ func financialContractPayloads() map[string]any {
 	reference.series(&series)
 	simulation := series
 	simulation.FirstNegative = text("2026-07-30")
-	breakdown := toNetWorthBreakdownDTO(networth.Breakdown{CashBalance: amount, InvestmentBalance: small, TotalAssets: amount.Add(small), NetWorth: amount.Add(small)})
-	snapshot := netWorthSnapshotDTO{
-		CurrencyCode: "BRL", StoredCurrency: "BRL", CapturedAt: instant, ValuationVersion: 1, ValuationStatus: networth.ValuationComplete,
+	breakdown := toNetWorthBreakdownDTO(networth.Breakdown{CashBalance: amount, InvestmentBalance: small, Total: amount.Add(small)})
+	snapshot := netWorthPointDTO{
+		CurrencyCode: "BRL", Date: instant, ValuationStatus: networth.ValuationComplete,
 		FX:                   &exchange.Rate{Base: "BRL", Quote: "BRL", Value: decimal.NewFromInt(1), AsOf: day, EffectiveOn: day, Source: "identity", FetchedAt: instant},
 		Valuation:            &valuation.Metadata{BaseCurrency: "BRL", ValuedAt: day, RatePolicy: "synthetic", Rates: map[string]valuation.Rate{"USD": {Value: small, EffectiveOn: day, Source: "synthetic"}}},
 		netWorthBreakdownDTO: &breakdown,
 	}
-	unavailable := netWorthSnapshotDTO{CurrencyCode: "BRL", StoredCurrency: "BRL", CapturedAt: instant, ValuationVersion: 1, ValuationStatus: networth.ValuationUnavailable}
+	unavailable := netWorthPointDTO{CurrencyCode: "BRL", Date: instant, ValuationStatus: networth.ValuationUnavailable}
 
 	rate := decimal.RequireFromString("0.0123456789")
 	usd := "USD"
@@ -215,7 +215,7 @@ func financialContractPayloads() map[string]any {
 		})}},
 		"timeline":            timelineResponseDTO{valuationDTO: reference, Base: series, PeriodTotals: periodTotalsToDTO(timeline.PeriodTotals{Income: small, Expense: amount, Result: small.Sub(amount)}), ScenarioImpacts: []scenarioImpactDTO{}},
 		"timeline_simulation": timelineResponseDTO{valuationDTO: reference, Base: series, PeriodTotals: periodTotalsDTO{Income: "0", Expense: "0", Result: "0"}, Simulation: &simulation, ScenarioImpacts: []scenarioImpactDTO{{ScenarioID: id, ScenarioName: "Synthetic scenario", Delta: moneyText}}},
-		"net_worth":           netWorthResponseDTO{Latest: snapshot, Series: []netWorthSnapshotDTO{unavailable, snapshot}},
+		"net_worth":           netWorthResponseDTO{Latest: snapshot, Series: []netWorthPointDTO{unavailable, snapshot}},
 		"money":               []string{moneyText, money.CanonicalDecimal(small), "-123.4500", "0.00", "123.4500"},
 	}
 }

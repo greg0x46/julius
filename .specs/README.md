@@ -57,7 +57,7 @@ renamed. Frontend routes and UI labels are also Portuguese.
 | `cenarios` | Scenarios (hypothetical layer) | `scenarios`, `projections` |
 | `recorrencias` | Recurring commitments + reconciliation | `recurrences` |
 | `home` | Home dashboard, projection | `timeline` |
-| `patrimonio-liquido` | Net worth | `networth` |
+| `patrimonio-liquido` | Wealth (patrimônio; folder name is historical) | `networth` |
 | `metas` | Goals (target vs. a global metric) | `goals` |
 | `investimentos` | Investments, quotes, reconciliation | `investments`, `quotes`, `marketdata` |
 | `configuracoes-autenticacao` | Settings, authentication | `auth`, `settings` |
@@ -112,7 +112,7 @@ Not tied to a single context:
   (transaction filters, scenario selection).
 - `frontend/src/presentation/money.ts` — money formatting/arithmetic on decimal
   strings.
-- Recharts is the chart library (Home projection, net worth).
+- Recharts is the chart library (Home projection, wealth).
 
 Tests: Vitest + Testing Library, colocated `*.test.ts(x)`. Vitest runs two
 projects with 2 workers: `dom` (jsdom + `src/test/setup.dom.ts`) for

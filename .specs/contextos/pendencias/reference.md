@@ -23,9 +23,9 @@ The name "Payables" therefore remains accurate.
 
 `internal/payables` — total/settled/remaining always recomputed on read from
 `payable_transaction_links`, never persisted. `summary.go` is the only place
-that recomputation lives: `Summarize`/`SummarizeAsOf` (one payable),
+that recomputation lives: `Summarize` (one payable),
 `SummarizeAll` (a set, in two queries — what the HTTP list uses) and
-`RemainingTotal`/`RemainingTotalAsOf`/`RemainingTotalsAsOf` (aggregates). The
+`RemainingTotal` (aggregate). The
 same sequence used to be reimplemented in four places, two of them in the HTTP
 layer. The pure math (settled/remaining/status) is internal to the package:
 `Summarize` is the only entry point, so nobody reassembles the pieces
@@ -34,9 +34,7 @@ externally.
 `Summary` carries its own links (`Links []LinkSummary`, with effective amount
 and the transaction's display fields) instead of just a count — the detail
 screen formats what that pass already loaded, without reloading every link and
-the transaction behind it. Under `SummarizeAsOf` the list holds exactly the
-links that counted on that day, so every `Summary` field describes the same
-moment.
+the transaction behind it.
 
 Also includes link eligibility (`eligibility.go`, which today derives the
 accepted flow direction from the debt/receivable `Kind`).

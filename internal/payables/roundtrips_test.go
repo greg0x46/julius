@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"testing"
-	"time"
 
 	"github.com/greg0x46/julius/internal/payables"
 )
@@ -96,28 +95,5 @@ func TestSummarizeAllRoundTripsDoNotGrowWithPayables(t *testing.T) {
 	if c.n > 2 {
 		t.Errorf("SummarizeAll over 5 payables x 6 links = %d queries, want <= 2 — "+
 			"a per-payable query has crept back in", c.n)
-	}
-}
-
-// TestRemainingTotalsAsOfRoundTripsDoNotGrowWithDays is the same guard for
-// the historical path, and it is the one that actually matters: the net
-// worth backfill reconstructs every day since the earliest transaction, so a
-// per-day query here is multiplied by years of history.
-func TestRemainingTotalsAsOfRoundTripsDoNotGrowWithDays(t *testing.T) {
-	f := newFixture(t)
-	seedPayables(t, f, 5, 6)
-
-	dayEnds := make([]time.Time, 365)
-	for i := range dayEnds {
-		dayEnds[i] = day(t, "2026-08-01").AddDate(0, 0, -i)
-	}
-
-	c := &countingQuerier{db: f.conn}
-	if _, err := payables.RemainingTotalsAsOf(context.Background(), c, payables.KindDebt, dayEnds); err != nil {
-		t.Fatalf("RemainingTotalsAsOf: %v", err)
-	}
-	if c.n > 3 {
-		t.Errorf("RemainingTotalsAsOf over 365 days = %d queries, want <= 3 — "+
-			"the whole point is that days are answered from one in-memory snapshot", c.n)
 	}
 }

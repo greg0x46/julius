@@ -1,6 +1,6 @@
 // Chart colours, by the job each one does (dataviz skill: identity vs state).
 //
-// Balance-over-time charts (Home's "Evolução do saldo", Patrimônio líquido)
+// Balance-over-time charts (Home's "Evolução do saldo", Patrimônio)
 // use the brand pair: ink for what already happened, brand green for what is
 // still a forecast, and a third, cooler hue only for a simulation. They never
 // borrow the income/expense green and red of the money tones — a line going

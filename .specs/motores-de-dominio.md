@@ -80,8 +80,8 @@ for money in accounts, and **neither** path above corrects it — both are
 *reporting* decisions, not claims that the money did not leave the bank. An
 ignored entry and a transfer really moved money, so they stay inside the
 balance; discounting them would report cash the user does not have. For the
-same reason historical net-worth reconstruction reverses both when walking
-backwards (`internal/networth` `cashDeltasDescending`), and card debt keeps
+same reason the wealth series reverses both when walking backwards
+(`internal/networth` `cashDeltasDescending`), and card debt keeps
 being reduced by the bill payment even when it is categorized as a transfer
 (`transactions.consideredCardTransactionTotal`) — both pass `""` as the kind to
 `money.Eligibility`, on purpose.
@@ -94,7 +94,7 @@ total comes from the cycle's eligible entries, not from the reported balance
 posted undeleted transaction amounts + explicit adjustment deltas; their
 inclusion/category annotations do not alter cash either. Synced balances retain
 provider ownership. Cash on hand comes from `transactions.CashOnHandByCurrency`, one
-total per currency; Net Worth reads the BRL total via `CashOnHandIn`, without a rate source. Timeline reuses `AccountBalance` for native
+total per currency; Wealth reads the native balances via `CashOnHandValued`, at the day's rate. Timeline reuses `AccountBalance` for native
 balance ownership, then converts its reference-date anchor and historical flows
 through `internal/reporting`, with explicit FX coverage.
 
@@ -102,8 +102,7 @@ Currency-bearing values use `money.Amount` (value + code) and `money.Balances`
 (one total per currency): adding different currencies is `ErrCurrencyMismatch`,
 and this layer never converts. `money.ParseCurrency` accepts only uppercase ISO
 4217 codes; a missing, malformed or unknown code (`ABC`) is an explicit error,
-never BRL. Net-worth backfill reverses only BRL movements of BRL accounts, to
-match the BRL anchor.
+never BRL. The wealth series walks each currency back in its own currency and converts at the end.
 
 The matrix of each of these rules, its owning module and the test that pins it
 is in [`invariantes-financeiros.md`](invariantes-financeiros.md).
@@ -197,8 +196,8 @@ below still holds as a domain yardstick; what is missing is its UI expression.
 - **Categorization** (`internal/categories`): category catalog + history.
   Widely referenced but a passive catalog with no matching/computation/merging
   logic of its own — fails criterion 2.
-- **Net worth** (`internal/networth`): net worth snapshots/history. Not
-  investigated in depth; fails criterion 3 (not reused across contexts today).
+- **Wealth** (`internal/networth`): cash plus investments today and the
+  derived daily history; nothing stored. Not investigated in depth; fails criterion 3 (not reused across contexts today).
 - **Sync/Pluggy** (`internal/pluggy`, `internal/syncsvc`, `internal/worker`):
   an ingestion provider, not a domain engine — violates criterion 3 directly.
   It feeds the Ledger together with manual entries

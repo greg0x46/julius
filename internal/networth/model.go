@@ -1,11 +1,14 @@
-// Package networth computes and snapshots the user's net worth (assets
-// minus liabilities) over time. There is no background worker: a snapshot
-// for "today" is written on every read (Snapshot, called from the HTTP
-// handler before List), which is enough for a self-hosted app used
-// sporadically. Every figure is valued in BRL: balances and holdings in other
-// currencies are converted with dated exchange rates, recorded on the row, and
-// a currency without a rate makes the valuation unavailable rather than
-// being dropped.
+// Package networth computes the user's wealth ("patrimônio"): what has
+// already been realized, cash plus investments, valued in BRL. It counts no
+// liability and nothing in the future: credit cards, debts and receivables
+// are not wealth. The package keeps its historical name.
+//
+// Nothing is stored. Today's figure and every past day are derived on read
+// (Compute, Series), so a corrected transaction, a late quote or an edited
+// operation shows up in the whole history at once. Every figure is in BRL:
+// balances and holdings in other currencies are converted with the rate of the
+// day being valued, and a currency without a rate makes that day unavailable
+// rather than being dropped.
 package networth
 
 import (
@@ -16,77 +19,32 @@ import (
 	"github.com/greg0x46/julius/internal/valuation"
 )
 
-// Breakdown is a point-in-time decomposition of net worth into the
-// categories the frontend's composition card shows. Assets = CashBalance +
-// InvestmentBalance; Liabilities = CreditCardBalance + PayablesDebt;
-// NetWorth = Assets - Liabilities.
-//
-// Receivables (payables.KindReceivable) are deliberately not part of this
-// model at all: unlike a bank balance or investment, money someone else
-// owes the user is a future possibility, not a realized asset — it carries
-// collection risk this package has no way to quantify. A debt
-// (PayablesDebt), by contrast, is a firm obligation regardless of whether
-// it's ever collected on the other side, so it stays a liability.
-//
-// CreditCardBalance is the current bill cycle's eligible transaction total
-// (transactions.CreditCardTransactionTotal), not financial_accounts.balance —
-// the same figure the homepage's "Dívida total" widget folds in as
-// future_installments_total, so the two pages agree.
-//
-// A payable debt is counted as a liability independent of any CREDIT
-// account balance: nothing in this codebase guarantees a debt payable is
-// "backed by" a specific credit card, so the two are summed as distinct
-// liabilities rather than deduplicated — a known simplification.
+// Breakdown is a point-in-time decomposition of wealth: Total = CashBalance +
+// InvestmentBalance.
 type Breakdown struct {
 	CashBalance       decimal.Decimal
 	InvestmentBalance decimal.Decimal
-	CreditCardBalance decimal.Decimal
-	PayablesDebt      decimal.Decimal
-	TotalAssets       decimal.Decimal
-	TotalLiabilities  decimal.Decimal
-	NetWorth          decimal.Decimal
+	Total             decimal.Decimal
 }
 
-// TotalsFor derives TotalAssets/TotalLiabilities/NetWorth from the
-// category fields — factored out so Compute and Snapshot's row-scan both
-// produce a fully consistent Breakdown from the same math.
+// TotalsFor derives Total from the categories.
 func (b Breakdown) TotalsFor() Breakdown {
-	b.TotalAssets = b.CashBalance.Add(b.InvestmentBalance)
-	b.TotalLiabilities = b.CreditCardBalance.Add(b.PayablesDebt)
-	b.NetWorth = b.TotalAssets.Sub(b.TotalLiabilities)
+	b.Total = b.CashBalance.Add(b.InvestmentBalance)
 	return b
 }
 
-// Snapshot mirrors one net_worth_snapshots row: a Breakdown captured on a
-// given calendar day.
-type SnapshotRow struct {
-	CurrencyCode string
-	ID           string
-	CapturedAt   time.Time
-	Breakdown    Breakdown
-	// ValuationVersion is 0 for rows written before foreign balances were
-	// valued: those cover BRL accounts and holdings only. Valuation is nil
-	// for them; otherwise it records the valuation day and rates used.
-	ValuationVersion int
-	ValuationStatus  string
-	Valuation        *valuation.Metadata
-	// IsBackfilled marks a row written by Backfill (reconstructed from past
-	// transactions) rather than Snapshot (a live read of today's
-	// provider-synced balances). Breakdown.InvestmentBalance is always zero
-	// on a backfilled row — see Backfill's doc comment for why.
-	IsBackfilled bool
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+// Point is the wealth at the end of one calendar day.
+type Point struct {
+	Day       time.Time
+	Status    string
+	Breakdown Breakdown
+	// Valuation records the day and the rates the figures were valued with.
+	Valuation *valuation.Metadata
 }
 
-// Valuation statuses of a stored snapshot.
+// Valuation statuses of a point.
 const (
-	// ValuationVersion is bumped whenever the way a snapshot is valued changes.
-	ValuationVersion = 1
-
-	ValuationLegacy        = "legacy"        // before foreign balances were valued; BRL coverage only
-	ValuationComplete      = "complete"      // live read, every currency valued
-	ValuationStale         = "stale"         // live read using at least one stale rate
-	ValuationReconstructed = "reconstructed" // rebuilt for a past day with that day's rates
-	ValuationUnavailable   = "unavailable"   // a past day that cannot be valued; carries no figures
+	ValuationComplete    = "complete"    // every currency valued
+	ValuationStale       = "stale"       // valued using at least one stale rate
+	ValuationUnavailable = "unavailable" // the day cannot be valued; carries no figures
 )
