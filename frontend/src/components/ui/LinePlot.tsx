@@ -156,7 +156,7 @@ export function LinePlot({
               stroke={balanceChartColor.axis}
               strokeDasharray="2 3"
             />
-            <text x={x(refIndex)} y={16} style={{ fontSize: "var(--fs-caption)" }} textAnchor="middle">
+            <text x={x(refIndex)} y={16} style={{ fontSize: "var(--fs-caption)" }} textAnchor="middle" fill={balanceChartColor.axis}>
               Hoje
             </text>
           </g>
