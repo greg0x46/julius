@@ -1,53 +1,6 @@
+@import "./tokens.css";
+
 :root {
-  /* Mirrors src/theme/tokens.ts — CSS can't import the TS module, so this
-     is the CSS-side copy of the same palette. Keep the two in sync. */
-
-  /* Text */
-  --color-text: #172b4d;
-  --color-text-secondary: #5d697c;
-  --color-text-tertiary: #6b778c; /* only on white, non-essential */
-
-  /* Brand: --color-accent is a FILL (marks, meters, chart, active
-     indicator), never text on white; --color-primary is the interactive
-     green for buttons, links, active tab and focus. */
-  --color-accent: #1baf7a;
-  --color-primary: #0f7d58;
-  --color-primary-hover: #0b6a4a;
-
-  /* Semantic */
-  --color-money-in: #1f6f46;
-  --color-success: #1f6f46;
-  --color-danger: #c4302b; /* the single red */
-  --color-warning: #f2a900; /* fills and the focus ring */
-  --color-warning-text: #8a5a00;
-  --color-info: #3b5b8c;
-
-  /* Surfaces and lines */
-  --color-bg: #f5f7fa;
-  --color-surface: #ffffff;
-  --color-border: #e5e9f0;
-  --color-border-strong: #d9d9d9;
-  --color-hover: rgba(23, 43, 77, 0.035);
-
-  /* StatusTag backgrounds (text colours are the semantic ones above). */
-  --tag-neutral-bg: #eef0f4;
-  --tag-info-bg: #e9eff8;
-  --tag-success-bg: #e5f3ec;
-  --tag-warning-bg: #fcf1d6;
-  --tag-danger-bg: #fbe8e7;
-
-  /* Shape: one radius for every surface and input, and no shadows. */
-  --radius: 8px;
-  --radius-sheet: 16px; /* top corners of a bottom sheet */
-
-  /* Type scale (body is 14px); weights are 400/500/600 only. */
-  --fs-caption: 0.75rem; /* labels, footnotes, column labels */
-  --fs-small: 0.8125rem; /* meta lines, secondary text */
-  --fs-body: 0.875rem;
-  --fs-row: 0.9375rem; /* row description 500, row money 600, section titles 600 */
-  --fs-title: 1.25rem; /* page title, 600, at every width */
-  --fs-hero: 1.75rem; /* ONE hero figure per page, 600, tabular-nums */
-
   /* Sticky offsets must use this var. */
   --app-bar-height: 64px;
 
@@ -94,8 +47,8 @@ body {
 }
 
 :focus-visible {
-  /* Green on a white halo: ≥3:1 against both the white surfaces and the
-     black app bar (the old amber ring was 1.9:1 on white). */
+  /* Primary ring on a surface-coloured halo: ≥3:1 against the page
+     surfaces and the black app bar in both themes. */
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
   box-shadow: 0 0 0 4px var(--color-surface);
@@ -106,9 +59,9 @@ body {
   z-index: 2000;
   top: 0.75rem;
   left: 0.75rem;
-  padding: 0.7rem 1rem;
+  padding: 0.7rem var(--space-4);
   transform: translateY(-200%);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-md);
   color: var(--color-surface);
   background: var(--color-text);
 }
@@ -125,11 +78,12 @@ body {
   padding: 0.5rem var(--page-gutter);
   color: var(--color-text);
   font-size: var(--fs-caption);
-  background: color-mix(in srgb, var(--color-accent) 14%, white);
-  border-bottom: 1px solid color-mix(in srgb, var(--color-accent) 35%, white);
+  background: var(--tag-success-bg);
+  border-bottom: 1px solid var(--color-border);
 }
 
 .app-build-footer {
+  margin-top: auto;
   padding: 0.5rem var(--page-gutter) calc(0.5rem + env(safe-area-inset-bottom));
   color: var(--color-text-secondary);
   font-size: var(--fs-caption);
@@ -152,13 +106,13 @@ body {
 }
 
 .ui-page-content {
-  padding-top: 1.5rem;
+  padding-top: var(--space-5);
 }
 
 @media (max-width: 47.99rem) {
 
   .ui-page-content {
-    padding-top: 1rem;
+    padding-top: var(--space-4);
   }
 }
 
@@ -170,9 +124,9 @@ body {
 .app-mobile-brand {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  padding-inline: 0.25rem;
-  font-size: 1rem;
+  gap: var(--space-2);
+  padding-inline: var(--space-1);
+  font-size: var(--fs-row);
   font-weight: 600;
 }
 
@@ -192,7 +146,7 @@ body {
    font in global.css's :root is untouched. */
 .app-brand-title {
   font-family: "Baloo 2", "Segoe UI", sans-serif;
-  font-size: 1.6rem;
+  font-size: var(--fs-title);
   font-weight: 700;
   letter-spacing: 0.01em;
   /* Flex items are blockified (CSS Display spec), and body's global
@@ -214,7 +168,7 @@ body {
   display: inline-block;
   margin-top: 0.1rem;
   font-family: "Baloo 2", "Segoe UI", sans-serif;
-  font-size: 0.65rem;
+  font-size: var(--fs-caption);
   font-weight: 500;
   opacity: 0.85;
   transform-origin: left;
@@ -230,9 +184,9 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 1rem;
+  gap: var(--space-4);
   min-height: 100vh;
-  padding: 1.5rem;
+  padding: var(--space-5);
   text-align: center;
 }
 
@@ -244,7 +198,7 @@ body {
 .app-loading-screen-caption {
   margin: 0;
   color: var(--color-text-secondary);
-  font-size: 0.9375rem;
+  font-size: var(--fs-row);
 }
 
 /* PageContainer's PageHeader packs title + subtitle into one nowrap flex
@@ -269,7 +223,7 @@ body {
 .category-color-grid {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: var(--space-2);
 }
 
 .category-color-swatch {
@@ -278,7 +232,7 @@ body {
   justify-content: center;
   width: 1.75rem;
   height: 1.75rem;
-  border-radius: 50%;
+  border-radius: var(--radius-full);
   border: 2px solid transparent;
   cursor: pointer;
   padding: 0;
@@ -288,12 +242,6 @@ body {
   border-color: var(--color-text);
 }
 
-@media (prefers-color-scheme: dark) {
-  .category-color-swatch[aria-checked="true"] {
-    border-color: var(--color-surface);
-  }
-}
-
 .category-badge {
   display: inline-flex;
   align-items: center;
@@ -301,9 +249,8 @@ body {
   flex-shrink: 0;
   width: 2rem;
   height: 2rem;
-  border-radius: 50%;
-  color: var(--color-surface);
-  font-size: 1rem;
+  border-radius: var(--radius-full);
+  font-size: var(--fs-row);
 }
 
 @media (max-width: 47.99rem) {
@@ -326,7 +273,7 @@ body {
 }
 
 /* ---- Segmented: the selected thumb reads off a hairline ring, not a shadow
-   (the track is a shade darker than the page, see theme/tokens.ts). ---- */
+   (the track is a shade darker than the page, see theme/tokens.json). ---- */
 
 .ui-segmented label[data-active="true"] {
   box-shadow: 0 0 0 1px var(--color-border);
@@ -369,7 +316,7 @@ body {
 
 /* Money (components/shared/Money.tsx). The tone classes only pick the text
    colour; `moneyTone` decides which one applies (flow: inflow tinted, outflow
-   default; result/balance: negative is the single danger red). */
+   default; result: negative keeps the text colour; balance: negative is the danger red). */
 .money {
   font-variui-numeric: tabular-nums;
   white-space: nowrap;
@@ -406,10 +353,10 @@ body {
 .status-tag {
   display: inline-block;
   padding: 0 0.375rem;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   font-size: var(--fs-caption);
   font-weight: 500;
-  line-height: 1.25rem;
+  line-height: var(--lh-body);
   white-space: nowrap;
 }
 

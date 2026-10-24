@@ -2,6 +2,7 @@ import type { Column } from "../ui/Table";
 import Table from "../ui/Table";
 import { Skeleton, Switch } from "../ui";
 
+import { readableTextOn } from "../../presentation/readableText";
 import type { Category, CategoryKind } from "../../api/contracts";
 import { categoryKindLabel, renderCategoryIcon } from "../../presentation/categoryLabels";
 import { DataCard, EmptyState, ListRow, ResponsiveList, Section } from "../layout";
@@ -20,7 +21,7 @@ const kindGroupTitle: Record<CategoryKind, string> = {
 
 function CategoryBadge({ category }: { category: Category }) {
   return (
-    <span className="category-badge" style={{ backgroundColor: category.color }} aria-hidden="true">
+    <span className="category-badge" style={{ backgroundColor: category.color, color: readableTextOn(category.color) }} aria-hidden="true">
       {renderCategoryIcon(category.icon)}
     </span>
   );

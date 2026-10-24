@@ -1,7 +1,7 @@
 /* ---- Pendências: list page ------------------------------------------- */
 
 .payables-summary {
-  margin-bottom: 0.75rem;
+  margin-bottom: var(--space-3);
 }
 
 .payables-loading {
@@ -38,16 +38,16 @@
 .payable-meter {
   display: block;
   height: 4px;
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   overflow: hidden;
-  background: var(--color-border, #e5e9f0);
+  background: var(--color-border);
 }
 
 .payable-meter-fill {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: var(--color-accent, #1baf7a);
+  background: var(--color-accent);
 }
 
 .payable-row-meta-text,
@@ -63,7 +63,7 @@
 /* Wide: one table, whose first and last cells line up with the page gutter.
    Its header skin comes from the theme, like every other table. */
 .payables-table tbody > tr > td {
-  font-size: var(--fs-body, 0.875rem);
+  font-size: var(--fs-body);
 }
 
 .payables-table tbody > tr > td:first-child,
@@ -77,12 +77,12 @@
 }
 
 .payable-name-link {
-  color: var(--color-text, #172b4d);
+  color: var(--color-text);
   font-weight: 500;
 }
 
 .payable-name-link:hover {
-  color: var(--color-primary, #0f7d58);
+  color: var(--color-primary);
 }
 
 .payable-progress-cell {
@@ -102,8 +102,8 @@
 
 .payable-progress-label {
   white-space: nowrap;
-  color: var(--color-text-secondary, #5d697c);
-  font-size: var(--fs-small, 0.8125rem);
+  color: var(--color-text-secondary);
+  font-size: var(--fs-caption);
   font-variui-numeric: tabular-nums;
 }
 
@@ -117,15 +117,15 @@
 
 .payable-plan-notice {
   margin: 0;
-  font-size: var(--fs-small, 0.8125rem);
+  font-size: var(--fs-body);
 }
 
 .payable-plan-notice-good {
-  color: var(--color-money-in, #1f6f46);
+  color: var(--color-money-in);
 }
 
 .payable-plan-notice-late {
-  color: var(--color-danger, #c4302b);
+  color: var(--color-danger);
 }
 
 /* Timeline rows: one line (date · parcela, amount, `···`), a lighter status
@@ -141,13 +141,13 @@
 }
 
 .payable-entry + .payable-entry {
-  border-top: 1px solid var(--color-border, #e5e9f0);
+  border-top: 1px solid var(--color-border);
 }
 
 .payable-entry-line {
   display: flex;
   align-items: flex-start;
-  gap: 0.5rem;
+  gap: var(--space-2);
 }
 
 .payable-entry-text {
@@ -159,8 +159,8 @@
 }
 
 .payable-entry-title {
-  color: var(--color-text, #172b4d);
-  font-size: var(--fs-row, 0.9375rem);
+  color: var(--color-text);
+  font-size: var(--fs-row);
   font-weight: 500;
   overflow-wrap: anywhere;
 }
@@ -169,15 +169,15 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.25rem 0.5rem;
-  color: var(--color-text-secondary, #5d697c);
-  font-size: var(--fs-small, 0.8125rem);
+  gap: var(--space-1) var(--space-2);
+  color: var(--color-text-secondary);
+  font-size: var(--fs-body);
 }
 
 /* The section header's action: a quiet text button, not the page's loudest
    control. It keeps a 40px target on a phone. */
 .payable-add-action.ui-btn {
-  color: var(--color-primary, #0f7d58);
+  color: var(--color-primary);
   font-weight: 500;
 }
 
@@ -193,10 +193,10 @@
 }
 
 .payable-entry-realization {
-  margin-top: 0.25rem;
-  padding-left: 1rem;
-  color: var(--color-text-secondary, #5d697c);
-  font-size: var(--fs-small, 0.8125rem);
+  margin-top: var(--space-1);
+  padding-left: var(--space-4);
+  color: var(--color-text-secondary);
+  font-size: var(--fs-body);
 }
 
 .payable-entry-realization .payable-entry-amount {
@@ -209,7 +209,7 @@
 
 .payable-entry-link.ui-btn {
   height: auto;
-  margin-top: 0.25rem;
+  margin-top: var(--space-1);
   padding-inline: 0;
 }
 
@@ -251,7 +251,7 @@
 /* The rows' padding and alignment are shared with the payables card, above.
    The table's header skin comes from the theme. */
 .recurrences-table tbody > tr > td {
-  font-size: var(--fs-body, 0.875rem);
+  font-size: var(--fs-body);
 }
 
 .recurrences-table tbody > tr > td:nth-child(2) {
@@ -275,20 +275,20 @@
 /* The occurrences as stacked rows (the phone's edit drawer): date and amount,
    a lighter status line, the actions under them. */
 .recurrence-extra {
-  margin-top: 0.5rem;
-  padding-top: 1rem;
-  border-top: 1px solid var(--color-border, #e5e9f0);
+  margin-top: var(--space-2);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border);
 }
 
 .recurrence-extra-title {
-  margin: 0 0 0.5rem;
-  font-size: var(--fs-row, 0.9375rem);
+  margin: 0 0 var(--space-2);
+  font-size: var(--fs-row);
   font-weight: 600;
 }
 
 .recurrence-extra-delete.ui-btn {
   align-self: flex-start;
-  margin-top: 0.5rem;
+  margin-top: var(--space-2);
   padding-inline: 0;
 }
 
@@ -303,19 +303,19 @@
 }
 
 .occurrence-row + .occurrence-row {
-  border-top: 1px solid var(--color-border, #e5e9f0);
+  border-top: 1px solid var(--color-border);
 }
 
 .occurrence-row-line {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 0.75rem;
+  gap: var(--space-3);
 }
 
 .occurrence-row-title {
-  color: var(--color-text, #172b4d);
-  font-size: var(--fs-row, 0.9375rem);
+  color: var(--color-text);
+  font-size: var(--fs-row);
   font-weight: 500;
 }
 
@@ -323,10 +323,10 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.25rem 0.5rem;
-  margin-top: 0.25rem;
-  color: var(--color-text-secondary, #5d697c);
-  font-size: var(--fs-small, 0.8125rem);
+  gap: var(--space-1) var(--space-2);
+  margin-top: var(--space-1);
+  color: var(--color-text-secondary);
+  font-size: var(--fs-body);
   overflow-wrap: anywhere;
 }
 

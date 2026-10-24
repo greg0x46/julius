@@ -102,11 +102,9 @@ function toSlices(items: CategorySpendingItem[]): Slice[] {
 
 /** The donut's centre figure shrinks with its length instead of breaking mid-number. */
 function donutFigureSize(text: string): string {
-  if (text.length <= 12) return "1.125rem";
-  if (text.length <= 14) return "1rem";
-  if (text.length <= 16) return "0.875rem";
-  if (text.length <= 18) return "0.8125rem";
-  return "0.75rem";
+  if (text.length <= 14) return "var(--fs-row)";
+  if (text.length <= 18) return "var(--fs-body)";
+  return "var(--fs-caption)";
 }
 
 function CategorySkeleton() {

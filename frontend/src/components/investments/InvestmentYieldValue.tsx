@@ -4,12 +4,13 @@ import { Money } from "../shared/Money";
 /**
  * Rendimento in R$ with its rentabilidade beside it. The amount goes through
  * the app's money rule for a result (explicit +/−, never colour alone); the %
- * is the backend's ratio and takes the tone of the percentage itself. Either
+ * is the backend's ratio, green when positive and neutral otherwise. Either
  * part may be left out (null).
  */
 export function InvestmentYieldValue({ gain, rate }: { gain: string | null; rate: string | null }) {
   const direction = rate === null ? "zero" : ratioDirection(rate);
-  const color = direction === "positive" ? "positive" : direction === "negative" ? "negative" : "neutral";
+  // A loss is a result, not an error: only a gain is coloured.
+  const color = direction === "positive" ? "positive" : "neutral";
   return (
     <span className="investment-yield">
       {gain !== null && <Money value={gain} tone="result" />}

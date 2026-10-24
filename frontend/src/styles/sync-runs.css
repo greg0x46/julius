@@ -7,13 +7,13 @@
 .sync-runs-page {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: var(--space-4);
 }
 
 /* The credentials disclosure is a quiet, hairline-bordered row, not a card. */
 .sync-credentials.ui-collapse {
   border: 1px solid var(--color-border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-md);
   background: var(--color-surface);
 }
 
@@ -38,7 +38,7 @@
 .connection-row {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--space-3);
 }
 
 .connection-row + .connection-row {
@@ -80,7 +80,7 @@
 
 .connection-row-meta {
   color: var(--color-text-secondary);
-  font-size: var(--fs-small);
+  font-size: var(--fs-body);
 }
 
 .connection-row-meta:empty {
@@ -91,13 +91,13 @@
   display: flex;
   flex: none;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--space-2);
 }
 
 .connection-technical {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: var(--space-1);
 }
 
 /* ---- Sync run detail ---------------------------------------------------- */
@@ -105,14 +105,14 @@
 .sync-run-overview-body {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: var(--space-4);
 }
 
 .sync-run-overview-meta,
 .sync-run-metrics {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.75rem 2rem;
+  gap: var(--space-3) var(--space-6);
   margin: 0;
 }
 
@@ -157,7 +157,7 @@
   display: flex;
   flex-direction: column;
   gap: 0.125rem;
-  padding: 0.75rem 0;
+  padding: var(--space-3) 0;
 }
 
 .sync-failure-row + .sync-failure-row {
@@ -172,5 +172,5 @@
 
 .sync-failure-meta {
   color: var(--color-text-secondary);
-  font-size: var(--fs-small);
+  font-size: var(--fs-body);
 }
