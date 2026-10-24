@@ -219,6 +219,7 @@ input[type="radio"] {
   accent-color: var(--color-primary);
 }
 .ui-switch {
+  position: relative;
   border: 0;
   border-radius: var(--radius-full);
   background: var(--color-border-strong);
