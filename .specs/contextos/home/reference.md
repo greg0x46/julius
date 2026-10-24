@@ -189,4 +189,6 @@ projected and simulated balances dashed, with today/zero references and the
 lowest-balance marker. Pointer/touch inspection and a keyboard-accessible date
 selector expose the original decimal values and entries; realized days still
 open transactions. Category breakdown uses local SVG rings and its linked list.
+Inspection follows the selected calendar day across period updates and hides
+when that day is outside the displayed period.
 No chart library or external UI runtime is required.

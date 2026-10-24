@@ -34,7 +34,9 @@ export function LinePlot({
   lowest,
   label,
 }: LinePlotProps) {
-  const [selected, setSelected] = useState<number | null>(null);
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const selectedIndex = selectedDate == null ? -1 : dates.indexOf(selectedDate);
+  const selected = selectedIndex >= 0 ? selectedIndex : null;
   const container = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(800);
   useEffect(() => {
@@ -96,7 +98,7 @@ export function LinePlot({
         viewBox={`0 0 ${width} ${height}`}
         width="100%"
         height={height}
-        onPointerLeave={() => setSelected(null)}
+        onPointerLeave={() => setSelectedDate(null)}
       >
         {Array.from({ length: 5 }, (_, index) => {
           const value = min + (span * index) / 4;
@@ -217,9 +219,9 @@ export function LinePlot({
             width={(width - left - right) / Math.max(dates.length - 1, 1)}
             height={bottom - top}
             fill="transparent"
-            onPointerEnter={() => setSelected(index)}
+            onPointerEnter={() => setSelectedDate(date)}
             onClick={() => {
-              setSelected(index);
+              setSelectedDate(date);
               onSelect?.(index);
             }}
           />
@@ -232,8 +234,10 @@ export function LinePlot({
             aria-label="Consultar data do gráfico"
             value={selected ?? ""}
             onChange={(event) =>
-              setSelected(
-                event.target.value === "" ? null : Number(event.target.value),
+              setSelectedDate(
+                event.target.value === ""
+                  ? null
+                  : (dates[Number(event.target.value)] ?? null),
               )
             }
           >

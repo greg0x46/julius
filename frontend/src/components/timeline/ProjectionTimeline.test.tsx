@@ -63,3 +63,46 @@ it("keeps fractional balances exact in the tooltip", () => {
   fireEvent.change(screen.getByRole("combobox"), { target: { value: "0" } });
   expect(screen.getByText(/9\.007\.199\.254\.740\.993,12/)).toBeInTheDocument();
 });
+
+it("tracks the selected day when the period changes and hides days outside it", () => {
+  const onSelectDay = vi.fn();
+  const initial = series(["1000", "750", "800"]);
+  const { rerender } = render(
+    <ProjectionTimeline
+      series={initial}
+      referenceDate="2026-10-23"
+      onSelectDay={onSelectDay}
+    />,
+  );
+  fireEvent.change(screen.getByRole("combobox"), { target: { value: "2" } });
+  const shorter = {
+    ...initial,
+    points: initial.points.slice(1),
+  };
+  rerender(
+    <ProjectionTimeline
+      series={shorter}
+      referenceDate="2026-10-23"
+      onSelectDay={onSelectDay}
+    />,
+  );
+  expect(screen.getByRole("combobox")).toHaveValue("1");
+  expect(screen.getByText(/Saldo realizado:.*800,00/)).toBeInTheDocument();
+  fireEvent.click(
+    screen.getByRole("button", { name: "Ver transações do dia" }),
+  );
+  expect(onSelectDay).toHaveBeenCalledWith("2026-10-23");
+
+  rerender(
+    <ProjectionTimeline
+      series={series(["900"])}
+      referenceDate="2026-10-23"
+      onSelectDay={onSelectDay}
+    />,
+  );
+  expect(screen.getByRole("combobox")).toHaveValue("");
+  expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole("button", { name: "Ver transações do dia" }),
+  ).not.toBeInTheDocument();
+});

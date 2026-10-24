@@ -40,6 +40,31 @@ it("leaves days that cannot be valued as gaps, not zeros", () => {
 });
 
 const originalTZ = process.env.TZ;
+
+it("clears inspection when refreshed history no longer contains the selected day", () => {
+  const point: NetWorthPoint = {
+    date: "2026-10-21",
+    valuation_status: "complete",
+    total: "100",
+    cash_balance: "100",
+    investment_balance: "0",
+  };
+  const { rerender } = render(
+    <NetWorthChart points={[point, { ...point, date: "2026-10-22" }]} />,
+  );
+  fireEvent.change(screen.getByRole("combobox"), { target: { value: "1" } });
+  expect(screen.getByText(/Patrimônio:.*100,00/)).toBeInTheDocument();
+
+  rerender(<NetWorthChart points={[point]} />);
+  expect(screen.getByRole("combobox")).toHaveValue("");
+  expect(screen.queryByRole("status")).not.toBeInTheDocument();
+
+  fireEvent.change(screen.getByRole("combobox"), { target: { value: "0" } });
+  rerender(<NetWorthChart points={[]} />);
+  expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  expect(screen.getByRole("combobox")).toHaveValue("");
+});
+
 afterEach(() => {
   if (originalTZ === undefined) delete process.env.TZ;
   else process.env.TZ = originalTZ;
