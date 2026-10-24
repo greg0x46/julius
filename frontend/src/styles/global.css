@@ -83,6 +83,7 @@ body {
 }
 
 .app-build-footer {
+  margin-top: auto;
   padding: 0.5rem var(--page-gutter) calc(0.5rem + env(safe-area-inset-bottom));
   color: var(--color-text-secondary);
   font-size: var(--fs-caption);

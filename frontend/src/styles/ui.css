@@ -627,6 +627,10 @@ input[type="radio"] {
   padding: var(--space-3) var(--space-2);
 }
 .app-main {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-height: 100dvh;
   padding-top: var(--app-bar-height);
   margin-left: 240px;
   min-width: 0;
