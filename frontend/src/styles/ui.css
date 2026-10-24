@@ -228,13 +228,13 @@ input[type="radio"] {
   align-items: center;
   padding: 3px;
   gap: 5px;
-  color: white;
+  color: var(--color-on-primary);
 }
 .ui-switch > span {
   width: 18px;
   height: 18px;
   border-radius: var(--radius-full);
-  background: white;
+  background: var(--color-surface);
 }
 .ui-switch[aria-checked="true"] {
   background: var(--color-primary);
@@ -258,7 +258,7 @@ input[type="radio"] {
   border-radius: var(--radius-sm);
 }
 .ui-segmented label[data-active="true"] {
-  background: white;
+  background: var(--color-surface);
   box-shadow: 0 0 0 1px var(--color-border);
 }
 .ui-segmented input {
@@ -423,7 +423,7 @@ input[type="radio"] {
   padding: 6px var(--space-2);
   border-radius: var(--radius-sm);
   background: var(--color-text);
-  color: white;
+  color: var(--color-surface);
   font-size: var(--fs-caption);
 }
 .ui-menu {
