@@ -57,8 +57,7 @@ async function select(page: Page, label: string, option: string) {
   const control = page.getByRole("combobox", { name: label, exact: true });
   await control.press("ArrowDown");
   if (await control.isEditable()) await control.fill(option);
-  // Ant Select exposes offscreen virtual options; click the rendered label.
-  await page.locator(".ant-select-dropdown:visible").getByText(option, { exact: true }).click();
+  await page.getByRole("option", { name: option, exact: true }).click();
 }
 
 async function transaction(page: Page, account: string, description: string, amount: string, inflow = false, category?: string) {
@@ -69,7 +68,7 @@ async function transaction(page: Page, account: string, description: string, amo
   await form.getByLabel("Descrição", { exact: true }).fill(description);
   if (inflow) await form.getByText("Entrada", { exact: true }).click();
   await form.getByLabel("Valor", { exact: true }).fill(amount);
-  await form.getByLabel("Data", { exact: true }).fill("15/09/2026");
+  await form.getByLabel("Data", { exact: true }).fill("2026-09-15");
   await form.getByLabel("Data", { exact: true }).press("Tab");
   if (category) await select(page, "Categoria (opcional)", category);
   const response = writeResponse(page, "/api/transactions");
@@ -197,7 +196,7 @@ async function investmentOperation(page: Page, kind: string, amount: string) {
   const form = page.getByRole("dialog");
   await select(page, "Tipo", kind);
   await form.getByLabel("Valor", { exact: true }).fill(amount);
-  await form.getByLabel("Data", { exact: true }).fill("15/09/2026");
+  await form.getByLabel("Data", { exact: true }).fill("2026-09-15");
   await form.getByLabel("Data", { exact: true }).press("Tab");
   const response = writeResponse(page, "/api/investment-operations");
   await form.getByRole("button", { name: "Salvar", exact: true }).click();
@@ -210,7 +209,7 @@ async function linkInvestment(page: Page, description: string, kind: string) {
   await page.getByRole("button", { name: `Ver detalhes de ${description}`, exact: true }).click();
   await page.getByRole("button", { name: /Vincular a investimento/ }).click();
   await page.getByRole("combobox", { name: "Movimentação de destino", exact: true }).press("ArrowDown");
-  await page.locator(".ant-select-dropdown:visible").getByText(kind, { exact: true }).click();
+  await page.getByRole("listbox").getByText(kind, { exact: true }).click();
   const response = writeResponse(page, "/api/investment-reconciliations");
   await page.getByRole("button", { name: "Vincular", exact: true }).click();
   await successful(response);

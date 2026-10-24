@@ -1,5 +1,5 @@
-import { CheckOutlined } from "@ant-design/icons";
-import { Input, Select, Switch } from "antd";
+import { CheckOutlined } from "../ui/icons";
+import { Input, Select, Switch } from "../ui";
 import { useEffect, useState } from "react";
 
 import type { Category, CategoryKind } from "../../api/contracts";

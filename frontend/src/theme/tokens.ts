@@ -1,12 +1,10 @@
-import type { ThemeConfig } from "antd";
-
 /**
  * Design tokens for Julius.
  *
  * These formalize the palette that had already emerged organically across
  * the app's CSS files (navy text, slate-gray secondary text, green primary,
  * green/red for positive/negative money, orange for warnings) into a single
- * source of truth consumed by antd's ConfigProvider. New CSS and components
+ * source of truth for local components. New CSS and components
  * should reference these instead of hardcoding hex values.
  */
 export const colors = {
@@ -52,7 +50,7 @@ export const colors = {
 export const fontFamily =
   'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
 
-/** 4px baseline spacing scale, exposed for use outside antd's own Space/Flex props. */
+
 export const spacing = {
   xs: 4,
   sm: 8,
@@ -61,99 +59,3 @@ export const spacing = {
   xl: 32,
   xxl: 48,
 } as const;
-
-/** Control heights on a pointer-friendly (compact) screen vs. a desktop one. */
-const controlHeights = {
-  wide: { controlHeight: 32, controlHeightLG: 40, controlHeightSM: 24 },
-  compact: { controlHeight: 40, controlHeightLG: 48, controlHeightSM: 32 },
-} as const;
-
-/**
- * The antd theme. On compact screens the controls grow to touch size
- * (40/48/32); the 16px input font that stops iOS from zooming on focus is
- * CSS-only (global.css), since antd has no per-control token for it.
- */
-export function createTheme(compact: boolean): ThemeConfig {
-  return {
-    token: {
-      colorPrimary: colors.primary,
-      colorLink: colors.primary,
-      colorLinkHover: colors.primaryHover,
-      colorInfo: colors.info,
-      colorSuccess: colors.success,
-      colorError: colors.error,
-      colorWarning: colors.warning,
-      colorWarningText: colors.warningText,
-      colorTextBase: colors.textPrimary,
-      colorTextSecondary: colors.textSecondary,
-      colorTextTertiary: colors.textTertiary,
-      // 4.6:1 on white; antd's default (25% black) is 1.65:1.
-      colorTextPlaceholder: colors.textTertiary,
-      colorBorder: colors.border,
-      colorBorderSecondary: colors.borderSecondary,
-      colorBgLayout: colors.bgLayout,
-      colorBgContainer: colors.bgContainer,
-      fontFamily,
-      borderRadius: 8,
-      borderRadiusLG: 8,
-      borderRadiusSM: 6,
-      fontSize: 14,
-      // Surfaces are separated by hairlines, never shadows (the Segmented
-      // thumb reads off a hairline ring instead, see global.css).
-      boxShadowTertiary: "none",
-      // A selected option in any menu or select: a light tint with the
-      // normal text colour, instead of a green-grey fill.
-      controlItemBgActive: colors.selectedTint,
-      controlItemBgActiveHover: colors.selectedTintHover,
-      ...(compact ? controlHeights.compact : controlHeights.wide),
-    },
-    components: {
-      // Flat buttons: antd paints a soft coloured shadow under primary,
-      // default and danger buttons that no other surface in the app has.
-      Button: {
-        primaryShadow: "none",
-        defaultShadow: "none",
-        dangerShadow: "none",
-      },
-      Card: {
-        borderRadiusLG: 8,
-      },
-      Select: {
-        optionSelectedBg: colors.selectedTint,
-        optionSelectedColor: colors.textPrimary,
-        optionSelectedFontWeight: 500,
-        optionActiveBg: colors.hover,
-      },
-      // Position and colour are the cue; the thumb's green-tinted drop
-      // shadow isn't needed on a white handle and breaks the flat language.
-      Switch: {
-        handleShadow: "none",
-      },
-      // A slightly darker track than the page lets the white selected thumb
-      // read as a thumb without a shadow (a hairline ring: global.css).
-      Segmented: {
-        trackBg: "#eceff4",
-        itemSelectedBg: colors.bgContainer,
-      },
-      // ONE table skin for every table (the 12px header label is
-      // global.css): white header with secondary-colour labels, hairlines
-      // only, a faint hover. Domain stylesheets must not restyle headers.
-      Table: {
-        headerBg: colors.bgContainer,
-        headerColor: colors.textSecondary,
-        headerSplitColor: "transparent",
-        headerBorderRadius: 0,
-        borderColor: colors.borderSecondary,
-        rowHoverBg: colors.hover,
-        cellPaddingBlock: 12,
-      },
-      Layout: {
-        headerBg: colors.bgContainer,
-        bodyBg: colors.bgLayout,
-      },
-    },
-  };
-}
-
-/** The wide-screen theme, for callers that don't track the viewport. */
-export const theme: ThemeConfig = createTheme(false);

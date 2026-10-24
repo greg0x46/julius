@@ -1,7 +1,7 @@
 import { hasNetWorthValue } from "../api/contracts";
 import { ApiError } from "../api/problems";
 import { ReportValuation } from "../components/shared/ReportValuation";
-import { Skeleton } from "antd";
+import { Skeleton } from "../components/ui";
 
 import { UnavailableState } from "../components/AsyncState";
 import { EmptyState, Page, Section } from "../components/layout";

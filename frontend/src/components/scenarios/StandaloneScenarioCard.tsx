@@ -1,9 +1,9 @@
 import { isPositiveDecimal } from "../../presentation/decimal";
-import { CloseOutlined } from "@ant-design/icons";
-import { Alert, Button, DatePicker, Drawer, Input, Select, Skeleton, Switch } from "antd";
-import type { ProColumns } from "@ant-design/pro-table";
-import ProTable from "@ant-design/pro-table";
-import dayjs, { type Dayjs } from "dayjs";
+import { CloseOutlined } from "../ui/icons";
+import { Alert, Button, DatePicker, Drawer, Input, Select, Skeleton, Switch } from "../ui";
+import type { Column } from "../ui/Table";
+import Table from "../ui/Table";
+import { calendar, type CalendarDate } from "../../presentation/calendar";
 import { useEffect, useId, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
@@ -58,7 +58,7 @@ function NewTransactionForm({
   const [description, setDescription] = useState("");
   const [kind, setKind] = useState<"income" | "expense">("expense");
   const [amount, setAmount] = useState<string | null>(null);
-  const [projectedAt, setProjectedAt] = useState<Dayjs>(dayjs());
+  const [projectedAt, setProjectedAt] = useState<CalendarDate>(calendar());
   const [error, setError] = useState<string | null>(null);
   // `submitting` arrives a render late: a second Enter in the same tick would
   // otherwise create the transaction twice.
@@ -85,7 +85,7 @@ function NewTransactionForm({
       if (saved) {
         setDescription("");
         setAmount(null);
-        setProjectedAt(dayjs());
+        setProjectedAt(calendar());
       }
     } finally {
       inFlight.current = false;
@@ -251,7 +251,7 @@ function ScenarioTransactionsPanel({
     />
   );
 
-  const columns: ProColumns<ScenarioTransaction>[] = [
+  const columns: Column<ScenarioTransaction>[] = [
     { title: "Descrição", dataIndex: "description" },
     {
       title: "Valor",
@@ -310,14 +310,12 @@ function ScenarioTransactionsPanel({
           </ul>
         )
       ) : (
-        <ProTable<ScenarioTransaction>
+        <Table<ScenarioTransaction>
           aria-label={`Transações hipotéticas de ${scenario.name}`}
           columns={columns}
           dataSource={transactions}
           loading={detailQuery.isLoading}
           rowKey="id"
-          search={false}
-          options={false}
           pagination={false}
           size="small"
           locale={{ emptyText: "Nenhuma transação hipotética ainda." }}
@@ -527,7 +525,7 @@ export function StandaloneScenarioList({
     if (message !== null) onActionError(message);
   };
 
-  const columns: ProColumns<Scenario>[] = [
+  const columns: Column<Scenario>[] = [
     { title: "Nome", dataIndex: "name" },
     {
       title: "Tipo",
@@ -602,14 +600,12 @@ export function StandaloneScenarioList({
           ariaLabel: `Abrir cenário ${scenario.name}`,
         })}
         wide={
-          <ProTable<Scenario>
+          <Table<Scenario>
             aria-label="Cenários"
             columns={columns}
             dataSource={scenarios}
             rowKey="id"
-            search={false}
-            options={false}
-            pagination={false}
+                pagination={false}
             expandable={{
               expandRowByClick: true,
               // The expand column has no header text; say what it does.

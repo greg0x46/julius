@@ -38,12 +38,12 @@ function renderForm(entry: AutomationEntry | null) {
 
 async function choose(label: string, option: string) {
   await userEvent.click(screen.getByRole("combobox", { name: label }));
-  fireEvent.click(await screen.findByText(option, { selector: ".ant-select-item-option-content" }));
+  fireEvent.click(await screen.findByText(option, { selector: '[role="option"]' }));
 }
 
 function clearCategory() {
-  const field = screen.getByRole("combobox", { name: "Categoria a aplicar (opcional)" }).closest(".ant-select")!;
-  const clear = field.querySelector(".ant-select-clear")!;
+  const field = screen.getByRole("combobox", { name: "Categoria a aplicar (opcional)" }).closest(".ui-select")!;
+  const clear = field.querySelector(".ui-select-clear")!;
   fireEvent.mouseDown(clear);
   fireEvent.click(clear);
 }

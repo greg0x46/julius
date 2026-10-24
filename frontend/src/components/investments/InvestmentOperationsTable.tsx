@@ -1,5 +1,5 @@
-import { Table } from "antd";
-import type { ColumnsType } from "antd/es/table";
+import { Table } from "../ui";
+import type { ColumnsType } from "../ui/Table";
 
 import type { InvestmentOperation, InvestmentPosition } from "../../api/contracts";
 import { investmentOperationKindLabel } from "../../presentation/investmentWorkspaceLabels";

@@ -1,5 +1,5 @@
 import { ReportValuation } from "../components/shared/ReportValuation";
-import { Alert, Button, Skeleton } from "antd";
+import { Alert, Button, Skeleton } from "../components/ui";
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 

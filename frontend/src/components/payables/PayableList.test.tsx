@@ -15,7 +15,7 @@ afterEach(() => {
   window.matchMedia = originalMatchMedia;
 });
 
-/** The list stacks below `lg` through the antd breakpoint hook, so a phone needs no breakpoint to match. */
+/** The list stacks below `lg` through the viewport hook, so a phone needs no breakpoint to match. */
 function stubViewport(compact: boolean) {
   vi.spyOn(compactScreen, "useCompactScreen").mockReturnValue(compact);
   if (!compact) return;

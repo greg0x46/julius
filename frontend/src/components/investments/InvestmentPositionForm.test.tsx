@@ -46,19 +46,19 @@ function renderForm(accounts: InvestmentAccount[] = [manualAccount]) {
 }
 
 async function choose(label: string, option: string) {
-  fireEvent.mouseDown(screen.getByRole("combobox", { name: label }));
-  await userEvent.click(await screen.findByText(option, { selector: ".ant-select-item-option-content" }));
+  fireEvent.click(screen.getByRole("combobox", { name: label }));
+  await userEvent.click(await screen.findByText(option, { selector: '[role="option"]' }));
 }
 
 function search(text: string) {
   const input = screen.getByRole("combobox", { name: "Ativo" });
-  fireEvent.mouseDown(input);
+  fireEvent.click(input);
   fireEvent.change(input, { target: { value: text } });
 }
 
 function fillOpeningValue() {
-  fireEvent.change(screen.getByRole("spinbutton", { name: "Quantidade inicial" }), { target: { value: "0,5" } });
-  fireEvent.change(screen.getByRole("spinbutton", { name: "Custo unitário" }), { target: { value: "300000" } });
+  fireEvent.change(screen.getByRole("textbox", { name: "Quantidade inicial" }), { target: { value: "0,5" } });
+  fireEvent.change(screen.getByRole("textbox", { name: "Custo unitário" }), { target: { value: "300000" } });
 }
 
 const save = () => userEvent.click(screen.getByRole("button", { name: "Salvar" }));
@@ -67,8 +67,8 @@ describe("asset selection from the catalog", () => {
   it.each(["BTC", "bitcoin"])("finds Bitcoin by %s and reuses it without creating an asset", async (text) => {
     const onCreate = renderForm();
     search(text);
-    expect(screen.queryByText("PETR4 · Petrobras PN", { selector: ".ant-select-item-option-content" })).toBeNull();
-    await userEvent.click(await screen.findByText("BTC · Bitcoin", { selector: ".ant-select-item-option-content" }));
+    expect(screen.queryByText("PETR4 · Petrobras PN", { selector: '[role="option"]' })).toBeNull();
+    await userEvent.click(await screen.findByText("BTC · Bitcoin", { selector: '[role="option"]' }));
     expect(screen.getByText("Criptoativos · Criptomoeda · BRL · Cotação automática")).toBeInTheDocument();
     fillOpeningValue();
     await save();
@@ -123,7 +123,7 @@ describe("new asset inside the position form", () => {
     expect(screen.getByRole("switch", { name: "Cotação automática" })).toBeChecked();
     fireEvent.change(screen.getByRole("textbox", { name: "Nome" }), { target: { value: "Bitcoin" } });
     // The opening values typed before switching to a new asset survive.
-    expect(screen.getByRole("spinbutton", { name: "Quantidade inicial" })).toHaveValue("0,5");
+    expect(screen.getByRole("textbox", { name: "Quantidade inicial" })).toHaveValue("0,5");
     await save();
     await waitFor(() => expect(onCreate).toHaveBeenCalledWith(expect.objectContaining({
       account_id: manualAccount.id, asset_id: created.id, initial_quantity: "0.5",
@@ -262,9 +262,9 @@ describe("new asset inside the position form", () => {
 describe("account selection", () => {
   it("offers manual and integrated accounts and preselects the first", async () => {
     const onCreate = renderForm([integratedAccount, manualAccount]);
-    fireEvent.mouseDown(screen.getByRole("combobox", { name: "Conta de investimento" }));
-    expect(await screen.findAllByText(manualAccount.name, { selector: ".ant-select-item-option-content" })).not.toHaveLength(0);
-    expect(await screen.findAllByText(integratedAccount.name, { selector: ".ant-select-item-option-content" })).not.toHaveLength(0);
+    fireEvent.click(screen.getByRole("combobox", { name: "Conta de investimento" }));
+    expect(await screen.findAllByText(manualAccount.name, { selector: '[role="option"]' })).not.toHaveLength(0);
+    expect(await screen.findAllByText(integratedAccount.name, { selector: '[role="option"]' })).not.toHaveLength(0);
     await choose("Ativo", "BTC · Bitcoin");
     await save();
     await waitFor(() => expect(onCreate).toHaveBeenCalledWith(expect.objectContaining({ account_id: integratedAccount.id })));

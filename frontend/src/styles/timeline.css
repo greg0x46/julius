@@ -32,7 +32,7 @@
 }
 
 .timeline-chart-tooltip-entries li span:last-child {
-  font-variant-numeric: tabular-nums;
+  font-variui-numeric: tabular-nums;
   white-space: nowrap;
 }
 

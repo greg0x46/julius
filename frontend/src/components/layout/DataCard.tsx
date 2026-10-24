@@ -1,4 +1,4 @@
-import { Card } from "antd";
+import { Card } from "../ui";
 import type { ReactNode } from "react";
 
 interface DataCardProps {

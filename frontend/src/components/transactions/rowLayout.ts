@@ -1,4 +1,4 @@
-import { Grid } from "antd";
+import { Grid } from "../ui";
 
 /**
  * How a transaction row is laid out:

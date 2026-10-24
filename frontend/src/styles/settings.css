@@ -25,7 +25,7 @@
   max-width: 28rem;
 }
 
-.settings-form .ant-btn {
+.settings-form .ui-btn {
   align-self: flex-start;
 }
 
@@ -35,14 +35,12 @@
   gap: 0.75rem;
 }
 
-.settings-radio .ant-radio-wrapper {
+.settings-radio .ui-radio-wrapper {
   align-items: flex-start;
   font-weight: 500;
 }
 
-/* antd centres the radio on the whole label; with a hint under the title it
-   belongs beside the title's first line. */
-.settings-radio .ant-radio-wrapper > .ant-radio {
+.settings-radio .ui-radio-wrapper > input {
   align-self: flex-start;
   margin-top: 0.1875rem;
 }
@@ -75,11 +73,11 @@
    every other list; ListRow brings no side padding of its own, so the card
    gives the rows the page gutter. */
 .settings-list-card .list-rows,
-.settings-list-card .ant-skeleton {
+.settings-list-card .ui-skeleton {
   padding-inline: var(--page-gutter);
 }
 
-.settings-list-card .ant-skeleton {
+.settings-list-card .ui-skeleton {
   padding-block: 1rem;
 }
 
@@ -164,7 +162,7 @@
 }
 
 /* The primary action is the one 48px control of the screen. */
-.login-form .ant-btn-lg {
+.login-form .ui-btn-large {
   height: 48px;
 }
 

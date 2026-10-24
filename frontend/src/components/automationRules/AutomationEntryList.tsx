@@ -1,6 +1,6 @@
-import type { ProColumns } from "@ant-design/pro-table";
-import ProTable from "@ant-design/pro-table";
-import { Skeleton, Switch } from "antd";
+import type { Column } from "../ui/Table";
+import Table from "../ui/Table";
+import { Skeleton, Switch } from "../ui";
 
 import type { AutomationActionType, AutomationRule, Category, RecurringCommitment } from "../../api/contracts";
 import { summarizeConditions } from "../../presentation/ruleConditionLabels";
@@ -64,7 +64,7 @@ export function AutomationEntryList({
 
   const rows: EntryRow[] = rules.map((rule) => ({ key: rule.id, rule }));
 
-  const columns: ProColumns<EntryRow>[] = [
+  const columns: Column<EntryRow>[] = [
     { title: "Nome", dataIndex: ["rule", "name"] },
     {
       title: "Ações",
@@ -153,14 +153,12 @@ export function AutomationEntryList({
           ariaLabel: `Editar automação ${rule.name}`,
         })}
         wide={
-          <ProTable<EntryRow>
+          <Table<EntryRow>
             aria-label="Automações"
             columns={columns}
             dataSource={rows}
             rowKey="key"
-            search={false}
-            options={false}
-            pagination={false}
+                pagination={false}
             onRow={(row) => ({ onClick: () => onEditRule(row.rule), style: { cursor: "pointer" } })}
           />
         }

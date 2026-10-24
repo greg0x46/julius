@@ -1,4 +1,4 @@
-import { Segmented } from "antd";
+import { Segmented } from "../ui";
 
 interface PageTabsProps<Value extends string> {
   label: string;

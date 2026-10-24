@@ -1,5 +1,5 @@
-import { CloseOutlined } from "@ant-design/icons";
-import { Button, Drawer } from "antd";
+import { CloseOutlined } from "../ui/icons";
+import { Button, Drawer } from "../ui";
 import { useEffect, useRef, type ReactNode } from "react";
 
 import { useCompactScreen } from "../shared/useCompactScreen";

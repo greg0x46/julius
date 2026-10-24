@@ -37,7 +37,7 @@ import {
   TrophyOutlined,
   WalletOutlined,
   WifiOutlined,
-} from "@ant-design/icons";
+} from "../components/ui/icons";
 import { createElement, type ComponentType } from "react";
 
 import type { CategoryKind, CategoryOption, InternalCategory, TransactionItem } from "../api/contracts";

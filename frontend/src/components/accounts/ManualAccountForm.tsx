@@ -1,4 +1,4 @@
-import { Alert, Button, Checkbox, Input, Select } from "antd";
+import { Alert, Button, Checkbox, Input, Select } from "../ui";
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 

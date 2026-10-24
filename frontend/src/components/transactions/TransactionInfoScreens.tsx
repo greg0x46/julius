@@ -1,4 +1,4 @@
-import { Descriptions, Tag } from "antd";
+import { Descriptions, Tag } from "../ui";
 
 import type { TransactionItem } from "../../api/contracts";
 import { internalCategoryOriginLabel } from "../../presentation/categoryLabels";

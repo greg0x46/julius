@@ -1,4 +1,4 @@
-import { Input, Select, Switch } from "antd";
+import { Input, Select, Switch } from "../ui";
 
 import type { InvestmentAssetClass, InvestmentAssetClassDefinition } from "../../api/contracts";
 import { FormField } from "../forms/FormField";

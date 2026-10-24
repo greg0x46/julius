@@ -64,7 +64,7 @@
 }
 
 /* Search stays put; only the list scrolls. */
-.category-popover .ant-popover-inner {
+.category-popover.ui-popover {
   padding: 0;
 }
 
@@ -75,7 +75,7 @@
   grid-template-rows: auto minmax(0, 1fr);
 }
 
-.category-sheet .ant-drawer-body {
+.category-sheet .ui-drawer-body {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   padding: 0;

@@ -1,7 +1,6 @@
-import type { ProColumns } from "@ant-design/pro-table";
-import ProTable from "@ant-design/pro-table";
-import { FilterFilled } from "@ant-design/icons";
-import { Skeleton, Switch } from "antd";
+import type { Column } from "../ui/Table";
+import Table from "../ui/Table";
+import { Skeleton, Switch } from "../ui";
 
 import type { Category, CategoryKind } from "../../api/contracts";
 import { categoryKindLabel, renderCategoryIcon } from "../../presentation/categoryLabels";
@@ -68,7 +67,7 @@ export function CategoryList({
 }) {
   const compact = useCompactScreen();
 
-  const columns: ProColumns<Category>[] = [
+  const columns: Column<Category>[] = [
     {
       title: "Nome",
       dataIndex: "name",
@@ -79,10 +78,6 @@ export function CategoryList({
       dataIndex: "kind",
       render: (_, category) => categoryKindLabel[category.kind],
       filters: kindOrder.map((kind) => ({ text: categoryKindLabel[kind], value: kind })),
-      // antd's default funnel is announced as "filter", in English.
-      filterIcon: (filtered: boolean) => (
-        <FilterFilled aria-label="Filtrar por tipo" style={{ color: filtered ? "var(--color-primary)" : undefined }} />
-      ),
       onFilter: (value, category) => category.kind === value,
     },
     {
@@ -116,13 +111,11 @@ export function CategoryList({
 
   const table = (
     <DataCard flush>
-      <ProTable<Category>
+      <Table<Category>
         aria-label="Categorias"
         columns={columns}
         dataSource={categories}
         rowKey="id"
-        search={false}
-        options={false}
         pagination={false}
         onRow={(category) => ({
           onClick: () => onRename(category),

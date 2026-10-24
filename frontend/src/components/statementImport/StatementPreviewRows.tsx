@@ -1,4 +1,4 @@
-import { Button, Radio } from "antd";
+import { Button, Radio } from "../ui";
 import { useState } from "react";
 
 import type { ImportConflict, ImportRow } from "../../api/statementImports";
@@ -80,7 +80,7 @@ function StatementPreviewRow({ row, conflict, filename, decision, onDecision }: 
             </section>
           </div>
           <Radio.Group aria-label={`Decisão da linha ${row.line_number}`} value={decision}
-            onChange={(event) => onDecision?.(row.line_number, event.target.value)}>
+            onChange={(event) => onDecision?.(row.line_number, event.target.value as "ignore" | "import")}>
             <Radio value="ignore">Manter existente / ignorar esta linha</Radio>
             <Radio value="import">Importar como outra transação</Radio>
           </Radio.Group>
