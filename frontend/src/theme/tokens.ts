@@ -25,6 +25,7 @@ export const colors = {
   borderSecondary: "#e5e9f0",
   bgLayout: "#f5f7fa",
   bgContainer: "#ffffff",
+  appBar: "#010409",
   selectedTint: "#e9eff8",
   selectedTintHover: "#dde7f5",
 } as const;
@@ -54,6 +55,7 @@ export const colorVars = {
   borderSecondary: "var(--color-border)",
   bgLayout: "var(--color-bg)",
   bgContainer: "var(--color-surface)",
+  appBar: "var(--color-app-bar)",
   selectedTint: "var(--color-selected)",
   selectedTintHover: "var(--color-selected-hover)",
 } as const;

@@ -12,7 +12,7 @@ it("generated token files match tokens.json", () => {
 
 it("every colour has its own dark value, except the allowlisted", () => {
   const { colors } = JSON.parse(readFileSync(new URL("./tokens.json", import.meta.url), "utf8"));
-  const sameInBoth = new Set(["warning"]);
+  const sameInBoth = new Set(["warning", "appBar"]);
   const missing = Object.entries<{ light: string; dark?: string }>(colors)
     .filter(([name, c]) => !sameInBoth.has(name) && (c.dark === undefined || c.dark === c.light))
     .map(([name]) => name);
