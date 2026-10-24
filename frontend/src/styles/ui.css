@@ -588,6 +588,10 @@ input[type="radio"] {
 .app-header .ui-btn {
   color: white;
 }
+.app-theme-switch {
+  margin-left: auto;
+  flex-shrink: 0;
+}
 .app-brand {
   display: inline-flex;
   align-items: center;
