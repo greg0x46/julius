@@ -47,8 +47,8 @@ body {
 }
 
 :focus-visible {
-  /* Green on a white halo: ≥3:1 against both the white surfaces and the
-     black app bar (the old amber ring was 1.9:1 on white). */
+  /* Primary ring on a surface-coloured halo, readable on every surface
+     (app bar included) in both themes. */
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
   box-shadow: 0 0 0 4px var(--color-surface);
