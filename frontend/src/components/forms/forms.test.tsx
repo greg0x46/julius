@@ -188,9 +188,14 @@ describe("parseMoney", () => {
 
 describe("Money", () => {
   it("renders tone, sign and tabular class", () => {
-    render(<Money value="-12.5" tone="result" />);
+    render(<Money value="-12.5" tone="balance" />);
     const node = screen.getByText(/^-R\$\s12,50$/);
     expect(node).toHaveClass("money", "money-negative");
+  });
+
+  it("keeps a negative result in the text colour, signed", () => {
+    render(<Money value="-12.5" tone="result" />);
+    expect(screen.getByText(/^-R\$\s12,50$/)).toHaveClass("money", "money-neutral");
   });
 });
 

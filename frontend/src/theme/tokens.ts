@@ -4,10 +4,11 @@
 export const colors = {
   textPrimary: "#172b4d",
   textSecondary: "#5d697c",
-  textTertiary: "#6b778c",
+  textTertiary: "#5d697c",
   accent: "#1baf7a",
-  primary: "#0f7d58",
-  primaryHover: "#0b6a4a",
+  primary: "#2457a6",
+  primaryHover: "#1b4585",
+  onPrimary: "#ffffff",
   moneyIn: "#1f6f46",
   success: "#1f6f46",
   error: "#c4302b",
@@ -20,12 +21,12 @@ export const colors = {
   tagWarningBg: "#fcf1d6",
   tagDangerBg: "#fbe8e7",
   hover: "rgba(23, 43, 77, 0.035)",
-  border: "#d9d9d9",
+  border: "#858f9e",
   borderSecondary: "#e5e9f0",
   bgLayout: "#f5f7fa",
   bgContainer: "#ffffff",
-  selectedTint: "#eef6f2",
-  selectedTintHover: "#e4f1ea",
+  selectedTint: "#e9eff8",
+  selectedTintHover: "#dde7f5",
 } as const;
 
 /** The same roles as CSS custom-property references, theme-aware. */
@@ -36,6 +37,7 @@ export const colorVars = {
   accent: "var(--color-accent)",
   primary: "var(--color-primary)",
   primaryHover: "var(--color-primary-hover)",
+  onPrimary: "var(--color-on-primary)",
   moneyIn: "var(--color-money-in)",
   success: "var(--color-success)",
   error: "var(--color-danger)",

@@ -255,7 +255,6 @@ body {
   width: 2rem;
   height: 2rem;
   border-radius: var(--radius-full);
-  color: var(--color-surface);
   font-size: var(--fs-row);
 }
 
@@ -322,7 +321,7 @@ body {
 
 /* Money (components/shared/Money.tsx). The tone classes only pick the text
    colour; `moneyTone` decides which one applies (flow: inflow tinted, outflow
-   default; result/balance: negative is the single danger red). */
+   default; result: negative keeps the text colour; balance: negative is the danger red). */
 .money {
   font-variui-numeric: tabular-nums;
   white-space: nowrap;

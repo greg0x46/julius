@@ -12,7 +12,7 @@
 }
 
 .settings-row-chevron {
-  color: var(--color-text-tertiary);
+  color: var(--color-text-secondary);
   font-size: var(--fs-caption);
 }
 

@@ -7,12 +7,12 @@
 // down is not an "expense" — except the single red marker for the lowest
 // balance, which is a warning and so is allowed the danger red.
 export const balanceChartColor = {
-  realized: "#172b4d",
-  projected: "#1baf7a",
-  simulation: "#3b5b8c",
-  lowest: "#c4302b",
-  grid: "#e5e9f0",
-  axis: "#5d697c",
+  realized: "var(--color-text)",
+  projected: "var(--color-accent)",
+  simulation: "var(--color-info)",
+  lowest: "var(--color-danger)",
+  grid: "var(--color-border)",
+  axis: "var(--color-text-secondary)",
 } as const;
 
 // Categorical slots for "Por categoria". Deliberately free of the green and the

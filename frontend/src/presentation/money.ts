@@ -84,7 +84,7 @@ function isZeroDecimal(value: string): boolean {
  *   `direction` overrides the value's sign when the value is an unsigned
  *   magnitude, as a transaction's amount is.
  * - result (period result, net figures): positive "+" money-in, negative
- *   "-" danger.
+ *   "-" in the default text colour (a loss is not an error).
  * - balance (saldo, patrimônio): negative is danger; otherwise default
  *   colour, never a "+".
  * - neutral: default colour, no sign logic.
@@ -103,7 +103,7 @@ export function moneyTone(value: string, kind: MoneyToneKind, direction?: MoneyD
     }
     case "result":
       if (zero) return { sign: "", color: "neutral" };
-      return negative ? { sign: "-", color: "negative" } : { sign: "+", color: "positive" };
+      return negative ? { sign: "-", color: "neutral" } : { sign: "+", color: "positive" };
     case "balance":
       return { sign: negative ? "-" : "", color: negative ? "negative" : "neutral" };
     case "neutral":

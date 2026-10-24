@@ -193,7 +193,7 @@ export function LinePlot({
             cy={y(Number(lowest.value))}
             r={5}
             fill={balanceChartColor.lowest}
-            stroke="#fff"
+            stroke="var(--color-surface)"
             strokeWidth={2}
           />
         )}

@@ -625,7 +625,7 @@ a.list-row:hover {
 }
 
 .empty-state-icon {
-  color: var(--color-text-tertiary);
+  color: var(--color-text-secondary);
   font-size: var(--fs-hero);
 }
 

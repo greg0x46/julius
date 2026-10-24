@@ -65,10 +65,6 @@
   color: var(--color-money-in);
 }
 
-.transaction-summary-result .transaction-summary-value.money-negative {
-  color: var(--color-danger);
-}
-
 /* The chevron is a 40px square with a 44px hit area; it sits on the
    gutter's right edge. */
 .transaction-summary-toggle {
@@ -274,7 +270,7 @@
 }
 
 .transaction-row.is-selected {
-  background: rgba(27, 175, 122, 0.08);
+  background: color-mix(in srgb, var(--color-accent) 12%, transparent);
   box-shadow: inset 3px 0 0 var(--color-accent);
 }
 
@@ -291,7 +287,7 @@
 
 .transaction-row.is-ignored .transaction-row-amount {
   text-decoration: line-through;
-  text-decoration-color: rgba(107, 119, 140, 0.6);
+  text-decoration-color: color-mix(in srgb, var(--color-text-secondary) 60%, transparent);
 }
 
 .transaction-row-date {
