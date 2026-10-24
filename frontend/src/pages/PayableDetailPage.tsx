@@ -1,4 +1,4 @@
-import { Alert } from "antd";
+import { Alert } from "../components/ui";
 import { useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 

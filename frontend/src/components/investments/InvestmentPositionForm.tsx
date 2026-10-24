@@ -1,6 +1,6 @@
 import { isPositiveDecimal } from "../../presentation/decimal";
-import { Button, DatePicker, Input, InputNumber, Select } from "antd";
-import dayjs, { type Dayjs } from "dayjs";
+import { Button, DatePicker, Input, InputNumber, Select } from "../ui";
+import { calendar, type CalendarDate } from "../../presentation/calendar";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import type {
@@ -28,7 +28,7 @@ type Draft = {
   initialQuantity: string | null;
   initialUnitCost: string | null;
   initialValue: string | null;
-  occurredOn: Dayjs;
+  occurredOn: CalendarDate;
   notes: string;
 };
 
@@ -42,7 +42,7 @@ function blankDraft(accounts: InvestmentAccount[]): Draft {
     initialQuantity: null,
     initialUnitCost: null,
     initialValue: null,
-    occurredOn: dayjs(),
+    occurredOn: calendar(),
     notes: "",
   };
 }
@@ -58,7 +58,7 @@ function draftFrom(position: InvestmentPosition | null, accounts: InvestmentAcco
     initialQuantity: null,
     initialUnitCost: null,
     initialValue: null,
-    occurredOn: dayjs(),
+    occurredOn: calendar(),
     notes: position.notes ?? "",
   };
 }

@@ -1,4 +1,4 @@
-import { Tooltip } from "antd";
+import { Tooltip } from "../ui";
 
 import type { Account } from "../../api/contracts";
 import { formatOptionalDateTime, formatOptionalDay } from "../../presentation/dates";

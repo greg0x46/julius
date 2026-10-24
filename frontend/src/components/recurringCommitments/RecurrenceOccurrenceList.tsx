@@ -1,5 +1,5 @@
-import { Alert, Button, Flex, Skeleton, Space, Table, Typography } from "antd";
-import type { ColumnsType } from "antd/es/table";
+import { Alert, Button, Flex, Skeleton, Space, Table, Typography } from "../ui";
+import type { ColumnsType } from "../ui/Table";
 import { useState } from "react";
 
 import type { RecurrenceOccurrence, RecurringCommitment, RecurringCommitmentKind } from "../../api/contracts";
@@ -303,16 +303,7 @@ export function RecurrenceOccurrenceList({ commitment }: { commitment: Recurring
           stacked
         )
       ) : (
-        /*
-          A plain antd Table, not the ProTable the top-level lists use: every
-          ProTable feature here would be switched off anyway (search, toolbar,
-          pagination), and its ProCard wrapper carries a `margin: 0 -8px` that
-          cancels the expanded cell's padding — the very thing antd's own
-          nested-table rule (`margin-left: 40px; margin-right: -8px`) already
-          does. Applied twice, the table's right edge landed 8px past the outer
-          table's scroll container, so expanding a row always produced a
-          horizontal scrollbar even with room to spare.
-        */
+
         <Table<RecurrenceOccurrence>
           aria-label={`Ocorrências de ${commitment.name}`}
           columns={columns}

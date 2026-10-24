@@ -1,6 +1,6 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { App } from "antd";
+import { App } from "../ui";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { RecordMenu } from "./RecordMenu";
@@ -112,7 +112,7 @@ describe("useConfirm", () => {
     expect(onConfirm).not.toHaveBeenCalled();
   });
 
-  it("falls back to the browser confirm outside an antd App", async () => {
+  it("falls back to the browser confirm outside a feedback provider", async () => {
     const onConfirm = vi.fn();
     vi.spyOn(window, "confirm").mockReturnValue(true);
     render(<ConfirmHarness onConfirm={onConfirm} />);

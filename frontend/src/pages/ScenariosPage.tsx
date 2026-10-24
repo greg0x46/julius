@@ -1,4 +1,4 @@
-import { Alert, Button, Select } from "antd";
+import { Alert, Button, Select } from "../components/ui";
 import { useState } from "react";
 
 import type { Scenario, ScenarioKind, ScenarioTransactionWrite } from "../api/contracts";

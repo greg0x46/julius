@@ -1,6 +1,6 @@
 import { compareDecimals, isPositiveDecimal } from "../../presentation/decimal";
-import { Alert, Checkbox, DatePicker, Flex, Input, InputNumber, Select } from "antd";
-import dayjs, { type Dayjs } from "dayjs";
+import { Alert, Checkbox, DatePicker, Flex, Input, InputNumber, Select } from "../ui";
+import { calendar, type CalendarDate } from "../../presentation/calendar";
 import { useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
 
 import type {
@@ -21,7 +21,7 @@ type Draft = {
   accountId: string;
   positionId: string | null;
   kind: InvestmentOperationKind;
-  occurredOn: Dayjs;
+  occurredOn: CalendarDate;
   amount: string | null;
   quantity: string | null;
   unitPrice: string | null;
@@ -35,7 +35,7 @@ function blankDraft(accounts: InvestmentAccount[], initial?: Partial<InvestmentO
     accountId: initial?.account_id ?? accounts.find((account) => account.active)?.id ?? "",
     positionId: initial?.position_id ?? null,
     kind: initial?.kind ?? "deposit",
-    occurredOn: initial?.occurred_on ? dayjs(initial.occurred_on) : dayjs(),
+    occurredOn: initial?.occurred_on ? calendar(initial.occurred_on) : calendar(),
     amount: initial?.amount ?? null,
     quantity: initial?.quantity ?? null,
     unitPrice: initial?.unit_price ?? null,
@@ -55,7 +55,7 @@ function draftFrom(
     accountId: operation.account_id,
     positionId: operation.position_id,
     kind: operation.kind,
-    occurredOn: dayjs(operation.occurred_on),
+    occurredOn: calendar(operation.occurred_on),
     amount: isDerivedAmount(operation) ? null : operation.amount,
     quantity: operation.quantity,
     unitPrice: operation.unit_price,

@@ -1,4 +1,4 @@
-import { Skeleton } from "antd";
+import { Skeleton } from "../ui";
 
 import type { Account } from "../../api/contracts";
 import { formatOptionalDay } from "../../presentation/dates";

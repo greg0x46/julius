@@ -1,4 +1,4 @@
-import { App } from "antd";
+import { App } from "../ui";
 import type { ReactNode } from "react";
 import { useCallback } from "react";
 
@@ -17,14 +17,7 @@ export interface ConfirmOptions {
   onConfirm: () => void | Promise<unknown>;
 }
 
-/**
- * A confirmation that works from a menu item (a Popconfirm has no button to
- * anchor to there) and reads the same on a phone and a desktop: one antd
- * modal, "Cancelar" and the action's own verb. Deleting a record says
- * "Excluir"; "Remover" is only for unlinking. Outside an antd `<App>` — as in
- * most component tests — there is no modal API, so it falls back to the
- * browser's own confirm rather than crash.
- */
+/** Shared asynchronous confirmation; standalone consumers fall back to the browser dialog. */
 export function useConfirm(): (options: ConfirmOptions) => void {
   const { modal } = App.useApp();
   return useCallback(

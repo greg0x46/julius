@@ -1,4 +1,4 @@
-import { Alert, Button } from "antd";
+import { Alert, Button } from "../components/ui";
 import { useState } from "react";
 
 import type { Category, CategoryKind } from "../api/contracts";

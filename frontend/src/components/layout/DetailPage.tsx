@@ -1,4 +1,4 @@
-import { Alert, Button, Flex, Skeleton } from "antd";
+import { Alert, Button, Flex, Skeleton } from "../ui";
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 

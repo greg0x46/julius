@@ -1,5 +1,5 @@
-import { ArrowLeftOutlined } from "@ant-design/icons";
-import { Button, Drawer } from "antd";
+import { ArrowLeftOutlined } from "../ui/icons";
+import { Button, Drawer } from "../ui";
 
 import type { InvestmentAccount, InvestmentOperation, InvestmentPosition } from "../../api/contracts";
 import { investmentAccountKindLabel } from "../../presentation/investmentWorkspaceLabels";
@@ -65,7 +65,6 @@ export function InvestmentAccountsDrawer({
       onClose={onClose}
       width={compact ? "100%" : 560}
       destroyOnHidden
-      // The record menu's bottom sheet nests inside this drawer; antd would push the drawer aside for it.
       push={false}
       title={
         <span className="investment-drawer-title">

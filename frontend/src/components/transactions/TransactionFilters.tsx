@@ -1,4 +1,4 @@
-import { Alert, Button, Checkbox } from "antd";
+import { Alert, Button, Checkbox } from "../ui";
 import { useMemo, type ReactNode } from "react";
 
 import type {

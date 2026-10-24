@@ -1,4 +1,4 @@
-import { Alert, Skeleton } from "antd";
+import { Alert, Skeleton } from "../ui";
 import { Link } from "react-router-dom";
 
 import type { TransactionInclusionState, TransactionItem } from "../../api/contracts";

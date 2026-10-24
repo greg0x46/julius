@@ -195,8 +195,9 @@ target. See the
   with optional Postgres via [`pgx`](https://github.com/jackc/pgx) — see
   [Running with Postgres](#running-with-postgres) — and migrations via
   [`goose`](https://github.com/pressly/goose) for both dialects.
-- **Frontend**: React 19, TypeScript, [Ant Design](https://ant.design/) /
-  Pro Components, [TanStack Query](https://tanstack.com/query), Vite.
+- **Frontend**: React 19, TypeScript, React Router and TanStack Query. Julius owns
+  its HTML/CSS controls, responsive layouts, SVG icons and charts; no external UI,
+  chart or date library is shipped. Vite builds the embedded assets.
 - **Tests**: Go's standard `testing` package, [Vitest](https://vitest.dev/) +
   Testing Library for components, [Playwright](https://playwright.dev/) for
   end-to-end.

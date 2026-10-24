@@ -19,8 +19,8 @@ vi.mock("../hooks/useInvestmentAssets", () => ({
 }));
 
 async function choose(user: ReturnType<typeof userEvent.setup>, form: ReturnType<typeof within>, label: string, option: string) {
-  fireEvent.mouseDown(form.getByRole("combobox", { name: label }));
-  await user.click(await screen.findByText(option, { selector: ".ant-select-item-option-content" }));
+  fireEvent.click(form.getByRole("combobox", { name: label }));
+  await user.click(await screen.findByText(option, { selector: '[role="option"]' }));
 }
 
 beforeEach(() => { vi.clearAllMocks(); });

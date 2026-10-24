@@ -1,4 +1,4 @@
-import { Input } from "antd";
+import { Input } from "../ui";
 import { useId } from "react";
 
 /** Digits typed by the user are cents: "1050" reads as R$ 10,50. */

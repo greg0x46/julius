@@ -70,7 +70,7 @@
   white-space: nowrap;
 }
 
-.goal-card-header .record-menu.ant-btn {
+.goal-card-header .record-menu.ui-btn {
   margin-right: -0.5rem;
 }
 
@@ -147,7 +147,7 @@
   font-size: 1.0625rem;
   font-weight: 700;
   fill: var(--color-text);
-  font-variant-numeric: tabular-nums;
+  font-variui-numeric: tabular-nums;
 }
 
 .goal-ring-subtext {
@@ -181,7 +181,7 @@
 
 .goal-projection-highlight strong {
   font-weight: 600;
-  font-variant-numeric: tabular-nums;
+  font-variui-numeric: tabular-nums;
 }
 
 .goal-projection-list {
@@ -209,7 +209,7 @@
 
 .goal-projection-list dd {
   margin: 0;
-  font-variant-numeric: tabular-nums;
+  font-variui-numeric: tabular-nums;
 }
 
 /* "Adicionar nova meta": the last tile of the grid, a quiet twin of Nova meta. */

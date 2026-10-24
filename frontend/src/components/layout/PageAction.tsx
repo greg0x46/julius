@@ -1,6 +1,6 @@
-import { PlusOutlined } from "@ant-design/icons";
-import { Button } from "antd";
-import type { ButtonProps } from "antd";
+import { PlusOutlined } from "../ui/icons";
+import { Button } from "../ui";
+import type { ButtonProps } from "../ui";
 import type { ReactNode } from "react";
 import { forwardRef } from "react";
 

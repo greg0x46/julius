@@ -1,5 +1,5 @@
-import { FilterOutlined } from "@ant-design/icons";
-import { Button } from "antd";
+import { FilterOutlined } from "../ui/icons";
+import { Button } from "../ui";
 
 interface FilterButtonProps {
   /** How many filters are active; shown next to the label and in the name. */

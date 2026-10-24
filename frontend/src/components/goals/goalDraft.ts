@@ -1,4 +1,4 @@
-import dayjs, { type Dayjs } from "dayjs";
+import { calendar, type CalendarDate } from "../../presentation/calendar";
 
 import type { Goal, GoalMetric, GoalWrite } from "../../api/contracts";
 import { isPositiveDecimal } from "../../presentation/decimal";
@@ -7,7 +7,7 @@ export type GoalDraft = {
   name: string;
   metric: GoalMetric;
   targetAmount: string | null;
-  targetDate: Dayjs | null;
+  targetDate: CalendarDate | null;
   notes: string;
 };
 
@@ -17,7 +17,7 @@ export function draftFromGoal(goal: Goal | null): GoalDraft {
     name: goal.name,
     metric: goal.metric,
     targetAmount: goal.target_amount,
-    targetDate: goal.target_date ? dayjs(goal.target_date) : null,
+    targetDate: goal.target_date ? calendar(goal.target_date) : null,
     notes: goal.notes ?? "",
   };
 }

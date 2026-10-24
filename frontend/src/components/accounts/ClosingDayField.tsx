@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Button, InputNumber, Tooltip, Typography } from "antd";
+import { Button, InputNumber, Tooltip, Typography } from "../ui";
 
 import type { Account } from "../../api/contracts";
 import { closingDayLabel, closingDaySourceHint } from "../../presentation/accountLabels";

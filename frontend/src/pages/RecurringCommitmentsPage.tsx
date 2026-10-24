@@ -1,4 +1,4 @@
-import { Alert, Button } from "antd";
+import { Alert, Button } from "../components/ui";
 import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 

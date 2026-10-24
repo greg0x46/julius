@@ -1,5 +1,5 @@
-import { CheckOutlined, SearchOutlined } from "@ant-design/icons";
-import { Drawer, Input, Popover } from "antd";
+import { CheckOutlined, SearchOutlined } from "../ui/icons";
+import { Drawer, Input, Popover } from "../ui";
 import { useMemo, useState, type ReactNode } from "react";
 
 import { renderCategoryIcon } from "../../presentation/categoryLabels";

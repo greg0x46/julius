@@ -1,5 +1,5 @@
 import { ReportValuation } from "../shared/ReportValuation";
-import { Skeleton } from "antd";
+import { Skeleton } from "../ui";
 import { useMemo } from "react";
 
 import { problemMessage, reportingError } from "../../presentation/reporting";

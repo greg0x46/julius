@@ -1,5 +1,5 @@
-import { Alert, Button, Skeleton, Table } from "antd";
-import type { ColumnsType } from "antd/es/table";
+import { Alert, Button, Skeleton, Table } from "./ui";
+import type { ColumnsType } from "./ui/Table";
 import { useEffect, useState } from "react";
 
 import type { InvestmentAsset, InvestmentAssetClass, InvestmentAssetClassDefinition } from "../api/contracts";
@@ -164,12 +164,12 @@ export function InvestmentAssetSettings({
     {
       title: "Código",
       dataIndex: "ticker",
-      render: (ticker: string | null) => ticker ?? <span className="investment-quiet">—</span>,
+      render: (_, asset) => asset.ticker ?? <span className="investment-quiet">—</span>,
     },
     {
       title: "Classe",
       dataIndex: "asset_class",
-      render: (value: InvestmentAssetClass) => classLabel(value),
+      render: (_, asset) => classLabel(asset.asset_class),
       filters: classOptions.map((item) => ({ text: item.label, value: item.value })),
       onFilter: (value, asset) => asset.asset_class === value,
     },

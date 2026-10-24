@@ -28,7 +28,7 @@
   gap: 0.75rem;
 }
 
-.statement-import-panel .ant-typography {
+.statement-import-panel .ui-typography {
   margin: 0;
 }
 
@@ -70,7 +70,7 @@
 }
 
 /* A text link, but still a real touch target on a phone. */
-.statement-template-action.ant-btn {
+.statement-template-action.ui-btn {
   height: auto;
   min-height: 40px;
   padding-inline: 0;
@@ -116,7 +116,7 @@
   color: var(--color-text);
   font-size: var(--fs-row);
   font-weight: 600;
-  font-variant-numeric: tabular-nums;
+  font-variui-numeric: tabular-nums;
 }
 
 .statement-import-counts .is-invalid dd {
@@ -145,7 +145,7 @@
   margin: 0;
   color: var(--color-text);
   font-weight: 600;
-  font-variant-numeric: tabular-nums;
+  font-variui-numeric: tabular-nums;
 }
 
 /* Hint, notices and the partial-import choice, above the rows; nothing to
@@ -228,7 +228,7 @@
   gap: 0.125rem;
   justify-items: end;
   text-align: right;
-  font-variant-numeric: tabular-nums;
+  font-variui-numeric: tabular-nums;
   white-space: nowrap;
 }
 
@@ -252,14 +252,14 @@
   min-width: 0;
 }
 
-.statement-row-conflict .ant-radio-group {
+.statement-row-conflict .ui-radio-group {
   display: flex;
   flex-wrap: wrap;
   gap: 0.25rem 0.75rem;
   width: 100%;
 }
 
-.statement-row-conflict .ant-radio-wrapper {
+.statement-row-conflict .ui-radio-wrapper {
   margin-inline-end: 0;
 }
 
@@ -301,14 +301,14 @@
   color: var(--color-warning-text);
   font-size: var(--fs-row);
   font-weight: 600;
-  font-variant-numeric: tabular-nums;
+  font-variui-numeric: tabular-nums;
 }
 
-.statement-row-conflict .ant-radio-group {
+.statement-row-conflict .ui-radio-group {
   flex-direction: column;
 }
 
-.statement-row-conflict .ant-radio-wrapper {
+.statement-row-conflict .ui-radio-wrapper {
   min-height: 44px;
   align-items: center;
 }
@@ -353,7 +353,7 @@
   white-space: nowrap;
 }
 
-.statement-import-pagination .ant-btn {
+.statement-import-pagination .ui-btn {
   min-height: 40px;
 }
 
@@ -417,7 +417,7 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .statement-row-conflict .ant-radio-group {
+  .statement-row-conflict .ui-radio-group {
     flex-direction: row;
   }
 

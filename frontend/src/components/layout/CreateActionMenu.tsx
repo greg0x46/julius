@@ -1,5 +1,5 @@
-import { Dropdown } from "antd";
-import type { ItemType } from "antd/es/menu/interface";
+import { Dropdown } from "../ui";
+import type { ItemType } from "../ui/menu";
 import type { ReactNode } from "react";
 import { useState } from "react";
 

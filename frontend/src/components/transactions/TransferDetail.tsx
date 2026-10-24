@@ -1,4 +1,4 @@
-import { Descriptions, Typography } from "antd";
+import { Descriptions, Typography } from "../ui";
 import type { AccountTransfer, TransferMovement } from "../../api/transfers";
 import { formatMoney } from "../../presentation/money";
 import { PanelSection } from "../shared/PanelStack";

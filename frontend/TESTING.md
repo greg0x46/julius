@@ -155,7 +155,7 @@ explicit parser behavior; they must not invent business values from missing
 data. For a quick failure check, temporarily change a DTO JSON tag and run the
 Go contract test without the update flag: it must fail; restore it afterwards.
 
-## Suite profiling (#68)
+## Historical suite profiling (#68, before local UI components)
 
 Benchmark the four expensive suites independently of #67's worker gains:
 
@@ -264,3 +264,16 @@ Final full-suite validation at the unchanged two-worker default passed
 68 files / 505 tests (163.59 s) while other repository checks were running.
 This is a coverage/stability check, not a timing comparison with the isolated
 one-worker benchmark above.
+
+## Local UI components
+
+Production UI uses local controls in `src/components/ui`, browser `<dialog>`
+focus management and the popover top layer. DOM setup supplies only the missing
+jsdom dialog/popover lifecycle; keyboard trapping and nested Escape behavior are
+checked in Chromium by `e2e/ui.spec.ts`. That suite also opens primary workspaces
+and settings routes and checks mobile navigation and viewport overflow.
+
+Tests should query controls by role and accessible name. Native date fields
+accept `YYYY-MM-DD`; money inputs and exact fractional quantities are textboxes
+with a decimal keyboard, while integral counts remain spinbuttons. Chart tests
+exercise the actual SVG and accessible date inspector, without chart mocks.

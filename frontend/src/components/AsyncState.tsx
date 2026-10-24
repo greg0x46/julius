@@ -1,4 +1,4 @@
-import { Alert, Button, Flex, Spin } from "antd";
+import { Alert, Button, Flex, Spin } from "./ui";
 import type { ReactNode } from "react";
 
 export function LoadingState({ children = "Carregando…" }: { children?: ReactNode }) {

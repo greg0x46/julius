@@ -1,5 +1,5 @@
-import type { ProColumns } from "@ant-design/pro-table";
-import ProTable from "@ant-design/pro-table";
+import type { Column } from "./ui/Table";
+import Table from "./ui/Table";
 import { Link, useNavigate } from "react-router-dom";
 
 import type { SyncRun } from "../api/contracts";
@@ -36,7 +36,7 @@ function runMeta(run: SyncRun): string {
  */
 export function SyncRunHistory({ runs }: { runs: SyncRun[] }) {
   const navigate = useNavigate();
-  const columns: ProColumns<SyncRun>[] = [
+  const columns: Column<SyncRun>[] = [
     {
       title: "Início",
       dataIndex: "started_at",
@@ -72,13 +72,11 @@ export function SyncRunHistory({ runs }: { runs: SyncRun[] }) {
         ariaLabel: detailsLabel(run),
       })}
       wide={
-        <ProTable<SyncRun>
+        <Table<SyncRun>
           aria-label="Sincronizações recentes"
           columns={columns}
           dataSource={runs}
           rowKey="id"
-          search={false}
-          options={false}
           pagination={false}
           onRow={(run) => ({ onClick: () => navigate(detailsPath(run)), style: { cursor: "pointer" } })}
         />

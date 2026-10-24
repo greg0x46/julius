@@ -1,5 +1,5 @@
 import { compareDecimals, isPositiveDecimal } from "../../presentation/decimal";
-import { Input } from "antd";
+import { Input } from "../ui";
 import { useEffect, useState } from "react";
 
 import type { Payable, PayableKind } from "../../api/contracts";

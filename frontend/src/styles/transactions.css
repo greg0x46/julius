@@ -53,7 +53,7 @@
 
 .transaction-summary-value {
   color: var(--color-text);
-  font-variant-numeric: tabular-nums;
+  font-variui-numeric: tabular-nums;
   font-weight: 500;
 }
 
@@ -123,7 +123,7 @@
 .transaction-summary-details dd {
   margin: 0;
   color: var(--color-text);
-  font-variant-numeric: tabular-nums;
+  font-variui-numeric: tabular-nums;
   font-weight: 500;
 }
 
@@ -197,7 +197,7 @@
   margin: 0;
   color: var(--color-text);
   font-size: var(--fs-small);
-  font-variant-numeric: tabular-nums;
+  font-variui-numeric: tabular-nums;
   font-weight: 600;
 }
 
@@ -298,7 +298,7 @@
   display: none;
   color: var(--color-text-secondary);
   font-size: var(--fs-small);
-  font-variant-numeric: tabular-nums;
+  font-variui-numeric: tabular-nums;
   white-space: nowrap;
 }
 
@@ -393,12 +393,12 @@
 }
 
 /* The `···` itself is the shared RecordMenu; the row only darkens it on hover. */
-.transaction-row:hover .transaction-actions-trigger.ant-btn {
+.transaction-row:hover .transaction-actions-trigger.ui-btn {
   color: var(--color-text);
 }
 
 .transaction-amount {
-  font-variant-numeric: tabular-nums;
+  font-variui-numeric: tabular-nums;
   text-align: right;
   white-space: nowrap;
 }
@@ -591,7 +591,7 @@
   }
 
   /* 44px touch targets for the only controls under the list. */
-  .transaction-pagination .ant-btn {
+  .transaction-pagination .ui-btn {
     min-width: 44px;
     min-height: 44px;
   }
