@@ -13,6 +13,7 @@ import {
 } from "../components/ui/icons";
 import { Button, Drawer } from "../components/ui";
 import { BuildFooter } from "./BuildFooter";
+import { DemoNotice } from "./DemoNotice";
 import julius from "../assets/julius.png";
 import { SkipLink } from "../components/SkipLink";
 import { useCompactScreen } from "../components/shared/useCompactScreen";
@@ -102,6 +103,7 @@ export function App() {
         <aside className="app-sidebar">{navigation}</aside>
       )}
       <main className="app-main" id="conteudo-principal" tabIndex={-1}>
+        <DemoNotice />
         <Outlet />
         <BuildFooter />
       </main>

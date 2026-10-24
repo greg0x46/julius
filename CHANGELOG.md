@@ -4,6 +4,23 @@ Notable changes per release. A section is added by `scripts/update-changelog.sh`
 only when a release is prepared, and the release job publishes that same text as
 the GitHub release notes. Newest release first.
 
+## v0.13.0 — 2026-10-24
+
+### Breaking changes
+
+- **networth:** Derive wealth as cash plus investments on every read ([#150](https://github.com/greg0x46/julius/pull/150))
+
+### Features
+
+- **demo:** Open public demo mode with seeded synthetic data ([#152](https://github.com/greg0x46/julius/pull/152))
+
+### Fixes
+
+- **deps:** Bump Go to 1.26.10 (GO-2026-6809) ([#151](https://github.com/greg0x46/julius/pull/151))
+- **deps:** Bump github.com/pressly/goose/v3 ([#143](https://github.com/greg0x46/julius/pull/143))
+- **deps:** Bump the npm-production-minor-patch group ([#145](https://github.com/greg0x46/julius/pull/145))
+- **deps:** Bump @tanstack/react-query ([#154](https://github.com/greg0x46/julius/pull/154))
+
 ## v0.12.0 — 2026-10-19
 
 ### Features

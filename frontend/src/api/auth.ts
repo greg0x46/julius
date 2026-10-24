@@ -1,6 +1,6 @@
 import { apiFetch, expireSession } from "./transport";
 
-export type AuthSession = { authenticated: boolean; authentication_enabled: boolean; email?: string };
+export type AuthSession = { authenticated: boolean; authentication_enabled: boolean; email?: string; demo?: boolean };
 async function send(path: string, method: string, payload?: unknown, signal?: AbortSignal): Promise<AuthSession> {
   const response = await apiFetch(path, {
     method, signal, headers: { "Content-Type": "application/json" },

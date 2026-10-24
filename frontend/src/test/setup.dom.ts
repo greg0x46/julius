@@ -23,6 +23,16 @@ Object.defineProperty(window, "matchMedia", {
   })),
 });
 
+// jsdom 30 added the -webkit- animation and transition properties that jsdom 27
+// lacked. rc-motion (antd) detects CSS motion support from them, so antd would
+// start animating, and jsdom never fires animationend/transitionend: leaving
+// elements (a button's loading icon, a closed dropdown) would stay mounted
+// and keep `pointer-events: none`. Keep motion off, as it was before.
+// Must run before antd is imported, because rc-motion decides once at load.
+for (const property of ["WebkitAnimation", "WebkitTransition"]) {
+  Reflect.deleteProperty(Object.getPrototypeOf(document.createElement("div").style), property);
+}
+
 class ResizeObserverStub {
   observe() {}
   unobserve() {}

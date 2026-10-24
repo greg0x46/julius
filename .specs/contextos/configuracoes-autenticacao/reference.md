@@ -40,6 +40,12 @@ password-derivation functions in settings exist only for migration and tests.
 - `julius auth reset-password [-db ...]`: resets the password and revokes
   sessions; does not need or change the key. Passwords are read without echo
   from a terminal.
+- `JULIUS_DEMO=true` (empty or false: off; any other value refuses to start):
+  public demo mode, see "Demo mode" below.
+- `julius demo seed [-db ...]`: fills a database that has no owner with
+  synthetic data (`internal/demo`) and refuses one that has an owner. Needs the
+  same `JULIUS_PUBLIC_URL` and key variables as the server; reads nothing
+  interactively.
 
 Owner/session timestamps use UTC text in SQLite and native `TIMESTAMPTZ` in
 Postgres, retaining second-level lifetime and idle-timeout semantics. Database
@@ -159,3 +165,25 @@ operation details retain their original currency. Investment secondary totals
 computed in the browser use the summary's exact FX rate; percentages are unchanged.
 
 Non-multipart request bodies are capped at 1 MiB (413 `body-too-large`); the statement upload keeps its own cap.
+
+## Demo mode
+
+`auth.Config.Demo` (from `JULIUS_DEMO`) makes the gate treat authentication as
+off without reading the stored preference, so nothing can close the instance,
+and adds `"demo": true` to the open-mode `GET /api/auth/session` (the UI shows
+a notice and replaces the access controls with an explanation). Writes whose
+path, cleaned of dot segments, is under `/api/auth/` or `/api/settings/`, or is
+`/api/sync-runs` or `/api/data-sources[/...]`, answer 403 `demo-mode` after the
+Origin check; everything else is unchanged. `cmd/julius` starts neither the sync
+worker nor the schedules in demo mode.
+
+`internal/demo.Seed` fills a fresh, migrated database through the real HTTP
+handler in process, so every row follows the normal validation and
+transactions. It creates the owner with a random unrecoverable password,
+disables authentication and the quote refresh, seeds the asset catalog and
+then builds a synthetic household relative to the day it runs: three manual
+accounts, six months of income, bills and spending, transfers, recurring
+commitments, a debt and a receivable, goals, an automation rule and a portfolio
+whose listed assets carry a stored price series with its coverage (the demo
+never calls a quote provider). Tests pin that every account balance is
+non-negative and every position is valued.
