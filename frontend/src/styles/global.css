@@ -241,12 +241,6 @@ body {
   border-color: var(--color-text);
 }
 
-@media (prefers-color-scheme: dark) {
-  .category-color-swatch[aria-checked="true"] {
-    border-color: var(--color-surface);
-  }
-}
-
 .category-badge {
   display: inline-flex;
   align-items: center;

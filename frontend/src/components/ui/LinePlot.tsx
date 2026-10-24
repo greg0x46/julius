@@ -116,7 +116,7 @@ export function LinePlot({
                 y={y(value)}
                 textAnchor="end"
                 dominantBaseline="middle"
-                fontSize={12}
+                style={{ fontSize: "var(--fs-caption)" }}
                 fill={balanceChartColor.axis}
               >
                 {formatAxisMoney(value)}
@@ -139,7 +139,7 @@ export function LinePlot({
               x={x(index)}
               y={height - 8}
               textAnchor="middle"
-              fontSize={12}
+              style={{ fontSize: "var(--fs-caption)" }}
               fill={balanceChartColor.axis}
             >
               {formatDate(date)}
@@ -156,7 +156,7 @@ export function LinePlot({
               stroke={balanceChartColor.axis}
               strokeDasharray="2 3"
             />
-            <text x={x(refIndex)} y={16} fontSize={12} textAnchor="middle">
+            <text x={x(refIndex)} y={16} style={{ fontSize: "var(--fs-caption)" }} textAnchor="middle">
               Hoje
             </text>
           </g>

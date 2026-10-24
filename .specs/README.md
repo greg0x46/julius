@@ -107,7 +107,7 @@ Not tied to a single context:
 - `frontend/src/components/shared/` — `Money`, `StatusTag`, `RecordMenu`,
   `BottomSheet`, `PanelStack`, `ConditionListEditor`; `components/AsyncState.tsx`
   for loading/error/empty states.
-- `frontend/src/theme/tokens.json` — single source of design tokens; `npm run gen:tokens` generates `src/styles/tokens.css` and `src/theme/tokens.ts` (do not edit).
+- `frontend/src/theme/tokens.json` — single source of design tokens; `npm run gen:tokens` generates `src/styles/tokens.css` and `src/theme/tokens.ts` (do not edit). Colour roles have light and dark values; ink follows the theme. Incoming money is green, outgoing money and negative results are neutral text with an explicit sign, and red is only for errors, overdue items and negative account balances.
   Scales: type `--fs-caption/body/row/title/hero` (12/14/16/20/32px) with `--lh-*`, radius `--radius-sm/md/lg/full`, spacing `--space-1..7`. CSS must use them for `font-size` and `border-radius` (guard: `src/styles/scales.test.ts`).
 - `frontend/src/components/filters/filterUrl.ts` — filter ⇄ `URLSearchParams`
   (transaction filters, scenario selection).
