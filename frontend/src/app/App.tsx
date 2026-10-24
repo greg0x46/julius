@@ -14,6 +14,7 @@ import type { ReactNode } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 
 import { BuildFooter } from "./BuildFooter";
+import { DemoNotice } from "./DemoNotice";
 
 import julius from "../assets/julius.png";
 import { SkipLink } from "../components/SkipLink";
@@ -46,7 +47,7 @@ const navItems: NavItem[] = [
   { path: "/recorrencias", name: "Recorrências", icon: <RedoOutlined /> },
   { path: "/investimentos", name: "Investimentos", icon: <RiseOutlined /> },
   { path: "/metas", name: "Metas", icon: <AimOutlined /> },
-  { path: "/patrimonio-liquido", name: "Patrimônio líquido", icon: <FundOutlined /> },
+  { path: "/patrimonio", name: "Patrimônio", icon: <FundOutlined /> },
   { path: "/configuracoes", name: "Configurações", icon: <SettingOutlined /> },
 ];
 
@@ -158,6 +159,7 @@ export function App() {
         fixSiderbar
       >
         <div id="conteudo-principal" tabIndex={-1}>
+          <DemoNotice />
           <Outlet />
         </div>
       </ProLayout>

@@ -140,7 +140,7 @@ var eligibleProviderStatuses = map[string]bool{"POSTED": true, "PENDING": true}
 // ReasonTransferCategory as a cash-flow candidate, so that reason must never
 // be reached by an unsupported status (such as PROCESSING) or an
 // unclassified movement. Reporting those as cash movement made
-// every day before it read wrong in the timeline and in net worth (a
+// every day before it read wrong in the timeline and in wealth (a
 // PROCESSING transfer was reversed out of the anchor; an unclassified one was
 // reversed out with the sign flipped). Ordering it last makes
 // "transfer_category" mean exactly what MovedCash claims: otherwise eligible,
@@ -150,7 +150,7 @@ var eligibleProviderStatuses = map[string]bool{"POSTED": true, "PENDING": true}
 // or "" when it has none. Callers that compute *balances* rather than
 // income/expense flows must pass "" — the transfer rule is a reporting
 // decision and never corrects an account balance. See the comments at the
-// call sites in networth/backfill.go and transactions/cardtotal.go, which
+// call sites in networth/series.go and transactions/cardtotal.go, which
 // pass Considered for the very same reason.
 //
 // Callers that receive an already-evaluated result instead of calling this
@@ -210,7 +210,7 @@ func Eligibility(
 // Anything reconstructing a *balance* from transactions must consult this
 // rather than the included flag, or every day before a transfer comes out
 // short by its full amount. That is the same trap the direct Eligibility
-// callers in networth/backfill.go and transactions/cardtotal.go sidestep by
+// callers in networth/series.go and transactions/cardtotal.go sidestep by
 // passing an empty categoryKind.
 func MovedCash(reason *EligibilityReason) bool {
 	return reason != nil && (*reason == ReasonTransferCategory || *reason == ReasonInvestmentTransfer || *reason == ReasonLinkedTransfer)

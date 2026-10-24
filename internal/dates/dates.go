@@ -22,8 +22,8 @@ import "time"
 // non-UTC time: two time.Time values for the same *instant* in different
 // zones can yield different days, because they are different wall-clock
 // dates. Callers that mean "the day this instant fell on in zone Z" must
-// convert to Z themselves before calling — which is exactly what
-// networth.creditCardBalanceAsOf does when it anchors on time.Local noon.
+// convert to Z themselves before calling — as the manual transaction handler
+// does when it anchors on time.Local noon.
 func Day(t time.Time) time.Time {
 	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)
 }

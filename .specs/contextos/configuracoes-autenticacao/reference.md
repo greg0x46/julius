@@ -40,6 +40,12 @@ password-derivation functions in settings exist only for migration and tests.
 - `julius auth reset-password [-db ...]`: resets the password and revokes
   sessions; does not need or change the key. Passwords are read without echo
   from a terminal.
+- `JULIUS_DEMO=true` (empty or false: off; any other value refuses to start):
+  public demo mode, see "Demo mode" below.
+- `julius demo seed [-db ...]`: fills a database that has no owner with
+  synthetic data (`internal/demo`) and refuses one that has an owner. Needs the
+  same `JULIUS_PUBLIC_URL` and key variables as the server; reads nothing
+  interactively.
 
 Owner/session timestamps use UTC text in SQLite and native `TIMESTAMPTZ` in
 Postgres, retaining second-level lifetime and idle-timeout semantics. Database
@@ -142,8 +148,8 @@ currency selector and one Save action for both preferences.
 This is a reporting valuation, never a change to the original currency, amount,
 balance or quantity. The existing consolidated BRL base and its eligibility
 exclusions are preserved. Home/timeline, category reports and investment
-summaries are converted using current BRL/reference FX; historical net-worth
-snapshots use captured-day FX. API responses carry `currency_code` and `fx`
+summaries are converted using current BRL/reference FX; the historical
+wealth series uses each day's FX. API responses carry `currency_code` and `fx`
 (pair, exact rate, inversion, requested/effective day, source, fetched time,
 stale flag) from `internal/exchange`. Missing FX returns 503
 `exchange-unavailable` with the pair, never an identity estimate; stale stored
@@ -151,11 +157,33 @@ rates remain usable with a visible warning. The ISO catalog includes currencies
 without provider coverage: selecting one is valid, but reports require a stored
 or provider-supplied rate.
 
-Saving clears the timeline, category/transaction, net-worth and investment-summary
+Saving clears the timeline, category/transaction, patrimônio and investment-summary
 caches. Report labels come from their own response currency, so a pending
 request never relabels an old BRL number as USD. The API validates a consistent
-currency across a net-worth series. Native account, transaction, position and
+currency across the wealth series. Native account, transaction, position and
 operation details retain their original currency. Investment secondary totals
 computed in the browser use the summary's exact FX rate; percentages are unchanged.
 
 Non-multipart request bodies are capped at 1 MiB (413 `body-too-large`); the statement upload keeps its own cap.
+
+## Demo mode
+
+`auth.Config.Demo` (from `JULIUS_DEMO`) makes the gate treat authentication as
+off without reading the stored preference, so nothing can close the instance,
+and adds `"demo": true` to the open-mode `GET /api/auth/session` (the UI shows
+a notice and replaces the access controls with an explanation). Writes whose
+path, cleaned of dot segments, is under `/api/auth/` or `/api/settings/`, or is
+`/api/sync-runs` or `/api/data-sources[/...]`, answer 403 `demo-mode` after the
+Origin check; everything else is unchanged. `cmd/julius` starts neither the sync
+worker nor the schedules in demo mode.
+
+`internal/demo.Seed` fills a fresh, migrated database through the real HTTP
+handler in process, so every row follows the normal validation and
+transactions. It creates the owner with a random unrecoverable password,
+disables authentication and the quote refresh, seeds the asset catalog and
+then builds a synthetic household relative to the day it runs: three manual
+accounts, six months of income, bills and spending, transfers, recurring
+commitments, a debt and a receivable, goals, an automation rule and a portfolio
+whose listed assets carry a stored price series with its coverage (the demo
+never calls a quote provider). Tests pin that every account balance is
+non-negative and every position is valued.

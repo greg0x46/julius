@@ -28,7 +28,7 @@ func TestManualInvestmentsAndLinkedBrokerageCashCountOnce(t *testing.T) {
 	}
 	assertDecimalEqual(t, "cash", b.CashBalance, "500")
 	assertDecimalEqual(t, "investments", b.InvestmentBalance, "3000")
-	assertDecimalEqual(t, "net worth", b.NetWorth, "3500")
+	assertDecimalEqual(t, "wealth", b.Total, "3500")
 	// A linked bank cash snapshot must not also add the manual cash ledger.
 	f.exec(`UPDATE investment_accounts SET financial_account_id=? WHERE id='manual'`, bankID)
 	b, err = networth.Compute(context.Background(), f.conn)
@@ -36,7 +36,7 @@ func TestManualInvestmentsAndLinkedBrokerageCashCountOnce(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertDecimalEqual(t, "linked investments", b.InvestmentBalance, "2600")
-	assertDecimalEqual(t, "linked net worth", b.NetWorth, "3100")
+	assertDecimalEqual(t, "linked wealth", b.Total, "3100")
 }
 
 func TestManualHoldingInIntegratedAccountCountsOnce(t *testing.T) {
@@ -59,7 +59,7 @@ func TestManualHoldingInIntegratedAccountCountsOnce(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertDecimalEqual(t, "investments", b.InvestmentBalance, "2500")
-	assertDecimalEqual(t, "net worth", b.NetWorth, "2500")
+	assertDecimalEqual(t, "wealth", b.Total, "2500")
 }
 
 func TestInvestmentLifecycleConservesWealthAndSeparatesSpending(t *testing.T) {
@@ -94,14 +94,14 @@ func TestInvestmentLifecycleConservesWealthAndSeparatesSpending(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		assertDecimalEqual(t, "wealth", b.NetWorth, want)
+		assertDecimalEqual(t, "wealth", b.Total, want)
 	}
 	wealth("5000")
 	deposit := operation(investments.OperationDeposit, 1, "1000", nil)
 	// The provider reports the actual bank transfer; recording a manual bank
 	// line alone never changes its authoritative balance.
 	f.exec(`UPDATE financial_accounts SET balance='4000' WHERE id=?`, bank)
-	bankDeposit := f.addCardTransaction(bank, day(1), "-1000", "DEBIT")
+	bankDeposit := f.addTransaction(bank, day(1), "-1000", "DEBIT")
 	if _, err := investments.CreateReconciliation(ctx, f.conn, investments.ReconciliationInput{OperationID: deposit.ID, FinancialTransactionID: &bankDeposit, Amount: dec("1000")}); err != nil {
 		t.Fatal(err)
 	}
@@ -114,7 +114,7 @@ func TestInvestmentLifecycleConservesWealthAndSeparatesSpending(t *testing.T) {
 	wealth("5200")
 	withdrawal := operation(investments.OperationWithdrawal, 5, "480", nil)
 	f.exec(`UPDATE financial_accounts SET balance='4480' WHERE id=?`, bank)
-	bankWithdrawal := f.addCardTransaction(bank, day(5), "480", "CREDIT")
+	bankWithdrawal := f.addTransaction(bank, day(5), "480", "CREDIT")
 	if _, err := investments.CreateReconciliation(ctx, f.conn, investments.ReconciliationInput{OperationID: withdrawal.ID, FinancialTransactionID: &bankWithdrawal, Amount: dec("480")}); err != nil {
 		t.Fatal(err)
 	}
@@ -170,18 +170,18 @@ func TestPrincipalTransferAloneKeepsNetWorth(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		assertDecimalEqual(t, label, b.NetWorth, want)
+		assertDecimalEqual(t, label, b.Total, want)
 	}
 
 	wealth("start", "5000")
 	deposit := create(investments.OperationInput{Kind: investments.OperationDeposit, OccurredOn: day(1), Amount: decimal.RequireFromString("1000")})
 	f.exec(`UPDATE financial_accounts SET balance='4000' WHERE id=?`, bank)
-	reconcile(deposit, f.addCardTransaction(bank, day(1), "-1000", "DEBIT"), "1000")
+	reconcile(deposit, f.addTransaction(bank, day(1), "-1000", "DEBIT"), "1000")
 	wealth("after contribution", "5000")
 
 	withdrawal := create(investments.OperationInput{Kind: investments.OperationWithdrawal, OccurredOn: day(2), Amount: decimal.RequireFromString("400")})
 	f.exec(`UPDATE financial_accounts SET balance='4400' WHERE id=?`, bank)
-	reconcile(withdrawal, f.addCardTransaction(bank, day(2), "400", "CREDIT"), "400")
+	reconcile(withdrawal, f.addTransaction(bank, day(2), "400", "CREDIT"), "400")
 	wealth("after withdrawal", "5000")
 
 	create(investments.OperationInput{Kind: investments.OperationFee, OccurredOn: day(3), Amount: decimal.RequireFromString("10")})

@@ -17,7 +17,7 @@ available for synced assets and their imported history.
 Integrated investments keep the provider's identifiers, initially grouped by
 connection. Reconciliations are local choices. A brokerage cash
 balance already present in `financial_accounts` can be linked, without adding
-its balance to net worth again.
+its balance to wealth again.
 
 An integrated account also accepts manual holdings (for example, a crypto
 asset that Open Finance does not expose). They are created, edited and deleted
@@ -119,8 +119,8 @@ not provided: `MonthlyMovements` and `RealizedGain` assume one currency.
 Appreciation and unrealized gain (`Summary.UnrealizedGain`) are never realized
 income or realized gain: they are excluded from `ManualReportingEntries`,
 `MonthlyMovements.Income`, `MonthlyMovements.RealizedGain` and timeline income
-totals, although they change net worth. Reconciled contributions and
-withdrawals preserve net worth; a fee reduces net worth by exactly its amount.
+totals, although they change wealth. Reconciled contributions and
+withdrawals preserve wealth; a fee reduces wealth by exactly its amount.
 
 Editing or deleting a reconciled manual bank entry requires undoing the links
 first. Ignoring a reconciled entry undoes its links (the operation is reported
@@ -128,13 +128,14 @@ on its own again), and an ignored entry cannot be reconciled. Reconciliation
 does not change imported balances. Manual bank entries keep the rule of not
 modifying the bank-reported balance.
 
-## Net worth and limits
+## Wealth and limits
 
-Net worth sums synced positions once, manual positions, and manual investment
+Wealth sums synced positions once, manual positions, and manual investment
 cash not yet represented in a linked financial account. Manual holdings in an
 integrated account count like any other manual holding (including in
-`ManualNetWorth`), without double-counting the provider's positions. No appreciation is invented for historical
-snapshots without data.
+`ManualNetWorth`), without double-counting the provider's positions. The history
+is derived on read from the same ledgers and price series (`investments.ValuesOn`),
+so it needs no stored snapshot and invents no appreciation.
 
 This version records operations; it does not place orders or move money at the
 bank. It does not include tax computation, short positions, FX on manual
@@ -369,7 +370,7 @@ position holds with positive quantity, and the backfill writes history. The job
 enters the series.
 
 The value of a manual position whose asset has automatic quotes is **derived on
-read** (`Position.CurrentValue`, which feeds totals and net worth):
+read** (`Position.CurrentValue`, which feeds totals and wealth):
 `quantity × latest series price`, rounded to cents, with
 `valuation_basis = market_quote`, `current_unit_price` equal to the price and
 `valued_on` equal to its day. None of this is persisted; an old quote still
@@ -666,11 +667,11 @@ Positions accept the filters `account_id`, `source`,
 queryable through the same operation history; the quotes job never creates them.
 
 The investments area's total includes the effective cash of linked accounts. In
-net worth that same cash is already in the bank portion, so it is not summed a
+wealth that same cash is already in the bank portion, so it is not summed a
 second time.
 
 Imported positions in other currencies keep their original currency and value;
-the summary, net worth and the period view convert them with the day's rate
+the summary, wealth and the period view convert them with the day's rate
 (see [Reference valuation](#reference-valuation)).
 
 ## Database representation

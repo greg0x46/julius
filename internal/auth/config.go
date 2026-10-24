@@ -8,7 +8,13 @@ import (
 	"strings"
 )
 
-type Config struct{ PublicURL string }
+// Config holds the public origin and the access mode. Demo turns the instance
+// into an open showcase: no login, and nothing that changes access or reaches
+// an external integration (see httpapi's demo guard).
+type Config struct {
+	PublicURL string
+	Demo      bool
+}
 
 func (c Config) Validate() error {
 	u, err := url.Parse(c.PublicURL)
