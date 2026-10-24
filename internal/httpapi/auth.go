@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"path"
 	"strings"
 	"sync"
 	"time"
@@ -81,14 +82,22 @@ func (a *authAPI) gate(next http.Handler) http.Handler {
 			return
 		}
 		w.Header().Set("Cache-Control", "no-store")
-		enabled, err := settings.AuthenticationEnabled(r.Context(), a.store.DB)
-		if err != nil {
-			writeProblem(w, 503, "auth-config-unavailable", "Configuração de autenticação indisponível", "Tente novamente em instantes.")
-			return
+		// A demo is always open, whatever the stored setting says.
+		enabled := false
+		if !a.config.Demo {
+			var err error
+			if enabled, err = settings.AuthenticationEnabled(r.Context(), a.store.DB); err != nil {
+				writeProblem(w, 503, "auth-config-unavailable", "Configuração de autenticação indisponível", "Tente novamente em instantes.")
+				return
+			}
 		}
 		if r.Method != "GET" && r.Method != "HEAD" && r.Method != "OPTIONS" {
 			if r.Header.Get("Origin") != a.config.PublicURL || r.Header.Get("X-Julius-Request") != "1" {
 				writeProblem(w, 403, "invalid-origin", "Origem da solicitação inválida", "")
+				return
+			}
+			if a.config.Demo && demoBlocked(r) {
+				writeProblem(w, 403, "demo-mode", "Indisponível na demonstração", "Este recurso fica desativado no ambiente de demonstração.")
 				return
 			}
 		}
@@ -105,6 +114,16 @@ func (a *authAPI) gate(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r)
 	})
 }
+
+// demoBlocked reports whether a write would change access (login, password,
+// the authentication switch) or reach an external integration (provider
+// credentials and connections, sync, quote providers). The public demo never
+// allows them: anyone could otherwise lock everyone out or store credentials.
+func demoBlocked(r *http.Request) bool {
+	p := path.Clean(r.URL.Path)
+	return strings.HasPrefix(p, "/api/auth/") || strings.HasPrefix(p, "/api/settings/") ||
+		p == "/api/sync-runs" || p == "/api/data-sources" || strings.HasPrefix(p, "/api/data-sources/")
+}
 func (a *authAPI) authError(w http.ResponseWriter, err error) {
 	if errors.Is(err, auth.ErrSession) || errors.Is(err, auth.ErrCredentials) {
 		writeProblem(w, 401, "unauthorized", "Autenticação necessária", "E-mail ou senha incorretos, ou sessão expirada.")
@@ -114,7 +133,11 @@ func (a *authAPI) authError(w http.ResponseWriter, err error) {
 }
 func (a *authAPI) session(w http.ResponseWriter, r *http.Request) {
 	if !r.Context().Value(authenticationEnabledKey{}).(bool) {
-		writeJSON(w, 200, map[string]any{"authenticated": false, "authentication_enabled": false})
+		session := map[string]any{"authenticated": false, "authentication_enabled": false}
+		if a.config.Demo {
+			session["demo"] = true
+		}
+		writeJSON(w, 200, session)
 		return
 	}
 	who, err := a.identity(r)

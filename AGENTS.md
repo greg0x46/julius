@@ -25,7 +25,7 @@ change.
 ## Layout
 
 ```
-cmd/julius/                entry point + subcommands (auth, seed)
+cmd/julius/                entry point + subcommands (auth, seed, demo)
 cmd/migrate-legacy/        one-shot legacy SQLite → SQLite/Postgres converter
 internal/
   db/                      connections/pool, goose migrations (sqlite/ and postgres/), dbtest/
@@ -38,6 +38,7 @@ internal/
   networth/ investments/ quotes/ marketdata/                 wealth (cash + investments), investments, prices
   pluggy/ syncsvc/ worker/ datasources/ statementimport/     ingestion
   auth/ settings/          owner account + sessions; encrypted secrets
+  demo/                    synthetic data for the public demo (`julius demo seed`, `JULIUS_DEMO`)
   invariants/              cross-engine tests pinning the financial rules
   webui/                   embeds frontend/dist (build tag embedded_frontend)
 frontend/src/              api/ hooks/ pages/ components/ presentation/ theme/ test/
