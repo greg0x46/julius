@@ -47,8 +47,8 @@ body {
 }
 
 :focus-visible {
-  /* Primary ring on a surface-coloured halo, readable on every surface
-     (app bar included) in both themes. */
+  /* Primary ring on a surface-coloured halo: ≥3:1 against the page
+     surfaces and the black app bar in both themes. */
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
   box-shadow: 0 0 0 4px var(--color-surface);
