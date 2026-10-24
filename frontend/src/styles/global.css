@@ -1,53 +1,6 @@
+@import "./tokens.css";
+
 :root {
-  /* Mirrors src/theme/tokens.ts — CSS can't import the TS module, so this
-     is the CSS-side copy of the same palette. Keep the two in sync. */
-
-  /* Text */
-  --color-text: #172b4d;
-  --color-text-secondary: #5d697c;
-  --color-text-tertiary: #6b778c; /* only on white, non-essential */
-
-  /* Brand: --color-accent is a FILL (marks, meters, chart, active
-     indicator), never text on white; --color-primary is the interactive
-     green for buttons, links, active tab and focus. */
-  --color-accent: #1baf7a;
-  --color-primary: #0f7d58;
-  --color-primary-hover: #0b6a4a;
-
-  /* Semantic */
-  --color-money-in: #1f6f46;
-  --color-success: #1f6f46;
-  --color-danger: #c4302b; /* the single red */
-  --color-warning: #f2a900; /* fills and the focus ring */
-  --color-warning-text: #8a5a00;
-  --color-info: #3b5b8c;
-
-  /* Surfaces and lines */
-  --color-bg: #f5f7fa;
-  --color-surface: #ffffff;
-  --color-border: #e5e9f0;
-  --color-border-strong: #d9d9d9;
-  --color-hover: rgba(23, 43, 77, 0.035);
-
-  /* StatusTag backgrounds (text colours are the semantic ones above). */
-  --tag-neutral-bg: #eef0f4;
-  --tag-info-bg: #e9eff8;
-  --tag-success-bg: #e5f3ec;
-  --tag-warning-bg: #fcf1d6;
-  --tag-danger-bg: #fbe8e7;
-
-  /* Shape: one radius for every surface and input, and no shadows. */
-  --radius: 8px;
-  --radius-sheet: 16px; /* top corners of a bottom sheet */
-
-  /* Type scale (body is 14px); weights are 400/500/600 only. */
-  --fs-caption: 0.75rem; /* labels, footnotes, column labels */
-  --fs-small: 0.8125rem; /* meta lines, secondary text */
-  --fs-body: 0.875rem;
-  --fs-row: 0.9375rem; /* row description 500, row money 600, section titles 600 */
-  --fs-title: 1.25rem; /* page title, 600, at every width */
-  --fs-hero: 1.75rem; /* ONE hero figure per page, 600, tabular-nums */
-
   /* Sticky offsets must use this var. */
   --app-bar-height: 64px;
 
@@ -326,7 +279,7 @@ body {
 }
 
 /* ---- Segmented: the selected thumb reads off a hairline ring, not a shadow
-   (the track is a shade darker than the page, see theme/tokens.ts). ---- */
+   (the track is a shade darker than the page, see theme/tokens.json). ---- */
 
 .ui-segmented label[data-active="true"] {
   box-shadow: 0 0 0 1px var(--color-border);

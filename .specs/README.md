@@ -107,7 +107,7 @@ Not tied to a single context:
 - `frontend/src/components/shared/` — `Money`, `StatusTag`, `RecordMenu`,
   `BottomSheet`, `PanelStack`, `ConditionListEditor`; `components/AsyncState.tsx`
   for loading/error/empty states.
-- `frontend/src/theme/tokens.ts` — colors, font and spacing; `frontend/src/styles/global.css` exposes the CSS tokens.
+- `frontend/src/theme/tokens.json` — single source of design tokens; `npm run gen:tokens` generates `src/styles/tokens.css` and `src/theme/tokens.ts` (do not edit).
 - `frontend/src/components/filters/filterUrl.ts` — filter ⇄ `URLSearchParams`
   (transaction filters, scenario selection).
 - `frontend/src/presentation/money.ts` — money formatting/arithmetic on decimal
