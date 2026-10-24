@@ -16,13 +16,17 @@ const decl = (name, value) => `  ${name}: ${value};`;
 
 function renderCss() {
   const light = [
+    decl("color-scheme", "light"),
     ...colorEntries.map(([, c]) => decl(c.var, c.light)),
     ...Object.values(tokens.radius).map((r) => decl(r.var, r.value)),
     ...Object.values(tokens.type).map((t) => decl(t.var, t.value)),
     ...Object.values(tokens.lineHeight).map((t) => decl(t.var, t.value)),
     ...Object.values(tokens.spaceVars).map((t) => decl(t.var, t.value)),
   ];
-  const dark = colorEntries.map(([, c]) => decl(c.var, c.dark ?? c.light));
+  const dark = [
+    decl("color-scheme", "dark"),
+    ...colorEntries.map(([, c]) => decl(c.var, c.dark ?? c.light)),
+  ];
   const indent = dark.map((l) => "  " + l);
   return `/* ${HEADER} */
 
