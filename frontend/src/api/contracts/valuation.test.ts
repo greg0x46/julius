@@ -3,12 +3,11 @@ import { parseNetWorthSeries } from "./netWorth";
 import { parseValuation } from "./valuation";
 
 const snapshot = {
-  captured_at: "2026-10-12T00:00:00Z", is_backfilled: false, valuation_version: 0, valuation_status: "legacy",
-  cash_balance: "100", investment_balance: "0", credit_card_balance: "0", payables_debt: "0",
-  total_assets: "100", total_liabilities: "0", net_worth: "100",
+  date: "2026-10-12T00:00:00Z", valuation_status: "complete",
+  cash_balance: "100", investment_balance: "0", total: "100",
 };
 
-it("reads legacy snapshots as BRL and rejects a mixed valuation history", () => {
+it("reads wealth points as BRL and rejects a mixed valuation history", () => {
   expect(parseNetWorthSeries({ latest: snapshot, series: [snapshot] }).series).toHaveLength(1);
   expect(() => parseNetWorthSeries({ latest: { ...snapshot, currency_code: "USD" }, series: [snapshot] })).toThrow(/Moedas/);
 });

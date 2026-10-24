@@ -73,6 +73,8 @@ var skipped = map[string]bool{
 	"debt_transaction_links": true, "receivable_transaction_links": true,
 	// Replaced by goals (migration 0005); the old grouping has no equivalent.
 	"investment_portfolios": true, "investment_position_portfolios": true,
+	// Wealth is derived on read (migration 0006); old snapshots are not carried over.
+	"net_worth_snapshots": true,
 }
 
 func orderedTables(conn *sql.DB) ([]string, error) {

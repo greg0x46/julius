@@ -148,8 +148,8 @@ currency selector and one Save action for both preferences.
 This is a reporting valuation, never a change to the original currency, amount,
 balance or quantity. The existing consolidated BRL base and its eligibility
 exclusions are preserved. Home/timeline, category reports and investment
-summaries are converted using current BRL/reference FX; historical net-worth
-snapshots use captured-day FX. API responses carry `currency_code` and `fx`
+summaries are converted using current BRL/reference FX; the historical
+wealth series uses each day's FX. API responses carry `currency_code` and `fx`
 (pair, exact rate, inversion, requested/effective day, source, fetched time,
 stale flag) from `internal/exchange`. Missing FX returns 503
 `exchange-unavailable` with the pair, never an identity estimate; stale stored
@@ -157,10 +157,10 @@ rates remain usable with a visible warning. The ISO catalog includes currencies
 without provider coverage: selecting one is valid, but reports require a stored
 or provider-supplied rate.
 
-Saving clears the timeline, category/transaction, net-worth and investment-summary
+Saving clears the timeline, category/transaction, patrimônio and investment-summary
 caches. Report labels come from their own response currency, so a pending
 request never relabels an old BRL number as USD. The API validates a consistent
-currency across a net-worth series. Native account, transaction, position and
+currency across the wealth series. Native account, transaction, position and
 operation details retain their original currency. Investment secondary totals
 computed in the browser use the summary's exact FX rate; percentages are unchanged.
 

@@ -9,7 +9,7 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// BRL is the currency every BRL-denominated aggregate (net worth, timeline)
+// BRL is the currency every BRL-denominated aggregate (wealth, timeline)
 // asks for explicitly.
 const BRL = "BRL"
 

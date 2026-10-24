@@ -30,7 +30,7 @@ type Metric string
 
 const (
 	// MetricInvestedValue is the market value of every investment, gains and
-	// losses included: the investments line of net worth.
+	// losses included: the investments line of wealth.
 	MetricInvestedValue Metric = "invested_value"
 )
 

@@ -202,7 +202,7 @@ migrations or tests.
 | `investment_positions` | [`investments/positions.go`](../../internal/investments/positions.go) | Local holding identities |
 | `investment_reconciliations` | [`investments/reconciliations.go`](../../internal/investments/reconciliations.go) | Links to real financial movements |
 | `manual_transaction_idempotency` | [`ledger/manual.go`](../../internal/ledger/manual.go) | Retry-safe manual creation |
-| `net_worth_snapshots` | [`networth/store.go`](../../internal/networth/store.go) | Historical daily snapshots |
+| `net_worth_snapshots` | Legacy source only; dropped by native migration `0006_drop_net_worth_snapshots` | Former stored wealth history (now derived on read; rows are not carried over) |
 | `normalization_events` | [`syncsvc/service.go`](../../internal/syncsvc/service.go) | Append-only ingestion audit |
 | `payable_transaction_links` | [`payables/store.go`](../../internal/payables/store.go) | Obligation settlement links |
 | `payables` | [`payables/store.go`](../../internal/payables/store.go) | Debts and receivables |
@@ -917,7 +917,8 @@ starts serialize and incomplete or unmapped schemas fail without activation.
 
 These tables start empty during legacy conversion and are created by native
 migrations (`0002_transfer_links`, `0005_goals`); they are absent from the
-historical snapshots. Migration `0005_goals` also drops `investment_portfolios`
+historical snapshots. Migration `0006_drop_net_worth_snapshots` drops `net_worth_snapshots`
+(wealth is derived on read) and `0005_goals` also drops `investment_portfolios`
 and `investment_position_portfolios`: legacy conversion still copies them into
 the baseline, then the migration discards them, because investment goals were
 replaced by metric goals with no data to carry over.

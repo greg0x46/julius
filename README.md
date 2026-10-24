@@ -85,12 +85,12 @@ authentication configuration that does not depend on the host:
   and reactivate accounts in **Contas e cartões**; currency and opening balance
   lock after movements; equivalent decimal representations still allow name
   and archive changes. Foreign amounts stay in their original currency and
-  are valued in BRL in Net Worth and the investment summary with the day's
+  are valued in BRL in Patrimônio and the investment summary with the day's
   exchange rate; a missing rate makes the figure unavailable.
 - **Reference currency** — choose the currency for consolidated Home, category,
-  investment and net-worth figures in **Configurações → Geral** (BRL by default).
-  Current reports use current FX; net-worth history uses each snapshot day’s FX.
-  Original records and stored BRL snapshots remain untouched. Missing rates
+  investment and patrimônio figures in **Configurações → Geral** (BRL by default).
+  Current reports use current FX; the patrimônio history uses each day’s FX.
+  Original records remain untouched. Missing rates
   make the affected report unavailable instead of assuming a 1:1 conversion.
 - **Transactions** — searchable/filterable transaction list, manual
   inclusion/exclusion (e.g. ignoring a chargeback or a duplicate) and
@@ -125,19 +125,20 @@ authentication configuration that does not depend on the host:
 - **Financial report** — a single time navigation (Actual → Today → Base
   Projection → Simulation): how much you will have on a future date, your
   lowest balance until then, and how hypothetical scenarios change that answer.
-- **Net worth** — net worth snapshots and history (assets − liabilities) over
-  time.
+- **Patrimônio** — what you already have, cash plus investments, today and
+  over time. Cards, debts and future bills are not counted, and the history is
+  recomputed on every read, so it follows any correction.
 - **Goals** — set a target amount (and optional date) for the total market
   value of your investments and follow the progress, recomputed on every read. With a
   date, the goal is projected to it from the average monthly return of your investments and
-  shows the monthly contribution needed to reach the target. More metrics (cash balance, net worth) are planned.
+  shows the monthly contribution needed to reach the target. More metrics (cash balance, patrimônio) are planned.
 - **Investments** — a period view of your portfolio (same period selector as Home and Transactions): portfolio value at the end of
   the period, net yield and return, contributions and withdrawals, with positions grouped by account or asset class,
   searchable, and with positions the history cannot cover flagged instead of counted as zero. Integrated and manual investment
   accounts, per-asset operations, manual valuations and optional automatic
   quotes (B3 and crypto), enabled by default with a persistent daily schedule. Contributions and withdrawals reconciled with the
   statement show up apart from spending, keeping their cash effect and avoiding
-  double counting in net worth. Manual-position returns use the exact recorded
+  double counting in patrimônio. Manual-position returns use the exact recorded
   acquisition cost, rather than reconstructing it from the displayed average cost.
   A curated starter asset catalog is populated automatically on startup.
 - **Browser authentication** — email and password login for the owner account,
@@ -205,7 +206,7 @@ target. See the
 ### Prerequisites
 
 - Go 1.26+
-- Node.js 24+
+- Node.js 24.15+ (or 26+)
 - A [Pluggy](https://pluggy.ai) account with a client ID/secret and at least
   one `item_id` for the account you want to sync — see Pluggy's
   [Get your API keys](https://docs.pluggy.ai/docs/get-your-api-keys) guide, and

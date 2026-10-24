@@ -1,5 +1,5 @@
 import { lazy, Suspense } from "react";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 
 import { HomePage } from "../pages/HomePage";
 import { NotFoundPage } from "../pages/NotFoundPage";
@@ -122,7 +122,8 @@ export function AppRouter() {
             <Route path="pendencias/:id" element={<PayableDetailPage />} />
             <Route path="recorrencias" element={<RecurringCommitmentsPage />} />
             <Route path="configuracoes/cenarios" element={<ScenariosPage />} />
-            <Route path="patrimonio-liquido" element={<NetWorthPage />} />
+            <Route path="patrimonio" element={<NetWorthPage />} />
+            <Route path="patrimonio-liquido" element={<Navigate to="/patrimonio" replace />} />
             <Route path="metas" element={<GoalsPage />} />
             <Route path="investimentos" element={<InvestmentsPage />} />
             <Route path="investimentos/:id" element={<InvestmentDetailPage />} />
