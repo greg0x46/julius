@@ -59,9 +59,9 @@ body {
   z-index: 2000;
   top: 0.75rem;
   left: 0.75rem;
-  padding: 0.7rem 1rem;
+  padding: 0.7rem var(--space-4);
   transform: translateY(-200%);
-  border-radius: 0.5rem;
+  border-radius: var(--radius-md);
   color: var(--color-surface);
   background: var(--color-text);
 }
@@ -105,13 +105,13 @@ body {
 }
 
 .ui-page-content {
-  padding-top: 1.5rem;
+  padding-top: var(--space-5);
 }
 
 @media (max-width: 47.99rem) {
 
   .ui-page-content {
-    padding-top: 1rem;
+    padding-top: var(--space-4);
   }
 }
 
@@ -123,9 +123,9 @@ body {
 .app-mobile-brand {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
-  padding-inline: 0.25rem;
-  font-size: 1rem;
+  gap: var(--space-2);
+  padding-inline: var(--space-1);
+  font-size: var(--fs-row);
   font-weight: 600;
 }
 
@@ -145,7 +145,7 @@ body {
    font in global.css's :root is untouched. */
 .app-brand-title {
   font-family: "Baloo 2", "Segoe UI", sans-serif;
-  font-size: 1.6rem;
+  font-size: var(--fs-title);
   font-weight: 700;
   letter-spacing: 0.01em;
   /* Flex items are blockified (CSS Display spec), and body's global
@@ -167,7 +167,7 @@ body {
   display: inline-block;
   margin-top: 0.1rem;
   font-family: "Baloo 2", "Segoe UI", sans-serif;
-  font-size: 0.65rem;
+  font-size: var(--fs-caption);
   font-weight: 500;
   opacity: 0.85;
   transform-origin: left;
@@ -183,9 +183,9 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 1rem;
+  gap: var(--space-4);
   min-height: 100vh;
-  padding: 1.5rem;
+  padding: var(--space-5);
   text-align: center;
 }
 
@@ -197,7 +197,7 @@ body {
 .app-loading-screen-caption {
   margin: 0;
   color: var(--color-text-secondary);
-  font-size: 0.9375rem;
+  font-size: var(--fs-row);
 }
 
 /* PageContainer's PageHeader packs title + subtitle into one nowrap flex
@@ -222,7 +222,7 @@ body {
 .category-color-grid {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: var(--space-2);
 }
 
 .category-color-swatch {
@@ -231,7 +231,7 @@ body {
   justify-content: center;
   width: 1.75rem;
   height: 1.75rem;
-  border-radius: 50%;
+  border-radius: var(--radius-full);
   border: 2px solid transparent;
   cursor: pointer;
   padding: 0;
@@ -254,9 +254,9 @@ body {
   flex-shrink: 0;
   width: 2rem;
   height: 2rem;
-  border-radius: 50%;
+  border-radius: var(--radius-full);
   color: var(--color-surface);
-  font-size: 1rem;
+  font-size: var(--fs-row);
 }
 
 @media (max-width: 47.99rem) {
@@ -359,10 +359,10 @@ body {
 .status-tag {
   display: inline-block;
   padding: 0 0.375rem;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   font-size: var(--fs-caption);
   font-weight: 500;
-  line-height: 1.25rem;
+  line-height: var(--lh-body);
   white-space: nowrap;
 }
 

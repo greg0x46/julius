@@ -19,6 +19,8 @@ function renderCss() {
     ...colorEntries.map(([, c]) => decl(c.var, c.light)),
     ...Object.values(tokens.radius).map((r) => decl(r.var, r.value)),
     ...Object.values(tokens.type).map((t) => decl(t.var, t.value)),
+    ...Object.values(tokens.lineHeight).map((t) => decl(t.var, t.value)),
+    ...Object.values(tokens.spaceVars).map((t) => decl(t.var, t.value)),
   ];
   const dark = colorEntries.map(([, c]) => decl(c.var, c.dark ?? c.light));
   const indent = dark.map((l) => "  " + l);
@@ -47,6 +49,7 @@ function renderTs() {
     .map(([k, v]) => `  ${k}: ${v},`)
     .join("\n");
   const radius = Object.entries(tokens.radius)
+    .filter(([, r]) => /^\d/.test(r.value))
     .map(([k, r]) => `  ${k}: ${parseFloat(r.value)},`)
     .join("\n");
   const type = Object.entries(tokens.type)

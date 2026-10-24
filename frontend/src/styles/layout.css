@@ -78,9 +78,9 @@
   flex: none;
   width: 1rem;
   height: 1.5rem;
-  margin-inline: 0 0.5rem;
+  margin-inline: 0 var(--space-2);
   color: var(--color-text-secondary);
-  font-size: 1rem;
+  font-size: var(--fs-row);
 }
 
 .page-back-link::after {
@@ -115,7 +115,7 @@
   align-items: center;
   grid-column: 2;
   grid-row: 1;
-  gap: 0.25rem;
+  gap: var(--space-1);
   min-width: 0;
   margin-inline-end: -0.5rem;
 }
@@ -128,7 +128,7 @@
   grid-column: 1 / -1;
   grid-row: 3;
   min-width: 0;
-  margin-top: 0.5rem;
+  margin-top: var(--space-2);
 }
 
 .page-context .filter-period-navigation {
@@ -155,7 +155,7 @@
 }
 
 .ui-btn.page-action.ui-btn-text {
-  padding-inline: 0.75rem;
+  padding-inline: var(--space-3);
   color: var(--color-primary);
   font-weight: 600;
 }
@@ -167,7 +167,7 @@
 
 /* PageContainer's content column: the same gutter as the header above. */
 .app-page .ui-page-content {
-  padding-block: 1rem 2rem;
+  padding-block: var(--space-4) var(--space-6);
   padding-inline: var(--page-inline-start) var(--page-inline-end);
 }
 
@@ -189,11 +189,11 @@
 
 .create-action-menu-option-description {
   color: var(--color-text-secondary);
-  font-size: 0.8125rem;
+  font-size: var(--fs-body);
 }
 
 .bottom-sheet.ui-drawer {
-  border-radius: var(--radius-sheet) var(--radius-sheet) 0 0;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
   overflow: hidden;
 }
 
@@ -209,8 +209,8 @@
 .bottom-sheet-handle {
   width: 2.25rem;
   height: 4px;
-  margin: 0.5rem auto 0;
-  border-radius: 999px;
+  margin: var(--space-2) auto 0;
+  border-radius: var(--radius-full);
   background: var(--color-border-strong);
 }
 
@@ -218,15 +218,15 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.75rem;
-  padding: 0.25rem 0.5rem 0.25rem 1.25rem;
+  gap: var(--space-3);
+  padding: var(--space-1) var(--space-2) var(--space-1) 1.25rem;
   border-bottom: 1px solid var(--color-border);
 }
 
 .bottom-sheet-title {
   margin: 0;
   color: var(--color-text);
-  font-size: 1rem;
+  font-size: var(--fs-row);
   font-weight: 600;
 }
 
@@ -246,9 +246,9 @@
 .bottom-sheet-list {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: var(--space-1);
   margin: 0;
-  padding: 0.5rem 0 0;
+  padding: var(--space-2) 0 0;
   list-style: none;
 }
 
@@ -294,9 +294,9 @@
 .record-menu-row {
   width: 100%;
   min-height: 48px;
-  padding: 0.5rem;
+  padding: var(--space-2);
   border: 0;
-  border-radius: var(--radius);
+  border-radius: var(--radius-md);
   color: var(--color-text);
   background: transparent;
   font: inherit;
@@ -321,7 +321,7 @@
 
 .record-menu-group-label {
   display: block;
-  padding: 0.5rem 0.5rem 0.25rem;
+  padding: var(--space-2) var(--space-2) var(--space-1);
   color: var(--color-text-secondary);
   font-size: var(--fs-caption);
   font-weight: 500;
@@ -349,7 +349,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
+  gap: var(--space-2);
 }
 
 .bottom-action-bar-row > .ui-btn {
@@ -379,7 +379,7 @@
 .section,
 .summary-strip {
   border: 1px solid var(--color-border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-md);
   background: var(--color-surface);
   box-shadow: none;
 }
@@ -402,7 +402,7 @@
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 1rem;
+  gap: var(--space-4);
   padding: 0.75rem var(--page-gutter);
   border-bottom: 1px solid var(--color-border);
 }
@@ -417,7 +417,7 @@
 .section-header small,
 .section-trailing {
   color: var(--color-text-secondary);
-  font-size: var(--fs-small);
+  font-size: var(--fs-body);
   font-variui-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -440,7 +440,7 @@
 .summary-strip {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: var(--space-3);
   padding: 1rem var(--page-gutter);
 }
 
@@ -453,7 +453,7 @@
 
 .summary-strip-label {
   color: var(--color-text-secondary);
-  font-size: var(--fs-small);
+  font-size: var(--fs-caption);
 }
 
 /* The hero figure is never cut off and never broken mid-number: one line, and
@@ -483,7 +483,7 @@
   flex-direction: column;
   align-items: flex-start;
   gap: 0.375rem;
-  margin-top: 0.25rem;
+  margin-top: var(--space-1);
   color: var(--color-text-secondary);
   font-size: var(--fs-caption);
 }
@@ -498,8 +498,8 @@
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 1rem;
-  padding: 0.5rem 0;
+  gap: var(--space-4);
+  padding: var(--space-2) 0;
   border-top: 1px solid var(--color-border);
 }
 
@@ -537,7 +537,7 @@
      middle of a two-line block. */
   align-items: baseline;
   justify-content: space-between;
-  gap: 1rem;
+  gap: var(--space-4);
   width: 100%;
   min-height: 56px;
   padding: 0.625rem 0;
@@ -580,7 +580,7 @@ a.list-row:hover {
 
 .list-row-meta {
   color: var(--color-text-secondary);
-  font-size: var(--fs-small);
+  font-size: var(--fs-body);
 }
 
 /* `truncate`: the "name, one meta line" shape, however long the name. */
@@ -626,7 +626,7 @@ a.list-row:hover {
 
 .empty-state-icon {
   color: var(--color-text-tertiary);
-  font-size: 1.75rem;
+  font-size: var(--fs-hero);
 }
 
 .empty-state-title {
@@ -639,11 +639,11 @@ a.list-row:hover {
 .empty-state-hint {
   margin: 0;
   color: var(--color-text-secondary);
-  font-size: var(--fs-small);
+  font-size: var(--fs-caption);
 }
 
 .empty-state-action {
-  margin-top: 0.5rem;
+  margin-top: var(--space-2);
 }
 
 /* One variant: outlined. A filled button here would compete with (or repeat)
@@ -663,7 +663,7 @@ a.list-row:hover {
 /* ---- Tabs ------------------------------------------------------------- */
 
 .page-tabs {
-  margin-bottom: 1rem;
+  margin-bottom: var(--space-4);
 }
 
 .page-tabs .page-tabs-control {
@@ -674,9 +674,9 @@ a.list-row:hover {
 
 .list-toolbar {
   display: grid;
-  gap: 0.5rem;
+  gap: var(--space-2);
   min-width: 0;
-  margin-bottom: 0.75rem;
+  margin-bottom: var(--space-3);
 }
 
 /* Phone: ONE row — search (taking what is left), the filter button as a
@@ -686,7 +686,7 @@ a.list-row:hover {
 .list-toolbar-row {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--space-2);
   min-width: 0;
 }
 
@@ -699,7 +699,7 @@ a.list-row:hover {
   flex: none;
   align-items: center;
   justify-content: flex-end;
-  gap: 0.5rem;
+  gap: var(--space-2);
   min-width: 0;
   margin-left: auto;
 }
@@ -720,7 +720,7 @@ a.list-row:hover {
 }
 
 .list-toolbar-filter-count {
-  margin-left: 0.25rem;
+  margin-left: var(--space-1);
 }
 
 /* On a phone the button keeps only its icon; the count rides its corner. */
@@ -742,8 +742,8 @@ a.list-row:hover {
     min-width: 18px;
     height: 18px;
     margin: 0;
-    padding-inline: 0.25rem;
-    border-radius: 999px;
+    padding-inline: var(--space-1);
+    border-radius: var(--radius-full);
     color: var(--color-surface);
     background: var(--color-primary);
     font-size: var(--fs-caption);
@@ -786,10 +786,10 @@ a.list-row:hover {
 .list-toolbar-switch {
   display: inline-flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--space-2);
   min-height: 40px;
   color: var(--color-text-secondary);
-  font-size: 0.8125rem;
+  font-size: var(--fs-body);
   cursor: pointer;
 }
 
@@ -806,7 +806,7 @@ a.list-row:hover {
   margin: 0;
   overflow: hidden;
   border-color: var(--color-border-strong);
-  border-radius: 999px;
+  border-radius: var(--radius-full);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -825,7 +825,7 @@ a.list-row:hover {
   top: var(--app-bar-height);
   padding: 0.625rem var(--page-gutter);
   border-bottom: 1px solid var(--color-border);
-  border-radius: var(--radius) var(--radius) 0 0;
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
   background: var(--color-surface);
 }
 
@@ -853,7 +853,7 @@ a.list-row:hover {
 
 @media (min-width: 48rem) {
   .page-header {
-    padding-block: 1rem;
+    padding-block: var(--space-4);
   }
 
   /* Hanging chevron: the 1rem glyph box plus its 0.5rem gap are pulled back
@@ -861,7 +861,7 @@ a.list-row:hover {
      pointer needs no 44px target, and a wider one would be clipped by the
      page's own overflow. */
   .page-back-link {
-    margin-inline: -1.5rem 0.5rem;
+    margin-inline: -1.5rem var(--space-2);
   }
 
   .page-back-link::after {
@@ -873,7 +873,7 @@ a.list-row:hover {
     align-items: center;
     grid-column: 2;
     grid-row: 1;
-    gap: 1rem;
+    gap: var(--space-4);
   }
 
   .page-context {
@@ -894,7 +894,7 @@ a.list-row:hover {
   .page-actions {
     grid-column: auto;
     grid-row: auto;
-    gap: 0.5rem;
+    gap: var(--space-2);
     margin-inline-end: 0;
   }
 
@@ -907,7 +907,7 @@ a.list-row:hover {
     display: flex;
     flex: 1 1 auto;
     align-items: center;
-    gap: 0.5rem;
+    gap: var(--space-2);
     min-width: 0;
   }
 
@@ -932,7 +932,7 @@ a.list-row:hover {
     overflow: visible;
     clip-path: none;
     color: var(--color-text-secondary);
-    font-size: var(--fs-small);
+    font-size: var(--fs-caption);
   }
 
   .list-toolbar-select .ui-select {
@@ -943,8 +943,8 @@ a.list-row:hover {
   .summary-strip-items {
     flex-direction: row;
     flex-wrap: wrap;
-    gap: 0.75rem 2rem;
-    padding-top: 0.75rem;
+    gap: var(--space-3) var(--space-6);
+    padding-top: var(--space-3);
     border-top: 1px solid var(--color-border);
   }
 
@@ -976,11 +976,11 @@ a.list-row:hover {
   .summary-strip {
     flex-flow: row wrap;
     align-items: center;
-    gap: 0.75rem 1.5rem;
+    gap: var(--space-3) var(--space-5);
   }
 
   .summary-strip-items {
-    gap: 0.75rem 0;
+    gap: var(--space-3) 0;
     margin-left: auto;
     padding-top: 0;
     border-top: 0;
@@ -1007,7 +1007,7 @@ a.list-row:hover {
 @media (max-width: 47.99rem) {
 
   .app-mobile-brand .app-brand-title {
-    font-size: 1.25rem;
+    font-size: var(--fs-title);
   }
 
   .app-mobile-brand .app-brand-subtitle {

@@ -70,16 +70,17 @@ export const spacing = {
 
 /** Border radii in px. */
 export const radius = {
-  base: 8,
-  sheet: 16,
+  sm: 4,
+  md: 8,
+  lg: 16,
+  full: 999,
 } as const;
 
 /** Type scale in rem. */
 export const fontSize = {
   caption: "0.75rem",
-  small: "0.8125rem",
   body: "0.875rem",
-  row: "0.9375rem",
+  row: "1rem",
   title: "1.25rem",
-  hero: "1.75rem",
+  hero: "2rem",
 } as const;

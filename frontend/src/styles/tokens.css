@@ -25,14 +25,29 @@
   --color-surface: #ffffff;
   --color-selected: #eef6f2;
   --color-selected-hover: #e4f1ea;
-  --radius: 8px;
-  --radius-sheet: 16px;
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 16px;
+  --radius-full: 999px;
+  --radius: var(--radius-md);
+  --radius-sheet: var(--radius-lg);
   --fs-caption: 0.75rem;
-  --fs-small: 0.8125rem;
   --fs-body: 0.875rem;
-  --fs-row: 0.9375rem;
+  --fs-row: 1rem;
   --fs-title: 1.25rem;
-  --fs-hero: 1.75rem;
+  --fs-hero: 2rem;
+  --lh-caption: 1rem;
+  --lh-body: 1.25rem;
+  --lh-row: 1.5rem;
+  --lh-title: 1.75rem;
+  --lh-hero: 2.375rem;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
 }
 
 @media (prefers-color-scheme: dark) {

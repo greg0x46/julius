@@ -29,7 +29,7 @@
 
 .form-field-label {
   color: var(--color-text);
-  font-size: var(--fs-small);
+  font-size: var(--fs-caption);
   font-weight: 500;
 }
 
@@ -51,13 +51,13 @@
 .form-drawer-form {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: var(--space-4);
 }
 
 .form-drawer-footer {
   display: flex;
   justify-content: flex-end;
-  gap: 0.5rem;
+  gap: var(--space-2);
 }
 
 /* The close button is a 44px target (the drawer header is wide enough that
@@ -79,7 +79,7 @@
 @media (max-width: 47.99rem) {
   .form-drawer .ui-drawer-header {
     padding-top: calc(0.5rem + env(safe-area-inset-top));
-    padding-bottom: 0.5rem;
+    padding-bottom: var(--space-2);
   }
 
   /* One full-width 48px Salvar, pinned; the footer clears the home indicator. */
@@ -115,7 +115,7 @@
 @media (max-width: 47.99rem) {
   .condition-row {
     flex-wrap: wrap;
-    padding-bottom: 0.75rem;
+    padding-bottom: var(--space-3);
     border-bottom: 1px solid var(--color-border);
   }
 

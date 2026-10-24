@@ -235,7 +235,7 @@ export function SkeletonBlock({
       style={{
         width: block ? "100%" : size,
         height: size,
-        borderRadius: shape === "circle" ? "50%" : 4,
+        borderRadius: shape === "circle" ? "var(--radius-full)" : "var(--radius-sm)",
         ...props.style,
       }}
       aria-hidden="true"
