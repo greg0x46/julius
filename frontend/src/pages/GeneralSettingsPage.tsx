@@ -1,4 +1,4 @@
-import { Alert, Button, Radio, Select, Skeleton } from "antd";
+import { Alert, Button, Radio, Select, Skeleton } from "../components/ui";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { listAccountCurrencies } from "../api/accounts";
 import { queryKeys } from "../api/queryKeys";

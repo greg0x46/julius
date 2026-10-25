@@ -1,5 +1,4 @@
-import { LeftOutlined } from "@ant-design/icons";
-import { PageContainer } from "@ant-design/pro-layout";
+import { LeftOutlined } from "../ui/icons";
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 
@@ -87,14 +86,18 @@ export function Page({
   const hasVisibleActions = actions !== undefined && !bottomBar;
 
   return (
-    <PageContainer
+    <PageFrame
       // The page's name is the one heading assistive tech should land on, so
       // the header is rendered by hand: a real h1 inside a real <header>.
       pageHeaderRender={() => (
         <header className="page-header">
           <div className="page-heading">
             {backTo !== undefined && (
-              <Link to={backTo} className="page-back-link" aria-label={backLabel}>
+              <Link
+                to={backTo}
+                className="page-back-link"
+                aria-label={backLabel}
+              >
                 <LeftOutlined aria-hidden="true" />
               </Link>
             )}
@@ -106,10 +109,14 @@ export function Page({
           {(hasContext || hasVisibleActions) && (
             <div className="page-header-slots">
               {hasContext && <div className="page-context">{context}</div>}
-              {hasVisibleActions && <div className="page-actions">{actions}</div>}
+              {hasVisibleActions && (
+                <div className="page-actions">{actions}</div>
+              )}
             </div>
           )}
-          {description !== undefined && !hideDescription && <p className="page-description">{description}</p>}
+          {description !== undefined && !hideDescription && (
+            <p className="page-description">{description}</p>
+          )}
         </header>
       )}
       className={[
@@ -123,6 +130,23 @@ export function Page({
     >
       {tabs !== undefined && <div className="page-tabs">{tabs}</div>}
       {children}
-    </PageContainer>
+    </PageFrame>
+  );
+}
+
+function PageFrame({
+  pageHeaderRender,
+  className,
+  children,
+}: {
+  pageHeaderRender: () => ReactNode;
+  className: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className={className}>
+      {pageHeaderRender()}
+      <div className="ui-page-content">{children}</div>
+    </div>
   );
 }

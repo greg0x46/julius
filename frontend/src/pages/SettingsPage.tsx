@@ -1,4 +1,4 @@
-import { RightOutlined } from "@ant-design/icons";
+import { RightOutlined } from "../components/ui/icons";
 
 import { ListRow, Page, Section } from "../components/layout";
 

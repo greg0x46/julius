@@ -1,4 +1,4 @@
-import { Grid } from "antd";
+import { Grid } from "../ui";
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 

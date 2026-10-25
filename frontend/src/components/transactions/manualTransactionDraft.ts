@@ -1,5 +1,5 @@
 import { isPositiveDecimal, sumDecimals } from "../../presentation/decimal";
-import dayjs, { type Dayjs } from "dayjs";
+import { calendar, type CalendarDate } from "../../presentation/calendar";
 
 import type { Category, ManualTransactionWrite, TransactionItem } from "../../api/contracts";
 
@@ -13,12 +13,12 @@ export type ManualDraft = {
   description: string;
   direction: Direction;
   amount: string | null;
-  date: Dayjs;
+  date: CalendarDate;
   categoryId: string | null;
 };
 
 export function blankManualDraft(accountId: string): ManualDraft {
-  return { accountId, description: "", direction: "outflow", amount: null, date: dayjs(), categoryId: null };
+  return { accountId, description: "", direction: "outflow", amount: null, date: calendar(), categoryId: null };
 }
 
 /** `transaction === null` is "create"; otherwise the draft starts from that line's own fields. */
@@ -29,7 +29,7 @@ export function manualDraftFrom(transaction: TransactionItem | null, defaultAcco
     description: transaction.description ?? "",
     direction: transaction.classification === "inflow" ? "inflow" : "outflow",
     amount: transaction.amount === null ? null : transaction.amount.replace(/^-/, ""),
-    date: transaction.occurred_at ? dayjs(transaction.occurred_at) : dayjs(),
+    date: transaction.occurred_at ? calendar(transaction.occurred_at) : calendar(),
     categoryId: transaction.internal_category?.id ?? null,
   };
 }

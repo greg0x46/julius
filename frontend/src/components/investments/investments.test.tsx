@@ -17,9 +17,9 @@ describe("InvestmentOperationFields", () => {
         onSubmit={vi.fn()}
       />,
     );
-    fireEvent.mouseDown(screen.getByRole("combobox", { name: "Tipo" }));
-    const option = (label: string) => screen.queryByText(label, { selector: ".ant-select-item-option-content" });
-    expect(await screen.findByText("Compra", { selector: ".ant-select-item-option-content" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("combobox", { name: "Tipo" }));
+    const option = (label: string) => screen.queryByText(label, { selector: '[role="option"]' });
+    expect(await screen.findByText("Compra", { selector: '[role="option"]' })).toBeInTheDocument();
     expect(option("Venda")).toBeInTheDocument();
     expect(option("Cotação manual")).toBeInTheDocument();
     expect(option("Saldo inicial")).toBeNull();

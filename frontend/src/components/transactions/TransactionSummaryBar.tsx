@@ -1,4 +1,4 @@
-import { DownOutlined } from "@ant-design/icons";
+import { DownOutlined } from "../ui/icons";
 import { useId, useState } from "react";
 
 import { ReportingDetails } from "../shared/ReportingDetails";

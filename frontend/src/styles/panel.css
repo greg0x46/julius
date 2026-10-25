@@ -1,16 +1,14 @@
-/* PanelStack: the one-level-at-a-time container (side panel from `md`
-   up, full-screen page below). The header is ours, not antd's, so the
-   back control and title read the same on both. */
-.panel-stack .ant-drawer-header {
+
+.panel-stack .ui-drawer-header {
   padding: 0.5rem var(--page-gutter);
   border-bottom: 1px solid var(--color-border);
 }
 
-.panel-stack .ant-drawer-header-title {
+.panel-stack .ui-drawer-header-title {
   min-width: 0;
 }
 
-.panel-stack .ant-drawer-title {
+.panel-stack .ui-drawer-title {
   min-width: 0;
   width: 100%;
 }
@@ -25,14 +23,14 @@
 
 /* The chevron's glyph sits on the same gutter as the body; the button is
    wider than the glyph, so it is pulled back by the difference. */
-.panel-stack-back.ant-btn {
+.panel-stack-back.ui-btn {
   margin-inline-start: -0.75rem;
 }
 
 /* On a phone every control of the header is a 44px target (the header is
    still one row tall, 56px with its padding), as in FormDrawer. */
 @media (max-width: 47.99rem) {
-  .panel-stack .ant-drawer-header {
+  .panel-stack .ui-drawer-header {
     padding-top: calc(0.25rem + env(safe-area-inset-top));
     padding-bottom: 0.25rem;
   }
@@ -42,7 +40,7 @@
     min-height: 44px;
   }
 
-  .panel-stack-back.ant-btn {
+  .panel-stack-back.ui-btn {
     width: 44px;
     height: 44px;
     margin-inline-start: -1rem;
@@ -53,7 +51,7 @@
     margin-inline-end: -0.5rem;
   }
 
-  .panel-stack-extra .ant-btn {
+  .panel-stack-extra .ui-btn {
     min-width: 44px;
     min-height: 44px;
   }
@@ -79,7 +77,7 @@
   justify-content: flex-end;
 }
 
-.panel-stack .ant-drawer-body {
+.panel-stack .ui-drawer-body {
   padding: 0;
 }
 
@@ -92,7 +90,7 @@
 
 /* The action bar is always in the tree so the body never jumps between
    screens; it only takes space once a screen fills it. */
-.panel-stack .ant-drawer-footer {
+.panel-stack .ui-drawer-footer {
   padding: 0;
   border-top: 0;
 }
@@ -107,13 +105,13 @@
 /* A screen that hosts a form ends like FormDrawer does on a phone: one
    full-width 48px action above the safe area. */
 @media (max-width: 47.99rem) {
-  .panel-stack-footer .ant-btn {
+  .panel-stack-footer .ui-btn {
     width: 100%;
     height: 48px;
   }
 }
 
-.panel-stack-compact .ant-drawer-body {
+.panel-stack-compact .ui-drawer-body {
   padding-bottom: env(safe-area-inset-bottom);
 }
 
@@ -218,29 +216,22 @@
   font-size: 0.8125rem;
 }
 
-.panel-disclosure-more.ant-collapse > .ant-collapse-item > .ant-collapse-header {
+.panel-disclosure-more.ui-collapse > details > summary {
   padding: 0.25rem 0;
   color: var(--color-primary);
   font-size: 0.8125rem;
   font-weight: 600;
 }
 
-.panel-disclosure-more.ant-collapse .ant-collapse-content > .ant-collapse-content-box {
+.panel-disclosure-more.ui-collapse details > :not(summary) {
   padding: 0 0 0.25rem;
   font-size: 0.8125rem;
 }
 
-.panel-disclosure-more .ant-typography {
+.panel-disclosure-more .ui-typography {
   margin-bottom: 0;
 }
 
-/* TransactionPicker: the one control for choosing a transaction. Each row is
-   a two-column grid — a flexible left region (description, then
-   date · account · category) and a right column that holds the amount at
-   its natural width. The amount is the anchor that tells look-alike rows
-   apart, so the left region is the only thing that ever truncates. From `md`
-   up it is an antd Select with rich options; on a compact screen a bottom
-   sheet. */
 .txn-picker-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) max-content;
@@ -269,7 +260,7 @@
   flex: 0 0 auto;
   /* Wide enough for "-R$ 99.999,99" so amounts line up across rows. */
   min-width: 6.5rem;
-  font-variant-numeric: tabular-nums;
+  font-variui-numeric: tabular-nums;
   text-align: right;
   white-space: nowrap;
   font-weight: 600;
@@ -305,7 +296,7 @@
   white-space: nowrap;
 }
 
-.txn-picker-meta .ant-tag {
+.txn-picker-meta .ui-tag {
   flex-shrink: 0;
   margin-inline-end: 0;
   line-height: 1.25rem;
@@ -337,22 +328,18 @@
   min-width: 0;
 }
 
-.txn-picker .ant-select-selection-item {
+.txn-picker .ui-select-selection-item {
   display: flex;
   align-items: center;
 }
 
-/* Let an antd option grow to two lines; its default is one clipped line. The
-   content box is a flex item whose automatic minimum is its content's
-   min-content width — a nowrap description would make it wider than the
-   option and push the amount out of view — so pin `min-width: 0`. */
-.txn-picker-popup .ant-select-item-option {
+.txn-picker-popup .ui-select-item {
   min-height: 48px;
   padding: 0.375rem 0.75rem;
   align-items: center;
 }
 
-.txn-picker-popup .ant-select-item-option-content {
+.txn-picker-popup .ui-select-item {
   display: block;
   min-width: 0;
   white-space: normal;
@@ -360,7 +347,7 @@
   text-overflow: clip;
 }
 
-.txn-picker-popup .ant-select-item-option-selected .txn-picker-description {
+.txn-picker-popup .ui-select-item[aria-selected="true"] .txn-picker-description {
   font-weight: 600;
 }
 
@@ -372,7 +359,7 @@
   color: var(--color-text);
 }
 
-.txn-picker-state .ant-spin {
+.txn-picker-state .ui-spin {
   margin-right: 0.5rem;
 }
 
@@ -425,7 +412,7 @@
   width: 100%;
 }
 
-.txn-picker-sheet .ant-drawer-body {
+.txn-picker-sheet .ui-drawer-body {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   gap: 0.75rem;

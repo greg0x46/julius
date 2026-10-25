@@ -1,4 +1,4 @@
-import { Alert, Button, Popconfirm, Space } from "antd";
+import { Alert, Button, Popconfirm, Space } from "../ui";
 import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 

@@ -1,4 +1,4 @@
-import { Alert } from "antd";
+import { Alert } from "../ui";
 import { type ReactNode } from "react";
 
 import type { ReportValuation as Valuation } from "../../api/contracts";

@@ -1,6 +1,6 @@
-import { EllipsisOutlined } from "@ant-design/icons";
-import { Button, Dropdown } from "antd";
-import type { ItemType } from "antd/es/menu/interface";
+import { EllipsisOutlined } from "../ui/icons";
+import { Button, Dropdown } from "../ui";
+import type { ItemType } from "../ui/menu";
 import { useState } from "react";
 
 import { BottomSheet } from "./BottomSheet";

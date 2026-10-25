@@ -1,4 +1,4 @@
-import { Select } from "antd";
+import { Select } from "../ui";
 
 interface ToolbarSelectProps<Value extends string> {
   id: string;

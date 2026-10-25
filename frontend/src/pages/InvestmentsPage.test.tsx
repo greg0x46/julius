@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import dayjs from "dayjs";
+import { calendar } from "../presentation/calendar";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -46,7 +46,7 @@ function summaryOf() {
 }
 
 async function chooseGrouping(label: string) {
-  await userEvent.click(screen.getByText(label, { selector: ".ant-segmented-item-label" }));
+  await userEvent.click(screen.getByRole("radio", { name: label }));
 }
 
 // Groups start collapsed; most checks need to see their rows.
@@ -105,7 +105,7 @@ describe("InvestmentsPage period view", () => {
     renderPage();
     await screen.findByRole("region", { name: /Carteira em/ });
     expect(portfolioApi.getInvestmentPeriod).toHaveBeenCalledWith(
-      { from: null, to: dayjs().format("YYYY-MM-DD"), groupBy: "class", source: null },
+      { from: null, to: calendar().format("YYYY-MM-DD"), groupBy: "class", source: null },
       expect.anything(),
     );
   });
@@ -388,7 +388,7 @@ describe("InvestmentsPage period view", () => {
     renderPage();
     await screen.findByRole("region", { name: /Carteira em/ });
     await chooseGrouping("Custódia");
-    const toggle = await screen.findByRole("button", { name: /Corretora XP/, expanded: false });
+    const toggle = await screen.findByRole("button", { name: /^Corretora XP/, expanded: false });
     expect(screen.queryByText("Tesouro Selic 2029")).toBeNull();
     // Collapsed hides rows only: the group's subtotal and share stay.
     expect(within(toggle.closest("tr")!).getByText("R$ 1.200,00")).toBeVisible();
@@ -414,7 +414,7 @@ describe("InvestmentsPage period view", () => {
     await chooseGrouping("Sem agrupamento");
     expect(await screen.findByText("Tesouro Selic 2029")).toBeVisible();
     expect(screen.getByText("CDB Banco Teste")).toBeVisible();
-    expect(screen.queryByRole("button", { expanded: false, name: /posições/ })).toBeNull();
+    expect(screen.getByRole("table", { name: "Posições" }).querySelector(".investment-group-toggle")).toBeNull();
   });
 });
 
@@ -436,7 +436,7 @@ describe("InvestmentsPage period view on a phone", () => {
     renderPage();
     await screen.findByRole("region", { name: /Carteira em/ });
     await chooseGrouping("Custódia");
-    const toggle = await screen.findByRole("button", { name: /Corretora XP/, expanded: false });
+    const toggle = await screen.findByRole("button", { name: /^Corretora XP/, expanded: false });
     expect(screen.queryByRole("table")).toBeNull();
     expect(screen.queryByRole("list", { name: "Posições de Corretora XP" })).toBeNull();
     await userEvent.click(toggle);

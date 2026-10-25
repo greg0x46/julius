@@ -1,4 +1,4 @@
-import { Segmented } from "antd";
+import { Segmented } from "../ui";
 
 export interface SegmentedOption<Value extends string> {
   value: Value;
@@ -6,15 +6,7 @@ export interface SegmentedOption<Value extends string> {
   disabled?: boolean;
 }
 
-/**
- * A short list of mutually exclusive choices, read at a glance: "Todas /
- * Entradas / Saídas". Exactly one value is selected at any time, so it never
- * represents "nothing chosen" — give it an explicit "all" option for that.
- *
- * antd's Segmented provides the radio semantics and keyboard handling; the
- * `segmented-control` class flattens its look and lifts the contrast of the
- * selected item so it reads without hunting.
- */
+/** Mutually exclusive native radios styled as a segmented control. */
 export function SegmentedControl<Value extends string>({
   id,
   label,

@@ -107,12 +107,21 @@ Not tied to a single context:
 - `frontend/src/components/shared/` — `Money`, `StatusTag`, `RecordMenu`,
   `BottomSheet`, `PanelStack`, `ConditionListEditor`; `components/AsyncState.tsx`
   for loading/error/empty states.
-- `frontend/src/theme/tokens.ts` — colors, font, spacing, antd theme.
+- `frontend/src/theme/tokens.ts` — colors, font and spacing; `frontend/src/styles/global.css` exposes the CSS tokens.
 - `frontend/src/components/filters/filterUrl.ts` — filter ⇄ `URLSearchParams`
   (transaction filters, scenario selection).
 - `frontend/src/presentation/money.ts` — money formatting/arithmetic on decimal
   strings.
-- Recharts is the chart library (Home projection, wealth).
+- `frontend/src/components/ui/` — local HTML/CSS React controls, SVG icons,
+  semantic tables, native dialog panels and browser popovers. `styles/ui.css`
+  defines their shared appearance; page styles build on local `ui-*` classes.
+- `components/ui/LinePlot.tsx` draws Home/net-worth series in responsive SVG;
+  category breakdown uses SVG rings. Exact decimal strings remain the source
+  for tooltips and financial labels; numeric conversion is only for geometry.
+- `presentation/calendar.ts` owns the frontend's small local calendar helper.
+  Forms use native date inputs; date-only strings stay local calendar days,
+  while timestamps follow the browser timezone. React Router, TanStack Query
+  and the existing API transport retain routing, caching and session handling.
 
 Tests: Vitest + Testing Library, colocated `*.test.ts(x)`. Vitest runs two
 projects with 2 workers: `dom` (jsdom + `src/test/setup.dom.ts`) for

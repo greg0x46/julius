@@ -1,4 +1,4 @@
-import { Alert, Button, Popconfirm, Skeleton, Typography } from "antd";
+import { Alert, Button, Popconfirm, Skeleton, Typography } from "../ui";
 import { useState } from "react";
 
 import type { ReconciliationOption, TransactionItem } from "../../api/contracts";

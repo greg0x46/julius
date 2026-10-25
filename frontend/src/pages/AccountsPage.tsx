@@ -1,5 +1,5 @@
-import { PlusOutlined, UploadOutlined } from "@ant-design/icons";
-import { Alert, Button } from "antd";
+import { PlusOutlined, UploadOutlined } from "../components/ui/icons";
+import { Alert, Button } from "../components/ui";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 

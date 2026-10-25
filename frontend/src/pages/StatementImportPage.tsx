@@ -1,5 +1,5 @@
-import { DownloadOutlined, InboxOutlined } from "@ant-design/icons";
-import { Alert, Button, Checkbox, Input, Radio, Select, Skeleton, Space, Typography } from "antd";
+import { DownloadOutlined, InboxOutlined } from "../components/ui/icons";
+import { Alert, Button, Checkbox, Input, Radio, Select, Skeleton, Space, Typography } from "../components/ui";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
@@ -128,7 +128,7 @@ export function StatementImportPage() {
         <Section title="Escolha a conta">
           <div className="statement-import-panel">
             <Typography.Paragraph>Use uma conta de arquivo. Extratos enviados aqui ficam separados de conexões automáticas.</Typography.Paragraph>
-            <Radio.Group value={targetKind} onChange={(event) => changeTarget(event.target.value)}>
+            <Radio.Group value={targetKind} onChange={(event) => changeTarget(event.target.value as "new" | "existing")}>
               <Radio value="new">Criar conta de arquivo</Radio>
               <Radio value="existing" disabled={accounts.state.kind !== "ready"}>Usar conta existente</Radio>
             </Radio.Group>

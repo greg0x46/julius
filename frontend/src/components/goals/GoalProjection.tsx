@@ -1,4 +1,4 @@
-import { InfoCircleOutlined } from "@ant-design/icons";
+import { InfoCircleOutlined } from "../ui/icons";
 
 import type { Goal } from "../../api/contracts";
 import { formatDateOnly } from "../../presentation/dates";

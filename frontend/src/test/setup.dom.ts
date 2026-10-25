@@ -3,11 +3,9 @@ import "@testing-library/jest-dom/vitest";
 import { cleanup, configure } from "@testing-library/react";
 import { afterEach, vi } from "vitest";
 
-// The default 1 s findBy*/waitFor timeout is too tight for antd renders
 // when several workers share the CPU.
 configure({ asyncUtilTimeout: 5000 });
 
-// jsdom has no viewport. Answer antd's breakpoint queries as a desktop
 // would (every min-width matches, no max-width does) so components that
 // switch layout on Grid.useBreakpoint render their default, wide form;
 // a test that needs the compact form overrides this itself.
@@ -46,3 +44,11 @@ globalThis.ResizeObserver = ResizeObserverStub;
 afterEach(() => {
   cleanup();
 });
+
+// jsdom does not implement the browser's dialog lifecycle.
+HTMLDialogElement.prototype.showModal = function () { this.setAttribute("open", ""); };
+HTMLDialogElement.prototype.close = function () { this.removeAttribute("open"); };
+
+// jsdom recognizes the popover attribute but has no top-layer implementation.
+HTMLElement.prototype.showPopover = function () { this.style.display = "block"; };
+HTMLElement.prototype.hidePopover = function () { this.style.display = "none"; };

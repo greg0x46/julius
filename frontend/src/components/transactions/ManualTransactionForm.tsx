@@ -1,4 +1,4 @@
-import { DatePicker, Input, Segmented, Select } from "antd";
+import { DatePicker, Input, Segmented, Select } from "../ui";
 import { useEffect, useState } from "react";
 
 import type { Account, Category, ManualTransactionWrite } from "../../api/contracts";

@@ -67,7 +67,7 @@ describe("QuotesSettings", () => {
     render(<QuotesSettings />);
     expect(
       await screen.findByText("Não foi possível concluir a atualização. Tente novamente mais tarde."),
-    ).toHaveClass("ant-typography-danger");
+    ).toHaveClass("ui-typography-danger");
     expect(screen.queryByText("Nenhum ativo com cotação automática para atualizar.")).not.toBeInTheDocument();
     expect(screen.queryByText("Nenhum ativo cotado. Tente novamente mais tarde.")).not.toBeInTheDocument();
   });
@@ -98,13 +98,13 @@ describe("QuotesSettings", () => {
       await screen.findByText(
         `${counts.fetched} de 3 ativos cotados; ${counts.failures} falharam; 1 adiados porque o provedor limitou as consultas. Tente novamente mais tarde.`,
       ),
-    ).toHaveClass("ant-typography-warning");
+    ).toHaveClass("ui-typography-warning");
   });
 
   it("reports a partial refresh without deferred providers", async () => {
     mockFetch(json(settings({ last_refresh: lastRefresh({ status: "partial", fetched: 2, failures: 1 }) })));
     render(<QuotesSettings />);
-    expect(await screen.findByText("2 de 3 ativos cotados; 1 falharam.")).toHaveClass("ant-typography-warning");
+    expect(await screen.findByText("2 de 3 ativos cotados; 1 falharam.")).toHaveClass("ui-typography-warning");
   });
 
   it("reports a rejected schedule", async () => {

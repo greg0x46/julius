@@ -1,4 +1,4 @@
-import { Alert, Button, Input } from "antd";
+import { Alert, Button, Input } from "./ui";
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "../api/transport";

@@ -71,7 +71,7 @@ with that day's `fx` provenance; any missing rate makes the report unavailable (
 ## Frontend
 
 `/patrimonio` (the old `/patrimonio-liquido` redirects) — a hero strip with
-today's total, cash and investments, plus `NetWorthChart` (Recharts) with the
+today's total, cash and investments, plus `NetWorthChart` (local responsive SVG) with the
 evolution. Unavailable days are gaps in the line, not zeros.
 
 ## API contract verification
@@ -80,3 +80,7 @@ Wire semantics and calculation ownership are inventoried in
 [`contratos-api.md`](../../contratos-api.md). Shared synthetic responses are
 checked against Go DTOs and the production TypeScript parsers by the existing
 backend/frontend CI tests.
+
+The chart retains gaps for unavailable valuations, exact decimal strings in
+tooltips, UTC calendar-day labels and an accessible date selector. Numeric
+coordinates never feed financial calculations.

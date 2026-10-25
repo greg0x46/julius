@@ -1,4 +1,4 @@
-import { Alert, Skeleton } from "antd";
+import { Alert, Skeleton } from "../ui";
 
 import type { AccountCard } from "../../api/contracts";
 import { formatOptionalLocalDay } from "../../presentation/dates";

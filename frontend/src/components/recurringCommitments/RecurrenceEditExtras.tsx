@@ -1,4 +1,4 @@
-import { Button } from "antd";
+import { Button } from "../ui";
 
 import type { RecurringCommitment } from "../../api/contracts";
 import { useConfirm } from "../shared/useConfirm";

@@ -1,6 +1,6 @@
 import { isPositiveDecimal, sumDecimals } from "../../presentation/decimal";
-import { Button, Checkbox, DatePicker, Divider, Input, InputNumber, Popconfirm, Segmented, Select, Switch } from "antd";
-import dayjs, { type Dayjs } from "dayjs";
+import { Button, Checkbox, DatePicker, Divider, Input, InputNumber, Popconfirm, Segmented, Select, Switch } from "../ui";
+import { calendar, type CalendarDate } from "../../presentation/calendar";
 import { useEffect, useState } from "react";
 
 import type {
@@ -128,8 +128,8 @@ type CommitmentDraft = {
   cadence: RecurringCommitmentCadence;
   dayOfMonth: number | null;
   monthOfYear: number | null;
-  startDate: Dayjs;
-  endDate: Dayjs | null;
+  startDate: CalendarDate;
+  endDate: CalendarDate | null;
   isActive: boolean;
 };
 
@@ -142,7 +142,7 @@ const blankCommitmentDraft: CommitmentDraft = {
   cadence: "monthly",
   dayOfMonth: null,
   monthOfYear: null,
-  startDate: dayjs(),
+  startDate: calendar(),
   endDate: null,
   isActive: true,
 };
@@ -158,8 +158,8 @@ function commitmentDraftFrom(commitment: RecurringCommitment | null): Commitment
     cadence: commitment.cadence,
     dayOfMonth: commitment.day_of_month,
     monthOfYear: commitment.month_of_year,
-    startDate: dayjs(commitment.start_date, dateFormat),
-    endDate: commitment.end_date ? dayjs(commitment.end_date, dateFormat) : null,
+    startDate: calendar(commitment.start_date),
+    endDate: commitment.end_date ? calendar(commitment.end_date) : null,
     isActive: commitment.is_active,
   };
 }

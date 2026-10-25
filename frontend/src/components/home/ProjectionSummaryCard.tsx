@@ -1,6 +1,6 @@
 import { ReportValuation } from "../shared/ReportValuation";
-import { QuestionCircleOutlined } from "@ant-design/icons";
-import { Popover, Skeleton } from "antd";
+import { QuestionCircleOutlined } from "../ui/icons";
+import { Popover, Skeleton } from "../ui";
 import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 

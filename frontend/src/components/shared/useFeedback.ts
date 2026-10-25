@@ -1,4 +1,4 @@
-import { App } from "antd";
+import { App } from "../ui";
 import { useMemo } from "react";
 
 export interface Feedback {
@@ -14,13 +14,7 @@ const ERROR_SECONDS = 5;
 
 const silent: Feedback = { success: () => undefined, error: () => undefined, info: () => undefined };
 
-/**
- * Transient toast feedback through antd's themed `message` (the app is
- * wrapped in antd `<App>` by `ThemeProvider`). Outside an `<App>` — as in
- * most component tests — `App.useApp()` yields an empty context; feedback is
- * then a silent no-op rather than a crash. (antd's static `message` is not a
- * usable fallback: on React 19 it renders nothing without antd's v5 patch.)
- */
+/** Transient feedback is provided by the application shell; isolated consumers can omit it. */
 export function useFeedback(): Feedback {
   const { message } = App.useApp();
   return useMemo(() => {

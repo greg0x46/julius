@@ -1,4 +1,4 @@
-import { Input, Select } from "antd";
+import { Input, Select } from "../ui";
 import { useEffect, useState } from "react";
 
 import type { Account, InvestmentAccountWrite } from "../../api/contracts";

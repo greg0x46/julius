@@ -14,7 +14,7 @@
   font-weight: 600;
 }
 
-.filter-period-navigation .ant-btn {
+.filter-period-navigation .ui-btn {
   flex: none;
   min-height: 40px;
 }
@@ -53,13 +53,13 @@
   gap: 0.125rem;
 }
 
-.filter-period-navigation-bare .ant-btn {
+.filter-period-navigation-bare .ui-btn {
   border-color: transparent;
   background: transparent;
   box-shadow: none;
 }
 
-.filter-period-navigation-bare .ant-btn:hover {
+.filter-period-navigation-bare .ui-btn:hover {
   background: var(--color-hover);
 }
 
@@ -116,7 +116,7 @@
     text-overflow: ellipsis;
   }
 
-  .filter-period-navigation > .ant-btn-link {
+  .filter-period-navigation > .ui-btn-link {
     flex: none;
     padding-inline: 0.5rem;
     white-space: nowrap;
@@ -125,7 +125,7 @@
 
 /* The arrows are icon-only: a 44px touch target on a phone. */
 @media (max-width: 47.99rem) {
-  .filter-period-navigation .filter-period-arrow.ant-btn {
+  .filter-period-navigation .filter-period-arrow.ui-btn {
     min-width: 44px;
     min-height: 44px;
   }

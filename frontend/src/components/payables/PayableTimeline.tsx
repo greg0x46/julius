@@ -1,7 +1,7 @@
 import { isPositiveDecimal, isZeroDecimal } from "../../presentation/decimal";
-import { PlusOutlined } from "@ant-design/icons";
-import { Alert, Button, DatePicker, Flex, InputNumber, Radio, Skeleton, Typography } from "antd";
-import dayjs, { type Dayjs } from "dayjs";
+import { PlusOutlined } from "../ui/icons";
+import { Alert, Button, DatePicker, Flex, InputNumber, Radio, Skeleton, Typography } from "../ui";
+import { calendar, type CalendarDate } from "../../presentation/calendar";
 import { useState } from "react";
 
 import type {
@@ -35,7 +35,7 @@ function formatShortDate(value: string): string {
   const parts = calendarParts(value);
   if (parts === null) return "Data inválida";
   const day = `${String(parts.day).padStart(2, "0")}/${String(parts.month).padStart(2, "0")}`;
-  return parts.year === dayjs().year() ? day : `${day}/${parts.year}`;
+  return parts.year === calendar().year() ? day : `${day}/${parts.year}`;
 }
 
 /**
@@ -219,7 +219,7 @@ export function PayableTimeline({
   const [generateBy, setGenerateBy] = useState<"months" | "amount">("months");
   const [months, setMonths] = useState<number | null>(6);
   const [installmentAmount, setInstallmentAmount] = useState<string | null>(null);
-  const [startDate, setStartDate] = useState<Dayjs>(() => dayjs());
+  const [startDate, setStartDate] = useState<CalendarDate>(() => calendar());
   const [actionError, setActionError] = useState<string | null>(null);
   const confirm = useConfirm();
   const feedback = useFeedback();
@@ -449,7 +449,7 @@ export function PayableTimeline({
                 <Radio.Button value="quinzenal">Quinzenal</Radio.Button>
               </Radio.Group>
             </Flex>
-            <Radio.Group value={generateBy} onChange={(e) => setGenerateBy(e.target.value)}>
+            <Radio.Group value={generateBy} onChange={(e) => setGenerateBy(e.target.value as "months" | "amount")}>
               <Radio value="months">Número de parcelas</Radio>
               <Radio value="amount">Valor da parcela</Radio>
             </Radio.Group>

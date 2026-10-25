@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Alert, Button, Input, Skeleton } from "antd";
+import { Alert, Button, Input, Skeleton } from "./ui";
 import { useState } from "react";
 
 import { changePassword, getSession, logout, setAuthenticationEnabled } from "../api/auth";

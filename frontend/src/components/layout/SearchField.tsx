@@ -1,5 +1,5 @@
-import { SearchOutlined } from "@ant-design/icons";
-import { Input } from "antd";
+import { SearchOutlined } from "../ui/icons";
+import { Input } from "../ui";
 
 interface SearchFieldProps {
   id: string;

@@ -465,7 +465,6 @@ describe("StatementImportPage", () => {
       // Two clicks before React can re-render: only the lock can stop the second.
       await act(async () => { confirm.click(); confirm.click(); });
       expect(statementApi.confirmStatement).toHaveBeenCalledTimes(1);
-      // While loading, antd prefixes the button's name with its spinner's label.
       await waitFor(() => expect(screen.getByRole("button", { name: /Importar 1 transação/ })).toBeDisabled());
       await user.click(screen.getByRole("button", { name: /Importar 1 transação/ }));
       expect(statementApi.confirmStatement).toHaveBeenCalledTimes(1);
@@ -487,12 +486,12 @@ describe("StatementImportPage", () => {
 
       await act(async () => { download.click(); download.click(); });
       expect(statementApi.downloadStatementTemplate).toHaveBeenCalledTimes(1);
-      await waitFor(() => expect(download).toHaveClass("ant-btn-loading"));
+      await waitFor(() => expect(download).toHaveAttribute("aria-busy", "true"));
       await user.click(download);
       expect(statementApi.downloadStatementTemplate).toHaveBeenCalledTimes(1);
 
       await act(async () => { pending.resolve(); });
-      await waitFor(() => expect(download).not.toHaveClass("ant-btn-loading"));
+      await waitFor(() => expect(download).not.toHaveAttribute("aria-busy", "true"));
       expect(screen.queryByRole("alert")).toBeNull();
 
       await user.click(download);

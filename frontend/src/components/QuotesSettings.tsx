@@ -1,4 +1,4 @@
-import { Alert, Button, Input, Select, Skeleton, Switch, Typography } from "antd";
+import { Alert, Button, Input, Select, Skeleton, Switch, Typography } from "./ui";
 import { useEffect, useState } from "react";
 import type { QuoteLastRefresh, QuoteSchedule } from "../api/contracts";
 import { ApiError, isAbortError } from "../api/problems";

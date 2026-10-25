@@ -11,14 +11,14 @@
 }
 
 /* The credentials disclosure is a quiet, hairline-bordered row, not a card. */
-.sync-credentials.ant-collapse {
+.sync-credentials.ui-collapse {
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
   background: var(--color-surface);
 }
 
 @media (max-width: 47.99rem) {
-  .sync-credentials.ant-collapse {
+  .sync-credentials.ui-collapse {
     margin-inline: calc(-1 * var(--page-gutter, 1rem));
     border-inline: 0;
     border-radius: 0;
@@ -137,7 +137,7 @@
   color: var(--color-text);
   font-size: var(--fs-row);
   font-weight: 500;
-  font-variant-numeric: tabular-nums;
+  font-variui-numeric: tabular-nums;
 }
 
 .sync-run-identifier {

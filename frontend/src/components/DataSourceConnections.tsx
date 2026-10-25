@@ -1,4 +1,4 @@
-import { Alert, Button, Collapse, Input, Skeleton, Switch, Typography } from "antd";
+import { Alert, Button, Collapse, Input, Skeleton, Switch, Typography } from "./ui";
 import { useEffect, useState } from "react";
 
 import type { DataSource, SyncRun } from "../api/contracts";

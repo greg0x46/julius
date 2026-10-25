@@ -1,5 +1,5 @@
 import { render, screen } from "@testing-library/react";
-import dayjs from "dayjs";
+import { calendar } from "../../presentation/calendar";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -10,7 +10,7 @@ import { ProjectionSummaryCard } from "./ProjectionSummaryCard";
 
 vi.mock("../../hooks/useHomePeriodBounds");
 vi.mock("../../hooks/useTimeline");
-vi.mock("../../hooks/useToday", () => ({ useToday: () => dayjs("2026-10-22") }));
+vi.mock("../../hooks/useToday", () => ({ useToday: () => calendar("2026-10-22") }));
 vi.mock("../timeline/ProjectionTimeline", () => ({ ProjectionTimeline: () => <div data-testid="projection-chart" /> }));
 
 const period = { from: "2026-09-01", to: "2026-09-30" };

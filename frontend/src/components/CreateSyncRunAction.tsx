@@ -1,5 +1,5 @@
-import { Alert, Button, Flex } from "antd";
-import { SyncOutlined } from "@ant-design/icons";
+import { Alert, Button, Flex } from "./ui";
+import { SyncOutlined } from "./ui/icons";
 import { useEffect } from "react";
 import { Link } from "react-router-dom";
 

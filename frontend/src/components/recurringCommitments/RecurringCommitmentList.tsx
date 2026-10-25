@@ -1,5 +1,5 @@
-import { Skeleton, Switch, Table } from "antd";
-import type { ColumnsType } from "antd/es/table";
+import { Skeleton, Switch, Table } from "../ui";
+import type { ColumnsType } from "../ui/Table";
 import type { ReactNode } from "react";
 
 import type { Category, RecurringCommitment } from "../../api/contracts";
@@ -175,7 +175,7 @@ export function RecurringCommitmentList({
               // A click inside the menu's dropdown bubbles here through the React tree
               // although its DOM lives in a portal: only the row's own DOM counts.
               if (!event.currentTarget.contains(target)) return;
-              if (target.closest("button, a, .ant-switch, .ant-table-row-expand-icon")) return;
+              if (target.closest("button, a, .ui-switch, .ui-table-row-expand-icon")) return;
               onEdit(commitment);
             },
           })}

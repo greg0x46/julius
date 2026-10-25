@@ -1,4 +1,4 @@
-import { Alert, Button, Skeleton } from "antd";
+import { Alert, Button, Skeleton } from "../components/ui";
 import { useState } from "react";
 
 import type { Goal, GoalWrite } from "../api/contracts";
