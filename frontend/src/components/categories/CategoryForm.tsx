@@ -1,5 +1,6 @@
 import { CheckOutlined } from "../ui/icons";
 import { Input, Select, Switch } from "../ui";
+import { readableTextOn } from "../../presentation/readableText";
 import { useEffect, useState } from "react";
 
 import type { Category, CategoryKind } from "../../api/contracts";
@@ -157,7 +158,7 @@ export function CategoryForm({
                 style={{ backgroundColor: hex }}
                 onClick={() => setDraft((current) => ({ ...current, color: hex }))}
               >
-                {selected && <CheckOutlined style={{ color: "#fff" }} aria-hidden="true" />}
+                {selected && <CheckOutlined style={{ color: readableTextOn(hex) }} aria-hidden="true" />}
               </button>
             );
           })}

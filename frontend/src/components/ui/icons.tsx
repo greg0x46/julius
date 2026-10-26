@@ -202,6 +202,9 @@ export function MoneyCollectOutlined(props: IconProps) {
     <Icon {...props} path="M2 4h20v12H2Zm10 3v6m-6-3h.01m12 0h.01M6 20h12" />
   );
 }
+export function MoonOutlined(props: IconProps) {
+  return <Icon {...props} path="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z" />;
+}
 export function PercentageOutlined(props: IconProps) {
   return (
     <Icon
@@ -297,6 +300,14 @@ export function SmileOutlined(props: IconProps) {
     <Icon
       {...props}
       path="M22 12A10 10 0 1 1 2 12a10 10 0 0 1 20 0M7 9h.01M17 9h.01M7 15q5 6 10 0"
+    />
+  );
+}
+export function SunOutlined(props: IconProps) {
+  return (
+    <Icon
+      {...props}
+      path="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8ZM12 2v2m0 16v2M4.9 4.9l1.4 1.4m11.4 11.4 1.4 1.4M2 12h2m16 0h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"
     />
   );
 }

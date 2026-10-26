@@ -7,11 +7,16 @@
     "node": "^24.15.0 || >=26.0.0"
   },
   "scripts": {
+    "gen:tokens": "node scripts/gen-tokens.mjs",
+    "predev": "npm run gen:tokens",
     "dev": "vite",
     "preview": "vite preview",
+    "prebuild": "npm run gen:tokens",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "pretypecheck": "npm run gen:tokens",
     "typecheck": "tsc -b --pretty false",
+    "pretest": "npm run gen:tokens",
     "test": "vitest",
     "test:e2e": "playwright test"
   },

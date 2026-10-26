@@ -4,7 +4,6 @@ import { LinePlot } from "../ui/LinePlot";
 import type { TimelineEntry, TimelineSeries } from "../../api/contracts";
 import { useReportFormat } from "../../hooks/useReportCurrency";
 import { balanceChartColor } from "../../presentation/chartColors";
-import { colors } from "../../theme/tokens";
 
 function formatDate(value: string): string {
   const [year, month, day] = value.split("-");
@@ -58,13 +57,7 @@ function DayEntries({ entries }: { entries: TimelineEntry[] }) {
           key={`${entry.source}-${entry.source_ref_id}-${entry.description}-${entry.amount}`}
         >
           <span>{entry.description}</span>
-          <span
-            style={{
-              color: Number(entry.amount) < 0 ? colors.error : undefined,
-            }}
-          >
-            {format(entry.amount)}
-          </span>
+          <span>{format(entry.amount)}</span>
         </li>
       ))}
       {hidden > 0 && (

@@ -5,6 +5,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { createAppQueryClient } from "./app/queryClient";
 import { AppRouter } from "./app/router";
 import { ThemeProvider } from "./app/ThemeProvider";
+import { applyStoredTheme } from "./app/theme";
 import "./styles/ui.css";
 import "./styles/global.css";
 import "./styles/forms.css";
@@ -26,6 +27,8 @@ import "./styles/scenarios.css";
 import "./styles/statement-imports.css";
 import "./styles/settings.css";
 
+
+applyStoredTheme();
 
 const root = document.getElementById("root");
 

@@ -5,15 +5,18 @@ import {
   BankOutlined,
   FundOutlined,
   HomeOutlined,
+  MoonOutlined,
   RedoOutlined,
   RiseOutlined,
   SettingOutlined,
+  SunOutlined,
   TransactionOutlined,
   WalletOutlined,
 } from "../components/ui/icons";
-import { Button, Drawer } from "../components/ui";
+import { Button, Drawer, Switch } from "../components/ui";
 import { BuildFooter } from "./BuildFooter";
 import { DemoNotice } from "./DemoNotice";
+import { useTheme } from "./theme";
 import julius from "../assets/julius.png";
 import { SkipLink } from "../components/SkipLink";
 import { useCompactScreen } from "../components/shared/useCompactScreen";
@@ -41,6 +44,7 @@ export function App() {
   const { pathname } = useLocation();
   const compact = useCompactScreen();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [theme, setTheme] = useTheme();
   const navigation = (
     <nav aria-label="Navegação principal">
       <ul className="app-navigation">
@@ -88,6 +92,14 @@ export function App() {
             )}
           </span>
         </Link>
+        <Switch
+          className="app-theme-switch"
+          aria-label="Tema escuro"
+          checked={theme === "dark"}
+          onChange={(dark) => setTheme(dark ? "dark" : "light")}
+          checkedChildren={<MoonOutlined />}
+          unCheckedChildren={<SunOutlined />}
+        />
       </header>
       {compact ? (
         <Drawer

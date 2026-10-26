@@ -10,9 +10,9 @@ describe("moneyTone", () => {
     expect(moneyTone("-10.00", "flow")).toEqual({ sign: "-", color: "neutral" });
   });
 
-  it("result: positive is money-in, negative is danger, zero is plain", () => {
+  it("result: positive is money-in, negative keeps the text colour, zero is plain", () => {
     expect(moneyTone("5.00", "result")).toEqual({ sign: "+", color: "positive" });
-    expect(moneyTone("-5.00", "result")).toEqual({ sign: "-", color: "negative" });
+    expect(moneyTone("-5.00", "result")).toEqual({ sign: "-", color: "neutral" });
     expect(moneyTone("-0.00", "result")).toEqual({ sign: "", color: "neutral" });
   });
 
