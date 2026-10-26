@@ -40,7 +40,7 @@ export function SummaryStrip({ label, value, note, children, items, busy, classN
         <span id={labelId} className="summary-strip-label">
           {label}
         </span>
-        <p className="summary-strip-value">{value}</p>
+        <div className="summary-strip-value">{value}</div>
         {children !== undefined && <div className="summary-strip-extra">{children}</div>}
       </div>
       {items !== undefined && items.length > 0 && (

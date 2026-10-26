@@ -42,7 +42,6 @@ export function RadioGroup({
   ...props
 }: {
   value?: string | null;
-  optionType?: string;
   onChange: (event: ChangeEvent<HTMLInputElement>) => void;
   children: ReactNode;
   disabled?: boolean;

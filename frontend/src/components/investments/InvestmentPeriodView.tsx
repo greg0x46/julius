@@ -101,7 +101,7 @@ export function InvestmentPeriodView({
                 <SearchField
                   id="investment-search"
                   label="Buscar ativo"
-                  placeholder="Buscar por nome ou ticker"
+                  placeholder="Nome ou ticker"
                   value={search}
                   onChange={setSearch}
                 />

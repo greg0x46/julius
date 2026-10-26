@@ -19,6 +19,8 @@ interface LinePlotProps {
   formatDate: (date: string) => string;
   tooltip: (index: number) => ReactNode;
   onSelect?: (index: number) => void;
+  /** Hides the day action for points `onSelect` would ignore. */
+  canSelect?: (index: number) => boolean;
   referenceDate?: string;
   lowest?: { date: string; value: string };
   label: string;
@@ -30,6 +32,7 @@ export function LinePlot({
   formatDate,
   tooltip,
   onSelect,
+  canSelect,
   referenceDate,
   lowest,
   label,
@@ -249,7 +252,7 @@ export function LinePlot({
             ))}
           </select>
         </label>
-        {onSelect && selected != null && (
+        {onSelect && selected != null && (canSelect?.(selected) ?? true) && (
           <button type="button" onClick={() => onSelect(selected)}>
             Ver transações do dia
           </button>

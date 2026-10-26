@@ -48,9 +48,9 @@ it("shows server balances due today for base and simulation and opens only reali
   );
   expect(onSelectDay).toHaveBeenCalledWith("2026-10-22");
   fireEvent.change(screen.getByRole("combobox"), { target: { value: "2" } });
-  fireEvent.click(
-    screen.getByRole("button", { name: "Ver transações do dia" }),
-  );
+  expect(
+    screen.queryByRole("button", { name: "Ver transações do dia" }),
+  ).not.toBeInTheDocument();
   expect(onSelectDay).toHaveBeenCalledTimes(1);
 });
 it("keeps fractional balances exact in the tooltip", () => {

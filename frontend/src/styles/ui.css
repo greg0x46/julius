@@ -106,6 +106,10 @@ svg.ui-icon {
 .ui-input-error {
   border-color: var(--color-danger);
 }
+.ui-select-error .ui-select-selector,
+.ui-input-affix-wrapper:has(> .ui-input-error) {
+  border-color: var(--color-danger);
+}
 .ui-input-affix-wrapper {
   display: inline-flex;
   align-items: center;
@@ -118,6 +122,16 @@ svg.ui-icon {
 .ui-input-affix-wrapper > .ui-input {
   border: 0;
   background: transparent;
+}
+/* The wrapper owns the border, so it also carries the focus ring. */
+.ui-input-affix-wrapper > .ui-input:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+.ui-input-affix-wrapper:has(> .ui-input:focus-visible) {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px var(--color-surface);
 }
 .ui-input-affix-wrapper > button {
   border: 0;
@@ -682,6 +696,13 @@ input[type="radio"] {
 }
 .ui-chart-controls select {
   max-width: 180px;
+  min-height: 32px;
+  padding: 4px 8px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
 }
 .ui-chart-tooltip {
   margin-block: var(--space-2);
@@ -701,6 +722,13 @@ input[type="radio"] {
   }
   .ui-btn-small {
     min-height: 32px;
+    position: relative;
+  }
+  /* 32px to the eye, 40px to the thumb. */
+  .ui-btn-small::after {
+    content: "";
+    position: absolute;
+    inset: -4px -2px;
   }
   .ui-input,
   .ui-select-input {

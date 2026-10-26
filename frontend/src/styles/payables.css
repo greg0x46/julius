@@ -104,7 +104,7 @@
   white-space: nowrap;
   color: var(--color-text-secondary);
   font-size: var(--fs-caption);
-  font-variui-numeric: tabular-nums;
+  font-variant-numeric: tabular-nums;
 }
 
 /* ---- Pendência: detail ------------------------------------------------- */
@@ -200,7 +200,7 @@
 }
 
 .payable-entry-realization .payable-entry-amount {
-  font-variui-numeric: tabular-nums;
+  font-variant-numeric: tabular-nums;
 }
 
 .payable-entry-realization-text {
@@ -333,4 +333,16 @@
 .occurrence-row-actions {
   margin-top: 0.125rem;
   margin-inline-start: -0.5rem;
+}
+
+/* Keep "Linha do tempo" on one line next to the trailing action, and a date or installment label whole. */
+.payable-timeline-section .section-header h2,
+.payable-nowrap {
+  white-space: nowrap;
+}
+
+.payable-timeline-section input[type="date"],
+.payable-timeline-section input[type="number"] {
+  width: 12rem;
+  max-width: 100%;
 }

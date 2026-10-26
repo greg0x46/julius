@@ -53,7 +53,7 @@
 
 .transaction-summary-value {
   color: var(--color-text);
-  font-variui-numeric: tabular-nums;
+  font-variant-numeric: tabular-nums;
   font-weight: 500;
 }
 
@@ -119,7 +119,7 @@
 .transaction-summary-details dd {
   margin: 0;
   color: var(--color-text);
-  font-variui-numeric: tabular-nums;
+  font-variant-numeric: tabular-nums;
   font-weight: 500;
 }
 
@@ -193,7 +193,7 @@
   margin: 0;
   color: var(--color-text);
   font-size: var(--fs-body);
-  font-variui-numeric: tabular-nums;
+  font-variant-numeric: tabular-nums;
   font-weight: 600;
 }
 
@@ -294,7 +294,7 @@
   display: none;
   color: var(--color-text-secondary);
   font-size: var(--fs-body);
-  font-variui-numeric: tabular-nums;
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
@@ -378,6 +378,11 @@
   color: var(--color-warning-text);
 }
 
+/* Never clipped to "Sem cate…" by a long account name beside it. */
+.transaction-meta > .transaction-category.is-empty {
+  flex-shrink: 0;
+}
+
 /* Lifted above the stretched hit area so the menu, not the row, gets the tap. */
 .transaction-actions {
   position: relative;
@@ -394,7 +399,7 @@
 }
 
 .transaction-amount {
-  font-variui-numeric: tabular-nums;
+  font-variant-numeric: tabular-nums;
   text-align: right;
   white-space: nowrap;
 }

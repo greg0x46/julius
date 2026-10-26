@@ -100,15 +100,15 @@ function ValidAccountDetail({ id }: { id: string }) {
           <ManualAccountActions account={snapshot} />
           {snapshot.account_type === "CREDIT" && (
             <>
-              <AccountCardsTable
-                cards={account.cards}
-                isLoading={account.cardsLoading}
-                error={account.cardsError}
-              />
               <AccountBillsTable
                 bills={account.bills}
                 isLoading={account.billsLoading}
                 error={account.billsError}
+              />
+              <AccountCardsTable
+                cards={account.cards}
+                isLoading={account.cardsLoading}
+                error={account.cardsError}
               />
             </>
           )}

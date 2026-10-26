@@ -254,14 +254,20 @@ export function PayableTimeline({
   const generate = () => {
     const start_date = startDate.format("YYYY-MM-DD");
     if (generateBy === "months") {
-      if (months === null || months < 1) return;
+      if (months === null || months < 1) {
+        setActionError("Informe o número de parcelas.");
+        return;
+      }
       return runAction(
         () => plan.generateInstallments({ cadence, months, start_date }),
         "Não foi possível gerar as parcelas.",
         "Parcelas geradas",
       );
     }
-    if (installmentAmount === null || !isPositiveDecimal(installmentAmount)) return;
+    if (installmentAmount === null || !isPositiveDecimal(installmentAmount)) {
+      setActionError("Informe o valor de cada parcela.");
+      return;
+    }
     return runAction(
       () => plan.generateInstallments({ cadence, installment_amount: installmentAmount, start_date }),
       "Não foi possível gerar as parcelas.",
@@ -442,7 +448,6 @@ export function PayableTimeline({
               <Radio.Group
                 value={cadence}
                 onChange={(e) => setCadence(e.target.value as Cadence)}
-                optionType="button"
               >
                 <Radio.Button value="mensal">Mensal</Radio.Button>
                 <Radio.Button value="semanal">Semanal</Radio.Button>
@@ -551,7 +556,9 @@ export function PayableTimeline({
                     <div className="payable-entry-line">
                       <span className="payable-entry-text">
                         <span className="payable-entry-title">
-                          {formatShortDate(installment.projected_at)} · {label}
+                          <span className="payable-nowrap">{formatShortDate(installment.projected_at)}</span> ·{" "}
+                          {/* Non-breaking: "Parcela 4/6" must not wrap between word and number. */}
+                          {label.replace(/^Parcela /, "Parcela\u00a0")}
                         </span>
                         {(tone !== undefined || divergesFromPlan) && (
                           <span className="payable-entry-meta">

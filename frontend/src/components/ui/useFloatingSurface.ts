@@ -22,8 +22,11 @@ export function useFloatingSurface(
     const update = () => {
       const rect = trigger.getBoundingClientRect();
       const bounds = element.getBoundingClientRect();
+      // A field's list may outgrow it for long options, but never fill the screen.
+      const natural = Math.max(matchWidth ? rect.width : 0, bounds.width);
       const width = Math.min(
-        Math.max(matchWidth ? rect.width : 0, bounds.width),
+        natural,
+        matchWidth ? Math.max(rect.width, 560) : natural,
         window.innerWidth - 16,
       );
       const availableBelow = window.innerHeight - rect.bottom - 12;
