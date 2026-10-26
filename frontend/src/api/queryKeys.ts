@@ -162,10 +162,16 @@ export const invalidateAfterPayableLinkChange = (
   client: Client,
   kind: PayableKind,
   payableId: string,
-) => invalidateAll(client, [[...queryKeys.payablesOfKind(kind), payableId], roots.payables]);
+) =>
+  invalidateAll(client, [
+    [...queryKeys.payablesOfKind(kind), payableId],
+    roots.payables,
+    ...projectionViews,
+  ]);
 
-/** Any create/update/delete of a payable. */
-export const invalidateAfterPayableChange = (client: Client) => invalidate(client, roots.payables);
+/** Any create/update/delete of a payable; its plan scenarios feed the projector. */
+export const invalidateAfterPayableChange = (client: Client) =>
+  invalidateAll(client, [roots.payables, roots.scenarios, ...projectionViews]);
 
 /**
  * A rule is saved: its reconcile action changes what the projector expects, and
@@ -196,23 +202,32 @@ export const invalidateAfterTransactionChange = (client: Client) =>
     roots.transactions,
     roots.accounts,
     roots.timeline,
+    roots.timelineDataRange,
     roots.netWorth,
+    roots.payables,
     roots.transactionTransfers,
     roots.recurringCommitments,
     roots.transactionReconciliation,
   ]);
 
 export const invalidateAfterManualAccountChange = (client: Client) =>
-  invalidateAll(client, [roots.accounts, roots.transactions, roots.timeline, roots.netWorth]);
+  invalidateAll(client, [
+    roots.accounts,
+    roots.transactions,
+    roots.timeline,
+    roots.timelineDataRange,
+    roots.netWorth,
+  ]);
 
 /** Marks every transactions query stale without refetching it. */
 export const markTransactionsStale = (client: Client) =>
   client.invalidateQueries({ queryKey: roots.transactions, refetchType: "none" });
 
-/** Ignoring a transfer participant can remove the whole relationship. */
+/** Ignoring a transfer participant can remove the whole relationship; period totals change too. */
 export const markTransactionInclusionViewsStale = (client: Client) =>
   Promise.all([
     markTransactionsStale(client),
+    client.invalidateQueries({ queryKey: roots.timeline, refetchType: "none" }),
     client.invalidateQueries({ queryKey: roots.transactionTransfers, refetchType: "none" }),
   ]);
 
@@ -223,8 +238,17 @@ export const invalidateAfterAccountClosingDayChange = (client: Client, accountId
     client.invalidateQueries({ queryKey: queryKeys.accountDetail(accountId), exact: true }),
   ]);
 
+/** An import writes ledger entries (and may create an account), not just its own history. */
 export const invalidateAfterStatementImport = (client: Client) =>
-  invalidateAll(client, [queryKeys.statementImportAccounts, queryKeys.statementImportHistory]);
+  invalidateAll(client, [
+    queryKeys.statementImportAccounts,
+    queryKeys.statementImportHistory,
+    roots.accounts,
+    roots.transactions,
+    roots.timeline,
+    roots.timelineDataRange,
+    roots.netWorth,
+  ]);
 
 export const invalidateSyncRunList = (client: Client) => invalidate(client, queryKeys.syncRunsList);
 export const invalidateDataSources = (client: Client) => invalidate(client, roots.dataSources);
@@ -235,5 +259,12 @@ export const invalidateTransactionReconciliation = (client: Client, transactionI
 /** A recurring commitment is planned cash flow, so any write to one moves the projection. */
 export const invalidateAfterRecurringCommitmentChange = (client: Client) =>
   invalidateAll(client, [roots.recurringCommitments, ...projectionViews]);
-export const invalidateCategories = (client: Client) => invalidate(client, roots.categories);
+/** Category names and kinds are embedded in transaction rows and rule conditions. */
+export const invalidateCategories = (client: Client) =>
+  Promise.all([
+    invalidate(client, roots.categories),
+    invalidate(client, roots.automationRules),
+    invalidate(client, roots.automationRuleConditionOptions),
+    markTransactionsStale(client),
+  ]);
 export const invalidateAuthSession = (client: Client) => invalidate(client, roots.authSession);

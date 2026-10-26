@@ -14,6 +14,7 @@ import { filtersToSearchParams, listFromSearchParams } from "../components/filte
 import { PeriodNavigator } from "../components/filters/PeriodNavigator";
 import { periodPresets } from "../components/filters/periodPresets";
 import { DataCard, EmptyState, GroupBySelect, Page, PageAction } from "../components/layout";
+import { useCompactScreen } from "../components/shared/useCompactScreen";
 import { useFeedback } from "../components/shared/useFeedback";
 import { useRowLayout } from "../components/transactions/rowLayout";
 import { ManualTransferForm } from "../components/transactions/ManualTransferForm";
@@ -120,6 +121,7 @@ export function TransactionsPage() {
   const query = useTransactions(filters, groupBy, page);
   const categories = useCategories();
   const accounts = useAccounts();
+  const compact = useCompactScreen();
   const feedback = useFeedback();
   const rowLayout = useRowLayout();
   const focusReturn = useRowFocusReturn();
@@ -224,7 +226,7 @@ export function TransactionsPage() {
     ? Math.min(data.page.number * data.page.size, data.page.total_items)
     : 0;
 
-  const createAction = <><PageAction label="Nova transação" shortLabel="Nova" onClick={openManualCreate} /><Button onClick={() => setTransferFormOpen(true)}>Nova transferência</Button></>;
+  const createAction = <><PageAction label="Nova transação" shortLabel="Nova" onClick={openManualCreate} /><Button onClick={() => setTransferFormOpen(true)}>{compact ? "Transferir" : "Nova transferência"}</Button></>;
 
   return (
     <Page

@@ -38,6 +38,11 @@
   .scenario-kind-filter-label {
     display: none;
   }
+
+  .scenario-kind-filter .ui-select {
+    min-width: 0;
+    max-width: 9rem;
+  }
 }
 
 /* One field per line on a phone; from `md` up the fields share rows. */

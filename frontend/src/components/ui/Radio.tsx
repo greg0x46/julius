@@ -15,6 +15,7 @@ const Context = createContext<{
 export function RadioControl({
   children,
   value,
+  checked,
   ...props
 }: InputHTMLAttributes<HTMLInputElement>) {
   const context = useContext(Context);
@@ -25,7 +26,7 @@ export function RadioControl({
         type="radio"
         value={value}
         name={context.name ?? props.name}
-        checked={context.value === String(value)}
+        checked={context.change ? context.value === String(value) : checked}
         disabled={props.disabled || context.disabled}
         onChange={context.change ?? props.onChange}
       />

@@ -83,6 +83,10 @@ export function DataSourceConnections({
     setAdding(false);
     create.reset();
   };
+  const openEditing = (source: DataSource) => {
+    update.reset();
+    setEditing(source);
+  };
   const closeEditing = () => {
     setEditing(null);
     update.reset();
@@ -121,7 +125,7 @@ export function DataSourceConnections({
                 type="button"
                 className="connection-row-main"
                 aria-label={`Editar ${source.name}`}
-                onClick={() => setEditing(source)}
+                onClick={() => openEditing(source)}
               >
                 <span className="connection-row-name">{source.name}</span>
                 <span className="connection-row-meta">{connectionMeta(source, runs)}</span>
@@ -145,7 +149,7 @@ export function DataSourceConnections({
                 <RecordMenu
                   label={`Ações de ${source.name}`}
                   items={[
-                    { key: "edit", label: "Editar", onClick: () => setEditing(source) },
+                    { key: "edit", label: "Editar", onClick: () => openEditing(source) },
                     {
                       key: "sync",
                       label: "Sincronizar agora",

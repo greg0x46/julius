@@ -5,6 +5,9 @@ import {
   invalidateAfterAutomationRuleChange,
   invalidateAfterGoalChange,
   invalidateAfterInvestmentAssetChange,
+  invalidateAfterManualAccountChange,
+  invalidateCategories,
+  markTransactionInclusionViewsStale,
   invalidateAfterLedgerChange,
   invalidateAfterOccurrenceReconciliation,
   invalidateAfterPayableChange,
@@ -149,13 +152,23 @@ describe("invalidation policies", () => {
   it("payable link change refreshes the payable and the payables lists", async () => {
     const { client, invalidateQueries } = spyClient();
     await invalidateAfterPayableLinkChange(client, "debt", "p1");
-    expect(keysOf(invalidateQueries)).toEqual([["payables", "debt", "p1"], ["payables"]]);
+    expect(keysOf(invalidateQueries)).toEqual([
+      ["payables", "debt", "p1"],
+      ["payables"],
+      ["timeline"],
+      ["timeline-data-range"],
+    ]);
   });
 
   it("payable, transaction and rule policies touch only their roots", async () => {
     const payable = spyClient();
     await invalidateAfterPayableChange(payable.client);
-    expect(keysOf(payable.invalidateQueries)).toEqual([["payables"]]);
+    expect(keysOf(payable.invalidateQueries)).toEqual([
+      ["payables"],
+      ["scenarios"],
+      ["timeline"],
+      ["timeline-data-range"],
+    ]);
 
     const tx = spyClient();
     await invalidateAfterTransactionChange(tx.client);
@@ -163,7 +176,9 @@ describe("invalidation policies", () => {
       ["transactions"],
       ["accounts"],
       ["timeline"],
+      ["timeline-data-range"],
       ["netWorth"],
+      ["payables"],
       ["transaction-transfer"],
       ["recurringCommitments"],
       ["transactionReconciliation"],
@@ -219,6 +234,44 @@ describe("invalidation policies", () => {
     expect(keysOf(invalidateQueries)).toEqual([
       ["statement-imports", "accounts"],
       ["statement-imports", "history"],
+      ["accounts"],
+      ["transactions"],
+      ["timeline"],
+      ["timeline-data-range"],
+      ["netWorth"],
+    ]);
+  });
+
+  it("manual account change also refreshes the timeline data range", async () => {
+    const { client, invalidateQueries } = spyClient();
+    await invalidateAfterManualAccountChange(client);
+    expect(keysOf(invalidateQueries)).toEqual([
+      ["accounts"],
+      ["transactions"],
+      ["timeline"],
+      ["timeline-data-range"],
+      ["netWorth"],
+    ]);
+  });
+
+  it("inclusion marks transactions, timeline and transfers stale without refetching", async () => {
+    const { client, invalidateQueries } = spyClient();
+    await markTransactionInclusionViewsStale(client);
+    expect(invalidateQueries.mock.calls).toEqual([
+      [{ queryKey: ["transactions"], refetchType: "none" }],
+      [{ queryKey: ["timeline"], refetchType: "none" }],
+      [{ queryKey: ["transaction-transfer"], refetchType: "none" }],
+    ]);
+  });
+
+  it("category write refreshes categories, rules and marks transactions stale", async () => {
+    const { client, invalidateQueries } = spyClient();
+    await invalidateCategories(client);
+    expect(invalidateQueries.mock.calls).toEqual([
+      [{ queryKey: ["categories"] }],
+      [{ queryKey: ["automationRules"] }],
+      [{ queryKey: ["automationRuleConditionOptions"] }],
+      [{ queryKey: ["transactions"], refetchType: "none" }],
     ]);
   });
 });

@@ -52,11 +52,41 @@
   font-size: var(--fs-title);
   font-weight: 600;
   line-height: 1.3;
+  /* The global `anywhere` would shrink min-content to one letter. */
+  overflow-wrap: break-word;
 }
 
 /* A long record name (a payable, an institution) takes two lines on a phone
    at most; the full text is the h1's `title`. */
 @media (max-width: 47.99rem) {
+  /* Title and actions share a row while the longest title word fits;
+     otherwise the actions drop to their own line instead of splitting it. */
+  .page-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .page-heading {
+    flex: 1 1 0;
+    min-width: min-content;
+  }
+
+  .page-actions {
+    flex: none;
+    margin-inline-start: auto;
+  }
+
+  .page-description {
+    flex: 1 0 100%;
+    order: 3;
+  }
+
+  .page-context {
+    flex: 1 0 100%;
+    order: 4;
+  }
+
   .page-title {
     display: -webkit-box;
     overflow: hidden;
@@ -868,12 +898,33 @@ a.list-row:hover {
     inset: -8px -4px;
   }
 
+  /* Period and actions share the title's row only while the title keeps its
+     longest word; otherwise they wrap below it. */
+  .page-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .page-heading {
+    flex: 1 1 auto;
+    min-width: min-content;
+  }
+
+  .page-description {
+    flex: 1 0 100%;
+    order: 3;
+  }
+
   .page-header-slots {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
+    justify-content: flex-end;
     grid-column: 2;
     grid-row: 1;
     gap: var(--space-4);
+    margin-inline-start: auto;
   }
 
   .page-context {
