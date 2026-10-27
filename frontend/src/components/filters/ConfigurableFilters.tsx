@@ -172,7 +172,7 @@ export function ConfigurableFilters<Values extends object>({
       for (const field of config) {
         if (field.type !== "text") continue;
         const typed = read(quickRef.current, field.key);
-        if (typeof typed === "string" && typed !== read(values, field.key)) {
+        if (typed !== read(values, field.key)) {
           merged = write(merged, field.key, typed);
         }
       }
@@ -431,6 +431,10 @@ export function ConfigurableFilters<Values extends object>({
             closable
             onClose={(event) => {
               event.preventDefault();
+              if (field.type === "text") {
+                quickRef.current = replaceField(quickRef.current, field, emptyValues);
+                setQuickValues(quickRef.current);
+              }
               onApply(replaceField(values, field, emptyValues));
             }}
             closeIcon={<span aria-label={`Remover ${shown}`}>×</span>}

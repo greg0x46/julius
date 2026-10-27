@@ -73,6 +73,29 @@ describe("ConfigurableFilters shortcuts and unlisted selections", () => {
     expect((screen.getByLabelText("Descrição") as HTMLInputElement).value).toBe("pão");
   });
 
+  it("keeps a pending search clear when an outside shortcut applies", () => {
+    vi.useFakeTimers();
+    render(<WideHarness initial={{ description: "pão", kind: null, accounts: [] }} />);
+    const input = screen.getByLabelText("Descrição") as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "" } });
+    fireEvent.click(screen.getByText("Entradas"));
+    act(() => void vi.advanceTimersByTime(300));
+    expect(screen.getByTestId("applied").textContent).toContain('"description":null');
+    expect(screen.getByTestId("applied").textContent).toContain('"kind":"inflow"');
+    expect(input.value).toBe("");
+  });
+
+  it("removing the search chip discards the pending search edit", () => {
+    vi.useFakeTimers();
+    render(<WideHarness initial={{ description: "pão", kind: null, accounts: [] }} />);
+    const input = screen.getByLabelText("Descrição") as HTMLInputElement;
+    fireEvent.change(input, { target: { value: "pãos" } });
+    fireEvent.click(screen.getByRole("button", { name: "Remover filtro" }));
+    act(() => void vi.advanceTimersByTime(300));
+    expect(screen.getByTestId("applied").textContent).toContain('"description":null');
+    expect(input.value).toBe("");
+  });
+
   it("clearing filters drops search text that was still debouncing", () => {
     vi.useFakeTimers();
     render(<WideHarness initial={{ description: "pão", kind: null, accounts: [] }} />);
