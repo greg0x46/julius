@@ -1,11 +1,14 @@
 package mcp
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -258,5 +261,69 @@ func TestConcurrentRequestsAreBounded(t *testing.T) {
 		case <-time.After(time.Second):
 			t.Fatal("request did not stop on cancellation")
 		}
+	}
+}
+
+func TestSlowRequestBodyIsBounded(t *testing.T) {
+	store, token := setup(t, dbtest.OpenSQLite(t))
+	handler, err := NewHandler(true, testConfig, store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(handler)
+	defer srv.Close()
+	conn, err := net.Dial("tcp", srv.Listener.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+	if err := conn.SetDeadline(time.Now().Add(requestTimeout + 5*time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	// Send valid headers, but never finish the declared body.
+	_, err = fmt.Fprintf(conn, "POST /mcp HTTP/1.1\r\nHost: example.com\r\nAuthorization: Bearer %s\r\nContent-Type: application/json\r\nAccept: application/json, text/event-stream\r\nContent-Length: 100\r\n\r\n{", token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response, err := http.ReadResponse(bufio.NewReader(conn), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response.Body.Close()
+	// The SDK's body-read deadline and HTTP handler timeout can race.
+	if response.StatusCode != 400 && response.StatusCode != 503 {
+		t.Fatalf("slow body: %d", response.StatusCode)
+	}
+	shutdown, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	if err := srv.Config.Shutdown(shutdown); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestPublicHostThroughLoopbackProxy(t *testing.T) {
+	store, token := setup(t, dbtest.OpenSQLite(t))
+	handler, err := NewHandler(true, testConfig, store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(handler)
+	defer srv.Close()
+	r, err := http.NewRequest("POST", srv.URL+"/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.Host = "julius.example"
+	r.Header.Set("Authorization", "Bearer "+token)
+	r.Header.Set("Content-Type", "application/json")
+	r.Header.Set("Accept", "application/json, text/event-stream")
+	response, err := srv.Client().Do(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != 200 {
+		body, _ := io.ReadAll(response.Body)
+		t.Fatalf("proxy host: %d %s", response.StatusCode, body)
 	}
 }

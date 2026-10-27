@@ -46,6 +46,9 @@ func NewHandler(enabled bool, config auth.Config, store *auth.Store) (http.Handl
 	})
 	transport := sdk.NewStreamableHTTPHandler(func(*http.Request) *sdk.Server { return server }, &sdk.StreamableHTTPOptions{
 		Stateless: true, JSONResponse: true, MaxRequestBodyBytes: 1 << 20,
+		// Reverse proxies may forward a public Host to a loopback listener.
+		// The gate below validates Origin and requires explicit Bearer credentials.
+		DisableLocalhostProtection: true,
 	})
 	slots := make(chan struct{}, maxConcurrentRequests)
 	guarded := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

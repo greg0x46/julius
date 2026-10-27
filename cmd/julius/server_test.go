@@ -90,3 +90,21 @@ func TestServeStartupAndShutdown(t *testing.T) {
 		t.Fatal("listener still open")
 	}
 }
+
+func TestServeStartupFailure(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	listener.Close()
+	done := make(chan error, 1)
+	go func() { done <- serve(context.Background(), &http.Server{}, listener) }()
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("startup failure was ignored")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("startup failure did not stop lifecycle goroutine")
+	}
+}
