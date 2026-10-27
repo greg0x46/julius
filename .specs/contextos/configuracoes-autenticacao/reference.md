@@ -187,3 +187,31 @@ commitments, a debt and a receivable, goals, an automation rule and a portfolio
 whose listed assets carry a stored price series with its coverage (the demo
 never calls a quote provider). Tests pin that every account balance is
 non-negative and every position is valued.
+
+## MCP transport
+
+`internal/mcp` uses the official Go MCP SDK and stateless Streamable HTTP,
+mounted at `/mcp` by `cmd/julius`, outside the REST cookie/open-mode gate.
+`JULIUS_MCP_ENABLED` defaults to false (404); invalid boolean values and enabling
+it with demo mode refuse startup. `/mcp/` and descendants are reserved (404),
+including in the SPA fallback. No financial tools are registered yet; tools
+capability and an empty discovery result establish the extension point without
+duplicating domain behavior. Protocol versions, initialize/discovery, transport
+errors and JSON-RPC errors are handled by the SDK.
+
+Every request requires a Bearer owner session, validated through
+`auth.Store.Authenticate`; cookies never grant access. Authentication must remain
+enabled in settings (403 when off); setting read failures and session storage
+failures return 503. Invalid/expired/revoked sessions return 401 with
+`WWW-Authenticate`. Session expiry, idle refresh, logout and password reset are
+shared with REST. Origin is optional for non-browser clients, but when present
+must equal the configured public origin. There is no OAuth or CORS integration.
+
+JSON responses, no persistent MCP sessions, 1 MiB bodies, a 30-second timeout
+(including body reads), and 16 in-flight requests bound resource use. Saturation
+returns 429 with Retry-After; GET/DELETE return 405. Responses are no-store.
+The binary handles SIGINT/SIGTERM and drains HTTP for 35 seconds before closing
+connections and then the database. Tests: `internal/mcp/server_test.go` covers
+configuration, both-dialect access checks, generic SDK discovery, legacy
+initialize, malformed/unsupported requests, unknown tools, limits and
+cancellation; `cmd/julius/server_test.go` pins route isolation and shutdown.

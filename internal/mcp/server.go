@@ -90,7 +90,7 @@ func NewHandler(enabled bool, config auth.Config, store *auth.Store) (http.Handl
 		w.Header().Set("Cache-Control", "no-store")
 		// Bound slow body reads as well as work that observes the request context.
 		_ = http.NewResponseController(w).SetReadDeadline(time.Now().Add(requestTimeout))
-		defer http.NewResponseController(w).SetReadDeadline(time.Time{})
+		_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(requestTimeout + 5*time.Second))
 		bounded.ServeHTTP(w, r)
 	}), nil
 }
