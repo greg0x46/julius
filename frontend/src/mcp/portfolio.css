@@ -1,0 +1,4 @@
+html, body, #root { min-width: 0; }
+.mcp-portfolio { padding: var(--page-gutter); }
+.mcp-portfolio h1 { font-size: 1.25rem; }
+.mcp-portfolio > p { color: var(--color-text-secondary); }

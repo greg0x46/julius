@@ -12,7 +12,7 @@
     "dev": "vite",
     "preview": "vite preview",
     "prebuild": "npm run gen:tokens",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build && vite build --config vite.mcp.config.ts",
     "lint": "eslint .",
     "pretypecheck": "npm run gen:tokens",
     "typecheck": "tsc -b --pretty false",

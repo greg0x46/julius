@@ -48,7 +48,7 @@ func NewHandler(enabled bool, config auth.Config, store *auth.Store, operations 
 	server := sdk.NewServer(&sdk.Implementation{Name: "julius", Version: "1"}, &sdk.ServerOptions{
 		Capabilities: &sdk.ServerCapabilities{Tools: &sdk.ToolCapabilities{}},
 	})
-	httpapi.RegisterMCPPlanningTools(server, store.DB)
+	httpapi.RegisterMCPPlanningTools(server, store.DB, registerPortfolioApp(server))
 	oauth.registerWrites(server)
 	var ops Operations
 	if len(operations) > 0 {
