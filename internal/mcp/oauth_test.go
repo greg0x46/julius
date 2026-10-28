@@ -161,7 +161,7 @@ func TestOAuthFlow(t *testing.T) {
 		}
 		code := f.approve(t)
 		token := f.token(t, code)
-		if w := request(t, f.handler, token, "", `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`); w.Code != 200 || !strings.Contains(w.Body.String(), `"tools":[]`) {
+		if w := request(t, f.handler, token, "", `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`); w.Code != 200 || !strings.Contains(w.Body.String(), `"name":"get_investment_portfolio"`) {
 			t.Fatalf("tools: %d %s", w.Code, w.Body)
 		}
 		if w := oauthRequest(f.handler, "POST", "/oauth/token", f.exchange(code).Encode(), nil, ""); w.Code != 400 {

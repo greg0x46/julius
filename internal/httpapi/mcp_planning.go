@@ -30,6 +30,8 @@ import (
 
 const mcpMaxOutput = 256 << 10
 
+var errMCPOutput = errors.New("result exceeds 256 KiB; reduce limit, date range or account scope")
+
 var errMCPInput = errors.New("invalid arguments: use calendar dates YYYY-MM-DD, ordered ranges of at most 366 days, and documented filters")
 
 type mcpPage struct {
@@ -167,18 +169,18 @@ func addPlanningTool[In, Out any](server *sdk.Server, name, description string, 
 			var data []byte
 			data, err = json.Marshal(out)
 			if err == nil && len(data) > mcpMaxOutput {
-				err = errors.New("result exceeds 256 KiB; reduce limit, date range or account scope")
+				err = errMCPOutput
 			}
 		}
 		if err != nil {
 			var zero Out
-			return planningToolError(err), zero, nil
+			return nil, zero, planningToolError(err)
 		}
 		return nil, out, nil
 	})
 }
 
-func planningToolError(err error) *sdk.CallToolResult {
+func planningToolError(err error) error {
 	message := "financial data unavailable; retry later"
 	var incomplete *reporting.IncompleteError
 	switch {
@@ -194,11 +196,14 @@ func planningToolError(err error) *sdk.CallToolResult {
 		}{"reporting-fx-unavailable", incomplete.Coverage, incomplete.Totals})
 		message = string(data)
 	default:
-		if err.Error() == "result exceeds 256 KiB; reduce limit, date range or account scope" {
+		if errors.Is(err, errMCPOutput) {
 			message = err.Error()
 		}
 	}
-	return &sdk.CallToolResult{IsError: true, Content: []sdk.Content{&sdk.TextContent{Text: message}}}
+	if len(message) > mcpMaxOutput {
+		message = "reporting-fx-unavailable: coverage exceeds 256 KiB; reduce the date range"
+	}
+	return errors.New(message)
 }
 
 type mcpPayablesInput struct {
@@ -257,7 +262,10 @@ func mcpPortfolio(ctx context.Context, conn *sql.DB, in mcpPortfolioInput) (inve
 	if in.AccountID != "" {
 		q.AccountID = &in.AccountID
 		if _, err := investments.GetAccount(ctx, conn, in.AccountID); err != nil {
-			return investmentPeriodDTO{}, errMCPInput
+			if errors.Is(err, investments.ErrNotFound) {
+				return investmentPeriodDTO{}, errMCPInput
+			}
+			return investmentPeriodDTO{}, err
 		}
 	}
 	reference, err := mcpReference(ctx, conn, to)
@@ -341,18 +349,23 @@ func mcpScenarioIDs(ctx context.Context, conn *sql.DB, selected []string) ([]str
 		return nil, err
 	}
 	known := map[string]bool{}
+	included := map[string]bool{}
 	ids := []string{}
 	for _, s := range list {
 		known[s.ID] = true
 		if s.IsActive && s.Kind != scenarios.KindStandalone {
 			ids = append(ids, s.ID)
+			included[s.ID] = true
 		}
 	}
 	for _, id := range selected {
 		if !known[id] {
 			return nil, errMCPInput
 		}
-		ids = append(ids, id)
+		if !included[id] {
+			ids = append(ids, id)
+			included[id] = true
+		}
 	}
 	return ids, nil
 }

@@ -262,9 +262,7 @@ func handleGetTimeline(conn *sql.DB) http.HandlerFunc {
 		response.valuationDTO = valuation
 		valuation.series(&response.Base)
 		valuation.fields(&response.PeriodTotals.Income, &response.PeriodTotals.Expense, &response.PeriodTotals.Result)
-		if response.PeriodTotals.Reporting != nil {
-			valuation.summary(response.PeriodTotals.Reporting)
-		}
+		response.PeriodTotals.Reporting = &response.Base.Reporting
 		if response.Simulation != nil {
 			valuation.series(response.Simulation)
 		}
