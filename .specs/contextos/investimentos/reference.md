@@ -771,3 +771,18 @@ precision and portfolio results on SQLite and Postgres.
 `internal/httpapi/mcp_investment_writes_test.go` pins provider ownership,
 manual holdings in synced custody, foreign-asset refusal, negative-history
 rollback, stale/repeated previews, injected failure and the atomic recheck.
+
+
+## MCP quote operations
+
+`get_operations_status` exposes quote scheduling and the persisted last full
+spot outcome, with no brapi token. `request_quote_refresh` requires access, write
+and operations scopes; it starts bounded asynchronous `quotes.RefreshNow` work
+using the same market service and shared REST/scheduler spot guard. Poll
+`get_operation_result` with the original token: a `finished` receipt contains the
+actual success/partial/deferred/failed outcome and counts; history backfill is
+separate. Manual requests remain eligible with the daily schedule disabled and
+never change that schedule. Server shutdown and a five-minute deadline cancel
+accepted work; client disconnect does not. Existing providers, caching, rate
+limits and retries remain authoritative. Process-local retry receipts, setup and
+synthetic validation: [README operational tools](../../../README.md#operational-tools).

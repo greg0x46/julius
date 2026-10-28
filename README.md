@@ -54,7 +54,7 @@ authentication configuration that does not depend on the host:
 - **Optional MCP endpoint** — provider-neutral Streamable HTTP in the same
   binary, disabled by default, with OAuth, PKCE and explicit owner consent for
   financial planning reads and separately scoped writes for goals, scenarios,
-  recurring commitments, transactions and editable investments. Every write requires owner approval in Julius. See [MCP](#mcp).
+  recurring commitments, transactions and editable investments. Financial writes require owner approval in Julius; separately authorized clients can inspect and request guarded maintenance. See [MCP](#mcp).
 
 - **Exact money boundaries** — amounts stay decimal strings through entry,
   editing, calculation and HTTP. BRL display rounds to cents with ties away
@@ -437,7 +437,7 @@ using its own single owner account, independent of any AI provider:
    tokens cannot authorize `/api`. REST keeps its cookie, Origin and
    `X-Julius-Request: 1` requirements.
 
-The `mcp:access` scope permits the read-only planning tools below.
+The `mcp:access` scope permits the read-only planning and operational tools below.
 Request `scope=mcp:access mcp:write` for financial writes; existing read-only
 grants gain no write permission. Write consent permits preparing changes,
 while each change still requires fresh owner approval in Julius.
@@ -671,7 +671,7 @@ To validate in dev with a synthetic owner and no bank connection:
 2. Connect a client supporting Dynamic Client Registration, follow the consent
    page, and choose **Negar acesso**: no access token should be issued.
 3. Connect again, review the details, enter the synthetic owner's credentials
-   and choose **Autorizar acesso**. Discovery should list the eight financial read tools and the guarded write tools above.
+   and choose **Autorizar acesso**. Discovery should list the eight financial read tools, operational tools and guarded financial write tools.
    Call `list_goals` with `{}` and `get_timeline` with today's `from`, `to` and
    `reference_date`; empty synthetic data should return empty lists/zero BRL
    figures. With a synthetic investment and dated goal, compare portfolio and
@@ -696,6 +696,78 @@ To validate in dev with a synthetic owner and no bank connection:
 5. Revoke the access token through `/oauth/revoke`, then verify the same token
    gets 401. Repeat authorization and reset the synthetic owner's password;
    that token should also get 401. Open mode must reject authorization.
+
+#### Operational tools
+
+Authorize with `scope=mcp:access mcp:write mcp:operations` to request network
+operations. Existing read-only and financial-write tokens gain no operations
+permission. OAuth consent explicitly authorizes maintenance requests without a
+new approval per operation; financial changes still require their own approval.
+No tool reads credentials, raw provider payloads, environment variables or keys,
+or accepts arbitrary commands or configuration changes.
+
+| Tool | Inputs and result |
+|---|---|
+| `get_operations_status` | `{}`; worker credential readiness, sync/quote daily schedules, quote service availability and last full spot refresh |
+| `list_sync_runs` | Optional `limit` (1–100, default 20), `offset`; newest provider sync runs, IDs, status and counters |
+| `get_sync_run` | Required `id` UUID; optional `limit`, `offset` page the safe failures, alongside run status; excludes file imports |
+| `request_sync` | Required `idempotency_key`; optional active Pluggy `source_id` UUID, omitted for all active connections; returns a receipt and queued run IDs |
+| `request_quote_refresh` | Required `idempotency_key`; returns a running receipt immediately; no `source_id` |
+| `get_operation_result` | Required `request_id` UUID; poll using the same operations-scoped access token |
+
+Read tools require only `mcp:access`; requests and receipt polling require all
+three scopes. Results use `status` and JSON `data`; request receipts add
+`request_id`, `state` and an optional `result` or safe `error`. Sync `accepted`
+means queued (HTTP result 202), not completed: poll each run with `get_sync_run`.
+Busy/inactive/file connections are rejected with the existing 409 policy; busy
+connections do not stop other eligible connections. Missing worker credentials
+reject the request without queueing. The existing worker owns claims, leases,
+recovery and provider retries; no second sync execution path is added.
+
+A quote receipt starts `running`, then becomes `finished` or `rejected`.
+`finished` carries the actual spot outcome (`success`, `partial`, `deferred` or
+`failed`) and counts; it does not claim upstream success. The shared REST and
+scheduler guard prevents overlapping spot refreshes. Provider timeouts, retries,
+rate limits and caching remain in force. Accepted quote work survives a client
+disconnect but observes server shutdown and a five-minute deadline. History
+backfill follows separately. Explicit manual refresh remains available when the
+automatic daily quote schedule is disabled; requests never change schedules.
+
+Use an 8–128 character printable ASCII `idempotency_key`, without spaces or
+commas. Retrying the same key and arguments returns the same receipt, including
+a terminal failure; changed arguments are rejected. A deliberate new attempt
+needs a new key. At most 100 receipts are retained per server process for one
+hour (running work is retained until it finishes), bound to the original token.
+Receipts and their retry protection do not survive restart or move between
+instances. If a receipt is unavailable, inspect durable `list_sync_runs` and
+`get_operations_status` before requesting again; keep retries on the same
+instance. Sync queue uniqueness and quote spot guards retain their existing
+scope (database-wide per connection for sync; process-local for quotes).
+
+To validate in dev with synthetic data and no live credentials:
+
+1. Enable MCP/authentication with a synthetic owner and authorize one read token
+   and one token with all three scopes. Read operational status/history with
+   either. A read token and a financial-write-only token must fail both requests.
+2. Without configured Pluggy credentials, `request_sync` must fail without a new
+   run. Inactive/file sources and overlapping runs are covered by synthetic
+   integration tests; no real bank connection is needed.
+3. With no quoted holdings, call `request_quote_refresh` with
+   `{"idempotency_key":"synthetic-refresh-1"}` and poll `get_operation_result`.
+   It should finish with zero assets without provider traffic. Retry the same
+   key: the request ID must remain unchanged. Supplying `force`, credentials,
+   an invalid UUID or a quote `source_id` must fail.
+4. With synthetic quoted holdings, automated fake-provider tests exercise
+   concurrency, upstream outage, rate limits and shutdown. Demo mode must refuse
+   MCP startup. No credential is returned by any read or error.
+
+For troubleshooting, reauthorize when operations scopes are missing; configure
+Pluggy only in Julius when `sync_ready` is false. For busy requests, inspect the
+active run or wait for spot work to finish. Inspect quote outcome counts rather
+than treating `finished` as success. After failure or deferral, use a new retry
+key only when a new attempt is intended. MCP transport limits (30 seconds,
+16 concurrent requests) also apply to these tools; the async quote deadline is
+separate.
 
 ### Public demo
 

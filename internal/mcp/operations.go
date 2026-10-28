@@ -167,13 +167,22 @@ func (o *oauthServer) registerOperations(server *sdk.Server, ops Operations) {
 	}
 	operationTool(server, "get_operation_result", "Poll an operation receipt using the exact original access token and operations scopes. Process-local receipts expire after one hour; after restart inspect durable sync history/last_quote_refresh before deciding to request new work. accepted means queued, not synchronized; finished quotes may still report failed, partial or deferred. Quote history backfill runs separately.", true, func(ctx context.Context, in struct {
 		RequestID string `json:"request_id"`
-	}) (operationOutput, error) { identity, _ := ctx.Value(writeContextKey{}).(writeIdentity); if !canOperate(identity.Scope) {
-		return operationOutput{}, errors.New("mcp:write and mcp:operations scopes required")
-	}; if !validOperationID(in.RequestID) {
-		return operationOutput{}, errors.New("invalid request_id")
-	}; mu.Lock(); defer mu.Unlock(); receipt := receipts[in.RequestID]; if receipt == nil || receipt.Owner != identity.Hash || (receipt.Output.State != "running" && !time.Now().Before(receipt.Expires)) {
-		return operationOutput{}, errors.New("operation unavailable or expired")
-	}; return receipt.Output, nil })
+	}) (operationOutput, error) {
+		identity, _ := ctx.Value(writeContextKey{}).(writeIdentity)
+		if !canOperate(identity.Scope) {
+			return operationOutput{}, errors.New("mcp:write and mcp:operations scopes required")
+		}
+		if !validOperationID(in.RequestID) {
+			return operationOutput{}, errors.New("invalid request_id")
+		}
+		mu.Lock()
+		defer mu.Unlock()
+		receipt := receipts[in.RequestID]
+		if receipt == nil || receipt.Owner != identity.Hash || (receipt.Output.State != "running" && !time.Now().Before(receipt.Expires)) {
+			return operationOutput{}, errors.New("operation unavailable or expired")
+		}
+		return receipt.Output, nil
+	})
 }
 func validOperationID(id string) bool { _, err := uuid.Parse(id); return err == nil }
 func validOperationKey(key string) bool {
