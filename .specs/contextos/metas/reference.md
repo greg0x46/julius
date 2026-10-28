@@ -119,3 +119,17 @@ exclude hypothetical scenarios; the disclosed assumptions retain zero
 appreciation when no monthly return can be measured.
 
 Tool inputs, output bounds and dev validation: [README MCP](../../../README.md#mcp).
+
+## MCP writes
+
+`create_goal`, `update_goal` and `delete_goal` require `mcp:write` plus fresh
+owner approval in Julius. Creation/editing use the existing goal request
+conversion, `goals.Create`/`Update` and REST formatter; updates replace fields.
+Positive exact BRL targets and calendar dates are validated before preview.
+Progress and target-date projections stay derived from realized investments.
+Deleting a goal removes only its target. Stored before-state is rechecked before
+application; unknown IDs fail safely. Notes are bounded to 4,000 characters.
+
+Synthetic lifecycle, exact amount, derived progress, stale/invalid input and
+OAuth/approval tests: `internal/httpapi/mcp_planning_writes_test.go` and
+`internal/mcp/planning_writes_test.go` (SQLite and Postgres).

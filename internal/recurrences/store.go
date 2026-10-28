@@ -115,6 +115,19 @@ func Update(ctx context.Context, conn *sql.DB, id string, write Write) (Recurrin
 	}
 	defer tx.Rollback()
 
+	c, err := UpdateWithQuerier(ctx, tx, id, write)
+	if err != nil {
+		return RecurringCommitment{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return RecurringCommitment{}, err
+	}
+	return c, nil
+}
+
+// UpdateWithQuerier replaces a commitment within the caller's transaction.
+// Callers must roll back the transaction on error.
+func UpdateWithQuerier(ctx context.Context, q Querier, id string, write Write) (RecurringCommitment, error) {
 	now := time.Now().UTC()
 	c := RecurringCommitment{
 		ID: id, Name: write.Name, Kind: write.Kind, Amount: write.Amount,
@@ -122,7 +135,7 @@ func Update(ctx context.Context, conn *sql.DB, id string, write Write) (Recurrin
 		DayOfMonth: write.DayOfMonth, MonthOfYear: write.MonthOfYear, StartDate: write.StartDate,
 		EndDate: write.EndDate, IsActive: write.IsActive, UpdatedAt: now,
 	}
-	res, err := tx.ExecContext(ctx, `
+	res, err := q.ExecContext(ctx, `
 		UPDATE scenarios SET name = ?, is_active = ?, updated_at = ?
 		WHERE id = ? AND kind = 'recurring'`,
 		c.Name, c.IsActive, db.FormatTime(now), id)
@@ -132,7 +145,7 @@ func Update(ctx context.Context, conn *sql.DB, id string, write Write) (Recurrin
 	if n, _ := res.RowsAffected(); n == 0 {
 		return RecurringCommitment{}, ErrNotFound
 	}
-	res, err = tx.ExecContext(ctx, `
+	res, err = q.ExecContext(ctx, `
 		UPDATE scenario_recurring_schedules SET
 			cashflow_kind = ?, amount = ?, category_id = ?, account_id = ?, cadence = ?,
 			day_of_month = ?, month_of_year = ?, start_date = ?, end_date = ?
@@ -151,15 +164,10 @@ func Update(ctx context.Context, conn *sql.DB, id string, write Write) (Recurrin
 	if n, _ := res.RowsAffected(); n == 0 {
 		return RecurringCommitment{}, ErrNotFound
 	}
-	if err := dropOrphanedOverrides(ctx, tx, c); err != nil {
+	if err := dropOrphanedOverrides(ctx, q, c); err != nil {
 		return RecurringCommitment{}, err
 	}
-	if err := tx.Commit(); err != nil {
-		return RecurringCommitment{}, err
-	}
-	// CreatedAt is the one field the write does not carry, so it comes from
-	// the row rather than being invented here.
-	return Get(ctx, conn, id)
+	return Get(ctx, q, id)
 }
 
 // dropOrphanedOverrides deletes the reconciliation rows of c whose date is no

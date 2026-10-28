@@ -53,8 +53,8 @@ authentication configuration that does not depend on the host:
 
 - **Optional MCP endpoint** — provider-neutral Streamable HTTP in the same
   binary, disabled by default, with OAuth, PKCE and explicit owner consent for
-  financial planning tools and separately scoped financial writes with per-operation
-  owner approval in Julius. See [MCP](#mcp).
+  financial planning reads and separately scoped writes for goals, scenarios,
+  recurring commitments, transactions and editable investments. Financial writes require owner approval in Julius; separately authorized clients can inspect and request guarded maintenance. See [MCP](#mcp).
 
 - **Exact money boundaries** — amounts stay decimal strings through entry,
   editing, calculation and HTTP. BRL display rounds to cents with ties away
@@ -437,7 +437,7 @@ using its own single owner account, independent of any AI provider:
    tokens cannot authorize `/api`. REST keeps its cookie, Origin and
    `X-Julius-Request: 1` requirements.
 
-The `mcp:access` scope permits the read-only planning tools below.
+The `mcp:access` scope permits the read-only planning and operational tools below.
 Request `scope=mcp:access mcp:write` for financial writes; existing read-only
 grants gain no write permission. Write consent permits preparing changes,
 while each change still requires fresh owner approval in Julius.
@@ -484,7 +484,7 @@ FX errors carry native totals and coverage issues (currency, account, date and
 reason). Errors disclose no database details. Tool descriptions/results state
 calculation assumptions, including Modified Dietz, historical FX, zero assumed
 goal appreciation when history is too short, and current FX across projections.
-No write tools, chats or inference calls are exposed.
+Financial writes require the separate approval flow below. No chats or inference calls are exposed.
 
 Consent requests and authorization codes expire after five minutes; access
 tokens expire after one hour, without idle extension. Only SHA-256 hashes of
@@ -520,8 +520,9 @@ Pluggy credentials and browser cookie are never issued to MCP clients.
 
 Write tools prepare an immutable preview; they never commit on an MCP call.
 All require both `mcp:access` and `mcp:write`. Inputs are an optional `id` UUID
-(required for changes to an existing record), a typed `data` object with the
-matching REST body below, and `idempotency_key` for manual creation.
+(required for changes to an existing record; integrated investment accounts use
+`integrated:<source UUID>`), a typed `data` object with the
+body fields below, and `idempotency_key` for manual transaction creation.
 Discovery publishes the body fields and exact string amount schema.
 
 | Tool | `data` fields |
@@ -535,7 +536,39 @@ Discovery publishes the body fields and exact string amount schema.
 | `update_category` | At least one of `name`, `is_active`, `icon`, `color`; deactivate instead of delete |
 | `create_automation_rule`, `update_automation_rule` | `name`, `is_active`, `logic_operator`, `conditions`, `actions` as in `/api/automation-rules`; `apply_retroactively` must be omitted or false |
 | `delete_automation_rule` | `{}`; previous category/inclusion decisions remain |
+| `create_goal`, `update_goal` | `name`, `metric` (`invested_value`), positive BRL `target_amount`; optional `target_date` (`YYYY-MM-DD` or null), `notes`; updates replace the goal fields |
+| `delete_goal` | `{}`; removes the target without changing investments |
+| `create_scenario`, `update_scenario` | `name`; standalone hypotheticals only; updates rename without changing activation |
+| `delete_scenario` | `{}`; removes the standalone scenario, its planned transactions and realization links, preserving real entries |
+| `create_planned_transaction`, `update_planned_transaction` | `description`, signed BRL `amount`, `projected_at` (`YYYY-MM-DD`), optional `category` UUID; requires top-level `scenario_id`, plus `id` for an existing planned transaction |
+| `delete_planned_transaction` | `{}`; requires top-level `scenario_id` and planned transaction `id`; preserves real entries |
+| `create_recurring_commitment`, `update_recurring_commitment` | `name`, `kind` (`income`/`expense`), positive BRL `amount`, `category_id`, `cadence` (`monthly`/`annual`), `day_of_month` (1–31), `start_date`, `is_active`; optional `account_id`, `end_date`, `month_of_year` (required for annual); updates replace schedule fields |
+| `delete_recurring_commitment` | `{}`; removes schedule/reconciliation decisions, preserving real entries; remove any targeting automation reconcile action first |
+| `create_investment_account` | `name`; optional `kind` (`manual`), `currency_code` (`BRL`), `financial_account_id` UUID; provider accounts come from sync |
+| `update_investment_account` | Optional `name`, `active`, `financial_account_id` (null unlinks); integrated custody accepts only the bank link |
+| `delete_investment_account` | `{}`; manual custody without positions or operations only |
+| `create_investment_position` | `account_id` (UUID or `integrated:<source UUID>`), `occurred_on` (`YYYY-MM-DD`), `asset_id` UUID or `name`; optional `ticker`, `asset_type`, `initial_quantity`, `initial_unit_cost`, `initial_value`, `notes` |
+| `update_investment_position` | Optional `name`, `ticker`, `asset_type`, `notes`; manual holdings only; instrument descriptions are shared across holdings of that asset |
+| `delete_investment_position` | `{}`; manual position without operations only |
+| `create_investment_operation`, `update_investment_operation` | `account_id`, `kind` (`initial_balance`, `deposit`, `withdrawal`, `buy`, `sell`, `income`, `fee`, `tax`, `valuation`), `occurred_on` (`YYYY-MM-DD`); optional `position_id`, `amount`, `quantity`, `unit_price`, `fees`, `taxes`, `notes`, as allowed by the investment ledger. Updates replace operation fields. Without `amount`, quantity × unit price supplies the gross amount. |
+| `delete_investment_operation` | `{}`; manual operation without reconciliations or a custody-transfer pair only |
 | `get_write_result` | Top-level `request_id`; returns approval state and the final REST status/body |
+
+Investment monetary fields, quantities and prices are plain decimal strings (at
+most 64 characters, no exponent or JSON numbers). Manual records remain BRL,
+including local positions within integrated custody; a foreign-currency asset
+cannot receive a manual holding. Synced holdings and operations retain their
+native data and currencies. Integrated custody permits local buys/sells only
+for its manual holdings, and cash-only contribution/withdrawal/income/fee/tax
+records without changing provider cash. Transfers, reconciliation writes and
+asset-catalog management are not exposed by these tools.
+
+Investment approval captures the relevant custody ledgers, positions and links;
+up to 500 positions plus operations per affected custody, also subject to the
+256 KiB preview limit. The approval recheck and mutation share a serializable
+transaction. Invalid history (including negative cash or quantity) rolls back
+entirely. Replaying the same approval applies it once; a new tool call prepares
+a new owner approval, not a persistent investment creation idempotency key.
 
 For example, `create_manual_transaction` accepts:
 
@@ -558,8 +591,8 @@ For example, `create_manual_transaction` accepts:
    terminal. A successful approval POST executes once, including concurrent
    retries. Changed preview data requires a new preview and approval.
 
-Creation keys use the existing persistent owner idempotency contract: 8–128
-printable ASCII characters without whitespace/commas; retry the same normalized
+Manual transaction creation keys use the existing persistent owner idempotency
+contract: 8–128 printable ASCII characters without whitespace/commas; retry the same normalized
 payload with the same key, including after losing a response. A different
 payload with that key returns a 409 Problem. Domain failures retain sanitized
 REST Problems. A 503 can mean the write committed but its result could not be
@@ -568,8 +601,9 @@ read back: inspect Julius before retrying; always reuse the creation key.
 Manual operations refuse provider entries, archived accounts and prohibited
 investment/transfer links just like the UI. Category propagation uses the domain
 installment grouping, capped at 100 identifiers, and rechecks the preview in the
-same serializable transaction as all decisions/events. Other operations address
-one record; arbitrary batches and retroactive rule application are unavailable.
+same serializable transaction as all decisions/events. Scenario deletion also
+captures planned children and realization links and rechecks its preview inside the deletion transaction. Arbitrary batches and retroactive
+rule application are unavailable.
 Rules affect future arrivals/changed sync entries, respecting manual decisions.
 Ignoring cleans up payable, recurring and investment links without changing bank
 cash. Manual creation shares learned categorization, automation and exact money
@@ -578,7 +612,7 @@ with the UI; updates/deletes retain the same service restrictions.
 Bodies are limited to 16 KiB; previews to 256 KiB; names to 200 characters,
 descriptions/condition values to 1,000, rule conditions to 20 and actions to 10.
 Amounts are nonzero plain decimal strings of at most 64 characters (no exponent).
-Approvals are instance-local, capped at 100, expire after five minutes and are
+Goal notes are limited to 4,000 characters. Approvals are instance-local, capped at 100, expire after five minutes and are
 lost on restart; final execution results remain for ten minutes. Use the same
 instance for tool calls and browser approval. Token revocation, expiry, password
 reset or disabling authentication prevents pending approval. Browser requests
@@ -594,6 +628,35 @@ editing/deleting a synced entry must fail. Deny a request and verify it remains
 unchanged. These steps need no live provider credentials; synced restrictions
 and rollback faults are also covered by the integration tests.
 
+Planning writes use the same goal and recurrence validation/derived states as the
+application. Active recurring commitments enter base forecasts and reconciled
+occurrences are suppressed. Schedule edits release manual links/detachments whose
+dates cease to be occurrences. Standalone scenarios remain hypothetical: even an
+active one enters MCP timeline/events only through explicit `scenario_ids`.
+Standalone planning writes never change goal progress, realized totals or account balances.
+
+To validate planning writes in dev, use a synthetic owner, a client authorized for
+both scopes and an expense category from Julius; no bank connection is required:
+
+1. Prepare `create_scenario` with `{"data":{"name":"Synthetic vehicle"}}`.
+   Approve in Julius, poll `get_write_result`, and keep the returned scenario ID.
+2. Prepare `create_planned_transaction` with that top-level `scenario_id` and
+   `data` containing `description`, `amount: "-20000.001"` and a future
+   `projected_at`. Approve and poll. Call `get_timeline` for that date range
+   with `reference_date` today: compare omitted IDs with `scenario_ids: [id]`.
+   Only the selected simulation should include the planned expense.
+3. Rename and then delete the scenario with separate approvals. Denying deletion
+   must retain it; approving must remove its planned events and preserve all real
+   transactions. A changed preview requires a new request.
+4. Create/edit a goal (`invested_value`, positive `target_amount`, optional future
+   `target_date`) and compare `list_goals` with Metas. Create/edit an active monthly
+   recurring expense with the category ID and compare its schedule/occurrences with
+   Recorrências and `list_projection_events`. Derived progress, calendar clamping
+   and reconciliation must match. Delete each with separate approvals.
+5. A read-only client must fail these writes. Invalid decimal strings/dates,
+   stale IDs and planned transaction IDs belonging to another scenario must fail
+   without mutation. Recurrence deletion must fail while targeted by automation.
+
 The official [Go MCP SDK](https://github.com/modelcontextprotocol/go-sdk) serves
 stateless Streamable HTTP with JSON responses: 1 MiB bodies, 30 seconds and
 16 concurrent requests (429 when busy). OAuth request bodies are limited to
@@ -608,15 +671,103 @@ To validate in dev with a synthetic owner and no bank connection:
 2. Connect a client supporting Dynamic Client Registration, follow the consent
    page, and choose **Negar acesso**: no access token should be issued.
 3. Connect again, review the details, enter the synthetic owner's credentials
-   and choose **Autorizar acesso**. Discovery should list the eight tools above.
+   and choose **Autorizar acesso**. Discovery should list the eight financial read tools, operational tools and guarded financial write tools.
    Call `list_goals` with `{}` and `get_timeline` with today's `from`, `to` and
    `reference_date`; empty synthetic data should return empty lists/zero BRL
    figures. With a synthetic investment and dated goal, compare portfolio and
    goal figures with Investimentos and Metas. Create a hypothetical scenario:
    it must affect only calls selecting its ID, including if marked active.
-4. Revoke the access token through `/oauth/revoke`, then verify the same token
+4. With `mcp:access mcp:write`, prepare and approve `create_investment_account`
+   with a synthetic name, then `create_investment_position` in that custody
+   with a synthetic asset name and today's `occurred_on`. Approve a `deposit`
+   of `100`, then a `buy` of quantity `3` at unit price `10`, fees `0.1` and
+   taxes `0.2`, then a `sell` of quantity `1` at `12`, fees `0.2` and taxes
+   `0.3`. Inspect Investimentos: quantity is `2`, cost is `20.2` and cash is
+   `81.2`. Record a `valuation` of `24` for the position and compare
+   `get_investment_portfolio` with the page: yield is `5.2`, costs `0.8`.
+   Before valuation, unavailable period values follow the existing quote
+   coverage rules. Reject a prepared deletion: the operation remains. Approve
+   deletion of the sale and replay that approval: it applies once. An attempted
+   sale of more units than held must fail without changing any record.
+   Provider ownership can additionally be checked with synthetic synced fixtures
+   in the automated tests; no live provider credentials are needed.
+   Pace approvals within the existing limit of five owner login attempts per
+   minute; wait for the next minute after a 429 response.
+5. Revoke the access token through `/oauth/revoke`, then verify the same token
    gets 401. Repeat authorization and reset the synthetic owner's password;
    that token should also get 401. Open mode must reject authorization.
+
+#### Operational tools
+
+Authorize with `scope=mcp:access mcp:write mcp:operations` to request network
+operations. Existing read-only and financial-write tokens gain no operations
+permission. OAuth consent explicitly authorizes maintenance requests without a
+new approval per operation; financial changes still require their own approval.
+No tool reads credentials, raw provider payloads, environment variables or keys,
+or accepts arbitrary commands or configuration changes.
+
+| Tool | Inputs and result |
+|---|---|
+| `get_operations_status` | `{}`; worker credential readiness, sync/quote daily schedules, quote service availability and last full spot refresh |
+| `list_sync_runs` | Optional `limit` (1–100, default 20), `offset`; newest provider sync runs, IDs, status and counters |
+| `get_sync_run` | Required `id` UUID; optional `limit`, `offset` page the safe failures, alongside run status; excludes file imports |
+| `request_sync` | Required `idempotency_key`; optional active Pluggy `source_id` UUID, omitted for all active connections; returns a receipt and queued run IDs |
+| `request_quote_refresh` | Required `idempotency_key`; returns a running receipt immediately; no `source_id` |
+| `get_operation_result` | Required `request_id` UUID; poll using the same operations-scoped access token |
+
+Read tools require only `mcp:access`; requests and receipt polling require all
+three scopes. Results use `status` and JSON `data`; request receipts add
+`request_id`, `state` and an optional `result` or safe `error`. Sync `accepted`
+means queued (HTTP result 202), not completed: poll each run with `get_sync_run`.
+Busy/inactive/file connections are rejected with the existing 409 policy; busy
+connections do not stop other eligible connections. Missing worker credentials
+reject the request without queueing. The existing worker owns claims, leases,
+recovery and provider retries; no second sync execution path is added.
+
+A quote receipt starts `running`, then becomes `finished` or `rejected`.
+`finished` carries the actual spot outcome (`success`, `partial`, `deferred` or
+`failed`) and counts; it does not claim upstream success. The shared REST and
+scheduler guard prevents overlapping spot refreshes. Provider timeouts, retries,
+rate limits and caching remain in force. Accepted quote work survives a client
+disconnect but observes server shutdown and a five-minute deadline. History
+backfill follows separately. Explicit manual refresh remains available when the
+automatic daily quote schedule is disabled; requests never change schedules.
+
+Use an 8–128 character printable ASCII `idempotency_key`, without spaces or
+commas. Retrying the same key and arguments returns the same receipt, including
+a terminal failure; changed arguments are rejected. A deliberate new attempt
+needs a new key. At most 100 receipts are retained per server process for one
+hour (running work is retained until it finishes), bound to the original token.
+Receipts and their retry protection do not survive restart or move between
+instances. If a receipt is unavailable, inspect durable `list_sync_runs` and
+`get_operations_status` before requesting again; keep retries on the same
+instance. Sync queue uniqueness and quote spot guards retain their existing
+scope (database-wide per connection for sync; process-local for quotes).
+
+To validate in dev with synthetic data and no live credentials:
+
+1. Enable MCP/authentication with a synthetic owner and authorize one read token
+   and one token with all three scopes. Read operational status/history with
+   either. A read token and a financial-write-only token must fail both requests.
+2. Without configured Pluggy credentials, `request_sync` must fail without a new
+   run. Inactive/file sources and overlapping runs are covered by synthetic
+   integration tests; no real bank connection is needed.
+3. With no quoted holdings, call `request_quote_refresh` with
+   `{"idempotency_key":"synthetic-refresh-1"}` and poll `get_operation_result`.
+   It should finish with zero assets without provider traffic. Retry the same
+   key: the request ID must remain unchanged. Supplying `force`, credentials,
+   an invalid UUID or a quote `source_id` must fail.
+4. With synthetic quoted holdings, automated fake-provider tests exercise
+   concurrency, upstream outage, rate limits and shutdown. Demo mode must refuse
+   MCP startup. No credential is returned by any read or error.
+
+For troubleshooting, reauthorize when operations scopes are missing; configure
+Pluggy only in Julius when `sync_ready` is false. For busy requests, inspect the
+active run or wait for spot work to finish. Inspect quote outcome counts rather
+than treating `finished` as success. After failure or deferral, use a new retry
+key only when a new attempt is intended. MCP transport limits (30 seconds,
+16 concurrent requests) also apply to these tools; the async quote deadline is
+separate.
 
 ### Public demo
 

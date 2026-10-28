@@ -239,7 +239,9 @@ password-reset races; reads also require the current revision. Browser logout
 has no effect on OAuth tokens; password changes/resets revoke all of them.
 
 `mcp:access` covers the transport and read-only tools. Optional `mcp:write`
-requires `mcp:access` too; either scope order is accepted and normalized. Read-only
+requires `mcp:access` too; scope order is accepted and normalized. Optional
+`mcp:operations` additionally requires `mcp:write`, authorizing guarded network
+requests explicitly disclosed on consent, without a new financial approval. Read-only
 grants cannot prepare or inspect writes. Each write needs its own owner approval. Existing grants also permit these reads; consent now explicitly
 discloses financial access and explicit hypothetical selection. Unknown requested
 scopes are rejected. Consent requests and codes last
@@ -322,11 +324,17 @@ Selection and missing-FX tests run on both database dialects.
 
 ### Financial write approval
 
-`internal/mcp/writes.go` registers ten preparation tools plus `get_write_result`;
+`internal/mcp/writes.go` registers thirty-one preparation tools plus `get_write_result`;
 [README financial writes](../../../README.md#financial-writes) lists exact tool
 names, body fields, bounds and synthetic dev validation. `internal/httpapi/mcp_writes.go`
 validates allowlisted operations, captures before-state, installment identifiers
 and financial links/amounts, and calls existing ledger/automation/category paths.
+`internal/httpapi/mcp_planning_writes.go` adds goal, standalone scenario/planned
+transaction and recurring commitment validation/snapshots, reusing their existing
+request conversions and domain flows. Scenario updates rename only. Planned
+transactions carry an explicit parent `scenario_id`; parent kind and child
+ownership are checked on preview/application. Goal progress and realized totals
+remain derived; standalone selection stays explicit.
 Ignore/delete previews include all own-account transfer participants and their
 native amounts and before-state: removing a transfer relationship preserves the
 counterpart entries but changes which reporting decisions apply.
@@ -354,8 +362,12 @@ creation idempotency survives. Multiple replicas need request affinity.
 Before-state changes invalidate approval. Installment categorization rechecks
 membership and every before-state inside the same serializable transaction as
 all decisions/events (100 identifiers maximum). No arbitrary batch or
-retroactive rule application is exposed. One-record manual/category/rule paths
-revalidate the preview before invoking their existing domain service boundaries.
+retroactive rule application is exposed. Scenario/planned-transaction deletion
+also rechecks its planning cascade and
+realization snapshots inside the deletion transaction, preserving real entries.
+Recurrence preview includes schedules, manual decisions and targeting rules; edits
+retain orphan cleanup and deletion refuses targeting reconcile actions.
+One-record manual/category/rule/goal/recurrence paths revalidate the preview before invoking their existing domain service boundaries.
 Read clients can discover schemas but cannot prepare, commit or read write results.
 
 Tests `internal/mcp/writes_test.go` and `internal/httpapi/mcp_writes_test.go`
@@ -364,3 +376,50 @@ CSRF/Origin/credentials, denial/replay/concurrency, token binding/revocation,
 expiry, exact money, persistent creation retries/conflicts, soft deletion,
 manual/provider restrictions, categorization cascades, stale previews, rule
 and catalog management, and injected partial failures with full rollback.
+
+Planning write contracts/authorization are covered by
+`internal/mcp/planning_writes_test.go` and
+`internal/httpapi/mcp_planning_writes_test.go`: all twelve tools, exact BRL money,
+goal/recurrence parity, explicit hypothetical timeline effects, invalid dates/IDs,
+stale cascades, parent ownership, anonymous/read-only rejection and destructive
+denial/replay. The OAuth consent disclosure names planning writes; each operation
+still requires a separate owner approval before application.
+
+
+### Guarded operations
+
+`internal/mcp/operations.go` registers six tools: `get_operations_status`,
+`list_sync_runs`, `get_sync_run`, `request_sync`, `request_quote_refresh` and
+`get_operation_result`. The first three require access scope; request and receipt
+polling require access, write and operations scopes. All stay behind the same
+authentication, demo/open-mode restrictions, 16-request concurrency gate and
+30-second transport timeout. Unknown inputs, malformed UUIDs, invalid pagination
+and client-supplied overrides are rejected. Reads are bounded to 100 items and
+256 KiB; failure details are paginated and use `syncsvc.SafeMessage`, never raw
+stored messages, external account/transaction IDs or payloads. Source names are
+blanked because REST names can fall back to private provider item IDs.
+
+`httpapi.MCPRequestSync` wraps only the existing enqueue handler. `worker.Ready`
+checks the same decrypted credentials as the worker and returns only a boolean.
+`cmd/julius` injects the same secrets, market service, sync schedule and shutdown
+context used by the existing server. No settings write or arbitrary route is
+exposed. Automatic quote disabling preserves manual refresh eligibility.
+
+Request receipts use validated idempotency keys and exact token ownership;
+matching retries return the original result even after completion, while changed
+arguments fail. A mutex serializes receipt creation, with at most 100 retained
+for one hour, excluding running work from expiry. Like write approvals, receipts
+are process-local; restart/another instance requires inspecting durable history
+before retrying. Sync execution remains in the existing worker and returns
+queued IDs. Quote execution calls `quotes.RefreshNow` asynchronously with a
+five-minute deadline and server cancellation, retaining shared scheduler/REST
+guards, provider cache/retry policy and persistent last-refresh outcomes.
+Receipt `finished` is distinct from quote `success`; failures/deferrals retain
+counts and do not expose upstream errors. History backfill remains separate.
+
+Setup, troubleshooting and synthetic dev steps: [README operational tools](../../../README.md#operational-tools).
+`internal/mcp/operations_test.go` covers real OAuth grants, consent disclosure,
+read/write/operations scope separation, strict inputs, sanitized bounded history,
+ineligible/unavailable services, concurrent queue requests, token isolation,
+terminal retries, shared quote guards, upstream failure/deferral and shutdown.
+Sync integration coverage runs on SQLite and disposable Postgres.

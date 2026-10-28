@@ -19,7 +19,11 @@ import (
 	"github.com/google/uuid"
 	"github.com/greg0x46/julius/internal/automation"
 	"github.com/greg0x46/julius/internal/categories"
+	"github.com/greg0x46/julius/internal/goals"
+	"github.com/greg0x46/julius/internal/investments"
 	"github.com/greg0x46/julius/internal/ledger"
+	"github.com/greg0x46/julius/internal/recurrences"
+	"github.com/greg0x46/julius/internal/scenarios"
 	"github.com/greg0x46/julius/internal/transactions"
 )
 
@@ -27,6 +31,7 @@ import (
 type MCPWriteRequest struct {
 	Operation      string          `json:"operation"`
 	ID             string          `json:"id,omitempty"`
+	ScenarioID     string          `json:"scenario_id,omitempty"`
 	Data           json.RawMessage `json:"data"`
 	IdempotencyKey string          `json:"idempotency_key,omitempty"`
 }
@@ -66,10 +71,13 @@ func PreviewMCPWrite(ctx context.Context, q transactions.Querier, in MCPWriteReq
 	}
 	create := strings.HasPrefix(in.Operation, "create_")
 	cleansLinks := false
-	if (create && in.ID != "") || (!create && !validWriteID(in.ID)) {
+	if (create && in.ID != "") || (!create && !validWriteID(in.ID) && !(strings.HasSuffix(in.Operation, "investment_account") && validCustodyID(in.ID))) {
 		return p, errMCPWriteInput
 	}
 	if in.Operation != "create_manual_transaction" && in.IdempotencyKey != "" {
+		return p, errMCPWriteInput
+	}
+	if !strings.HasSuffix(in.Operation, "planned_transaction") && in.ScenarioID != "" {
 		return p, errMCPWriteInput
 	}
 	add := func(v any) error {
@@ -227,7 +235,10 @@ func PreviewMCPWrite(ctx context.Context, q transactions.Querier, in MCPWriteReq
 		}
 		p.Effect = "Exclui a regra e suas condições e ações. Decisões anteriores de categoria e inclusão permanecem; a reconciliação automática dependente da regra deixa de ocorrer."
 	default:
-		return p, errMCPWriteInput
+		if investmentWrite(in.Operation) {
+			return previewMCPInvestmentWrite(ctx, q, p)
+		}
+		return previewMCPPlanningWrite(ctx, q, p)
 	}
 	if !create {
 		if len(p.AffectedIDs) == 0 {
@@ -336,6 +347,48 @@ func (w *mcpWriteResponse) WriteHeader(status int) { w.status = status }
 
 func ExecuteMCPWrite(ctx context.Context, conn *sql.DB, approved MCPWritePreview) (MCPWriteResult, error) {
 	in := approved.Request
+	if investmentWrite(in.Operation) {
+		return executeMCPInvestmentWrite(ctx, conn, approved)
+	}
+	if in.Operation == "delete_scenario" || in.Operation == "delete_planned_transaction" || in.Operation == "update_recurring_commitment" || in.Operation == "delete_recurring_commitment" {
+		tx, err := conn.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
+		if err != nil {
+			return MCPWriteResult{}, err
+		}
+		defer tx.Rollback()
+		if err = checkMCPPreview(ctx, tx, approved); err != nil {
+			return MCPWriteResult{}, err
+		}
+		result := MCPWriteResult{Status: http.StatusNoContent}
+		switch in.Operation {
+		case "delete_scenario":
+			err = scenarios.DeleteScenario(ctx, tx, in.ID)
+		case "delete_planned_transaction":
+			err = scenarios.DeleteScenarioTransaction(ctx, tx, in.ID)
+		case "delete_recurring_commitment":
+			err = recurrences.Delete(ctx, tx, in.ID)
+		case "update_recurring_commitment":
+			var req recurringCommitmentWriteRequest
+			_ = json.Unmarshal(in.Data, &req)
+			write, conversionErr := req.toWrite()
+			if conversionErr != nil {
+				return MCPWriteResult{}, errMCPWriteInput
+			}
+			var commitment recurrences.RecurringCommitment
+			commitment, err = recurrences.UpdateWithQuerier(ctx, tx, in.ID, write)
+			if err == nil {
+				result.Status = http.StatusOK
+				result.Data, err = json.Marshal(toRecurringCommitmentDTO(commitment))
+			}
+		}
+		if err != nil {
+			return MCPWriteResult{}, err
+		}
+		if err = tx.Commit(); err != nil {
+			return MCPWriteResult{}, err
+		}
+		return result, nil
+	}
 	// Category propagation is a bulk mutation: recheck its entire preview inside
 	// the same transaction as all category decisions and events.
 	if in.Operation == "assign_transaction_category" {
@@ -367,6 +420,20 @@ func ExecuteMCPWrite(ctx context.Context, conn *sql.DB, approved MCPWritePreview
 		"create_manual_transaction": handleCreateManualTransaction(svc), "update_manual_transaction": handleUpdateManualTransaction(svc), "delete_manual_transaction": handleDeleteManualTransaction(svc),
 		"set_transaction_inclusion": handleSetTransactionInclusion(conn), "create_category": handleCreateCategory(conn), "update_category": handleUpdateCategory(conn),
 		"create_automation_rule": handleCreateAutomationRule(conn), "update_automation_rule": handleUpdateAutomationRule(conn), "delete_automation_rule": handleDeleteAutomationRule(conn),
+		"create_goal": handleCreateGoal(conn), "update_goal": handleUpdateGoal(conn), "delete_goal": handleDeleteGoal(conn),
+		"create_scenario":            handleCreateStandaloneScenario(conn),
+		"create_planned_transaction": handleCreateScenarioTransaction(conn), "update_planned_transaction": handleUpdateScenarioTransaction(conn),
+		"create_recurring_commitment": handleCreateRecurringCommitment(conn),
+	}
+	if in.Operation == "update_scenario" {
+		var req scenarioCreateRequest
+		_ = json.Unmarshal(in.Data, &req)
+		s, err := scenarios.RenameScenario(ctx, conn, in.ID, req.Name)
+		if err != nil {
+			return MCPWriteResult{}, err
+		}
+		raw, err := json.Marshal(scenarioToDTO(s))
+		return MCPWriteResult{Status: http.StatusOK, Data: raw}, err
 	}
 	handler, ok := handlers[in.Operation]
 	if !ok {
@@ -374,6 +441,10 @@ func ExecuteMCPWrite(ctx context.Context, conn *sql.DB, approved MCPWritePreview
 	}
 	r, _ := http.NewRequestWithContext(ctx, http.MethodPost, "/", bytes.NewReader(in.Data))
 	r.SetPathValue("id", in.ID)
+	if in.ScenarioID != "" {
+		r.SetPathValue("id", in.ScenarioID)
+		r.SetPathValue("transactionId", in.ID)
+	}
 	r.Header.Set("Content-Type", "application/json")
 	if in.IdempotencyKey != "" {
 		r.Header.Set("Idempotency-Key", in.IdempotencyKey)
@@ -398,6 +469,14 @@ func checkMCPPreview(ctx context.Context, q transactions.Querier, approved MCPWr
 // MCPWriteError only exposes domain errors; storage errors never reach clients.
 func MCPWriteError(err error) string {
 	switch {
+	case errors.Is(err, investments.ErrInvalidInput), errors.Is(err, investments.ErrNotManual), errors.Is(err, investments.ErrIntegratedReadOnly), errors.Is(err, investments.ErrTransferAtomic), errors.Is(err, investments.ErrNegativeCash), errors.Is(err, investments.ErrNegativePosition), errors.Is(err, investments.ErrUnsupportedCurrency), errors.Is(err, investments.ErrOperationHasReconciliations), errors.Is(err, investments.ErrPositionHasOperations), errors.Is(err, investments.ErrAccountHasOperations), errors.Is(err, investments.ErrAccountHasPositions), errors.Is(err, investments.ErrPositionAlreadyExists), errors.Is(err, investments.ErrAssetAlreadyExists), errors.Is(err, investments.ErrFinancialAccountLinked), errors.Is(err, investments.ErrReconciliationConflict), errors.Is(err, investments.ErrInvalidReconciliationLink), errors.Is(err, investments.ErrAccountNotFound), errors.Is(err, investments.ErrPositionNotFound), errors.Is(err, investments.ErrOperationNotFound), errors.Is(err, investments.ErrAssetNotFound):
+		return err.Error() + "; check investment eligibility and request a new preview"
+	case errors.Is(err, sql.ErrNoRows):
+		return "referenced record not found; check the category or account identifier and request a new preview"
+	case errors.Is(err, goals.ErrNotFound), errors.Is(err, goals.ErrInvalidInput), errors.Is(err, scenarios.ErrScenarioNotFound), errors.Is(err, scenarios.ErrTransactionNotFound), errors.Is(err, recurrences.ErrNotFound):
+		return err.Error() + "; check the identifier and planning fields, then request a new preview"
+	case errors.Is(err, recurrences.ErrLinkedToAutomationRule), errors.Is(err, scenarios.ErrScenarioLinkedToAutomationRule):
+		return "recurring commitment is targeted by an automation rule; remove its reconcile action before deleting"
 	case errors.Is(err, errMCPWriteInput), errors.Is(err, ErrMCPWriteConflict), errors.Is(err, transactions.ErrNotManual), errors.Is(err, transactions.ErrTransactionNotFound), errors.Is(err, categories.ErrCategoryInvalid), errors.Is(err, categories.ErrNotFound), errors.Is(err, automation.ErrNotFound):
 		return err.Error()
 	default:
@@ -409,6 +488,16 @@ func MCPWriteError(err error) string {
 func MCPWriteInputSchema(operation string) any {
 	var typ reflect.Type
 	switch operation {
+	case "create_investment_account":
+		typ = reflect.TypeFor[investmentAccountCreateRequest]()
+	case "update_investment_account":
+		typ = reflect.TypeFor[investmentAccountUpdateRequest]()
+	case "create_investment_position":
+		typ = reflect.TypeFor[investmentPositionCreateRequest]()
+	case "update_investment_position":
+		typ = reflect.TypeFor[investmentPositionUpdateRequest]()
+	case "create_investment_operation", "update_investment_operation":
+		typ = reflect.TypeFor[investmentOperationRequest]()
 	case "create_manual_transaction", "update_manual_transaction":
 		typ = reflect.TypeFor[manualTransactionRequest]()
 	case "assign_transaction_category":
@@ -421,16 +510,45 @@ func MCPWriteInputSchema(operation string) any {
 		typ = reflect.TypeFor[categoryUpdateRequest]()
 	case "create_automation_rule", "update_automation_rule":
 		typ = reflect.TypeFor[ruleWriteRequest]()
+	case "create_goal", "update_goal":
+		typ = reflect.TypeFor[goalRequest]()
+	case "create_scenario", "update_scenario":
+		typ = reflect.TypeFor[scenarioCreateRequest]()
+	case "create_planned_transaction", "update_planned_transaction":
+		typ = reflect.TypeFor[scenarioTransactionWriteRequest]()
+	case "create_recurring_commitment", "update_recurring_commitment":
+		typ = reflect.TypeFor[recurringCommitmentWriteRequest]()
 	default:
 		typ = reflect.TypeFor[struct{}]()
 	}
-	schema, err := jsonschema.ForType(typ, &jsonschema.ForOptions{TypeSchemas: map[reflect.Type]*jsonschema.Schema{reflect.TypeFor[decimal.Decimal](): {Type: "string", Description: "Signed exact decimal string, nonzero, at most 64 characters; no exponent."}}})
+	schema, err := jsonschema.ForType(typ, &jsonschema.ForOptions{TypeSchemas: map[reflect.Type]*jsonschema.Schema{reflect.TypeFor[investmentDecimal](): {Type: "string", Pattern: plainWriteDecimal.String(), MaxLength: new(64), Description: "Exact native BRL decimal string; no exponent."}, reflect.TypeFor[investmentText](): {Types: []string{"string", "null"}}, reflect.TypeFor[decimal.Decimal](): {Type: "string", Description: "Signed exact decimal string, nonzero, at most 64 characters; no exponent."}}})
 	if err != nil {
 		panic(err)
+	}
+	switch operation {
+	case "create_investment_account":
+		schema.Required = []string{"name"}
+	case "update_investment_account", "update_investment_position":
+		schema.Required = nil
+	case "create_investment_position":
+		schema.Required = []string{"account_id", "occurred_on"}
+	case "create_investment_operation", "update_investment_operation":
+		schema.Required = []string{"account_id", "kind", "occurred_on"}
+		schema.Properties["kind"] = &jsonschema.Schema{Type: "string", Enum: []any{"initial_balance", "deposit", "withdrawal", "buy", "sell", "income", "fee", "tax", "valuation"}}
 	}
 	// REST PATCH fields and nullable optional category selection remain optional.
 	if operation == "update_category" {
 		schema.Required = nil
+	}
+	if operation == "create_goal" || operation == "update_goal" {
+		schema.Properties["target_amount"] = &jsonschema.Schema{Type: "string", Description: "Positive exact BRL decimal string; at most 64 characters, no exponent."}
+		schema.Required = []string{"name", "metric", "target_amount"}
+	}
+	if operation == "create_recurring_commitment" || operation == "update_recurring_commitment" {
+		schema.Required = []string{"name", "kind", "amount", "category_id", "cadence", "day_of_month", "start_date", "is_active"}
+	}
+	if operation == "create_planned_transaction" || operation == "update_planned_transaction" {
+		schema.Required = []string{"description", "amount", "projected_at"}
 	}
 	if operation == "create_manual_transaction" || operation == "update_manual_transaction" {
 		schema.Required = []string{"account_id", "description", "amount", "occurred_at"}
@@ -457,6 +575,10 @@ func MCPWriteInputSchema(operation string) any {
 	optionalTargets(schema)
 	properties := map[string]any{"data": schema}
 	required := []string{"data"}
+	if strings.HasSuffix(operation, "planned_transaction") {
+		properties["scenario_id"] = map[string]any{"type": "string", "description": "Parent standalone scenario UUID; the transaction must belong to it."}
+		required = append(required, "scenario_id")
+	}
 	if !strings.HasPrefix(operation, "create_") {
 		properties["id"] = map[string]any{"type": "string", "description": "Existing UUID"}
 		required = append(required, "id")
