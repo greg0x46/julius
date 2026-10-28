@@ -245,3 +245,17 @@ open transactions. Category breakdown uses local SVG rings and its linked list.
 Inspection follows the selected calendar day across period updates and hides
 when that day is outside the displayed period.
 No chart library or external UI runtime is required.
+
+## MCP reads
+
+`get_timeline` reads the same `timeline.BuildSeries`, `TotalsForPeriod` and REST
+formatters, with required reference/from/to calendar days and optional timezone.
+It returns one selected series, period totals, selected IDs, reporting coverage
+and reference-currency FX. Unlike the application's default active selection,
+MCP explicitly selects active non-standalone commitments plus requested IDs;
+active standalone hypotheticals require explicit selection. `ScenarioSelection`
+is optional on `BuildParams`; omitting it preserves existing application behavior.
+Reporting summaries in both MCP and REST share the converted base summary, so
+reference-currency conversion occurs once (including the period's coverage).
+
+Tool inputs, output bounds and dev validation: [README MCP](../../../README.md#mcp).
