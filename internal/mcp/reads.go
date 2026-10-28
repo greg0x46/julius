@@ -52,7 +52,7 @@ type spendingInput struct {
 
 type readResult struct {
 	Status     int             `json:"status"`
-	Data       json.RawMessage `json:"data"`
+	Data       any             `json:"data"`
 	Pagination *readPagination `json:"pagination,omitempty"`
 }
 
@@ -137,12 +137,12 @@ func runRead(ctx context.Context, handler http.HandlerFunc, method string, body 
 	if response.overflow {
 		return nil, readResult{}, errors.New("result exceeds 8 MiB; narrow the date range or filters")
 	}
-	result := readResult{Status: response.status, Data: response.body.Bytes()}
+	result := readResult{Status: response.status, Data: json.RawMessage(response.body.Bytes())}
 	if result.Status >= 400 {
 		return &sdk.CallToolResult{IsError: true}, result, nil
 	}
 	if page != nil {
-		data := result.Data
+		data := result.Data.(json.RawMessage)
 		var fields map[string]json.RawMessage
 		if report {
 			if err := json.Unmarshal(data, &fields); err != nil {
