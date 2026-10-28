@@ -11,6 +11,7 @@ import (
 
 	"github.com/greg0x46/julius/internal/automation"
 	"github.com/greg0x46/julius/internal/ledger"
+	"github.com/greg0x46/julius/internal/money"
 	"github.com/greg0x46/julius/internal/payables"
 	"github.com/greg0x46/julius/internal/scenarios"
 	"github.com/greg0x46/julius/internal/transactions"
@@ -186,6 +187,15 @@ func previewMCPAccountsWrite(ctx context.Context, q transactions.Querier, p MCPW
 	}
 	switch in.Operation {
 	case "create_manual_account", "update_manual_account":
+		if !create {
+			var fields map[string]json.RawMessage
+			_ = json.Unmarshal(in.Data, &fields)
+			var code string
+			_ = json.Unmarshal(fields["currency_code"], &code)
+			if !planningWriteAmount(in.Data, "opening_balance") || !validManualAccountCurrency(code) || (string(fields["archived"]) != "true" && string(fields["archived"]) != "false") {
+				return p, errMCPWriteInput
+			}
+		}
 		input, err := mcpManualAccountInput(in.Data)
 		if err != nil {
 			return p, err
@@ -485,7 +495,7 @@ func executeMCPAccountsWrite(ctx context.Context, conn *sql.DB, approved MCPWrit
 				err = errMCPWriteInput
 			}
 			if err == nil {
-				value = payableLinkDTO{ID: link.Link.ID, TransactionID: link.Link.TransactionID, LinkedAmount: link.Link.LinkedAmount.String(), LinkedAt: link.Link.LinkedAt}
+				value = payableLinkDTO{ID: link.Link.ID, TransactionID: link.Link.TransactionID, LinkedAmount: money.CanonicalDecimal(link.Link.LinkedAmount), LinkedAt: link.Link.LinkedAt}
 			}
 		}
 		result.Status = http.StatusCreated

@@ -68,7 +68,8 @@ func (f *writeFixture) call(t *testing.T, tool string, args any) writeToolOutput
 	t.Helper()
 	result, err := f.session.CallTool(context.Background(), &sdk.CallToolParams{Name: tool, Arguments: args})
 	if err != nil || result.IsError {
-		t.Fatalf("%s failed: %+v %v", tool, result, err)
+		content, _ := json.Marshal(result)
+		t.Fatalf("%s failed: %s %v", tool, content, err)
 	}
 	raw, _ := json.Marshal(result.StructuredContent)
 	var out writeToolOutput

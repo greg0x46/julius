@@ -527,20 +527,16 @@ func MCPWriteInputSchema(operation string) any {
 	if err != nil {
 		panic(err)
 	}
-	if operation == "create_manual_account" || operation == "update_manual_account" {
+	if operation == "create_manual_account" {
 		schema.Required = []string{"name"}
+	}
+	if operation == "update_manual_account" {
+		schema.Required = []string{"name", "currency_code", "opening_balance", "archived"}
 	}
 	if operation == "create_payable" {
 		schema.Required = []string{"kind", "name", "total_amount"}
 	}
-	if operation == "create_transfer" {
-		// Either existing movement IDs or complete manual movements; runtime enforces exclusivity.
-		for _, def := range schema.Defs {
-			if def.Properties["occurred_at"] != nil {
-				def.Required = []string{"account_id", "description", "amount", "occurred_at"}
-			}
-		}
-	}
+
 	// REST PATCH fields and nullable optional category selection remain optional.
 	if operation == "update_category" {
 		schema.Required = nil
@@ -565,6 +561,9 @@ func MCPWriteInputSchema(operation string) any {
 	optionalTargets = func(s *jsonschema.Schema) {
 		if s == nil {
 			return
+		}
+		if operation == "create_transfer" && s.Properties["occurred_at"] != nil {
+			s.Required = []string{"account_id", "description", "amount", "occurred_at"}
 		}
 		if s.Properties["scenario_id"] != nil && s.Properties["type"] != nil {
 			s.Required = []string{"type"}
