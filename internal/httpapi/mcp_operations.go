@@ -17,6 +17,16 @@ func MCPRequestSync(ctx context.Context, conn *sql.DB, sourceID string) MCPWrite
 	r, _ := http.NewRequestWithContext(ctx, http.MethodPost, "/", bytes.NewReader(body))
 	w := &mcpWriteResponse{header: make(http.Header), status: http.StatusOK}
 	handleCreateSyncRun(conn)(w, r)
+	if w.status == http.StatusAccepted {
+		var response createSyncRunResponse
+		if json.Unmarshal(w.Bytes(), &response) == nil {
+			for i := range response.Runs {
+				response.Runs[i].SourceName = ""
+			}
+			data, _ := json.Marshal(response)
+			return MCPWriteResult{Status: w.status, Data: data}
+		}
+	}
 	return MCPWriteResult{Status: w.status, Data: append(json.RawMessage(nil), w.Bytes()...)}
 }
 
@@ -34,6 +44,7 @@ func MCPReadSync(ctx context.Context, conn *sql.DB, id string, limit, offset int
 			if err != nil {
 				return nil, err
 			}
+			run.SourceName = ""
 			runs = append(runs, run)
 		}
 		return runs, rows.Err()
@@ -42,6 +53,8 @@ func MCPReadSync(ctx context.Context, conn *sql.DB, id string, limit, offset int
 	if err != nil {
 		return nil, err
 	}
+	// REST names can fall back to a private provider item identifier.
+	run.SourceName = ""
 	// File imports are not provider synchronization runs.
 	var kind string
 	if err = conn.QueryRowContext(ctx, `SELECT run_type FROM sync_runs WHERE id=?`, id).Scan(&kind); err != nil {
