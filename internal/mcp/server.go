@@ -2,6 +2,7 @@
 package mcp
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -48,6 +49,7 @@ func NewHandler(enabled bool, config auth.Config, store *auth.Store) (http.Handl
 		Capabilities: &sdk.ServerCapabilities{Tools: &sdk.ToolCapabilities{}},
 	})
 	httpapi.RegisterMCPPlanningTools(server, store.DB)
+	oauth.registerWrites(server)
 	transport := sdk.NewStreamableHTTPHandler(func(*http.Request) *sdk.Server { return server }, &sdk.StreamableHTTPOptions{
 		Stateless: true, JSONResponse: true, MaxRequestBodyBytes: 1 << 20,
 		// Reverse proxies may forward a public Host to a loopback listener.
@@ -91,12 +93,13 @@ func NewHandler(enabled bool, config auth.Config, store *auth.Store) (http.Handl
 			}
 			return
 		}
-		if scope != mcpScope {
+		if !validScope(scope) {
 			w.Header().Set("WWW-Authenticate", `Bearer error="insufficient_scope", scope="`+mcpScope+`", resource_metadata="`+config.PublicURL+`/.well-known/oauth-protected-resource/mcp"`)
 			http.Error(w, "Insufficient scope", http.StatusForbidden)
 			return
 		}
-		transport.ServeHTTP(w, r)
+		ctx := context.WithValue(r.Context(), writeContextKey{}, writeIdentity{Hash: tokenHash(token), Scope: scope})
+		transport.ServeHTTP(w, r.WithContext(ctx))
 	})
 	bounded := http.TimeoutHandler(oauth.routes(guarded), requestTimeout, "MCP request timed out")
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

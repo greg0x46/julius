@@ -53,7 +53,8 @@ authentication configuration that does not depend on the host:
 
 - **Optional MCP endpoint** — provider-neutral Streamable HTTP in the same
   binary, disabled by default, with OAuth, PKCE and explicit owner consent for
-  read-only financial planning tools. See [MCP](#mcp).
+  financial planning tools and separately scoped financial writes with per-operation
+  owner approval in Julius. See [MCP](#mcp).
 
 - **Exact money boundaries** — amounts stay decimal strings through entry,
   editing, calculation and HTTP. BRL display rounds to cents with ties away
@@ -436,7 +437,10 @@ using its own single owner account, independent of any AI provider:
    tokens cannot authorize `/api`. REST keeps its cookie, Origin and
    `X-Julius-Request: 1` requirements.
 
-The sole scope, `mcp:access`, permits the read-only planning tools below.
+The `mcp:access` scope permits the read-only planning tools below.
+Request `scope=mcp:access mcp:write` for financial writes; existing read-only
+grants gain no write permission. Write consent permits preparing changes,
+while each change still requires fresh owner approval in Julius.
 Consent explicitly discloses financial reads. Existing grants with this scope
 also permit these reads; revoke them if that access is no longer wanted.
 Unknown scopes are rejected; missing required token scope returns 403 with an
@@ -510,6 +514,85 @@ Issuer and resource URLs use this configured origin, never forwarded headers.
 An Origin header on MCP, when supplied, must match it. Keep tokens, callback
 codes and passwords out of logs and URLs you share. The encryption master key,
 Pluggy credentials and browser cookie are never issued to MCP clients.
+
+
+#### Financial writes
+
+Write tools prepare an immutable preview; they never commit on an MCP call.
+All require both `mcp:access` and `mcp:write`. Inputs are an optional `id` UUID
+(required for changes to an existing record), a typed `data` object with the
+matching REST body below, and `idempotency_key` for manual creation.
+Discovery publishes the body fields and exact string amount schema.
+
+| Tool | `data` fields |
+|---|---|
+| `assign_transaction_category` | `category_id` (active UUID); includes every sibling installment in the preview |
+| `set_transaction_inclusion` | `state`: `considered` or `ignored` |
+| `create_manual_transaction` | `account_id`, `description`, signed decimal-string `amount`, calendar `occurred_at` (`YYYY-MM-DD`), optional `category_id`; also requires top-level `idempotency_key` |
+| `update_manual_transaction` | Same body as creation, without an idempotency key; manual entries only |
+| `delete_manual_transaction` | `{}`; manual entries only, soft delete |
+| `create_category` | `name`, `kind` (`expense`, `income`, `transfer`), `icon`, `color` from the Julius catalog palette |
+| `update_category` | At least one of `name`, `is_active`, `icon`, `color`; deactivate instead of delete |
+| `create_automation_rule`, `update_automation_rule` | `name`, `is_active`, `logic_operator`, `conditions`, `actions` as in `/api/automation-rules`; `apply_retroactively` must be omitted or false |
+| `delete_automation_rule` | `{}`; previous category/inclusion decisions remain |
+| `get_write_result` | Top-level `request_id`; returns approval state and the final REST status/body |
+
+For example, `create_manual_transaction` accepts:
+
+```json
+{"idempotency_key":"synthetic-entry-001","data":{"account_id":"<account UUID>","description":"Synthetic groceries","amount":"-42.501","occurred_at":"2026-10-01"}}
+```
+
+1. Review the returned `preview`: affected identifiers/count, current objects,
+   requested fields and effects on reporting, balances and financial links.
+   Transfer-unlink previews include the other participants and exact native amounts;
+   those entries survive and resume their category/inclusion reporting decisions.
+   New records have count 1 and no identifier until commit.
+2. Open `approval_url` in the owner's browser. The Julius page identifies the
+   requesting client, shows the exact request and effects, and requires fresh
+   owner credentials plus **Aprovar e aplicar alteração**. Never give the owner
+   password to the MCP client. A prompt instruction or a client boolean cannot
+   approve a write. Denial needs no password.
+3. Call `get_write_result` with `request_id`, using the exact original access
+   token. `pending` does not change data; `applied`, `denied` and `failed` are
+   terminal. A successful approval POST executes once, including concurrent
+   retries. Changed preview data requires a new preview and approval.
+
+Creation keys use the existing persistent owner idempotency contract: 8–128
+printable ASCII characters without whitespace/commas; retry the same normalized
+payload with the same key, including after losing a response. A different
+payload with that key returns a 409 Problem. Domain failures retain sanitized
+REST Problems. A 503 can mean the write committed but its result could not be
+read back: inspect Julius before retrying; always reuse the creation key.
+
+Manual operations refuse provider entries, archived accounts and prohibited
+investment/transfer links just like the UI. Category propagation uses the domain
+installment grouping, capped at 100 identifiers, and rechecks the preview in the
+same serializable transaction as all decisions/events. Other operations address
+one record; arbitrary batches and retroactive rule application are unavailable.
+Rules affect future arrivals/changed sync entries, respecting manual decisions.
+Ignoring cleans up payable, recurring and investment links without changing bank
+cash. Manual creation shares learned categorization, automation and exact money
+with the UI; updates/deletes retain the same service restrictions.
+
+Bodies are limited to 16 KiB; previews to 256 KiB; names to 200 characters,
+descriptions/condition values to 1,000, rule conditions to 20 and actions to 10.
+Amounts are nonzero plain decimal strings of at most 64 characters (no exponent).
+Approvals are instance-local, capped at 100, expire after five minutes and are
+lost on restart; final execution results remain for ten minutes. Use the same
+instance for tool calls and browser approval. Token revocation, expiry, password
+reset or disabling authentication prevents pending approval. Browser requests
+require same-origin POST and an HttpOnly/SameSite CSRF cookie; ordinary MCP calls
+cannot supply approval. There is no HTTP proxy or SQL tool.
+
+To validate in dev with synthetic data, create a manual BRL account in Julius,
+authorize a client with both scopes, prepare the example with that account UUID,
+and check that the account is unchanged until browser approval. Poll the result,
+repeat creation with the same key (one entry), categorize it, then update and
+delete it with separate approvals. A read-only client must fail every write;
+editing/deleting a synced entry must fail. Deny a request and verify it remains
+unchanged. These steps need no live provider credentials; synced restrictions
+and rollback faults are also covered by the integration tests.
 
 The official [Go MCP SDK](https://github.com/modelcontextprotocol/go-sdk) serves
 stateless Streamable HTTP with JSON responses: 1 MiB bodies, 30 seconds and

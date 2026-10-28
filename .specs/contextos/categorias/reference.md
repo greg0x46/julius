@@ -61,3 +61,14 @@ follows the same order (learned → rules).
 Category report values use the financial reference currency (default BRL),
 with current FX and its provenance. Catalog and transaction category decisions
 are unchanged; see [Transactions — Consolidated report valuation](../transacoes/reference.md#consolidated-report-valuation).
+
+## MCP writes
+
+MCP can prepare category creation and updates (including deactivation), and
+manual transaction categorization. Owner approval in Julius is required for each
+mutation. Assignment previews enumerate the domain installment cascade; every
+decision/event commits together after a serializable preview recheck. Catalog
+updates preserve existing decisions; category deletion is not exposed.
+
+Tool inputs, approval contract, limits and synthetic dev validation:
+[README financial writes](../../../README.md#financial-writes).
