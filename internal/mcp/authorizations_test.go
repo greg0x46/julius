@@ -9,9 +9,12 @@ import (
 	"net/url"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/greg0x46/julius/internal/auth"
+	"github.com/greg0x46/julius/internal/db"
 	"github.com/greg0x46/julius/internal/db/dbtest"
+	dbtypes "github.com/greg0x46/julius/internal/db/types"
 	"github.com/greg0x46/julius/internal/httpapi"
 	"github.com/greg0x46/julius/internal/mcpaccess"
 	"github.com/greg0x46/julius/internal/settings"
@@ -255,4 +258,55 @@ func TestDemoCannotManageMCP(t *testing.T) {
 			t.Fatalf("demo %s: %d", method, w.Code)
 		}
 	}
+}
+
+func TestConnectionExpiryAndRevocationIsolation(t *testing.T) {
+	dbtest.Each(t, func(t *testing.T, conn *sql.DB) {
+		store, first := setup(t, conn)
+		flow := newFlow(t, store)
+		second := flow.token(t, flow.approve(t))
+		handler, _ := NewHandler(true, testConfig, store)
+		// Knowing one client ID and another client's token cannot revoke that token.
+		p := url.Values{"client_id": {flow.client}, "token": {first}}
+		if w := oauthRequest(handler, "POST", "/oauth/revoke", p.Encode(), nil, ""); w.Code != 200 {
+			t.Fatalf("revocation: %d", w.Code)
+		}
+		for _, token := range []string{first, second} {
+			var before, after string
+			if err := conn.QueryRow(`SELECT expires_at FROM oauth_grants WHERE token_hash=?`, tokenHash(token)).Scan(dbtypes.Time(&before)); err != nil {
+				t.Fatal(err)
+			}
+			if w := request(t, handler, token, "", `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`); w.Code != 200 {
+				t.Fatalf("cross-client revocation: %d", w.Code)
+			}
+			if err := conn.QueryRow(`SELECT expires_at FROM oauth_grants WHERE token_hash=?`, tokenHash(token)).Scan(dbtypes.Time(&after)); err != nil {
+				t.Fatal(err)
+			}
+			if before != after {
+				t.Fatal("use extended expiry")
+			}
+		}
+		list, err := mcpaccess.NewStore(conn).List(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, a := range list {
+			if a.LastUsedAt == nil {
+				t.Fatal("use not tracked")
+			}
+		}
+		id := authorizationID(t, conn, first)
+		if _, err := conn.Exec(`UPDATE mcp_authorizations SET expires_at=? WHERE id=?`, db.FormatTime(time.Now().Add(-time.Second)), id); err != nil {
+			t.Fatal(err)
+		}
+		if w := request(t, handler, first, "", `{}`); w.Code != 401 {
+			t.Fatalf("expired authorization: %d", w.Code)
+		}
+		if _, err := conn.Exec(`UPDATE oauth_grants SET authorization_id=NULL WHERE token_hash=?`, tokenHash(second)); err != nil {
+			t.Fatal(err)
+		}
+		if w := request(t, handler, second, "", `{}`); w.Code != 401 {
+			t.Fatalf("legacy token without authorization: %d", w.Code)
+		}
+	})
 }
