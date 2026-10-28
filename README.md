@@ -53,8 +53,8 @@ authentication configuration that does not depend on the host:
 
 - **Optional MCP endpoint** — provider-neutral Streamable HTTP in the same
   binary, disabled by default, with OAuth, PKCE and explicit owner consent for
-  financial planning tools and separately scoped financial writes with per-operation
-  owner approval in Julius. See [MCP](#mcp).
+  financial planning reads and separately scoped writes for goals, scenarios,
+  recurring commitments and transactions. Every write requires owner approval in Julius. See [MCP](#mcp).
 
 - **Exact money boundaries** — amounts stay decimal strings through entry,
   editing, calculation and HTTP. BRL display rounds to cents with ties away
@@ -484,7 +484,7 @@ FX errors carry native totals and coverage issues (currency, account, date and
 reason). Errors disclose no database details. Tool descriptions/results state
 calculation assumptions, including Modified Dietz, historical FX, zero assumed
 goal appreciation when history is too short, and current FX across projections.
-No write tools, chats or inference calls are exposed.
+Financial writes require the separate approval flow below. No chats or inference calls are exposed.
 
 Consent requests and authorization codes expire after five minutes; access
 tokens expire after one hour, without idle extension. Only SHA-256 hashes of
@@ -521,7 +521,7 @@ Pluggy credentials and browser cookie are never issued to MCP clients.
 Write tools prepare an immutable preview; they never commit on an MCP call.
 All require both `mcp:access` and `mcp:write`. Inputs are an optional `id` UUID
 (required for changes to an existing record), a typed `data` object with the
-matching REST body below, and `idempotency_key` for manual creation.
+body fields below, and `idempotency_key` for manual transaction creation.
 Discovery publishes the body fields and exact string amount schema.
 
 | Tool | `data` fields |
@@ -535,6 +535,14 @@ Discovery publishes the body fields and exact string amount schema.
 | `update_category` | At least one of `name`, `is_active`, `icon`, `color`; deactivate instead of delete |
 | `create_automation_rule`, `update_automation_rule` | `name`, `is_active`, `logic_operator`, `conditions`, `actions` as in `/api/automation-rules`; `apply_retroactively` must be omitted or false |
 | `delete_automation_rule` | `{}`; previous category/inclusion decisions remain |
+| `create_goal`, `update_goal` | `name`, `metric` (`invested_value`), positive BRL `target_amount`; optional `target_date` (`YYYY-MM-DD` or null), `notes`; updates replace the goal fields |
+| `delete_goal` | `{}`; removes the target without changing investments |
+| `create_scenario`, `update_scenario` | `name`; standalone hypotheticals only; updates rename without changing activation |
+| `delete_scenario` | `{}`; removes the standalone scenario, its planned transactions and realization links, preserving real entries |
+| `create_planned_transaction`, `update_planned_transaction` | `description`, signed BRL `amount`, `projected_at` (`YYYY-MM-DD`), optional `category` UUID; requires top-level `scenario_id`, plus `id` for an existing planned transaction |
+| `delete_planned_transaction` | `{}`; requires top-level `scenario_id` and planned transaction `id`; preserves real entries |
+| `create_recurring_commitment`, `update_recurring_commitment` | `name`, `kind` (`income`/`expense`), positive BRL `amount`, `category_id`, `cadence` (`monthly`/`annual`), `day_of_month` (1–31), `start_date`, `is_active`; optional `account_id`, `end_date`, `month_of_year` (required for annual); updates replace schedule fields |
+| `delete_recurring_commitment` | `{}`; removes schedule/reconciliation decisions, preserving real entries; remove any targeting automation reconcile action first |
 | `get_write_result` | Top-level `request_id`; returns approval state and the final REST status/body |
 
 For example, `create_manual_transaction` accepts:
@@ -558,8 +566,8 @@ For example, `create_manual_transaction` accepts:
    terminal. A successful approval POST executes once, including concurrent
    retries. Changed preview data requires a new preview and approval.
 
-Creation keys use the existing persistent owner idempotency contract: 8–128
-printable ASCII characters without whitespace/commas; retry the same normalized
+Manual transaction creation keys use the existing persistent owner idempotency
+contract: 8–128 printable ASCII characters without whitespace/commas; retry the same normalized
 payload with the same key, including after losing a response. A different
 payload with that key returns a 409 Problem. Domain failures retain sanitized
 REST Problems. A 503 can mean the write committed but its result could not be
@@ -568,8 +576,9 @@ read back: inspect Julius before retrying; always reuse the creation key.
 Manual operations refuse provider entries, archived accounts and prohibited
 investment/transfer links just like the UI. Category propagation uses the domain
 installment grouping, capped at 100 identifiers, and rechecks the preview in the
-same serializable transaction as all decisions/events. Other operations address
-one record; arbitrary batches and retroactive rule application are unavailable.
+same serializable transaction as all decisions/events. Scenario deletion also
+captures planned children and realization links and rechecks its preview inside the deletion transaction. Arbitrary batches and retroactive
+rule application are unavailable.
 Rules affect future arrivals/changed sync entries, respecting manual decisions.
 Ignoring cleans up payable, recurring and investment links without changing bank
 cash. Manual creation shares learned categorization, automation and exact money
@@ -578,7 +587,7 @@ with the UI; updates/deletes retain the same service restrictions.
 Bodies are limited to 16 KiB; previews to 256 KiB; names to 200 characters,
 descriptions/condition values to 1,000, rule conditions to 20 and actions to 10.
 Amounts are nonzero plain decimal strings of at most 64 characters (no exponent).
-Approvals are instance-local, capped at 100, expire after five minutes and are
+Goal notes are limited to 4,000 characters. Approvals are instance-local, capped at 100, expire after five minutes and are
 lost on restart; final execution results remain for ten minutes. Use the same
 instance for tool calls and browser approval. Token revocation, expiry, password
 reset or disabling authentication prevents pending approval. Browser requests
@@ -594,6 +603,35 @@ editing/deleting a synced entry must fail. Deny a request and verify it remains
 unchanged. These steps need no live provider credentials; synced restrictions
 and rollback faults are also covered by the integration tests.
 
+Planning writes use the same goal and recurrence validation/derived states as the
+application. Active recurring commitments enter base forecasts and reconciled
+occurrences are suppressed. Schedule edits release manual links/detachments whose
+dates cease to be occurrences. Standalone scenarios remain hypothetical: even an
+active one enters MCP timeline/events only through explicit `scenario_ids`.
+Standalone planning writes never change goal progress, realized totals or account balances.
+
+To validate planning writes in dev, use a synthetic owner, a client authorized for
+both scopes and an expense category from Julius; no bank connection is required:
+
+1. Prepare `create_scenario` with `{"data":{"name":"Synthetic vehicle"}}`.
+   Approve in Julius, poll `get_write_result`, and keep the returned scenario ID.
+2. Prepare `create_planned_transaction` with that top-level `scenario_id` and
+   `data` containing `description`, `amount: "-20000.001"` and a future
+   `projected_at`. Approve and poll. Call `get_timeline` for that date range
+   with `reference_date` today: compare omitted IDs with `scenario_ids: [id]`.
+   Only the selected simulation should include the planned expense.
+3. Rename and then delete the scenario with separate approvals. Denying deletion
+   must retain it; approving must remove its planned events and preserve all real
+   transactions. A changed preview requires a new request.
+4. Create/edit a goal (`invested_value`, positive `target_amount`, optional future
+   `target_date`) and compare `list_goals` with Metas. Create/edit an active monthly
+   recurring expense with the category ID and compare its schedule/occurrences with
+   Recorrências and `list_projection_events`. Derived progress, calendar clamping
+   and reconciliation must match. Delete each with separate approvals.
+5. A read-only client must fail these writes. Invalid decimal strings/dates,
+   stale IDs and planned transaction IDs belonging to another scenario must fail
+   without mutation. Recurrence deletion must fail while targeted by automation.
+
 The official [Go MCP SDK](https://github.com/modelcontextprotocol/go-sdk) serves
 stateless Streamable HTTP with JSON responses: 1 MiB bodies, 30 seconds and
 16 concurrent requests (429 when busy). OAuth request bodies are limited to
@@ -608,7 +646,7 @@ To validate in dev with a synthetic owner and no bank connection:
 2. Connect a client supporting Dynamic Client Registration, follow the consent
    page, and choose **Negar acesso**: no access token should be issued.
 3. Connect again, review the details, enter the synthetic owner's credentials
-   and choose **Autorizar acesso**. Discovery should list the eight tools above.
+   and choose **Autorizar acesso**. Discovery should list the eight financial read tools and the guarded write tools above.
    Call `list_goals` with `{}` and `get_timeline` with today's `from`, `to` and
    `reference_date`; empty synthetic data should return empty lists/zero BRL
    figures. With a synthetic investment and dated goal, compare portfolio and

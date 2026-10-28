@@ -322,11 +322,17 @@ Selection and missing-FX tests run on both database dialects.
 
 ### Financial write approval
 
-`internal/mcp/writes.go` registers ten preparation tools plus `get_write_result`;
+`internal/mcp/writes.go` registers twenty-two preparation tools plus `get_write_result`;
 [README financial writes](../../../README.md#financial-writes) lists exact tool
 names, body fields, bounds and synthetic dev validation. `internal/httpapi/mcp_writes.go`
 validates allowlisted operations, captures before-state, installment identifiers
 and financial links/amounts, and calls existing ledger/automation/category paths.
+`internal/httpapi/mcp_planning_writes.go` adds goal, standalone scenario/planned
+transaction and recurring commitment validation/snapshots, reusing their existing
+request conversions and domain flows. Scenario updates rename only. Planned
+transactions carry an explicit parent `scenario_id`; parent kind and child
+ownership are checked on preview/application. Goal progress and realized totals
+remain derived; standalone selection stays explicit.
 Ignore/delete previews include all own-account transfer participants and their
 native amounts and before-state: removing a transfer relationship preserves the
 counterpart entries but changes which reporting decisions apply.
@@ -354,8 +360,12 @@ creation idempotency survives. Multiple replicas need request affinity.
 Before-state changes invalidate approval. Installment categorization rechecks
 membership and every before-state inside the same serializable transaction as
 all decisions/events (100 identifiers maximum). No arbitrary batch or
-retroactive rule application is exposed. One-record manual/category/rule paths
-revalidate the preview before invoking their existing domain service boundaries.
+retroactive rule application is exposed. Scenario/planned-transaction deletion
+also rechecks its planning cascade and
+realization snapshots inside the deletion transaction, preserving real entries.
+Recurrence preview includes schedules, manual decisions and targeting rules; edits
+retain orphan cleanup and deletion refuses targeting reconcile actions.
+One-record manual/category/rule/goal/recurrence paths revalidate the preview before invoking their existing domain service boundaries.
 Read clients can discover schemas but cannot prepare, commit or read write results.
 
 Tests `internal/mcp/writes_test.go` and `internal/httpapi/mcp_writes_test.go`
@@ -364,3 +374,11 @@ CSRF/Origin/credentials, denial/replay/concurrency, token binding/revocation,
 expiry, exact money, persistent creation retries/conflicts, soft deletion,
 manual/provider restrictions, categorization cascades, stale previews, rule
 and catalog management, and injected partial failures with full rollback.
+
+Planning write contracts/authorization are covered by
+`internal/mcp/planning_writes_test.go` and
+`internal/httpapi/mcp_planning_writes_test.go`: all twelve tools, exact BRL money,
+goal/recurrence parity, explicit hypothetical timeline effects, invalid dates/IDs,
+stale cascades, parent ownership, anonymous/read-only rejection and destructive
+denial/replay. The OAuth consent disclosure names planning writes; each operation
+still requires a separate owner approval before application.
