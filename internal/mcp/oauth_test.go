@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"html"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -45,11 +46,19 @@ func oauthRequest(h http.Handler, method, path, body string, cookie *http.Cookie
 }
 func newFlow(t *testing.T, store *auth.Store) *oauthFlow {
 	t.Helper()
+	return newFlowWithRedirect(t, store, "http://127.0.0.1:45678/callback")
+}
+func newFlowWithRedirect(t *testing.T, store *auth.Store, redirect string) *oauthFlow {
+	t.Helper()
 	h, err := NewHandler(true, testConfig, store)
 	if err != nil {
 		t.Fatal(err)
 	}
-	r := httptest.NewRequest("POST", "/oauth/register", strings.NewReader(`{"client_name":"Synthetic client <script>","redirect_uris":["http://127.0.0.1:45678/callback"],"token_endpoint_auth_method":"none"}`))
+	metadata, err := json.Marshal(clientMetadata{Name: "Synthetic client <script>", Redirects: []string{redirect}, Method: "none"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := httptest.NewRequest("POST", "/oauth/register", strings.NewReader(string(metadata)))
 	r.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, r)
@@ -84,17 +93,39 @@ func (f *oauthFlow) approve(t *testing.T) string {
 	f.begin(t)
 	p := url.Values{"request": {f.pending}, "decision": {"allow"}, "email": {"owner@example.com"}, "password": {"synthetic-password"}}
 	w := oauthRequest(f.handler, "POST", "/oauth/authorize", p.Encode(), f.cookie, testConfig.PublicURL)
-	if w.Code != 303 {
-		t.Fatalf("consent: %d %s", w.Code, w.Body)
-	}
-	u, err := url.Parse(w.Header().Get("Location"))
-	if err != nil {
-		t.Fatal(err)
-	}
+	u := consentCallback(t, w)
 	if u.Query().Get("state") != "opaque-state" || u.Query().Get("iss") != testConfig.PublicURL || u.Query().Get("code") == "" {
 		t.Fatalf("redirect: %s", u)
 	}
 	return u.Query().Get("code")
+}
+func consentCallback(t *testing.T, w *httptest.ResponseRecorder) *url.URL {
+	t.Helper()
+	if w.Code != http.StatusOK || w.Header().Get("Location") != "" {
+		t.Fatalf("consent must navigate from a fresh document: %d", w.Code)
+	}
+	body := w.Body.String()
+	refresh := regexp.MustCompile(`http-equiv="refresh" content="0;url=([^"]+)"`).FindStringSubmatch(body)
+	link := regexp.MustCompile(`<a href="([^"]+)">`).FindStringSubmatch(body)
+	if len(refresh) != 2 || len(link) != 2 || html.UnescapeString(refresh[1]) != html.UnescapeString(link[1]) {
+		t.Fatalf("missing or mismatched callback navigation: %s", body)
+	}
+	if strings.Contains(body, "<form") || strings.Contains(body, "synthetic-password") || strings.Contains(body, "owner@example.com") {
+		t.Fatal("continuation contains credentials or a form")
+	}
+	for _, directive := range []string{"default-src 'none'", "form-action 'self'", "frame-ancestors 'none'", "base-uri 'none'"} {
+		if !strings.Contains(w.Header().Get("Content-Security-Policy"), directive) {
+			t.Fatalf("missing CSP directive %q", directive)
+		}
+	}
+	if w.Header().Get("Referrer-Policy") != "no-referrer" || w.Header().Get("Cache-Control") != "no-store" || w.Header().Get("X-Frame-Options") != "DENY" {
+		t.Fatal("missing callback protection headers")
+	}
+	u, err := url.Parse(html.UnescapeString(link[1]))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return u
 }
 func (f *oauthFlow) exchange(code string) url.Values {
 	return url.Values{"grant_type": {"authorization_code"}, "code": {code}, "client_id": {f.client}, "redirect_uri": {f.params.Get("redirect_uri")}, "resource": {f.params.Get("resource")}, "code_verifier": {f.verifier}}
@@ -184,6 +215,43 @@ func TestOAuthRejectsInvalidGrants(t *testing.T) {
 		}
 	})
 }
+func TestOAuthConsentCallbackNavigation(t *testing.T) {
+	dbtest.Each(t, func(t *testing.T, conn *sql.DB) {
+		store, _ := setup(t, conn)
+		for _, redirect := range []string{
+			"http://127.0.0.1:45678/callback",
+			"https://client.example/callback?existing=one&quoted=%22%3E%3Cscript%3E",
+		} {
+			for _, decision := range []string{"allow", "deny"} {
+				f := newFlowWithRedirect(t, store, redirect)
+				state := `opaque "quoted" <script>& state`
+				f.params.Set("state", state)
+				consent := f.begin(t)
+				if !strings.Contains(consent.Body.String(), `<form action="/oauth/authorize" method="post">`) {
+					t.Fatal("credential form must post to the fixed same-origin endpoint")
+				}
+				p := url.Values{"request": {f.pending}, "decision": {decision}, "email": {"owner@example.com"}, "password": {"synthetic-password"}}
+				w := oauthRequest(f.handler, "POST", "/oauth/authorize", p.Encode(), f.cookie, testConfig.PublicURL)
+				u := consentCallback(t, w)
+				original, _ := url.Parse(redirect)
+				if u.Scheme != original.Scheme || u.Host != original.Host || u.Path != original.Path || u.Query().Get("existing") != original.Query().Get("existing") || u.Query().Get("quoted") != original.Query().Get("quoted") || u.Query().Get("state") != state || u.Query().Get("iss") != testConfig.PublicURL {
+					t.Fatalf("callback parameters changed: %s", u)
+				}
+				if strings.Contains(w.Body.String(), "<script>") || !strings.Contains(w.Body.String(), "&amp;") {
+					t.Fatal("callback must be escaped in HTML attributes")
+				}
+				if decision == "allow" {
+					if u.Query().Get("code") == "" || u.Query().Get("error") != "" {
+						t.Fatalf("missing authorization code: %s", u)
+					}
+					f.token(t, u.Query().Get("code"))
+				} else if u.Query().Get("error") != "access_denied" || u.Query().Get("code") != "" {
+					t.Fatalf("invalid denial: %s", u)
+				}
+			}
+		}
+	})
+}
 func TestOAuthConsentBoundaries(t *testing.T) {
 	dbtest.Each(t, func(t *testing.T, conn *sql.DB) {
 		store, _ := setup(t, conn)
@@ -230,9 +298,9 @@ func TestOAuthConsentBoundaries(t *testing.T) {
 		p.Del("email")
 		p.Del("password")
 		w = oauthRequest(f.handler, "POST", "/oauth/authorize", p.Encode(), f.cookie, testConfig.PublicURL)
-		u, _ := url.Parse(w.Header().Get("Location"))
-		if w.Code != 303 || u.Query().Get("error") != "access_denied" || u.Query().Get("code") != "" {
-			t.Fatalf("deny: %d %s", w.Code, w.Header().Get("Location"))
+		u := consentCallback(t, w)
+		if u.Query().Get("error") != "access_denied" || u.Query().Get("code") != "" || u.Query().Get("state") != "opaque-state" || u.Query().Get("iss") != testConfig.PublicURL {
+			t.Fatalf("deny: %s", u)
 		}
 		if w := oauthRequest(f.handler, "POST", "/oauth/authorize", p.Encode(), f.cookie, testConfig.PublicURL); w.Code != 400 {
 			t.Fatalf("consent reused: %d", w.Code)

@@ -248,8 +248,11 @@ unverified client name, client ID, redirect, resource and scope. It requires
 fresh owner credentials and a separate explicit approval even with a browser
 session. Denial needs no password. An HttpOnly/SameSite=Strict host cookie binds
 the pending request to the browser; consent POST requires exact Origin. CSP
-blocks framing/scripts and limits form submission; responses are no-store and
-no-referrer. Failed credentials retain the details/email and clear the password.
+blocks framing/scripts and restricts the credential form to the same origin;
+responses are no-store and no-referrer. After approval or denial, a fresh HTML
+document navigates to the validated callback with a meta refresh and an escaped
+fallback link, avoiding CSP restrictions on cross-origin form redirects. Failed
+credentials retain the details/email and clear the password.
 OAuth protocol errors use OAuth JSON or a validated redirect, not REST Problems.
 
 Supported registration is RFC 7591 DCR only. Client ID Metadata Documents are

@@ -169,7 +169,9 @@ func (o *oauthServer) consent(w http.ResponseWriter, r *http.Request) {
 	}
 	target.RawQuery = p.Encode()
 	http.SetCookie(w, &http.Cookie{Name: o.csrfCookie(), Value: "", Path: "/", Secure: o.config.Secure(), HttpOnly: true, SameSite: http.SameSiteStrictMode, MaxAge: -1, Expires: time.Unix(1, 0)})
-	http.Redirect(w, r, target.String(), http.StatusSeeOther)
+	// A fresh document navigates independently of the consent form's same-origin CSP.
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	_ = callbackPage.Execute(w, target.String())
 }
 func (o *oauthServer) renderConsent(w http.ResponseWriter, status int, g grant, name, pending, email, message string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -187,3 +189,7 @@ var consentPage = template.Must(template.New("consent").Parse(`<!doctype html>
 <dl><dt>Aplicativo (nome informado pelo cliente)</dt><dd>{{if .Name}}{{.Name}}{{else}}Aplicativo sem nome{{end}}</dd><dt>Identificador do cliente</dt><dd>{{.Grant.Client}}</dd><dt>Endereço de retorno</dt><dd>{{.Grant.Redirect}}</dd><dt>Recurso</dt><dd>{{.Grant.Resource}}</dd><dt>Permissões</dt><dd>Conectar via MCP (<code>{{.Grant.Scope}}</code>). Nenhuma ferramenta de dados financeiros está disponível nesta versão.</dd></dl>
 <p>Confirme sua identidade para autorizar.</p>{{if .Error}}<p role="alert">{{.Error}}</p>{{end}}
 <form action="/oauth/authorize" method="post"><input type="hidden" name="request" value="{{.Request}}"><label for="email">E-mail</label><input id="email" name="email" type="email" autocomplete="username" value="{{.Email}}" required maxlength="254"><label for="password">Senha</label><input id="password" name="password" type="password" autocomplete="current-password" required><button type="submit" name="decision" value="allow">Autorizar acesso</button><button type="submit" name="decision" value="deny" formnovalidate>Negar acesso</button></form></main></html>`))
+
+var callbackPage = template.Must(template.New("callback").Parse(`<!doctype html>
+<html lang="pt-BR"><meta charset="utf-8"><meta http-equiv="refresh" content="0;url={{.}}"><title>Retornar ao aplicativo · Julius</title>
+<p><a href="{{.}}">Continuar para o aplicativo</a></p></html>`))
