@@ -158,7 +158,7 @@ func TestProtocolLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	result, err := session.ListTools(ctx, &sdk.ListToolsParams{})
-	if err != nil || len(result.Tools) != 31 {
+	if err != nil || len(result.Tools) != 41 {
 		t.Fatalf("tool discovery: %v %v", result, err)
 	}
 	readOnly := 0

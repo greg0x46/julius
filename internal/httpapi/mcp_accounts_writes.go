@@ -79,6 +79,7 @@ func mcpManualAccountInput(data json.RawMessage) (transactions.ManualAccountInpu
 func previewMCPAccountsWrite(ctx context.Context, q transactions.Querier, p MCPWritePreview) (MCPWritePreview, error) {
 	in := p.Request
 	create := strings.HasPrefix(in.Operation, "create_")
+	createdCount := 1
 	if strings.HasPrefix(in.Operation, "delete_") && in.Operation != "delete_payable_link" && string(in.Data) != "{}" {
 		return p, errMCPWriteInput
 	}
@@ -119,6 +120,9 @@ func previewMCPAccountsWrite(ctx context.Context, q transactions.Querier, p MCPW
 		}
 		if !found {
 			return transactions.ErrTransactionNotFound
+		}
+		if in.Operation == "create_transfer" && (item.Account.CurrencyCode == nil || !validManualAccountCurrency(*item.Account.CurrencyCode)) {
+			return transactions.ErrInvalidTransfer
 		}
 		if err = add(toItemDTO(item)); err != nil {
 			return err
@@ -178,10 +182,13 @@ func previewMCPAccountsWrite(ctx context.Context, q transactions.Querier, p MCPW
 			if err = add(links); err != nil {
 				return item, err
 			}
+			for _, link := range links {
+				p.AffectedIDs = append(p.AffectedIDs, link.ID)
+			}
 		}
 		p.AffectedIDs = append(p.AffectedIDs, id)
 		for _, link := range summary.Links {
-			p.AffectedIDs = append(p.AffectedIDs, link.Link.TransactionID)
+			p.AffectedIDs = append(p.AffectedIDs, link.Link.ID, link.Link.TransactionID)
 		}
 		return item, nil
 	}
@@ -236,6 +243,7 @@ func previewMCPAccountsWrite(ctx context.Context, q transactions.Querier, p MCPW
 			if req.Fee != nil {
 				inputs = append(inputs, req.Fee)
 			}
+			createdCount = len(inputs) + 1
 			currencies := []string{}
 			var fields map[string]json.RawMessage
 			_ = json.Unmarshal(in.Data, &fields)
@@ -390,7 +398,7 @@ func previewMCPAccountsWrite(ctx context.Context, q transactions.Querier, p MCPW
 	}
 	p.AffectedCount = len(p.AffectedIDs)
 	if create {
-		p.AffectedCount++
+		p.AffectedCount += createdCount
 	}
 	return p, nil
 }

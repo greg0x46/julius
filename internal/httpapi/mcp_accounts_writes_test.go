@@ -111,6 +111,10 @@ func TestMCPTransfersPreserveCashAndReportOnlyFees(t *testing.T) {
 		dest := planningResultID(t, applyWrite(t, conn, writePreview(t, conn, "create_manual_account", "", mcpAccountData("USD", "0"))))
 		data := map[string]any{"source": mcpMovement(source, "-540.1234567890123456789"), "destination": mcpMovement(dest, "100.1234567890123456789"), "fee": mcpMovement(source, "-2.0000000000000000001")}
 		p := writePreview(t, conn, "create_transfer", "", data)
+		if p.AffectedCount != 6 {
+			t.Fatalf("missing transfer effects: %+v", p)
+		}
+
 		mcpCount(t, conn, "financial_transactions", 0)
 		result := applyWrite(t, conn, p)
 		var transfer transactions.AccountTransfer
@@ -286,6 +290,10 @@ func TestMCPAccountWritesRejectInvalidLinksAndRollback(t *testing.T) {
 		if _, err = httpapi.ExecuteMCPWrite(ctx, conn, p); !errors.Is(err, httpapi.ErrMCPWriteConflict) {
 			t.Fatalf("stale cascade accepted: %v", err)
 		}
+
+		invalidCurrency := planningCash(t, conn, "ZZZ", "0")
+		invalidSource, validDestination := create(invalidCurrency, "-1"), create(dest, "1")
+		mcpRejected(t, conn, "create_transfer", "", map[string]any{"source_transaction_id": invalidSource, "destination_transaction_id": validDestination})
 		for _, bad := range []map[string]any{
 			{"name": "Synthetic", "kind": "unknown", "total_amount": "10"},
 			{"name": "Synthetic", "kind": "debt", "total_amount": 10},
