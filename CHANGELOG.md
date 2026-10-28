@@ -4,6 +4,14 @@ Notable changes per release. A section is added by `scripts/update-changelog.sh`
 only when a release is prepared, and the release job publishes that same text as
 the GitHub release notes. Newest release first.
 
+## v0.16.0 — 2026-10-28
+
+### Features
+
+- **mcp:** Manage goals, scenarios and recurring commitments ([#184](https://github.com/greg0x46/julius/pull/184))
+- **mcp:** Manage investment positions and operations ([#185](https://github.com/greg0x46/julius/pull/185))
+- **mcp:** Expose guarded sync and operational tools ([#187](https://github.com/greg0x46/julius/pull/187))
+
 ## v0.15.0 — 2026-10-28
 
 ### Features
