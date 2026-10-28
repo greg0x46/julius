@@ -5,6 +5,7 @@
   --color-text: #172b4d;
   --color-text-secondary: #5d697c;
   --color-text-tertiary: #5d697c;
+  --color-category-violet: #4a3aa7;
   --color-accent: #1baf7a;
   --color-primary: #2457a6;
   --color-primary-hover: #1b4585;
@@ -57,8 +58,9 @@
   :root:not([data-theme="light"]) {
     color-scheme: dark;
     --color-text: #e6edf3;
-    --color-text-secondary: #8b949e;
-    --color-text-tertiary: #8b949e;
+    --color-text-secondary: #9da5af;
+    --color-text-tertiary: #9da5af;
+    --color-category-violet: #8f80e8;
     --color-accent: #3fb950;
     --color-primary: #58a6ff;
     --color-primary-hover: #79c0ff;
@@ -88,8 +90,9 @@
 :root[data-theme="dark"] {
   color-scheme: dark;
   --color-text: #e6edf3;
-  --color-text-secondary: #8b949e;
-  --color-text-tertiary: #8b949e;
+  --color-text-secondary: #9da5af;
+  --color-text-tertiary: #9da5af;
+  --color-category-violet: #8f80e8;
   --color-accent: #3fb950;
   --color-primary: #58a6ff;
   --color-primary-hover: #79c0ff;

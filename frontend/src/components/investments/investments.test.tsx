@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, onTestFinished, vi } from "vitest";
 
 import { integratedAccount } from "../../test/investmentWorkspaceFixtures";
 import { InvestmentOperationFields } from "./InvestmentOperationForm";
@@ -23,6 +23,27 @@ describe("InvestmentOperationFields", () => {
     expect(option("Venda")).toBeInTheDocument();
     expect(option("Cotação manual")).toBeInTheDocument();
     expect(option("Saldo inicial")).toBeNull();
+  });
+
+  it("scrolls the validation error into view", () => {
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    onTestFinished(() => {
+      delete (Element.prototype as Partial<Element>).scrollIntoView;
+    });
+    const { container } = render(
+      <InvestmentOperationFields
+        formId="operation"
+        operation={null}
+        accounts={[integratedAccount]}
+        positions={[]}
+        submitError={null}
+        onSubmit={vi.fn()}
+      />,
+    );
+    fireEvent.submit(container.querySelector("form")!);
+    expect(screen.getByText("Informe um valor maior que zero.")).toBeInTheDocument();
+    expect(scrollIntoView).toHaveBeenCalled();
   });
 });
 

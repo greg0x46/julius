@@ -34,6 +34,7 @@ export function AccountRecentTransactions({
   pendingTransactionId?: string | null;
 }) {
   const layout = useRowLayout();
+  const failed = error !== null && error !== undefined;
   return (
     <Section
       title="Últimas transações"
@@ -42,7 +43,7 @@ export function AccountRecentTransactions({
           Ver todas
         </Link>}
     >
-      {error !== null && error !== undefined && (
+      {failed && (
         <Alert type="error" showIcon message="Não foi possível carregar as transações desta conta." />
       )}
       {isLoading ? (
@@ -50,10 +51,12 @@ export function AccountRecentTransactions({
           <Skeleton active paragraph={{ rows: 3 }} title={false} />
         </div>
       ) : transactions.length === 0 ? (
-        <EmptyState
-          title="Nenhuma transação nesta conta"
-          hint="As transações sincronizadas ou importadas aparecem aqui."
-        />
+        failed ? null : (
+          <EmptyState
+            title="Nenhuma transação nesta conta"
+            hint="As transações sincronizadas ou importadas aparecem aqui."
+          />
+        )
       ) : (
         <div className="transaction-list">
           {transactions.map((item) => (

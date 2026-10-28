@@ -325,7 +325,7 @@ export function InvestmentPositionForm({
             // Leaving the field clears its search; the last text typed still seeds a new asset.
             onSearch={(value) => value !== "" && setAssetSearch(value)}
             notFoundContent="Nenhum ativo encontrado."
-            placeholder={catalog.isLoading ? "Carregando ativos…" : "Busque por código ou nome (ex.: PETR4, Bitcoin)"}
+            placeholder={catalog.isLoading ? "Carregando ativos…" : "Busque por código ou nome"}
             loading={catalog.isLoading}
             onChange={(value: string) => pickAsset(assets.find((asset) => asset.id === value))}
           />

@@ -1,5 +1,5 @@
-import { useState, type ReactNode } from "react";
-import { Link, Outlet, useLocation } from "react-router-dom";
+import { useEffect, useState, type ReactNode } from "react";
+import { Link, Outlet, useLocation, useNavigationType } from "react-router-dom";
 import {
   AimOutlined,
   BankOutlined,
@@ -42,9 +42,15 @@ const navItems: { path: string; name: string; icon: ReactNode }[] = [
 ];
 export function App() {
   const { pathname } = useLocation();
+  const navigationType = useNavigationType();
   const compact = useCompactScreen();
   const [menuOpen, setMenuOpen] = useState(false);
   const [theme, setTheme] = useTheme();
+  // pushState keeps the old scroll offset: a new page must open at its top.
+  useEffect(() => {
+    if (navigationType !== "POP") window.scrollTo?.(0, 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname]);
   const navigation = (
     <nav aria-label="Navegação principal">
       <ul className="app-navigation">

@@ -99,7 +99,7 @@ export function FilterCombobox(props: FilterComboboxProps) {
     id,
     label,
     placeholder,
-    options,
+    options: listedOptions,
     searchPlaceholder = "Buscar…",
     loading = false,
     error = null,
@@ -130,6 +130,15 @@ export function FilterCombobox(props: FilterComboboxProps) {
   const summaryId = useId();
   const selectedValues = compact ? draft : committed;
 
+  // A selected value the facets no longer list stays visible and removable.
+  const options = useMemo<ComboboxOption[]>(() => {
+    if (loading || error) return listedOptions;
+    const listed = new Set(listedOptions.map((option) => option.value));
+    const missing = [...new Set([...committed, ...draft])].filter((value) => !listed.has(value));
+    return missing.length === 0
+      ? listedOptions
+      : [...listedOptions, ...missing.map((value) => ({ value, label: "Seleção indisponível" }))];
+  }, [listedOptions, committed, draft, loading, error]);
   const byValue = useMemo(() => new Map(options.map((option) => [option.value, option])), [options]);
   const selectedOptions = committed.flatMap((value) => {
     const option = byValue.get(value);

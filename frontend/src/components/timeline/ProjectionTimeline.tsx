@@ -304,6 +304,7 @@ export function ProjectionTimeline({
               ]
             : []),
         ]}
+        canSelect={(index) => data[index].date <= referenceDate}
         onSelect={
           onSelectDay
             ? (index) => {

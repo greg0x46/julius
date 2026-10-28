@@ -124,11 +124,16 @@ export function Select<T = string, O extends SelectOption = SelectOption>({
   );
   const changeOpen = (next: boolean) => {
     setOpen(next);
+    const selectedIndex = filtered.findIndex(
+      (option) => !option.disabled && chosen.includes(option.value),
+    );
     setActive(
-      Math.max(
-        0,
-        filtered.findIndex((option) => !option.disabled),
-      ),
+      selectedIndex >= 0
+        ? selectedIndex
+        : Math.max(
+            0,
+            filtered.findIndex((option) => !option.disabled),
+          ),
     );
     onDropdownVisibleChange?.(next);
     onOpenChange?.(next);
@@ -229,7 +234,7 @@ export function Select<T = string, O extends SelectOption = SelectOption>({
               event.stopPropagation();
               changeOpen(false);
             }
-            if (event.key === "Tab") changeOpen(false);
+            if (event.key === "Tab" && open) changeOpen(false);
             if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
               event.preventDefault();
               if (!open) changeOpen(true);

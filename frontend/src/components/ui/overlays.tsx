@@ -4,6 +4,7 @@ import {
   isValidElement,
   useEffect,
   useId,
+  useLayoutEffect,
   useRef,
   useState,
   type CSSProperties,
@@ -52,6 +53,7 @@ export function Drawer({
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const heading = useId();
+  const pressedBackdrop = useRef(false);
   useEffect(() => {
     const dialog = ref.current;
     if (!open || !dialog) return;
@@ -81,8 +83,13 @@ export function Drawer({
         event.stopPropagation();
         onClose?.();
       }}
+      onPointerDown={(event) => {
+        pressedBackdrop.current = event.target === event.currentTarget;
+      }}
       onClick={(event) => {
-        if (event.target !== event.currentTarget) return;
+        // A drag that starts inside (text selection) must not dismiss.
+        if (event.target !== event.currentTarget || !pressedBackdrop.current)
+          return;
         const bounds = event.currentTarget.getBoundingClientRect();
         if (
           event.clientX < bounds.left ||
@@ -126,6 +133,7 @@ interface PopoverProps {
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
   overlayClassName?: string;
+  haspopup?: "menu";
 }
 export function Popover({
   children,
@@ -137,10 +145,12 @@ export function Popover({
   trigger,
   placement,
   classNames,
+  haspopup,
 }: PopoverProps) {
   const [local, setLocal] = useState(false);
   const open = controlled ?? local;
   const root = useRef<HTMLSpanElement>(null);
+  const opener = useRef<HTMLElement | null>(null);
   const id = useId();
   const surface = useRef<HTMLDivElement>(null);
   const position = useFloatingSurface(
@@ -170,6 +180,7 @@ export function Popover({
   const child = isValidElement<HTMLAttributes<HTMLElement>>(children)
     ? cloneElement(children, {
         "aria-expanded": open,
+        "aria-haspopup": haspopup,
         "aria-controls": open ? id : undefined,
         onClick: (event) => {
           children.props.onClick?.(event);
@@ -192,12 +203,18 @@ export function Popover({
             }
           : undefined
       }
+      onClickCapture={(event) => {
+        if (!open) opener.current = event.target as HTMLElement;
+      }}
       onKeyDown={(event) => {
         if (event.key === "Escape" && open) {
           event.preventDefault();
           event.stopPropagation();
           change(false);
-          root.current?.querySelector<HTMLElement>("button, input")?.focus();
+          (
+            opener.current?.closest<HTMLElement>("button, a, input, [tabindex]") ??
+            root.current?.querySelector<HTMLElement>("button, input")
+          )?.focus();
         }
       }}
     >
@@ -340,6 +357,7 @@ export function Dropdown({
         open={open}
         onOpenChange={setOpen}
         placement="bottomRight"
+        haspopup="menu"
         content={
           <div role="menu" className="ui-menu">
             <MenuItems
@@ -417,6 +435,14 @@ export function FeedbackProvider({
     { id: number; text: string; type: string }[]
   >([]);
   const serial = useRef(0);
+  const toasts = useRef<HTMLDivElement>(null);
+  // Top layer, so toasts stay visible above open modal drawers.
+  useLayoutEffect(() => {
+    const element = toasts.current;
+    if (!element) return;
+    element.hidePopover?.();
+    if (messages.length) element.showPopover?.();
+  }, [messages]);
   const timers = useRef(new Set<ReturnType<typeof setTimeout>>());
   useEffect(() => {
     const pending = timers.current;
@@ -447,7 +473,7 @@ export function FeedbackProvider({
     >
       {children}
       {createPortal(
-        <div className="ui-messages">
+        <div ref={toasts} popover="manual" className="ui-messages">
           {messages.map((item) => (
             <div
               key={item.id}

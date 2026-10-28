@@ -74,6 +74,11 @@ export function ClosingDayField({
           Nem toda instituição informa o fechamento do cartão. Defina o dia aqui para que o
           Julius use o seu valor.
         </Typography.Paragraph>
+        {account.closing_day !== null && (
+          <Typography.Paragraph type="secondary">
+            Valor atual: {closingDaySourceHint(account.closing_day_source).toLowerCase()}.
+          </Typography.Paragraph>
+        )}
         <FormField label="Dia do mês" htmlFor="closing-day-input">
           <InputNumber
             id="closing-day-input"

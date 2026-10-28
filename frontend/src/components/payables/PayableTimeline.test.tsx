@@ -44,4 +44,29 @@ describe("PayableTimeline plan generation", () => {
     await waitFor(() => expect(generateInstallments).toHaveBeenCalledOnce());
     expect(Number.isInteger(generateInstallments.mock.calls[0]![0].months)).toBe(true);
   });
+
+  it("says why nothing was generated when the installment count is empty", async () => {
+    generateInstallments.mockClear();
+    render(
+      <MemoryRouter>
+        <PayableTimeline
+          payableId="44444444-4444-4444-8444-444444444444"
+          kind="debt"
+          links={[]}
+          search=""
+          onSearchChange={vi.fn()}
+          candidates={[]}
+          isSearching={false}
+          isLinking={false}
+          onLinkTransaction={vi.fn()}
+          onUnlinkTransaction={vi.fn()}
+        />
+      </MemoryRouter>,
+    );
+    const input = screen.getByRole("spinbutton", { name: "Número de parcelas" });
+    await userEvent.clear(input);
+    await userEvent.click(screen.getByRole("button", { name: "Gerar parcelas" }));
+    expect(await screen.findByText("Informe o número de parcelas.")).toBeInTheDocument();
+    expect(generateInstallments).not.toHaveBeenCalled();
+  });
 });

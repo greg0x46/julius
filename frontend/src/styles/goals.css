@@ -147,7 +147,7 @@
   font-size: var(--fs-row);
   font-weight: 700;
   fill: var(--color-text);
-  font-variui-numeric: tabular-nums;
+  font-variant-numeric: tabular-nums;
 }
 
 .goal-ring-subtext {
@@ -181,7 +181,7 @@
 
 .goal-projection-highlight strong {
   font-weight: 600;
-  font-variui-numeric: tabular-nums;
+  font-variant-numeric: tabular-nums;
 }
 
 .goal-projection-list {
@@ -209,7 +209,7 @@
 
 .goal-projection-list dd {
   margin: 0;
-  font-variui-numeric: tabular-nums;
+  font-variant-numeric: tabular-nums;
 }
 
 /* "Adicionar nova meta": the last tile of the grid, a quiet twin of Nova meta. */
@@ -260,4 +260,9 @@
   margin-left: 0.375rem;
   color: var(--color-text-secondary);
   vertical-align: middle;
+}
+
+/* Large real balances must fit beside the ring on a phone. */
+.goal-figures .money-size-hero {
+  font-size: clamp(1.25rem, 6.5vw, var(--fs-hero));
 }

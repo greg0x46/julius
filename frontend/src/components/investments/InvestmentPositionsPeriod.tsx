@@ -415,7 +415,7 @@ export function InvestmentPositionsPeriod({
             <tr>
               <th scope="col">Ativo</th>
               {showClass && <th scope="col">Classe</th>}
-              {showCustody && <th scope="col">Custódia</th>}
+              {showCustody && <th scope="col" className="investment-col-custody">Custódia</th>}
               <th scope="col" className="investment-col-end">Valor atual</th>
               <th scope="col" className="investment-col-end">Valor investido</th>
               <th scope="col" className="investment-col-end">Rendimento</th>
@@ -472,7 +472,7 @@ export function InvestmentPositionsPeriod({
                           </div>
                         </td>
                       )}
-                      {showCustody && <td>{position.account_name}</td>}
+                      {showCustody && <td className="investment-col-custody">{position.account_name}</td>}
                       <td className="investment-col-end">
                         <div className="investment-cell investment-cell-end">
                           <span className="investment-cell-value">

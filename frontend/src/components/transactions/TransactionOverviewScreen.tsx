@@ -9,6 +9,7 @@ import type { Category, TransactionInclusionState, TransactionItem } from "../..
 import { useTransactionReconciliation } from "../../hooks/useTransactionReconciliation";
 import { internalCategoryOriginLabel } from "../../presentation/categoryLabels";
 import { formatDay } from "../../presentation/dates";
+import { exclusionReasonLabel } from "../../presentation/transactionStatus";
 import { formatBRL, formatMoney } from "../../presentation/money";
 import {
   allowsInvestmentLink,
@@ -162,6 +163,11 @@ export function TransactionOverviewScreen({
         {ignored && (
           <Typography.Text type="secondary" className="transaction-field-hint">
             Fora dos totais: esta transação não entra nos relatórios e cálculos do período.
+          </Typography.Text>
+        )}
+        {!ignored && !linkedPrincipal && !item.totals_eligibility.included && item.totals_eligibility.reason && (
+          <Typography.Text type="secondary" className="transaction-field-hint">
+            {exclusionReasonLabel[item.totals_eligibility.reason]}
           </Typography.Text>
         )}
         {inclusionError && <WriteFailure issue={inclusionError} title="Não foi possível salvar a decisão" />}

@@ -201,7 +201,7 @@ export function AutomationRulesPage() {
           rules={automationRules.rules}
           commitments={commitments.commitments}
           categories={categories.categories}
-          isLoading={automationRules.isLoading || commitments.isLoading}
+          isLoading={automationRules.isLoading || commitments.isLoading || categories.isLoading}
           togglingRuleId={togglingRuleId}
           onEditRule={openEditRule}
           onToggleRule={toggleRule}

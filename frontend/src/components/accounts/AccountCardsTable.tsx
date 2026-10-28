@@ -36,9 +36,10 @@ export function AccountCardsTable({
     );
   }
 
+  const failed = error !== null && error !== undefined;
   return (
     <Section title="Cartões vinculados">
-      {error !== null && error !== undefined && (
+      {failed && (
         <Alert type="error" showIcon message="Não foi possível carregar os cartões desta conta." />
       )}
       {isLoading ? (
@@ -46,10 +47,12 @@ export function AccountCardsTable({
           <Skeleton active paragraph={{ rows: 2 }} title={false} />
         </div>
       ) : cards.length === 0 ? (
-        <EmptyState
-          title="Nenhum cartão vinculado"
-          hint="Os números dos cartões aparecem aqui quando surgem nas transações desta conta."
-        />
+        failed ? null : (
+          <EmptyState
+            title="Nenhum cartão vinculado"
+            hint="Os números dos cartões aparecem aqui quando surgem nas transações desta conta."
+          />
+        )
       ) : (
         <ul className="list-rows" aria-label="Cartões vinculados">
           {cards.map((card) => (

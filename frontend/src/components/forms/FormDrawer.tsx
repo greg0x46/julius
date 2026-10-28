@@ -1,6 +1,6 @@
 import { CloseOutlined } from "../ui/icons";
 import { Alert, Button, Drawer } from "../ui";
-import { useId, type FormEvent, type ReactNode } from "react";
+import { useEffect, useId, useRef, type FormEvent, type ReactNode } from "react";
 
 import { useCompactScreen } from "../shared/useCompactScreen";
 
@@ -45,6 +45,12 @@ export function FormDrawer({
 }: FormDrawerProps) {
   const compact = useCompactScreen();
   const formId = useId();
+  // The alert sits at the top of a body that scrolls on a phone: the error from a
+  // Salvar tapped at the bottom would go unseen.
+  const alertRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (error) alertRef.current?.scrollIntoView?.({ block: "nearest" });
+  }, [error]);
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -93,7 +99,11 @@ export function FormDrawer({
       }
     >
       <form id={formId} className="form-drawer-form" onSubmit={handleSubmit} noValidate>
-        {error ? <Alert type="error" showIcon message={error} /> : null}
+        {error ? (
+          <div ref={alertRef}>
+            <Alert type="error" showIcon message={error} />
+          </div>
+        ) : null}
         {children}
       </form>
     </Drawer>

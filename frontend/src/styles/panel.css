@@ -260,7 +260,7 @@
   flex: 0 0 auto;
   /* Wide enough for "-R$ 99.999,99" so amounts line up across rows. */
   min-width: 6.5rem;
-  font-variui-numeric: tabular-nums;
+  font-variant-numeric: tabular-nums;
   text-align: right;
   white-space: nowrap;
   font-weight: 600;

@@ -64,4 +64,10 @@ describe("TransactionOverviewScreen transfer access", () => {
     await screen.findByText("Nenhum vínculo");
     expect(screen.getByRole("button", { name: /Transferência entre contas/ })).toBeDisabled();
   });
+
+  it("explains why a considered transaction is still outside the totals", async () => {
+    show();
+    expect(screen.getByText("Fora dos totais: tipo não classificado")).toBeInTheDocument();
+    await screen.findByText("Nenhum vínculo");
+  });
 });

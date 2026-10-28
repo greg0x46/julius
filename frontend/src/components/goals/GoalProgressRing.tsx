@@ -34,6 +34,7 @@ interface GoalProgressRingProps {
 export function GoalProgressRing({ percent, tone, label }: GoalProgressRingProps) {
   const clamped = Math.min(100, Math.max(0, percent));
   const offset = CIRCUMFERENCE * (1 - clamped / 100);
+  const text = `${percent}%`;
 
   return (
     <svg
@@ -58,8 +59,16 @@ export function GoalProgressRing({ percent, tone, label }: GoalProgressRingProps
         strokeDashoffset={offset}
         transform={`rotate(-90 ${CENTER} ${CENTER})`}
       />
-      <text x={CENTER} y={CENTER - 4} textAnchor="middle" className="goal-ring-text">
-        {percent}%
+      <text
+        x={CENTER}
+        y={CENTER - 4}
+        textAnchor="middle"
+        className="goal-ring-text"
+        // Squeeze a long percent (e.g. 12345%) to fit inside the ring.
+        textLength={text.length > 5 ? text.length * 8.5 : undefined}
+        lengthAdjust="spacingAndGlyphs"
+      >
+        {text}
       </text>
       <text x={CENTER} y={CENTER + 16} textAnchor="middle" className="goal-ring-subtext">
         da meta

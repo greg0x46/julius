@@ -19,6 +19,7 @@ import { PayableList } from "../components/payables/PayableList";
 import { Money } from "../components/shared/Money";
 import { useFeedback } from "../components/shared/useFeedback";
 import { usePayables } from "../hooks/usePayables";
+import { compareDecimals } from "../presentation/decimal";
 import { errorMessage } from "../presentation/errors";
 import { sumBRL } from "../presentation/money";
 import { payableDetailPath, payableVocabulary } from "../presentation/payableLabels";
@@ -41,7 +42,7 @@ const sortOptions: { label: string; value: PayableSort }[] = [
 const comparators: Record<PayableSort, (left: Payable, right: Payable) => number> = {
   recent: (left, right) => right.created_at.localeCompare(left.created_at),
   name: (left, right) => left.name.localeCompare(right.name, "pt-BR"),
-  remaining: (left, right) => Number(right.remaining_amount) - Number(left.remaining_amount),
+  remaining: (left, right) => compareDecimals(right.remaining_amount, left.remaining_amount),
 };
 
 /** Search and sort happen here: the list is small and already fully loaded. */
