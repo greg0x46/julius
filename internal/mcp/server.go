@@ -34,7 +34,7 @@ func ParseEnabled(value string) (bool, error) {
 
 // NewHandler never accepts cookies or inherits the REST API's open-access mode.
 // Bearer credentials are scoped OAuth tokens, isolated from owner sessions.
-func NewHandler(enabled bool, config auth.Config, store *auth.Store) (http.Handler, error) {
+func NewHandler(enabled bool, config auth.Config, store *auth.Store, operations ...Operations) (http.Handler, error) {
 	if !enabled {
 		return http.NotFoundHandler(), nil
 	}
@@ -50,6 +50,11 @@ func NewHandler(enabled bool, config auth.Config, store *auth.Store) (http.Handl
 	})
 	httpapi.RegisterMCPPlanningTools(server, store.DB)
 	oauth.registerWrites(server)
+	var ops Operations
+	if len(operations) > 0 {
+		ops = operations[0]
+	}
+	oauth.registerOperations(server, ops)
 	transport := sdk.NewStreamableHTTPHandler(func(*http.Request) *sdk.Server { return server }, &sdk.StreamableHTTPOptions{
 		Stateless: true, JSONResponse: true, MaxRequestBodyBytes: 1 << 20,
 		// Reverse proxies may forward a public Host to a loopback listener.
