@@ -12,7 +12,7 @@ import { formatReportMoney } from "../../presentation/money";
 import { Skeleton } from "../ui";
 
 import { UnavailableState } from "../AsyncState";
-import { Section, SummaryStrip } from "../layout";
+import { Section } from "../layout";
 import { Money } from "../shared/Money";
 
 const dateFormat = "YYYY-MM-DD";
@@ -26,16 +26,15 @@ function FlowFigure({ value, direction }: { value: string; direction: "inflow" |
 }
 
 /**
- * Home's hero: the period's result as the page's one big figure, with
- * entradas and saídas as a two-column definition strip underneath (each a
- * link to the matching transactions). There is no share bar between them:
+ * The selected period's result with entradas and saídas on one compact line
+ * (each figure a link to the matching transactions). It is no longer the page
+ * hero — the daily allowance is. There is no share bar between them:
  * the two figures already say it, and a green/red bar would paint an ordinary
  * outflow in the colour reserved for trouble. The scenario caveat is small
  * print under the figure, never a sentence above it.
  */
 export function PeriodBalanceCard({ period }: { period: Period }) {
-  const { bounds, isLoading: rangeLoading, error: rangeError, refetch: refetchRange } =
-    useHomePeriodBounds(period);
+  const { bounds, isLoading: rangeLoading, error: rangeError, refetch: refetchRange } = useHomePeriodBounds(period);
   // Only the day span matters here, not the exact instant, so this needs
   // none of ProjectionSummaryCard's midnight-rollover handling.
   const referenceDate = useMemo(() => calendar().format(dateFormat), []);
@@ -82,7 +81,10 @@ export function PeriodBalanceCard({ period }: { period: Period }) {
             }}
           >
             {problemMessage(timeline.error) ?? "Não foi possível carregar o resultado do período."}
-            <ReportingDetails report={reportingError(timeline.error)?.problem?.reporting} totals={reportingError(timeline.error)?.problem?.totals} />
+            <ReportingDetails
+              report={reportingError(timeline.error)?.problem?.reporting}
+              totals={reportingError(timeline.error)?.problem?.totals}
+            />
           </UnavailableState>
         )}
       </Section>
@@ -94,37 +96,43 @@ export function PeriodBalanceCard({ period }: { period: Period }) {
 
   return (
     <ReportValuation valuation={timeline.valuation}>
-      <SummaryStrip
-        className="period-balance"
-        label="Resultado do período"
-        value={<Money value={balance} tone="result" size="hero" />}
-        note={empty ? "Nenhuma movimentação no período" : "Entradas menos saídas, incluindo cenários ativos"}
-        items={[
-          {
-            label: "Entradas",
-            value: (
+      <section className="period-balance" aria-label="Resultado do período">
+        <dl className="period-balance-row">
+          <div className="period-balance-item">
+            <dt>Resultado do período</dt>
+            <dd>
+              <Money value={balance} tone="result" size="row" />
+            </dd>
+          </div>
+          <div className="period-balance-item">
+            <dt>Entradas</dt>
+            <dd>
               <Link
                 to={transactionsLink("inflow")}
                 aria-label={`Entradas: ${formatReportMoney(inflow, timeline.currencyCode)}. Ver transações`}
               >
                 <FlowFigure value={inflow} direction="inflow" />
               </Link>
-            ),
-          },
-          {
-            label: "Saídas",
-            value: (
+            </dd>
+          </div>
+          <div className="period-balance-item">
+            <dt>Saídas</dt>
+            <dd>
               <Link
                 to={transactionsLink("outflow")}
                 aria-label={`Saídas: ${formatReportMoney(outflow, timeline.currencyCode)}. Ver transações`}
               >
                 <FlowFigure value={outflow} direction="outflow" />
               </Link>
-            ),
-          },
-        ]}
-      />
-      <ReportingDetails report={totals?.reporting} totals={totals?.totals} />
+            </dd>
+          </div>
+        </dl>
+        {/* The scenario caveat is small print, and only where there is room for it. */}
+        <p className={`period-balance-note ${empty ? "" : "is-optional"}`}>
+          {empty ? "Nenhuma movimentação no período" : "Entradas menos saídas, incluindo cenários ativos"}
+        </p>
+        <ReportingDetails report={totals?.reporting} totals={totals?.totals} />
+      </section>
     </ReportValuation>
   );
 }

@@ -54,6 +54,17 @@
   list-style: none;
 }
 
+@media (max-width: 47.99rem) {
+  .timeline-chart-legend {
+    gap: var(--space-1) 0.625rem;
+    font-size: var(--fs-caption);
+  }
+
+  .timeline-chart-swatch {
+    width: 1rem;
+  }
+}
+
 .timeline-chart-legend li {
   display: inline-flex;
   align-items: center;
@@ -68,6 +79,15 @@
 
 .timeline-chart-swatch.is-dashed {
   border-top-style: dashed;
+}
+
+.timeline-chart-swatch.is-ring {
+  box-sizing: border-box;
+  width: 0.625rem;
+  height: 0.625rem;
+  border: 2px solid currentColor;
+  border-radius: var(--radius-full);
+  background: var(--color-surface);
 }
 
 .timeline-chart-swatch.is-dot {

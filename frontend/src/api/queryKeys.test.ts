@@ -38,6 +38,7 @@ describe("queryKeys values", () => {
     expect(queryKeys.payablesOfKind(null)).toEqual(["payables", "all"]);
     expect(queryKeys.payablesOfKind("debt")).toEqual(["payables", "debt"]);
     expect(queryKeys.payableScenarios("p1")).toEqual(["payables", "p1", "scenarios"]);
+    expect(queryKeys.payableTotalOwed).toEqual(["payables", "total-owed"]);
     expect(queryKeys.accountCards("a1")).toEqual(["accounts", "a1", "cards"]);
     expect(queryKeys.accountBills("a1")).toEqual(["accounts", "a1", "bills"]);
     expect(queryKeys.investmentWorkspacePart("summary")).toEqual(["investmentWorkspace", "summary"]);

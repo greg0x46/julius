@@ -64,6 +64,7 @@ export const queryKeys = {
     [...roots.investments, investmentId, "transactions"] as const,
 
   payablesOfKind: (kind: PayableKind | null) => [...roots.payables, kind ?? "all"] as const,
+  payableTotalOwed: [...roots.payables, "total-owed"] as const,
   payableScenarios: (payableId: string) => [...roots.payables, payableId, "scenarios"] as const,
 
   recurrenceOccurrences: (commitmentId: string) =>

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   formatDate,
   formatDay,
+  formatDayMonth,
   formatLocalDay,
   formatOptionalDate,
   formatOptionalDateTime,
@@ -49,4 +50,9 @@ describe("date presentation", () => {
     expect(formatOptionalDateTime(null)).toBe("Ainda não disponível");
     expect(formatOptionalDateTime("invalid")).toBe("Data inválida");
   });
+});
+
+it("formats a calendar day as day and month only", () => {
+  expect(formatDayMonth("2026-10-31")).toBe("31/10");
+  expect(formatDayMonth("not a date")).toBe("not a date");
 });

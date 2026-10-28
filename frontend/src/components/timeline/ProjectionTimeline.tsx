@@ -1,9 +1,11 @@
-import { Alert } from "../ui";
-import { LinePlot } from "../ui/LinePlot";
+import { LinePlot, type PlotMarker } from "../ui/LinePlot";
 
 import type { TimelineEntry, TimelineSeries } from "../../api/contracts";
 import { useReportFormat } from "../../hooks/useReportCurrency";
 import { balanceChartColor } from "../../presentation/chartColors";
+import { selectChartEvents } from "../../presentation/chartEvents";
+import { formatDayMonth } from "../../presentation/dates";
+import { useCompactScreen } from "../shared/useCompactScreen";
 
 function formatDate(value: string): string {
   const [year, month, day] = value.split("-");
@@ -109,10 +111,17 @@ type LegendItem = {
   key: string;
   label: string;
   color: string;
-  kind: "solid" | "dashed" | "dot";
+  kind: "solid" | "dashed" | "dot" | "ring";
 };
 
-/** Solid, dashed and dot swatches distinguish realized balances, forecasts and the minimum. */
+/**
+ * The legend is HTML rather than part of the plot: its swatches have to show
+ * the one difference that matters — a solid line is what happened, a dashed
+ * one is a forecast. The lowest-balance marker is named here, not on the plot,
+ * where a label would collide with the line or clip at the chart edge. The few
+ * labelled future events and the first negative day are named on the plot
+ * itself; the legend only says what each kind of marker means.
+ */
 function ChartLegend({ items }: { items: LegendItem[] }) {
   return (
     <ul className="timeline-chart-legend" aria-label="Legenda do gráfico">
@@ -191,6 +200,7 @@ export function ProjectionTimeline({
    */
   onSelectDay?: (date: string) => void;
 }) {
+  const compact = useCompactScreen();
   const data = mergePoints(series, simulation ?? null, referenceDate);
   const activeSeries = simulation ?? series;
   const hasPast = data.some((row) => row.date < referenceDate);
@@ -203,49 +213,49 @@ export function ProjectionTimeline({
     if (day) day.push(entry);
     else entriesByDate.set(entry.date, [entry]);
   }
+  const negativePoint = activeSeries.first_negative
+    ? activeSeries.points.find((p) => p.date === activeSeries.first_negative)
+    : undefined;
+  // A few labelled future events (bills, installments, recurrences); fewer on
+  // a phone, where labels would run into each other. The first negative day
+  // is labelled by its own marker.
+  const events = selectChartEvents(
+    activeSeries.entries,
+    activeSeries.points,
+    referenceDate,
+    compact ? 1 : 3,
+    negativePoint ? [negativePoint.date] : [],
+  );
+  const markers: PlotMarker[] = [
+    ...events.map((event) => ({
+      date: event.date,
+      value: event.balance,
+      label: event.label,
+      tone: "event" as const,
+    })),
+    ...(negativePoint
+      ? [
+          {
+            date: negativePoint.date,
+            value: negativePoint.balance,
+            label: `Negativo ${formatDayMonth(negativePoint.date)}`,
+            tone: "negative" as const,
+          },
+        ]
+      : []),
+  ];
+
   const legend: LegendItem[] = [];
-  if (hasPast)
-    legend.push({
-      key: "past",
-      label: pastLineName,
-      color: balanceChartColor.realized,
-      kind: "solid",
-    });
-  if (hasFuture)
-    legend.push({
-      key: "future",
-      label: futureLineName,
-      color: balanceChartColor.projected,
-      kind: "dashed",
-    });
-  if (simulation)
-    legend.push({
-      key: "simulation",
-      label: simulationLineName,
-      color: balanceChartColor.simulation,
-      kind: "dashed",
-    });
-  legend.push({
-    key: "lowest",
-    label: "Menor saldo",
-    color: balanceChartColor.lowest,
-    kind: "dot",
-  });
+  if (hasPast) legend.push({ key: "past", label: "Realizado", color: balanceChartColor.realized, kind: "solid" });
+  if (hasFuture) legend.push({ key: "future", label: "Projetado", color: balanceChartColor.projected, kind: "dashed" });
+  if (simulation) legend.push({ key: "simulation", label: simulationLineName, color: balanceChartColor.simulation, kind: "dashed" });
+  if (events.length > 0) legend.push({ key: "events", label: "Evento", color: balanceChartColor.projected, kind: "ring" });
+  if (negativePoint) legend.push({ key: "negative", label: "Negativo", color: balanceChartColor.lowest, kind: "dot" });
+  // The lowest point is marked on the plot; it is named only when no negative marker already stands for it.
+  if (!negativePoint) legend.push({ key: "lowest", label: "Menor saldo", color: balanceChartColor.lowest, kind: "dot" });
 
   return (
-    <div
-      className="timeline-chart"
-      role="group"
-      aria-label="Saldo ao longo do tempo"
-    >
-      {activeSeries.first_negative && (
-        <Alert
-          type="warning"
-          showIcon
-          message={`Se nada mudar, o saldo pode ficar negativo em ${formatDate(activeSeries.first_negative)}.`}
-          style={{ marginBottom: 12 }}
-        />
-      )}
+    <div className="timeline-chart" role="group" aria-label="Saldo ao longo do tempo">
       <LinePlot
         dates={data.map((row) => row.date)}
         height={height}
@@ -256,6 +266,7 @@ export function ProjectionTimeline({
           date: activeSeries.lowest_balance.date,
           value: activeSeries.lowest_balance.balance,
         }}
+        markers={markers}
         series={[
           ...(hasPast
             ? [

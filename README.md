@@ -125,6 +125,12 @@ authentication configuration that does not depend on the host:
   Fixed-amount installments preserve exact remainders without exceeding the
   chosen installment amount. Generation and readjustment are limited to 10,000
   installments per operation; requests exceeding the limit preserve the plan.
+- **Home** — leads with how much you can spend per day until the end of the
+  month, next to today's balance and the projected end-of-month balance. A
+  warning band says when the balance is forecast to go negative; the balance
+  chart names the biggest upcoming events (card bill, installment,
+  recurrence) and the first negative day. Your wealth, your main goal and your
+  total debt are cards linking to their screens.
 - **Financial report** — a single time navigation (Actual → Today → Base
   Projection → Simulation): how much you will have on a future date, your
   lowest balance until then, and how hypothetical scenarios change that answer.
