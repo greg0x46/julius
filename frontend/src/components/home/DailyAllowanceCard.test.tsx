@@ -72,8 +72,8 @@ describe("DailyAllowanceCard", () => {
     renderCard();
 
     await waitFor(() => expect(figureText()).toBe("R$ 85,50 / dia"));
-    expect(screen.getByText("Disponível por dia")).toBeVisible();
-    expect(screen.getByText("Disponível para gastar até o fim do mês")).toBeVisible();
+    expect(screen.getByRole("heading", { name: "Pode gastar por dia até 31/10" })).toBeVisible();
+    expect(screen.getByText(/Não é orçamento nem reserva/)).toBeVisible();
     expect(timelineApi.getTimeline).toHaveBeenCalledWith(params, expect.anything());
   });
 
