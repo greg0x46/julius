@@ -46,6 +46,7 @@ type fields struct {
 	authResult                   AuthResult
 	clientName, clientIDPrefix   string
 	errCode, errReason, errField string
+	errValues                    []string // replaced as a whole, never mutated in place
 }
 
 // record is the per-request state kept in the context. Every access to the
@@ -184,6 +185,28 @@ func SetError(ctx context.Context, code, reason, field string) {
 	code, reason, field = token(code), optionalToken(reason), optionalToken(field)
 	rec.mu.Lock()
 	rec.errCode, rec.errReason, rec.errField = code, reason, field
+	rec.mu.Unlock()
+}
+
+// maxErrorValues caps what SetErrorValues keeps.
+const maxErrorValues = 8
+
+// SetErrorValues records up to 8 additional categorical values that explain a
+// rejection (for example the known grant types a client sent, already passed
+// through Known). Each value is validated like SetError's and replaced by
+// "invalid_value" when it does not match; values beyond the eighth are
+// dropped and an empty list clears the field. It is independent of SetError.
+func SetErrorValues(ctx context.Context, values ...string) {
+	rec := recordFrom(ctx)
+	if rec == nil {
+		return
+	}
+	var kept []string
+	for _, v := range values[:min(len(values), maxErrorValues)] {
+		kept = append(kept, token(v))
+	}
+	rec.mu.Lock()
+	rec.errValues = kept
 	rec.mu.Unlock()
 }
 
@@ -366,6 +389,9 @@ func logAccess(rec *record, req *http.Request, method, urlPath string, sw *write
 		if o.value != "" {
 			attrs = append(attrs, slog.String(o.key, o.value))
 		}
+	}
+	if len(s.errValues) > 0 {
+		attrs = append(attrs, slog.Any("invalid_values", s.errValues))
 	}
 	rec.logger.LogAttrs(ctx, level, "http_request", attrs...)
 }

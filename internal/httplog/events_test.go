@@ -3,6 +3,7 @@ package httplog
 import (
 	"log/slog"
 	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -221,10 +222,11 @@ func TestAccessLogKeyOrderWithAllOptionalFields(t *testing.T) {
 		SetAuth(r.Context(), AuthOAuth, AuthOK)
 		SetOAuthClient(r.Context(), "0123456789", "Name")
 		SetError(r.Context(), "c", "r", "f")
+		SetErrorValues(r.Context(), "v1", "v2")
 	})), r)
 	want := []string{"time", "level", "msg", "event", "request_id", "method", "route", "status", "duration_ms",
 		"response_bytes", "peer_ip", "forwarded_ip", "user_agent", "auth_type", "auth_result",
-		"client_name", "client_id_prefix", "error_code", "error_reason", "invalid_field"}
+		"client_name", "client_id_prefix", "error_code", "error_reason", "invalid_field", "invalid_values"}
 	if got := keysOf(t, s.lines()[0]); !equalStrings(got, want) {
 		t.Fatalf("keys = %v\nwant   %v", got, want)
 	}
@@ -284,6 +286,87 @@ func (u unwrapOnly) Unwrap() http.ResponseWriter { return u.ResponseWriter }
 type cyclic struct{ http.ResponseWriter }
 
 func (c cyclic) Unwrap() http.ResponseWriter { return c }
+
+func TestSetErrorValues(t *testing.T) {
+	nine := []string{"v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8", "v9"}
+	tests := []struct {
+		name   string
+		values []string
+		want   []any // nil: field omitted
+	}{
+		{"none", nil, nil},
+		{"one", []string{"authorization_code"}, []any{"authorization_code"}},
+		{"several keep order", []string{"b", "a", "c"}, []any{"b", "a", "c"}},
+		{"invalid replaced", []string{"ok", "Bad Value", "", "a\nb", strings.Repeat("a", 65)}, []any{"ok", invalidValue, invalidValue, invalidValue, invalidValue}},
+		{"exactly 8", nine[:8], []any{"v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8"}},
+		{"truncated to 8", nine, []any{"v1", "v2", "v3", "v4", "v5", "v6", "v7", "v8"}},
+		{"nine invalid still capped", []string{"A", "A", "A", "A", "A", "A", "A", "A", "A"}, []any{invalidValue, invalidValue, invalidValue, invalidValue, invalidValue, invalidValue, invalidValue, invalidValue}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			l, s := newTestLogger()
+			serve(Middleware(l)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				SetErrorValues(r.Context(), tc.values...)
+			})), newReq("GET", "/x"))
+			line := s.lines()[0]
+			m := decode(t, line)
+			got, present := m["invalid_values"]
+			if tc.want == nil {
+				if present {
+					t.Fatalf("invalid_values = %v, want omitted", got)
+				}
+				return
+			}
+			arr, ok := got.([]any) // a real JSON array, not a string
+			if !ok || !reflect.DeepEqual(arr, tc.want) {
+				t.Fatalf("invalid_values = %#v, want %#v", got, tc.want)
+			}
+			if !strings.Contains(line, `"invalid_values":["`) {
+				t.Fatalf("not encoded as an array: %s", line)
+			}
+		})
+	}
+}
+
+func TestSetErrorValuesIndependentOfSetError(t *testing.T) {
+	m := lastLine(t, emit(t, func(w http.ResponseWriter, r *http.Request) {
+		SetErrorValues(r.Context(), "keep_me")
+		SetError(r.Context(), "code_one", "reason_one", "field_one")
+		SetError(r.Context(), "code_two", "", "")
+		SetWriterError(w, "code_three")
+	}))
+	if m["error_code"] != "code_three" || !reflect.DeepEqual(m["invalid_values"], []any{"keep_me"}) {
+		t.Fatalf("line: %v", m)
+	}
+
+	m = lastLine(t, emit(t, func(w http.ResponseWriter, r *http.Request) {
+		SetError(r.Context(), "code_one", "reason_one", "field_one")
+		SetErrorValues(r.Context(), "first")
+		SetErrorValues(r.Context(), "second")
+	}))
+	if m["error_reason"] != "reason_one" || !reflect.DeepEqual(m["invalid_values"], []any{"second"}) {
+		t.Fatalf("last call must win and keep SetError fields: %v", m)
+	}
+
+	m = lastLine(t, emit(t, func(w http.ResponseWriter, r *http.Request) {
+		SetErrorValues(r.Context(), "gone")
+		SetErrorValues(r.Context())
+	}))
+	if _, ok := m["invalid_values"]; ok {
+		t.Fatalf("empty call must clear the field: %v", m)
+	}
+}
+
+func TestSetErrorValuesDoesNotAliasCallerSlice(t *testing.T) {
+	values := []string{"one", "two"}
+	m := lastLine(t, emit(t, func(w http.ResponseWriter, r *http.Request) {
+		SetErrorValues(r.Context(), values...)
+		values[0] = "mutated"
+	}))
+	if !reflect.DeepEqual(m["invalid_values"], []any{"one", "two"}) {
+		t.Fatalf("line: %v", m)
+	}
+}
 
 func TestAuthAndOAuthClient(t *testing.T) {
 	t.Run("defaults", func(t *testing.T) {
@@ -354,6 +437,7 @@ func TestAuthAndOAuthClient(t *testing.T) {
 		SetAuth(ctx, AuthSession, AuthOK)
 		SetOAuthClient(ctx, "a", "b")
 		SetError(ctx, "a", "b", "c")
+		SetErrorValues(ctx, "a", "b")
 	})
 }
 

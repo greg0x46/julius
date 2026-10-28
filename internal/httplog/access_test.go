@@ -7,6 +7,7 @@ import (
 	"math"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"regexp"
 	"strings"
 	"testing"
@@ -509,6 +510,7 @@ func TestForbiddenStringsNeverLogged(t *testing.T) {
 		}
 		SetAuth(r.Context(), AuthSession, AuthRejected)
 		SetError(r.Context(), "invalid_credentials", "bad_password", "password")
+		SetErrorValues(r.Context(), Known("PASSWORDSECRET", "authorization_code"), "authorization_code")
 		SetOAuthClient(r.Context(), "client-1234567890", "Demo App")
 		Event(r.Context(), "auth.login.failure", slog.String("reason", "bad_password"))
 		http.SetCookie(w, &http.Cookie{Name: "sid", Value: "SETCOOKIESECRET"})
@@ -537,7 +539,8 @@ func TestForbiddenStringsNeverLogged(t *testing.T) {
 		}
 	}
 	m := decode(t, lines[1])
-	if m["route"] != "POST /api/accounts/{id}" || m["user_agent"] != "Test/1.0" || m["client_id_prefix"] != "client-1" {
+	if m["route"] != "POST /api/accounts/{id}" || m["user_agent"] != "Test/1.0" || m["client_id_prefix"] != "client-1" ||
+		!reflect.DeepEqual(m["invalid_values"], []any{"other", "authorization_code"}) {
 		t.Errorf("unexpected access line: %v", m)
 	}
 }

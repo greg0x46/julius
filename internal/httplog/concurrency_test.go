@@ -16,6 +16,7 @@ func hammer(w http.ResponseWriter, r *http.Request, rounds int) {
 		SetAuth(ctx, AuthOAuth, AuthRejected)
 		SetOAuthClient(ctx, "client-id-1234", "Client")
 		SetError(ctx, "some_code", "some_reason", "some_field")
+		SetErrorValues(ctx, "value_a", "value_b")
 		SetWriterError(w, "writer_code")
 		Event(ctx, "security.rate_limited", slog.String("limiter", "mcp"))
 		_ = RequestID(ctx)
