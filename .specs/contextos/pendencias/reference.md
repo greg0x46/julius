@@ -76,3 +76,23 @@ amounts and status are actual BRL state, never simulated repayments. Credit-card
 bills are outside this list.
 
 Tool inputs, output bounds and dev validation: [README MCP](../../../README.md#mcp).
+
+## MCP writes
+
+Separately scoped preparation tools create, update and delete payables and their
+transaction links; every mutation requires owner approval in Julius. Amounts are
+exact BRL decimal strings. Updates change only name/total; initial settled amount
+and kind are immutable. Links reuse `ValidateLink`/`EligibilityForLink`: considered
+BRL outflow for debt, inflow for receivable, one payable per transaction.
+
+`CreateLinkWithQuerier` and `DeleteLinkWithQuerier` accept a caller-owned transaction;
+REST wrappers also validate/apply within one transaction. MCP snapshots payable
+summaries, plans, planned children, realizations and linked transactions and
+revalidates atomically with mutations. Failed link/settlement writes roll back
+together. Unlink removes dependent settlements/allocations; payable deletion
+cascades plans/links. Both retain real transactions, and summaries remain derived.
+
+Tests `TestMCPPayablesLinksAndPlanCleanup`,
+`TestMCPAccountWritesRejectInvalidLinksAndRollback` and
+`TestMCPAccountsToolsLifecycleAndApprovalReplay` run on both dialects. Tool fields,
+limits, approval and synthetic dev validation: [README](../../../README.md#financial-writes).
