@@ -171,6 +171,15 @@ func pluggyCredentials(ctx context.Context, conn *sql.DB, secrets *settings.Secr
 	return clientID, clientSecret, nil
 }
 
+// Ready reports whether the worker can read its credentials, without returning them.
+func Ready(ctx context.Context, conn *sql.DB, secrets *settings.Secrets) bool {
+	if secrets == nil {
+		return false
+	}
+	_, _, err := pluggyCredentials(ctx, conn, secrets)
+	return err == nil
+}
+
 // ProcessClaim mirrors process_claim: it executes a run workerID claimed,
 // heartbeating it meanwhile, and cancels the execution if the claim is lost.
 func ProcessClaim(ctx context.Context, conn *sql.DB, secrets *settings.Secrets, cfg Config, workerID, syncRunID, sourceID string) error {
