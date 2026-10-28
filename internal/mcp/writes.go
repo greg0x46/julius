@@ -236,10 +236,10 @@ func (o *oauthServer) renderWrite(w http.ResponseWriter, status int, id string, 
 	if a != nil {
 		var data map[string]json.RawMessage
 		_ = json.Unmarshal(a.Preview.Request.Data, &data)
-		labels := map[string]string{"account_id": "Conta", "description": "Descrição", "amount": "Valor assinado", "occurred_at": "Data", "category_id": "Categoria", "state": "Inclusão", "name": "Nome", "kind": "Tipo", "is_active": "Ativa", "icon": "Ícone", "color": "Cor", "conditions": "Condições", "actions": "Ações", "logic_operator": "Operador lógico", "metric": "Métrica", "target_amount": "Valor alvo (BRL)", "target_date": "Data alvo", "notes": "Observações", "projected_at": "Data planejada", "category": "Categoria", "cadence": "Frequência", "day_of_month": "Dia do mês", "month_of_year": "Mês do ano", "start_date": "Data inicial", "end_date": "Data final", "scenario_id": "Cenário", "financial_account_id": "Conta bancária vinculada", "position_id": "Posição", "asset_id": "Ativo", "ticker": "Código do ativo", "currency_code": "Moeda", "quantity": "Quantidade", "unit_price": "Preço unitário", "fees": "Taxas", "taxes": "Impostos", "occurred_on": "Data da operação", "initial_quantity": "Quantidade inicial", "initial_unit_cost": "Custo unitário inicial", "initial_value": "Saldo inicial", "asset_type": "Tipo de ativo", "active": "Ativa", "source": "Origem", "editable": "Editável"}
-		for _, key := range []string{"account_id", "description", "amount", "occurred_at", "category_id", "state", "name", "kind", "is_active", "icon", "color", "logic_operator", "conditions", "actions", "metric", "target_amount", "target_date", "notes", "projected_at", "category", "cadence", "day_of_month", "month_of_year", "start_date", "end_date", "scenario_id", "financial_account_id", "position_id", "asset_id", "ticker", "currency_code", "quantity", "unit_price", "fees", "taxes", "occurred_on", "initial_quantity", "initial_unit_cost", "initial_value", "asset_type", "active", "source", "editable"} {
+		labels := map[string]string{"account_id": "Conta", "description": "Descrição", "amount": "Valor assinado", "occurred_at": "Data", "category_id": "Categoria", "state": "Inclusão", "name": "Nome", "kind": "Tipo", "is_active": "Ativa", "icon": "Ícone", "color": "Cor", "conditions": "Condições", "actions": "Ações", "logic_operator": "Operador lógico", "metric": "Métrica", "target_amount": "Valor alvo (BRL)", "target_date": "Data alvo", "notes": "Observações", "projected_at": "Data planejada", "category": "Categoria", "cadence": "Frequência", "day_of_month": "Dia do mês", "month_of_year": "Mês do ano", "start_date": "Data inicial", "end_date": "Data final", "scenario_id": "Cenário", "financial_account_id": "Conta bancária vinculada", "position_id": "Posição", "asset_id": "Ativo", "ticker": "Código do ativo", "currency_code": "Moeda", "quantity": "Quantidade", "unit_price": "Preço unitário", "fees": "Taxas", "taxes": "Impostos", "occurred_on": "Data da operação", "initial_quantity": "Quantidade inicial", "initial_unit_cost": "Custo unitário inicial", "initial_value": "Saldo inicial", "asset_type": "Tipo de ativo", "active": "Ativa", "source": "Origem", "is_editable": "Editável", "cash_balance": "Saldo disponível", "current_value": "Valor atual", "total_cost": "Custo de aquisição"}
+		for _, key := range []string{"account_id", "description", "amount", "occurred_at", "category_id", "state", "name", "kind", "is_active", "icon", "color", "logic_operator", "conditions", "actions", "metric", "target_amount", "target_date", "notes", "projected_at", "category", "cadence", "day_of_month", "month_of_year", "start_date", "end_date", "scenario_id", "financial_account_id", "position_id", "asset_id", "ticker", "currency_code", "quantity", "unit_price", "fees", "taxes", "occurred_on", "initial_quantity", "initial_unit_cost", "initial_value", "asset_type", "active", "source", "is_editable", "cash_balance", "current_value", "total_cost"} {
 			if value, ok := data[key]; ok {
-				rows = append(rows, row{labels[key], strings.Trim(string(value), `"`)})
+				rows = append(rows, row{labels[key], investmentApprovalValue(a, key, strings.Trim(string(value), `"`))})
 			}
 		}
 		for _, raw := range a.Preview.Before {
@@ -247,7 +247,7 @@ func (o *oauthServer) renderWrite(w http.ResponseWriter, status int, id string, 
 			if json.Unmarshal(raw, &current) != nil {
 				continue
 			}
-			for _, key := range []string{"id", "account_id", "account_name", "currency_code", "description", "amount", "occurred_at", "name", "kind", "is_active", "internal_category", "inclusion", "metric", "target_amount", "target_date", "notes", "projected_at", "category", "category_id", "cadence", "day_of_month", "month_of_year", "start_date", "end_date", "scenario_id", "financial_account_id", "position_id", "asset_id", "ticker", "currency_code", "quantity", "unit_price", "fees", "taxes", "occurred_on", "initial_quantity", "initial_unit_cost", "initial_value", "asset_type", "active", "source", "editable"} {
+			for _, key := range []string{"id", "account_id", "account_name", "currency_code", "description", "amount", "occurred_at", "name", "kind", "is_active", "internal_category", "inclusion", "metric", "target_amount", "target_date", "notes", "projected_at", "category", "category_id", "cadence", "day_of_month", "month_of_year", "start_date", "end_date", "scenario_id", "financial_account_id", "position_id", "asset_id", "ticker", "currency_code", "quantity", "unit_price", "fees", "taxes", "occurred_on", "initial_quantity", "initial_unit_cost", "initial_value", "asset_type", "active", "source", "is_editable", "cash_balance", "current_value", "total_cost"} {
 				if value, ok := current[key]; ok {
 					label := labels[key]
 					if label == "" {
@@ -257,7 +257,7 @@ func (o *oauthServer) renderWrite(w http.ResponseWriter, status int, id string, 
 					if json.Unmarshal(value, &plain) != nil {
 						plain = string(value)
 					}
-					beforeRows = append(beforeRows, row{label, plain})
+					beforeRows = append(beforeRows, row{label, investmentApprovalValue(a, key, plain)})
 				}
 			}
 		}
@@ -269,6 +269,17 @@ func (o *oauthServer) renderWrite(w http.ResponseWriter, status int, id string, 
 		Action                        *writeAction
 		Rows, BeforeRows              []row
 	}{id, message, email, writeOperationLabel(a), a, rows, beforeRows})
+}
+
+func investmentApprovalValue(a *writeAction, key, value string) string {
+	if !strings.Contains(a.Preview.Request.Operation, "investment_") || key != "kind" {
+		return value
+	}
+	labels := map[string]string{"buy": "Compra", "sell": "Venda", "fee": "Taxa", "tax": "Imposto", "income": "Rendimento", "deposit": "Aporte", "withdrawal": "Resgate", "valuation": "Avaliação", "initial_balance": "Saldo inicial", "manual": "Manual", "integrated": "Integrada"}
+	if label, ok := labels[value]; ok {
+		return label
+	}
+	return value
 }
 
 func writeOperationLabel(a *writeAction) string {
