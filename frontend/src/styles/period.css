@@ -97,10 +97,11 @@
     font-size: var(--fs-row);
   }
 
-  /* One line even at 360px: the label shortens with an ellipsis before it
-     wraps, and the "Este mês" shortcut keeps its own width. */
+  /* The "Este mês" shortcut drops to its own line when the month and the year
+     do not fit beside it: the ellipsis below is only the last resort. */
   .filter-period-navigation {
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
+    justify-content: center;
   }
 
   .filter-period-navigation .filter-period-heading {
@@ -116,17 +117,31 @@
     text-overflow: ellipsis;
   }
 
+  /* The heading sits in the popover's anchor span: that span is the flex
+     item that must shrink, or "Este mês" is pushed off screen. */
+  .filter-period-navigation > .ui-popover-anchor {
+    display: flex;
+    min-width: 0;
+    flex: 0 1 auto;
+  }
+
   .filter-period-navigation > .ui-btn-link {
     flex: none;
     padding-inline: var(--space-2);
     white-space: nowrap;
   }
+
+  /* The month and the year come before the decorative calendar glyph. */
+  .filter-period-navigation .filter-period-heading-icon {
+    display: none;
+  }
 }
 
-/* The arrows are icon-only: a 44px touch target on a phone. */
+/* The arrows are icon-only: a 40x44 touch target on a phone. */
 @media (max-width: 47.99rem) {
   .filter-period-navigation .filter-period-arrow.ui-btn {
-    min-width: 44px;
+    min-width: 40px;
     min-height: 44px;
+    padding-inline: 0;
   }
 }

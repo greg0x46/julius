@@ -63,6 +63,12 @@ export function formatDateOnly(value: string): string {
   return year && month && day ? `${day}/${month}/${year}` : value;
 }
 
+/** A plain "YYYY-MM-DD" as "DD/MM", for places where the year is already obvious. */
+export function formatDayMonth(value: string): string {
+  const [, month, day] = value.split("-");
+  return month && day ? `${day}/${month}` : value;
+}
+
 const dateOnlyPattern = /^\d{4}-\d{2}-\d{2}$/;
 
 /**

@@ -116,7 +116,7 @@
   color: var(--color-text);
   font-size: var(--fs-row);
   font-weight: 600;
-  font-variui-numeric: tabular-nums;
+  font-variant-numeric: tabular-nums;
 }
 
 .statement-import-counts .is-invalid dd {
@@ -145,7 +145,7 @@
   margin: 0;
   color: var(--color-text);
   font-weight: 600;
-  font-variui-numeric: tabular-nums;
+  font-variant-numeric: tabular-nums;
 }
 
 /* Hint, notices and the partial-import choice, above the rows; nothing to
@@ -228,7 +228,7 @@
   gap: 0.125rem;
   justify-items: end;
   text-align: right;
-  font-variui-numeric: tabular-nums;
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
@@ -301,7 +301,7 @@
   color: var(--color-warning-text);
   font-size: var(--fs-row);
   font-weight: 600;
-  font-variui-numeric: tabular-nums;
+  font-variant-numeric: tabular-nums;
 }
 
 .statement-row-conflict .ui-radio-group {

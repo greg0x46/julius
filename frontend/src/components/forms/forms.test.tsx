@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { App as FeedbackApp, Input } from "../ui";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
 import * as compactScreen from "../shared/useCompactScreen";
 import { useFeedback } from "../shared/useFeedback";
@@ -41,6 +41,16 @@ describe("FormDrawer", () => {
     render(<Harness onSubmit={() => undefined} error="Não foi possível salvar." />);
     expect(screen.getByText("Não foi possível salvar.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Cancelar" })).toBeInTheDocument();
+  });
+
+  it("scrolls the error into view, since the body scrolls on a phone", () => {
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    onTestFinished(() => {
+      delete (Element.prototype as Partial<Element>).scrollIntoView;
+    });
+    render(<Harness onSubmit={() => undefined} error="Não foi possível salvar." />);
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
   });
 
   it("is full-screen on compact screens: close in the header, no Cancelar", () => {

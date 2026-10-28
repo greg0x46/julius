@@ -18,12 +18,13 @@ export function AccountBillsTable({
   isLoading: boolean;
   error: unknown;
 }) {
+  const failed = error !== null && error !== undefined;
   return (
     <Section title="Faturas fechadas">
       <p className="accounts-section-note">
         A instituição disponibiliza apenas faturas já fechadas — a fatura em aberto aparece no saldo do cartão.
       </p>
-      {error !== null && error !== undefined && (
+      {failed && (
         <Alert type="error" showIcon message="Não foi possível carregar as faturas desta conta." />
       )}
       {isLoading ? (
@@ -31,17 +32,19 @@ export function AccountBillsTable({
           <Skeleton active paragraph={{ rows: 2 }} title={false} />
         </div>
       ) : bills.length === 0 ? (
-        <EmptyState
-          title="Nenhuma fatura fechada"
-          hint="As faturas fechadas aparecem aqui quando a instituição as informa."
-        />
+        failed ? null : (
+          <EmptyState
+            title="Nenhuma fatura fechada"
+            hint="As faturas fechadas aparecem aqui quando a instituição as informa."
+          />
+        )
       ) : (
         <ul className="list-rows" aria-label="Faturas fechadas">
           {bills.map((bill) => (
             <ListRow
               key={bill.id}
-              title={`Fechou em ${formatOptionalDay(bill.closing_date)}`}
-              meta={`Vence em ${formatOptionalDay(bill.due_date)} · Mín. ${formatAccountMoney(bill.minimum_payment_amount, bill.currency_code)}`}
+              title={bill.closing_date === null ? "Fechamento não informado" : `Fechou em ${formatOptionalDay(bill.closing_date)}`}
+              meta={`Vence em ${formatOptionalDay(bill.due_date)} · Mín.\u00a0${formatAccountMoney(bill.minimum_payment_amount, bill.currency_code)}`}
               trailing={<AccountMoney value={bill.total_amount} currencyCode={bill.currency_code} tone="neutral" />}
             />
           ))}

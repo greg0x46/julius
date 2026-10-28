@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { expect, it, vi } from "vitest";
-import type { TimelineSeries } from "../../api/contracts";
+import { describe, expect, it, vi } from "vitest";
+import type { TimelineEntry, TimelineSeries } from "../../api/contracts";
 import { ProjectionTimeline } from "./ProjectionTimeline";
 
 function series(balances: string[]): TimelineSeries {
@@ -48,9 +48,9 @@ it("shows server balances due today for base and simulation and opens only reali
   );
   expect(onSelectDay).toHaveBeenCalledWith("2026-10-22");
   fireEvent.change(screen.getByRole("combobox"), { target: { value: "2" } });
-  fireEvent.click(
-    screen.getByRole("button", { name: "Ver transações do dia" }),
-  );
+  expect(
+    screen.queryByRole("button", { name: "Ver transações do dia" }),
+  ).not.toBeInTheDocument();
   expect(onSelectDay).toHaveBeenCalledTimes(1);
 });
 it("keeps fractional balances exact in the tooltip", () => {
@@ -105,4 +105,76 @@ it("tracks the selected day when the period changes and hides days outside it", 
   expect(
     screen.queryByRole("button", { name: "Ver transações do dia" }),
   ).not.toBeInTheDocument();
+});
+
+function futureEntry(overrides: Partial<TimelineEntry>): TimelineEntry {
+  return {
+    date: "2026-10-23",
+    description: "Compra",
+    amount: "-100.00",
+    reportable_amount: "-100.00",
+    category_id: null,
+    category_name: "Sem categoria",
+    tier: "confirmado",
+    source: "real",
+    source_ref_id: "ref",
+    scenario_id: null,
+    ...overrides,
+  };
+}
+
+describe("ProjectionTimeline markers", () => {
+  it("labels the biggest future events and the first negative day, and says so in the legend", () => {
+    const base = series(["1000", "750", "-200"]);
+    render(
+      <ProjectionTimeline
+        series={{
+          ...base,
+          first_negative: "2026-10-23",
+          entries: [
+            futureEntry({ date: "2026-10-22", amount: "-950.00" }),
+            futureEntry({ date: "2026-10-22", amount: "-50.00", description: "Outra" }),
+          ],
+        }}
+        referenceDate="2026-10-21"
+      />,
+    );
+
+    expect(screen.getByText("Fatura 22/10")).toBeInTheDocument();
+    expect(screen.getByText("Negativo 23/10")).toBeInTheDocument();
+    const legend = screen.getByRole("list", { name: "Legenda do gráfico" });
+    expect(legend).toHaveTextContent("Evento");
+    expect(legend).toHaveTextContent("Negativo");
+  });
+
+  it("leaves the first negative day to its own marker instead of stacking an event label on it", () => {
+    render(
+      <ProjectionTimeline
+        series={{
+          ...series(["1000", "750", "-200"]),
+          first_negative: "2026-10-23",
+          entries: [futureEntry({ date: "2026-10-23", amount: "-950.00" })],
+        }}
+        referenceDate="2026-10-21"
+      />,
+    );
+
+    expect(screen.queryByText("Fatura 23/10")).not.toBeInTheDocument();
+  });
+
+  it("draws no event or negative marker when there is nothing to name", () => {
+    const { container } = render(<ProjectionTimeline series={series(["1000", "750", "800"])} referenceDate="2026-10-22" />);
+
+    // The lowest-balance dot is not a marker: it carries no label.
+    expect(container.querySelectorAll(".ui-line-plot-marker")).toHaveLength(0);
+    const legend = screen.getByRole("list", { name: "Legenda do gráfico" });
+    expect(legend).not.toHaveTextContent("Evento");
+    expect(legend).not.toHaveTextContent("Negativo");
+  });
+
+  it("no longer carries the negative-balance warning inside the chart", () => {
+    render(<ProjectionTimeline series={{ ...series(["1000", "-5", "800"]), first_negative: "2026-10-22" }} referenceDate="2026-10-22" />);
+
+    expect(screen.queryByText(/pode ficar negativo/)).toBeNull();
+  });
 });

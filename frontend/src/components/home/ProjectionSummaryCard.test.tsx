@@ -38,6 +38,55 @@ function renderCard(balances: string[], startingBalance = balances[0]) {
   return render(<MemoryRouter><ProjectionSummaryCard period={period} /></MemoryRouter>);
 }
 
+function renderFuture(balances: string[], firstNegative: string | null = null, lowestIndex = 0) {
+  const points: TimelineDayPoint[] = balances.map((balance, index) => ({
+    date: `2026-10-${String(22 + index).padStart(2, "0")}`,
+    balance,
+    inflow: "0.00",
+    outflow: "0.00",
+    lowest_tier: "projetado",
+  }));
+  const base: TimelineSeries = {
+    points, entries: [], starting_balance: balances[0],
+    lowest_balance: points[lowestIndex], first_negative: firstNegative,
+  };
+  const future = { from: "2026-10-01", to: points[points.length - 1].date };
+  vi.mocked(homePeriodBounds.useHomePeriodBounds).mockReturnValue({
+    bounds: future, wholePeriod: false, isLoading: false, error: null, refetch: vi.fn(),
+  });
+  vi.mocked(timelineHook.useTimeline).mockReturnValue({
+    valuation: { currency_code: "BRL" }, currencyCode: "BRL", base,
+    periodTotals: null, simulation: null, scenarioImpacts: [],
+    isLoading: false, error: null, refetch: vi.fn(),
+  });
+  return render(<MemoryRouter><ProjectionSummaryCard period={future} /></MemoryRouter>);
+}
+
+describe("ProjectionSummaryCard figures shown once", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const monthDays = (tail: string[]) => [...tail, ...Array(10 - tail.length).fill(tail[tail.length - 1])];
+
+  it("drops a lowest balance that is the month-end balance already in the top band", () => {
+    renderFuture(monthDays(["1000.00", "900.00", "800.00"]), null, 9);
+
+    expect(screen.queryByText("Menor saldo previsto")).toBeNull();
+    expect(screen.queryByText("Saldo no fim do período")).toBeNull();
+  });
+
+  it("keeps a lowest balance that is not repeated elsewhere", () => {
+    renderFuture(monthDays(["1000.00", "300.00", "800.00"]).map((v, i) => (i >= 2 ? "800.00" : v)), null, 1);
+
+    expect(screen.getByText("Menor saldo previsto").parentElement).toHaveTextContent("R$ 300,00");
+  });
+
+  it("leaves the lowest point to the alert when the forecast goes negative", () => {
+    renderFuture(monthDays(["1000.00", "-300.00", "200.00"]), "2026-10-23", 1);
+
+    expect(screen.queryByText("Menor saldo previsto")).toBeNull();
+  });
+});
+
 describe("ProjectionSummaryCard monetary comparisons", () => {
   beforeEach(() => vi.clearAllMocks());
 

@@ -6,14 +6,22 @@
 
 ## What it is
 
-The landing dashboard: balance/inflows/outflows of the selected period, the
-balance projection (today, end of horizon, lowest balance), the daily spending
-allowance until the end of the month, and spending by category. The first three
-read the backend `Series`. The client selects historical minima with exact
-decimal comparisons and computes the daily allowance (floor, truncation and
-division over the daily balances the server returns). These are deliberate
-exceptions to "Home never recomputes"; moving them to the server is the natural
-step if another screen needs the same figures.
+The landing dashboard. One summary card: the daily spending allowance (the page
+hero), today's cash and the projected end-of-month balance beside/under it, then
+the selected period's result, entradas and saídas on a thin line. Each figure
+appears once above the fold. Below: a warning band when the forecast goes negative,
+the balance projection, spending by category, and three cards (wealth, main
+goal, total debt) linking to their screens. The header carries the period
+control. The first three figures read the backend
+`Series`. The client selects historical minima with exact decimal comparisons
+and computes the daily allowance (floor, truncation and division over the daily
+balances the server returns). These are deliberate exceptions to "Home never
+recomputes"; moving them to the server is the natural step if another screen
+needs the same figures. Other client-side reading is limited to: the exact
+decimal difference between two valued days of the wealth series, and the exact sum of
+same-day card purchases for a chart label. Everything else (negative-balance
+dates, lowest balance, goal progress/projection, totals owed) is the server's
+figure shown as it comes.
 
 A monthly retrospective screen once existed (`/relatorio-financeiro`, with
 month-by-month breakdown, category drill-down and comparisons); it was removed
@@ -113,38 +121,84 @@ back to `dev`. Vite supplies Git/default metadata at build time; CI supplies
 GitHub lookup. The footer stays in document flow, includes bottom safe-area
 padding, and reserves room on mobile pages with a fixed bottom action bar.
 
-Home (`/`):
-- `PeriodBalanceCard` — balance, inflows and outflows of the period
-  (`period_totals`), with historical BRL consolidation, explicit missing-rate
-  states and expandable native currency totals for mixed-currency periods.
-- `ProjectionSummaryCard` — balance today, balance at the end of a future
-  window, lowest balance, plus `ProjectionTimeline`. Uses the shared selected
-  period, including the whole-period option. Historical minimum selection and the empty-balance
-  check use exact decimal comparisons. Equal minima retain the first date;
-  neither decision converts monetary values to JavaScript numbers. The chart
-  preserves the server's end-of-day balance for today, including commitments
-  and card bills due today; "Saldo hoje" shows `starting_balance`, the cash now.
-- `DailyAllowanceCard` — daily spending allowance ("R$ X / dia"), below the
-  period result, as a compact figure (`Money` size `row`; the page hero is only
-  the period result). It runs its own query with `reference_date = from = today`
-  and `to = last day of the month`, independent of the selected period:
-  `base.points` has one point per day, today's first, already net of real
-  entries, plan installments, unreconciled recurrences and bills due today.
+Home (`/`). Layout by named areas (`styles/home.css`): wide screens stack top
+summary card, alert, chart (full width), then categories on the left and the
+three cards on the right; a phone is one column in that order, with the three
+cards as one list of rows (figure and detail on one line, a chevron, empty
+states as a single quiet line; sparkline and secondary notes dropped).
+- `DailyAllowanceCard` — the hero, "Pode gastar por dia até DD/MM" ("R$ X / dia";
+  not a reserve nor a budget). Runs its own query through `useMonthTimeline`
+  with `reference_date = from = today` and `to = last day of the month`,
+  independent of the selected period: `base.points` has one point per day,
+  today's first, already net of real entries, plan installments, unreconciled
+  recurrences and bills due today.
   Value = the minimum, over days k = 1..N (today = 1), of `max(0, balance_k) / k`,
   truncated to the cent (`presentation/dailyAllowance.ts`): spending d per day
   leaves `balance_k - k·d` on day k, so that minimum is the largest d that never
   zeroes the balance — an early dip weighs more than the same dip at month end.
   Assumes spending at the end of each day. The cent math (`clampBRLAtZero`,
   `minBRL`, `divideBRLFloor`, which rejects negative values) lives in
-  `presentation/money.ts`. "Today" rolls over at midnight (`useToday`, shared
-  with `ProjectionSummaryCard`, each card with its own timer). The React Query
-  key is by value: the query is shared with another card only if the window is
-  identical, which the default period (start of month) is not. If a background
-  refetch fails it keeps the last value; the error state shows only with no data
-  at all. Nothing is persisted: the value follows any `timeline` invalidation.
-  It is not a reserve nor a budget.
+  `presentation/money.ts`. "Today" rolls over at midnight (`useToday`). The
+  React Query key is by value, so cards with an identical window share one
+  request. If a background refetch fails it keeps the last value; the error
+  state shows only with no data at all. Nothing is persisted.
+- `MonthBalancesCard` — "Saldo hoje" (`starting_balance`, the cash now) and
+  "Em DD/MM" tagged "projetado" (the last point of the same month series:
+  end-of-day balance on the last day, still including what has not happened).
+  Same request as the allowance; the stale-rate notice is the allowance card's.
+- `PeriodBalanceCard` — balance, inflows and outflows of the selected period
+  (`period_totals`), with historical BRL consolidation, explicit missing-rate
+  states and expandable native currency totals for mixed-currency periods. No
+  longer the page hero: one compact line (result, entradas, saídas); the
+  "incluindo cenários ativos" note is hidden on a phone unless the period is
+  empty.
+- `NegativeBalanceAlert` — warning band (warning tokens) "O saldo fica negativo
+  em DD/MM se nada mudar. Ponto mais baixo: … em DD/MM." with an inline link to
+  the period's transactions. The lowest point is left out when it is the last
+  day of the chart's window (that figure is already the end balance). Reads `first_negative` and `lowest_balance` of the
+  chart's series (from today onward; null `first_negative` or a loading/error
+  state renders nothing). The year is added when it differs from today's. It
+  replaces the alert that used to sit inside the chart.
+- `ProjectionSummaryCard` — `ProjectionTimeline` with a figure strip only for
+  what nothing else above the fold says: the lowest balance (`lowest_balance`,
+  or the historical minimum for a window that ends today) unless the forecast
+  is negative (the alert says it) or it equals the month-end balance already in
+  the summary card; and the balance at the end of a future window unless that
+  is the month end. No strip when both are repeats. Uses the shared selected period, including the whole-period option,
+  through `useHomeProjection` (shared with the alert, one request). Historical
+  minimum selection and the empty-balance check use exact decimal comparisons.
+  Equal minima retain the first date; neither converts monetary values to
+  JavaScript numbers. The chart preserves the server's end-of-day balance for
+  today, including commitments and card bills due today.
+  `ProjectionTimeline`: realized solid in ink, projected dashed in brand green,
+  short legend (Realizado / Projetado / Evento / Negativo; "Menor saldo" only
+  when there is no negative marker), "Hoje" line, zero line, lowest-balance dot, a labelled dot at the first
+  negative day, and up to 3 labelled hollow dots (1 on a phone) for the biggest
+  upcoming events (`presentation/chartEvents.ts`): Confirmado/Projetado entries
+  after today — card purchases due the same day summed as one "Fatura",
+  plan installments as "Parcela", recurrences by name — ranked by exact amount,
+  one per day, never on the first negative day. Labels have a halo in the surface color and
+  sit to the dot's left in the last 40% of the window so they stay inside the
+  plot. Scenarios are not part of this
+  view.
 - `SpendingByCategoryCard` — spending by category, read from
   `GET /api/transactions/category-breakdown` (Transactions context).
+- `NetWorthSummaryCard` — link to `/patrimonio`: latest wealth (cash plus
+  investments) in the response's currency and a sparkline plus the exact change
+  since the oldest valued day in the last 30 days
+  (`presentation/netWorthTrend.ts`). Every day is derived on read, so the
+  window is a plain date range; days that cannot be valued (`unavailable`) are
+  skipped, never read as zero, and without an earlier valued day it says there
+  is not enough history. An unvaluable latest day says "Indisponível", never
+  zero.
+- `PrimaryGoalCard` — link to `/metas`: the first goal in the Metas page order
+  (open goals first, smallest target first), with progress meter, current/target
+  in BRL (goals are never converted) and the server's projection ("No ritmo
+  para …" / "Atrás do ritmo … aporte de …"); "mais N metas" when there are
+  others. No goals: one quiet line with a "Criar meta" link.
+- `TotalOwedCard` — link to `/pendencias`: `GET /api/payables/total-owed`, open
+  debts ("Pendências") plus card bills still accruing ("faturas abertas"), in
+  the currency the response declares (BRL by construction).
 
 ## Notes
 
@@ -157,10 +211,9 @@ The components that did this
 removed as dead; recover them from git history if simulation returns to the
 screen.
 
-For the same reason `CertaintyTier` appears nowhere in the UI — the certainty
-vocabulary (principle 4 of `.specs/motores-de-dominio.md`) lives only in the
-backend today. The badge that showed it (`EntryOriginBadge`) and its label map
-were removed with it.
+`CertaintyTier` only selects which entries get a chart marker (Confirmado and
+Projetado); it is not shown as a badge — the one that did (`EntryOriginBadge`)
+was removed.
 
 ## API contract verification
 

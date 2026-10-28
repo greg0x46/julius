@@ -52,6 +52,9 @@ function TransactionMeta({
       {accountShown && <span className="transaction-meta-where">{account}</span>}
       {item.origin === "manual" && <span className="transaction-meta-flag">Manual</span>}
       {item.source_provider === "file" && <span className="transaction-meta-flag">Arquivo</span>}
+      {!ignored && (item.totals_eligibility.reason === "transfer_category" || item.totals_eligibility.reason === "linked_transfer") && (
+        <span className="transaction-meta-flag">Fora dos totais</span>
+      )}
       {ignored && (
         <span
           className="transaction-meta-flag is-ignored"

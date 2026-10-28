@@ -157,10 +157,48 @@ export function ConfigurableFilters<Values extends object>({
   const [draft, setDraft] = useState(values);
   const [error, setError] = useState<string | null>(null);
   const quickTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingRef = useRef(false);
+  const quickRef = useRef(quickValues);
+  useEffect(() => {
+    quickRef.current = quickValues;
+  });
   useEffect(() => {
     if (quickTimer.current) clearTimeout(quickTimer.current);
-    setQuickValues(values);
+    // A shortcut applied from outside while the search was still debouncing:
+    // carry the typed text into the new applied values instead of dropping it.
+    if (pendingRef.current) {
+      pendingRef.current = false;
+      let merged = values;
+      for (const field of config) {
+        if (field.type !== "text") continue;
+        const typed = read(quickRef.current, field.key);
+        if (typed !== read(values, field.key)) {
+          merged = write(merged, field.key, typed);
+        }
+      }
+      if (merged !== values) {
+        setQuickValues(merged);
+        setDraft(merged);
+        onApply(merged);
+        return;
+      }
+    }
+    // Applying trims the search text; keep what is being typed (a trailing
+    // space) instead of snapping the input back to the trimmed value.
+    setQuickValues((current) => {
+      let next = values;
+      for (const field of config) {
+        if (field.type !== "text") continue;
+        const typed = read(current, field.key);
+        const applied = read(values, field.key);
+        if (typeof typed === "string" && typed !== applied && typed.trim() === (applied ?? "")) {
+          next = write(next, field.key, typed);
+        }
+      }
+      return next;
+    });
     setDraft(values);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset only when the applied values change
   }, [values]);
   useEffect(
     () => () => {
@@ -232,8 +270,13 @@ export function ConfigurableFilters<Values extends object>({
     if (!validate(next)) return;
     if (quickTimer.current) clearTimeout(quickTimer.current);
     if (field.debounceMs) {
-      quickTimer.current = setTimeout(() => onApply(next), field.debounceMs);
+      pendingRef.current = true;
+      quickTimer.current = setTimeout(() => {
+        pendingRef.current = false;
+        onApply(next);
+      }, field.debounceMs);
     } else {
+      pendingRef.current = false;
       onApply(next);
     }
   };
@@ -252,6 +295,12 @@ export function ConfigurableFilters<Values extends object>({
     setDraft(values);
     setError(null);
     setAdvancedOpen(false);
+  };
+  // Clearing must not carry still-debouncing search text back in.
+  const clearAll = () => {
+    if (quickTimer.current) clearTimeout(quickTimer.current);
+    pendingRef.current = false;
+    onClear();
   };
   const clearAdvanced = () => {
     let next = draft;
@@ -382,6 +431,10 @@ export function ConfigurableFilters<Values extends object>({
             closable
             onClose={(event) => {
               event.preventDefault();
+              if (field.type === "text") {
+                quickRef.current = replaceField(quickRef.current, field, emptyValues);
+                setQuickValues(quickRef.current);
+              }
               onApply(replaceField(values, field, emptyValues));
             }}
             closeIcon={<span aria-label={`Remover ${shown}`}>×</span>}
@@ -390,7 +443,7 @@ export function ConfigurableFilters<Values extends object>({
           </Tag>
         );
       })}
-      <Button type="link" size="small" onClick={onClear}>
+      <Button type="link" size="small" onClick={clearAll}>
         Limpar filtros
       </Button>
     </div>

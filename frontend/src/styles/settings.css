@@ -45,6 +45,13 @@
   margin-top: 0.1875rem;
 }
 
+.settings-radio-body {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
 .settings-radio-hint {
   display: block;
   margin: 0;

@@ -222,7 +222,8 @@ export function RecurrenceOccurrenceList({ commitment }: { commitment: Recurring
     {
       title: "Ocorrência",
       dataIndex: "date",
-      render: (_: unknown, occurrence) => formatDay(occurrence.date),
+      width: 120,
+      render: (_: unknown, occurrence) => <span style={{ whiteSpace: "nowrap" }}>{formatDay(occurrence.date)}</span>,
     },
     {
       title: "Valor esperado",

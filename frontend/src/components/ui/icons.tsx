@@ -358,6 +358,14 @@ export function UploadOutlined(props: IconProps) {
 export function WalletOutlined(props: IconProps) {
   return <Icon {...props} path="M3 5h17v15H3ZM3 5V3h14v2m-1 6h6v5h-6Z" />;
 }
+export function WarningOutlined(props: IconProps) {
+  return (
+    <Icon
+      {...props}
+      path="M10.3 4 2.4 18a2 2 0 0 0 1.7 3h15.8a2 2 0 0 0 1.7-3L13.7 4a2 2 0 0 0-3.4 0M12 9v4m0 4v.01"
+    />
+  );
+}
 export function WifiOutlined(props: IconProps) {
   return (
     <Icon

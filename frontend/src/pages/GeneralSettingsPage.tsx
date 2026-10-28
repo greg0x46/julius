@@ -130,15 +130,19 @@ export function GeneralSettingsPage() {
             >
               <div className="settings-radio">
                 <Radio value="occurred_at">
-                  Mês da compra
-                  <span className="settings-radio-hint">Cada compra conta no mês em que foi realizada.</span>
+                  <span className="settings-radio-body">
+                    Mês da compra
+                    <span className="settings-radio-hint">Cada compra conta no mês em que foi realizada.</span>
+                  </span>
                 </Radio>
                 <Radio value="paid_at">
-                  Mês do pagamento
-                  <span className="settings-radio-hint">
-                    Cada compra conta no mês da fatura em que é efetivamente paga. Compras recentes, cuja
-                    fatura ainda não fechou, usam uma estimativa que se ajusta sozinha assim que a fatura
-                    fecha numa sincronização seguinte.
+                  <span className="settings-radio-body">
+                    Mês do pagamento
+                    <span className="settings-radio-hint">
+                      Cada compra conta no mês da fatura em que é efetivamente paga. Compras recentes, cuja
+                      fatura ainda não fechou, usam uma estimativa que se ajusta sozinha assim que a fatura
+                      fecha numa sincronização seguinte.
+                    </span>
                   </span>
                 </Radio>
               </div>

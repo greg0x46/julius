@@ -243,9 +243,20 @@ export function InvestmentOperationFields({
     if (submitRef) submitRef.current = submit;
   });
 
+  // The alert sits at the top of a form that scrolls on a phone: bring it into view.
+  const alertRef = useRef<HTMLDivElement>(null);
+  const shownError = error ?? submitError;
+  useEffect(() => {
+    if (shownError) alertRef.current?.scrollIntoView?.({ block: "nearest" });
+  }, [shownError]);
+
   const body = (
     <>
-      {(error ?? submitError) && <Alert type="error" showIcon message={error ?? submitError} />}
+      {shownError && (
+        <div ref={alertRef}>
+          <Alert type="error" showIcon message={shownError} />
+        </div>
+      )}
       {draft.kind === "valuation" && (
         <p className="form-field-hint">
           Cotação manual: marca o valor atual desta posição nesta data. Em ativos com cotação automática, uma cotação

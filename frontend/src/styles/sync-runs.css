@@ -17,6 +17,20 @@
   background: var(--color-surface);
 }
 
+.sync-credentials.ui-collapse > details > summary {
+  padding: 0.6875rem var(--page-gutter, 1rem);
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.sync-credentials.ui-collapse > details[open] > summary {
+  border-bottom: 1px solid var(--color-border);
+}
+
+.sync-credentials.ui-collapse details > :not(summary) {
+  padding: var(--space-4) var(--page-gutter, 1rem);
+}
+
 @media (max-width: 47.99rem) {
   .sync-credentials.ui-collapse {
     margin-inline: calc(-1 * var(--page-gutter, 1rem));
@@ -137,7 +151,7 @@
   color: var(--color-text);
   font-size: var(--fs-row);
   font-weight: 500;
-  font-variui-numeric: tabular-nums;
+  font-variant-numeric: tabular-nums;
 }
 
 .sync-run-identifier {

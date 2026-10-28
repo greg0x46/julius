@@ -7,6 +7,13 @@
          every safe-area padding rule already in this codebase
          (filters.css, panel.css, categories.css) on notched devices. -->
     <meta name="color-scheme" content="light dark" />
+    <!-- Applies the saved theme before first paint (same key as src/app/theme.ts). -->
+    <script>
+      try {
+        var t = localStorage.getItem("julius.theme");
+        if (t === "light" || t === "dark") document.documentElement.dataset.theme = t;
+      } catch (e) {}
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="description" content="Acompanhe suas sincronizações no Julius." />
     <title>Julius</title>
