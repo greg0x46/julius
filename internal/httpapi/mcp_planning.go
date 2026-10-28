@@ -447,7 +447,7 @@ func mcpBuildTimeline(ctx context.Context, conn *sql.DB, in mcpTimelineInput) (m
 	if err != nil {
 		return mcpTimeline{}, err
 	}
-	v, err := mcpReference(ctx, conn, time.Now())
+	v, err := mcpReference(ctx, conn, time.Now().UTC())
 	if err != nil {
 		return mcpTimeline{}, err
 	}

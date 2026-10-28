@@ -199,6 +199,31 @@ func TestMCPPlanningMatchesApplication(t *testing.T) {
 
 }
 
+func TestMCPPlanningTimelineUsesUTCReferenceFXDay(t *testing.T) {
+	original := time.Local
+	time.Local = time.FixedZone("synthetic-next-day", 24*60*60)
+	t.Cleanup(func() { time.Local = original })
+	date := time.Now().UTC().Format(time.DateOnly)
+	if time.Now().Format(time.DateOnly) == date {
+		t.Fatal("test requires different local and UTC calendar days")
+	}
+	srv, conn := newTestServer(t)
+	planningCash(t, conn, "BRL", "100")
+	session := planningSession(t, conn)
+	got := planningCall(t, session, "get_timeline", map[string]any{"from": date, "to": date, "reference_date": date, "timezone": "UTC"})
+	want := investmentCall(t, srv, http.MethodGet, "/api/timeline?from="+date+"&to="+date+"&reference_date="+date+"&timezone=UTC", nil, 200)
+	for _, key := range []string{"as_of", "effective_on"} {
+		gotDay := got["fx"].(map[string]any)[key]
+		wantDay := want["fx"].(map[string]any)[key]
+		if gotDay != wantDay || gotDay != date+"T00:00:00Z" {
+			t.Fatalf("reference FX %s: MCP=%v REST=%v, want UTC day %s", key, gotDay, wantDay, date)
+		}
+	}
+	if !reflect.DeepEqual(got["series"], want["base"]) || !reflect.DeepEqual(got["period_totals"], want["period_totals"]) {
+		t.Fatal("timeline differs from application with non-UTC process timezone")
+	}
+}
+
 func TestMCPPlanningExplicitScenarios(t *testing.T) {
 	dbtest.Each(t, func(t *testing.T, conn *sql.DB) {
 		ctx := context.Background()
