@@ -283,3 +283,23 @@ connections and then the database. Tests: `internal/mcp/server_test.go` covers
 configuration, both-dialect access checks, generic SDK discovery, legacy
 initialize, malformed/unsupported requests, unknown tools, limits and
 cancellation; `cmd/julius/server_test.go` pins route isolation and shutdown.
+
+
+### Cross-client validation
+
+`internal/mcp/interop_test.go` runs an independent Python SDK client through
+HTTP discovery, DCR, scope rejection, denial/approval, S256 exchange, replay
+rejection, MCP initialize/discovery, unknown-tool rejection and revocation.
+It also runs the pinned Inspector CLI (TypeScript SDK) against authenticated
+tool discovery. Both use `dbtest.Each`; CI installs the test-only clients and
+sets their executable paths before the ordinary Go test suite. Locally the
+external tests skip unless `JULIUS_MCP_TEST_PYTHON` and
+`JULIUS_MCP_TEST_INSPECTOR` are set, respectively. The Go SDK protocol lifecycle
+also runs on both dialects and rejects discovery on an already connected client
+after revocation. No new binary/runtime dependency is introduced.
+
+[Self-hosted setup and validation](../../../docs/mcp.md) documents HTTPS,
+consent, revocation, repeatable tests and manual browser/remote-client checks.
+This remains the transport/OAuth milestone: financial read fixtures and actual
+read-tool contracts depend on the read tools being implemented. Empty discovery
+and an unknown-call error are not evidence of financial-read interoperability.

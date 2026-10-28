@@ -400,6 +400,9 @@ configuration failure.
 
 ### MCP
 
+For deployment, repeatable Go/Python/Inspector checks, client limitations and
+troubleshooting, see the [self-hosted MCP guide](docs/mcp.md).
+
 Set `JULIUS_MCP_ENABLED=true` to serve MCP at `/mcp` in the existing binary.
 Unset or false keeps MCP and its OAuth endpoints disabled (404); invalid values
 prevent startup. Enable authentication in settings first. MCP cannot be enabled
