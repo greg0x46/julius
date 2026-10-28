@@ -25,29 +25,29 @@ import (
 // --- request DTOs, matching frontend/src/api/contracts.ts's TransactionQuery ---
 
 type transactionFiltersRequest struct {
-	Origin         *string `json:"origin"`
-	SourceProvider *string `json:"source_provider"`
-	CardBalance    *bool   `json:"card_balance"`
-	CreditCard     *bool   `json:"credit_card"`
-	DateFrom       *string `json:"date_from"`
-	DateTo         *string `json:"date_to"`
-	Description    *string `json:"description"`
+	Origin         *string `json:"origin,omitempty"`
+	SourceProvider *string `json:"source_provider,omitempty"`
+	CardBalance    *bool   `json:"card_balance,omitempty"`
+	CreditCard     *bool   `json:"credit_card,omitempty"`
+	DateFrom       *string `json:"date_from,omitempty"`
+	DateTo         *string `json:"date_to,omitempty"`
+	Description    *string `json:"description,omitempty"`
 	// The singular fields are the original contract and still work; the
 	// plural ones are "any of" sets (see transactions.Filters). Both spellings
 	// of one field are merged, so a client sending only account_id gets the
 	// same result as before.
-	AccountID        *string  `json:"account_id"`
-	AccountIDs       []string `json:"account_ids"`
-	Institution      *string  `json:"institution"`
-	Institutions     []string `json:"institutions"`
-	CategoryID       *string  `json:"category_id"`
-	CategoryIDs      []string `json:"category_ids"`
-	Classification   *string  `json:"classification"`
-	ProviderStatus   *string  `json:"provider_status"`
-	ProviderStatuses []string `json:"provider_statuses"`
-	AmountMin        *string  `json:"amount_min"`
-	AmountMax        *string  `json:"amount_max"`
-	Uncategorized    *bool    `json:"uncategorized"`
+	AccountID        *string  `json:"account_id,omitempty"`
+	AccountIDs       []string `json:"account_ids,omitempty"`
+	Institution      *string  `json:"institution,omitempty"`
+	Institutions     []string `json:"institutions,omitempty"`
+	CategoryID       *string  `json:"category_id,omitempty"`
+	CategoryIDs      []string `json:"category_ids,omitempty"`
+	Classification   *string  `json:"classification,omitempty"`
+	ProviderStatus   *string  `json:"provider_status,omitempty"`
+	ProviderStatuses []string `json:"provider_statuses,omitempty"`
+	AmountMin        *string  `json:"amount_min,omitempty"`
+	AmountMax        *string  `json:"amount_max,omitempty"`
+	Uncategorized    *bool    `json:"uncategorized,omitempty"`
 }
 
 // anyOfSet merges a legacy single value with its plural form into one
@@ -73,10 +73,10 @@ func anyOfSet(single *string, many []string) []string {
 
 type transactionQueryRequest struct {
 	Timezone string                    `json:"timezone"`
-	GroupBy  string                    `json:"group_by"`
-	Page     int                       `json:"page"`
-	PageSize int                       `json:"page_size"`
-	Filters  transactionFiltersRequest `json:"filters"`
+	GroupBy  string                    `json:"group_by,omitempty"`
+	Page     int                       `json:"page,omitempty"`
+	PageSize int                       `json:"page_size,omitempty"`
+	Filters  transactionFiltersRequest `json:"filters,omitempty"`
 }
 
 func parseDateOnly(s string) (money.Date, error) {

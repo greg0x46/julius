@@ -44,6 +44,7 @@ func NewHandler(enabled bool, config auth.Config, store *auth.Store) (http.Handl
 	server := sdk.NewServer(&sdk.Implementation{Name: "julius", Version: "1"}, &sdk.ServerOptions{
 		Capabilities: &sdk.ServerCapabilities{Tools: &sdk.ToolCapabilities{}},
 	})
+	registerReadTools(server, store.DB)
 	transport := sdk.NewStreamableHTTPHandler(func(*http.Request) *sdk.Server { return server }, &sdk.StreamableHTTPOptions{
 		Stateless: true, JSONResponse: true, MaxRequestBodyBytes: 1 << 20,
 		// Reverse proxies may forward a public Host to a loopback listener.
