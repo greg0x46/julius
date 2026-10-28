@@ -56,7 +56,11 @@ func planningCall(t *testing.T, s *sdk.ClientSession, name string, args map[stri
 		t.Fatal(err)
 	}
 	if result.IsError {
-		t.Fatalf("%s: %+v", name, result.Content)
+		content, err := json.Marshal(result.Content)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Fatalf("%s: %s", name, content)
 	}
 	data, err := json.Marshal(result.StructuredContent)
 	if err != nil {
@@ -201,7 +205,12 @@ func TestMCPPlanningMatchesApplication(t *testing.T) {
 
 func TestMCPPlanningTimelineUsesUTCReferenceFXDay(t *testing.T) {
 	original := time.Local
-	time.Local = time.FixedZone("synthetic-next-day", 24*60*60)
+	// Pick a valid RFC3339 offset that crosses UTC midnight at the current hour.
+	offset := 12 * 60 * 60
+	if time.Now().UTC().Hour() < 12 {
+		offset = -offset
+	}
+	time.Local = time.FixedZone("synthetic-other-day", offset)
 	t.Cleanup(func() { time.Local = original })
 	date := time.Now().UTC().Format(time.DateOnly)
 	if time.Now().Format(time.DateOnly) == date {
