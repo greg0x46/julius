@@ -88,6 +88,13 @@ test data afterward. No running Julius instance or bank connection is needed.
 | [MCP Inspector CLI](https://github.com/modelcontextprotocol/inspector/tree/0.21.1), `TestInspectorClientInterop` | Authenticated Streamable HTTP initialize and empty tool discovery; both dialects |
 | OAuth/access boundary tests | Missing/expired/wrong-resource/revoked tokens, insufficient scope, CSRF, owner reset, open mode and browser/REST separation rejected; both dialects |
 
+Validation record (2026-10-28): Go SDK 1.8.0, Python SDK 1.26.0 and Inspector
+CLI 0.21.1 passed the checks above on SQLite and PostgreSQL 17. The full Go
+suite, frontend lint/typecheck and 907 unit tests, six Playwright journeys,
+embedded-frontend build, release-script tests, production npm audit and
+reachable-code vulnerability scan passed. Interactive Inspector OAuth and
+remote AI applications remain manual checks, unverified in this run.
+
 Inspector uses the TypeScript SDK; the Go and Python SDKs are independent
 implementations. The Inspector CLI test supplies a synthetic token issued by
 the real Julius consent/code flow; the Python test also exercises that flow
