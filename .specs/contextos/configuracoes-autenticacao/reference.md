@@ -203,7 +203,7 @@ Every MCP request requires a scoped OAuth Bearer token from `internal/mcp`;
 owner sessions and cookies never grant access. Authentication must remain
 enabled (403 when off); storage failures return 503. Invalid, expired, revoked
 or wrong-resource tokens return 401 with a protected-resource metadata challenge;
-missing `mcp:access` returns 403/`insufficient_scope`. Origin is optional for
+missing `mcp:read` returns 403/`insufficient_scope`. Origin is optional for
 non-browser clients, but when present must equal the configured public origin.
 There is no CORS. `/api` retains its existing cookie/CSRF gate and ignores
 OAuth tokens.
@@ -222,7 +222,7 @@ and the authentication preference is checked before every OAuth request.
 | GET /oauth/authorize | Validates client, exact redirect, resource, scope and S256 challenge; renders owner consent |
 | POST /oauth/authorize | Checks bound cookie and Origin; explicit denial or fresh owner credentials plus explicit approval; redirects code/error with state and issuer |
 | POST /oauth/token | Form-encoded code exchange; consumes code atomically and validates client, redirect, resource, PKCE and owner revision |
-| POST /oauth/revoke | Form-encoded client ID/token; idempotent revocation of that client's access token |
+| POST /oauth/revoke | Form-encoded client ID/token; idempotent revocation of the connection belonging to that client/token |
 
 Migration `0007_mcp_oauth` adds `oauth_clients` and `oauth_grants` on both
 dialects. These tables start empty when converting legacy databases. Client IDs
@@ -235,8 +235,15 @@ session. Code/token insertion compares the verified owner revision to prevent
 password-reset races; reads also require the current revision. Browser logout
 has no effect on OAuth tokens; password changes/resets revoke all of them.
 
-The sole scope is `mcp:access`, covering today's transport with zero financial
-tools. Unknown requested scopes are rejected. Consent requests and codes last
+The default scope is `mcp:read`; `mcp:read mcp:write` requests writes too.
+Omitted scope and legacy `mcp:access` requests map to read-only. Consent defaults
+to read-only and offers writing only when requested; the selection persists
+through credential errors. Unknown requested scopes are rejected. There are
+still zero financial tools. A receiving middleware classifies tools through a
+server-owned name/scope map and rejects unclassified tools. Before execution it
+rechecks the MCP and browser-auth flags, token expiry/revision, connection
+revocation and current scope intersected with the token scope. Prompts and
+client-supplied annotations never grant permissions. Consent requests and codes last
 five minutes; access tokens last one hour without idle refresh. Only hashes of
 random 32-byte credentials reach storage. Code and consent consumption are
 single-use under concurrent requests. Tokens are bound to the exact configured
@@ -280,3 +287,52 @@ connections and then the database. Tests: `internal/mcp/server_test.go` covers
 configuration, both-dialect access checks, generic SDK discovery, legacy
 initialize, malformed/unsupported requests, unknown tools, limits and
 cancellation; `cmd/julius/server_test.go` pins route isolation and shutdown.
+
+
+### MCP authorization management
+
+Paired migration `0008_mcp_authorizations` adds `mcp_authorizations`, with UUID
+connection ID, opaque OAuth client ID, current scope, approved scope ceiling,
+owner revision, creation/last-use/expiry/revocation timestamps. `oauth_grants`
+links codes/tokens to this connection; pending consent has no connection. Every
+fresh consent creates an independent connection, including for the same client.
+Existing pre-upgrade tokens and codes without a connection fail closed and need
+fresh authorization. Legacy conversion leaves these tables empty.
+
+`internal/mcpaccess` owns lifecycle persistence and `mcp.enabled` (unencrypted,
+default true under the server's disabled-by-default environment flag). A false
+runtime flag denies further MCP/OAuth requests with 403; re-enabling resumes
+unexpired, non-revoked connections. Environment disable removes routes until
+restart and cannot be overridden through settings. Both checks are independent
+of browser login. Management requires an authenticated owner even in open mode;
+demo blocks management. Clients never gain REST access through an OAuth token.
+
+| Method / route | Behavior |
+|---|---|
+| GET /api/settings/mcp | Returns server availability, runtime enabled flag and all authorized connections, including expired/revoked; no credentials/hashes |
+| PUT /api/settings/mcp | Saves the runtime enabled flag; requires normal CSRF headers |
+| PATCH /api/settings/mcp/connections/{id} | Sets read-only or read/write within original consent ceiling; expired/revoked/escalating changes return 409 |
+| DELETE /api/settings/mcp/connections/{id} | Idempotently records revocation for that connection; unknown IDs return 409 |
+
+Security settings reuses Section, Switch, Select and Popconfirm, with loading,
+retry, empty, unavailable-server and per-action error states. Names are explicitly
+self-reported in consent; IDs distinguish identical names. Read-only consent has
+no write selector. Active write consent can be reduced and restored within its
+ceiling; broader access requires new consent. Revoked/expired rows retain dates
+and permission summaries without editing controls. Disabling MCP leaves the list
+and revocation controls usable; demo/open mode shows explanatory copy.
+
+A connection expires 65 minutes after consent (five-minute exchange window plus
+one-hour token lifetime); the token itself can expire earlier. Successful MCP
+credential checks update last use, including discovery; neither lifetime extends.
+Revocation blocks outstanding codes and later calls. Password change/reset marks
+all connections revoked in the same transaction that increments owner revision
+and clears browser sessions. Revision checks prevent racing issuance from gaining
+access. Logout affects only the browser. In-flight executions may finish.
+
+Tests: `internal/mcpaccess/store_test.go` covers persistence/lifecycle on both
+dialects. `internal/mcp/authorizations_test.go` tests management isolation, CSRF,
+revoked-code exchange, read/write execution, runtime disable, consent ceiling,
+demo/open access and safe errors on SQLite/Postgres. Frontend
+`MCPSettings.test.tsx` covers controls, confirmation, errors, states and independent
+connections; `api/mcpSettings.test.ts` validates response data and transport.
