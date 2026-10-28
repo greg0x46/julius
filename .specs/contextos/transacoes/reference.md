@@ -246,7 +246,9 @@ the previous amount, and replay adds no expense
 - `/transacoes` — main ledger: filters, grouping, totals, category/inclusion
   edit drawer, "Novo lançamento manual" button and — for a manual entry — a
   "Manual" tag in the list and drawer, with Editar/Excluir actions.
-  `ManualTransactionForm` serves create and edit.
+  `ManualTransactionForm` serves create and edit. Debounced description edits,
+  including clearing the search, survive unrelated filter shortcuts; removing
+  the description chip discards its pending edit.
 - `/contas-e-cartoes` + `/contas-e-cartoes/:id` — native balance rows,
   "Nova conta" drawer (name, currency, opening balance), and manual-only edit,
   signed balance-adjustment, archive/reactivate actions on detail. The detail
@@ -426,3 +428,15 @@ consolidated BRL figures already use each entry's reporting-day rate (see
 `internal/reporting`); the reference currency then applies one current
 BRL→reference rate on top, so a non-BRL reference is a presentation valuation
 of that BRL base, not a per-day reconstruction.
+
+## MCP writes
+
+Manual creation/update/deletion, inclusion decisions and categorization are
+available through separately scoped MCP preparation tools. Each requires a
+Julius browser approval before writing. The adapter reuses `ledger.Service`,
+`ledger.OnIgnored` and existing validation, preserving exact decimals, persistent
+creation idempotency, manual-only restrictions and cleanup. Installment category
+cascades show all IDs (maximum 100) and revalidate atomically; no arbitrary batch.
+
+Tool inputs, approval contract, limits and synthetic dev validation:
+[README financial writes](../../../README.md#financial-writes).

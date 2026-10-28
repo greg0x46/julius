@@ -12,6 +12,13 @@ export interface PlotSeries {
   step?: boolean;
   values: (string | null | undefined)[];
 }
+/** A named point on the curve: a dated event (`event`) or the first negative day (`negative`). */
+export interface PlotMarker {
+  date: string;
+  value: string;
+  label: string;
+  tone: "event" | "negative";
+}
 interface LinePlotProps {
   dates: string[];
   series: PlotSeries[];
@@ -19,8 +26,11 @@ interface LinePlotProps {
   formatDate: (date: string) => string;
   tooltip: (index: number) => ReactNode;
   onSelect?: (index: number) => void;
+  /** Hides the day action for points `onSelect` would ignore. */
+  canSelect?: (index: number) => boolean;
   referenceDate?: string;
   lowest?: { date: string; value: string };
+  markers?: PlotMarker[];
   label: string;
 }
 export function LinePlot({
@@ -30,8 +40,10 @@ export function LinePlot({
   formatDate,
   tooltip,
   onSelect,
+  canSelect,
   referenceDate,
   lowest,
+  markers = [],
   label,
 }: LinePlotProps) {
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
@@ -197,6 +209,43 @@ export function LinePlot({
             strokeWidth={2}
           />
         )}
+        {markers.map((marker) => {
+          const index = dates.indexOf(marker.date);
+          if (index < 0) return null;
+          const negative = marker.tone === "negative";
+          const cx = x(index);
+          const cy = y(Number(marker.value));
+          // A label centred on a dot near the right edge would leave the plot: hang it to the dot's left instead.
+          const nearEnd = index > dates.length * 0.6;
+          return (
+            <g key={`${marker.tone}-${marker.date}-${marker.label}`} className="ui-line-plot-marker">
+              <circle
+                cx={cx}
+                cy={cy}
+                r={negative ? 6 : 4}
+                fill={negative ? balanceChartColor.lowest : "var(--color-surface)"}
+                stroke={negative ? "var(--color-surface)" : balanceChartColor.projected}
+                strokeWidth={2}
+              />
+              <text
+                x={nearEnd ? cx - 10 : cx}
+                y={nearEnd ? cy : negative ? cy + 18 : cy - 10}
+                textAnchor={nearEnd ? "end" : "middle"}
+                dominantBaseline={nearEnd ? "middle" : undefined}
+                fill={negative ? balanceChartColor.lowest : balanceChartColor.axis}
+                stroke="var(--color-surface)"
+                strokeWidth={3}
+                style={{
+                  fontSize: "var(--fs-caption)",
+                  fontWeight: negative ? 600 : 400,
+                  paintOrder: "stroke",
+                }}
+              >
+                {marker.label}
+              </text>
+            </g>
+          );
+        })}
         {selected != null && (
           <line
             x1={x(selected)}
@@ -249,7 +298,7 @@ export function LinePlot({
             ))}
           </select>
         </label>
-        {onSelect && selected != null && (
+        {onSelect && selected != null && (canSelect?.(selected) ?? true) && (
           <button type="button" onClick={() => onSelect(selected)}>
             Ver transações do dia
           </button>

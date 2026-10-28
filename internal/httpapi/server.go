@@ -227,7 +227,7 @@ func spaHandler(frontend fs.FS) http.Handler {
 	fileServer := http.FileServerFS(frontend)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requestedPath := strings.TrimPrefix(r.URL.Path, "/")
-		if requestedPath == "health" || strings.HasPrefix(requestedPath, "api/") || strings.HasPrefix(requestedPath, "health/") {
+		if requestedPath == "mcp" || strings.HasPrefix(requestedPath, "mcp/") || requestedPath == "health" || strings.HasPrefix(requestedPath, "api/") || strings.HasPrefix(requestedPath, "health/") {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusNotFound)
 			_ = json.NewEncoder(w).Encode(map[string]string{"detail": "Not Found"})

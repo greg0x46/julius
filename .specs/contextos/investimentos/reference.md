@@ -723,3 +723,13 @@ view converts every position with one rate per currency (day `to`) in the
 backend and shows the native value of a foreign position beside it. No
 positions, targets or provider balances are
 rewritten when switching reference currency.
+
+## MCP reads
+
+`get_investment_portfolio` reads `investments.BuildPortfolio` through the shared
+REST formatter: as-of holdings, Modified Dietz returns, native amounts, dated FX,
+partial totals and null unavailable figures keep their existing semantics.
+Required `to` is clamped to today; `from`, source, grouping and display-account
+filters match the period endpoint. No scenarios enter this read.
+
+Tool inputs, output bounds and dev validation: [README MCP](../../../README.md#mcp).

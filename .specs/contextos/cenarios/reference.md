@@ -69,3 +69,16 @@ count from exact integer quotient and remainder. Every installment stays at or
 below the chosen amount, including remainders beyond 16 decimal places.
 Generation and readjustment reject more than 10,000 installments per operation
 before allocating a plan or replacing existing installments; HTTP returns 422.
+
+## MCP reads
+
+`list_scenarios` discovers IDs/kinds/activation flags without applying any
+scenario. `list_projection_events` returns the unified projection read model
+(events, dates, direction, tiers, realization state), and `get_timeline` uses
+`BuildParams.ScenarioSelection = explicit`. Both select active non-standalone
+commitments plus explicitly requested IDs. Omitted/empty IDs add no hypothetical
+data, including when a standalone scenario is marked active. Unknown IDs are
+rejected; selections allow at most 20 additional IDs. Realized wealth/goals/
+payable balances never consume this selection.
+
+Tool inputs, output bounds and dev validation: [README MCP](../../../README.md#mcp).

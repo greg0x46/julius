@@ -461,7 +461,7 @@
 
 .money-range .ui-input-affix-wrapper {
   min-height: 40px;
-  font-variui-numeric: tabular-nums;
+  font-variant-numeric: tabular-nums;
 }
 
 .money-range-error {

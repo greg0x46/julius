@@ -1,5 +1,5 @@
 import { DownOutlined, SearchOutlined } from "../ui/icons";
-import { Drawer, Input, Select, Spin, Tag, Typography } from "../ui";
+import { Button, Drawer, Input, Select, Spin, Tag, Typography } from "../ui";
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 
 import { calendarParts, formatCompactDay } from "../../presentation/dates";
@@ -269,8 +269,11 @@ export function TransactionPicker({
     setQuery("");
   };
 
+  const clearable = allowClear && selected !== null && !disabled;
+
   return (
     <>
+      <div style={clearable ? { display: "flex", alignItems: "center", gap: 8 } : undefined}>
       <button
         type="button"
         id={id}
@@ -284,6 +287,12 @@ export function TransactionPicker({
         <span className="txn-picker-trigger-value">{selected ? <Value transaction={selected} /> : placeholder}</span>
         {loading ? <Spin size="small" /> : <DownOutlined aria-hidden="true" />}
       </button>
+      {clearable && (
+        <Button type="link" size="small" aria-label={`Limpar ${label}`} onClick={() => choose(null)}>
+          Limpar
+        </Button>
+      )}
+      </div>
       <Sheet
         open={sheetOpen}
         label={label}

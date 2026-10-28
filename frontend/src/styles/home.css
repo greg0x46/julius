@@ -1,24 +1,36 @@
-/* Início. Three blocks — the period's result, the balance over time, spending
-   by category — laid out by area so their order can differ: on a phone the
-   result comes first, then the chart (the page's question is "will I be
-   OK?"), then the breakdown; from `lg` up the result and the chart stack in
-   the wide column and the breakdown gets a column of its own, wide enough
-   for a category name, its amount and its share on one line. */
+/* Início. Blocks are laid out by named area so a phone's order (summary card,
+   alert, chart, categories, context rows) can differ from the wide layout's.
+   From `lg` up the category list and the context cards share the last row,
+   the list wide enough for a category name, its amount and its share on one
+   line. On a phone the summary is ONE card and the context cards are ONE
+   list of rows, so the figures reach the chart without a stack of sheets. */
 
 .dashboard-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   grid-template-areas:
-    "result"
+    "top"
+    "alert"
     "chart"
-    "category";
+    "category"
+    "cards";
   align-items: start;
   gap: var(--space-4);
 }
 
-.dashboard-area-result {
-  grid-area: result;
+.dashboard-area-top {
+  grid-area: top;
   min-width: 0;
+}
+
+/* No alert, no row: an empty area would still add a gap. */
+.dashboard-area-alert {
+  grid-area: alert;
+  min-width: 0;
+}
+
+.dashboard-area-alert:empty {
+  display: none;
 }
 
 .dashboard-area-chart {
@@ -35,70 +47,438 @@
   container: category-area / inline-size;
 }
 
+/* The three context cards: each a link to its own screen. */
+.dashboard-area-cards {
+  grid-area: cards;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
 @media (min-width: 64.01rem) {
   .dashboard-layout {
     grid-template-columns: minmax(0, 1.7fr) minmax(19rem, 1fr);
     grid-template-areas:
-      "result category"
-      "chart category";
-    grid-template-rows: auto 1fr;
+      "top top"
+      "alert alert"
+      "chart chart"
+      "category cards";
   }
 }
 
-/* ---- Resultado do período: from `md` up the strip is layout.css's own (hero
-   beside the figures). On a phone the two figures sit side by side — label
-   above value, Entradas | Saídas — instead of as stacked rows; each value is
-   the link to its transactions. ----------------------------------------- */
+/* ---- Summary card: the daily allowance (the hero), the two balances that
+   frame it, and the selected period's result as a thin line. One surface; the
+   parts inside it drop their own. ------------------------------------------ */
 
-@media (max-width: 47.99rem) {
-  .period-balance .summary-strip-items {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+.home-summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.home-summary .section {
+  margin-inline: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.home-summary > .home-balances,
+.home-summary > .home-summary-period {
+  border-top: 1px solid var(--color-border);
+}
+
+@media (min-width: 48rem) {
+  .home-summary {
+    grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
   }
 
-  .period-balance .summary-strip-item {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.125rem;
-    padding: var(--space-2) 0 0 var(--space-3);
+  .home-summary > .home-balances {
     border-top: 0;
     border-left: 1px solid var(--color-border);
   }
 
-  .period-balance .summary-strip-item:first-child {
-    padding-left: 0;
-    border-left: 0;
-  }
-
-  .period-balance .summary-strip-item dd {
-    text-align: left;
+  .home-summary > .home-summary-period {
+    grid-column: 1 / -1;
   }
 }
 
-/* The whole value is the link, with a hit area taller than the text. */
-.period-balance .summary-strip-item a {
-  display: inline-block;
-  padding-block: var(--space-1);
+/* ---- Home tiles: a quiet label above a figure. ---------------------------- */
+
+.home-tile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+  padding: 0.875rem var(--page-gutter);
+}
+
+@media (min-width: 48rem) {
+  .home-tile {
+    padding: 1.25rem var(--space-5);
+  }
+}
+
+.home-tile-label {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--fs-body);
+  font-weight: 400;
+}
+
+a.home-tile.is-link {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 3.5rem;
   color: var(--color-text);
+  text-decoration: none;
 }
 
-.period-balance .summary-strip-item a:hover .money {
+a.home-tile.is-link:hover {
+  background: var(--color-hover);
+}
+
+a.home-tile.is-link:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+}
+
+.home-tile-body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.home-tile-chevron {
+  display: none;
+  color: var(--color-text-secondary);
+  font-size: var(--fs-title);
+}
+
+/* Figure and its detail: stacked in a wide card, on one line in a phone's row. */
+.home-tile-line {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.home-tile-figure {
+  font-size: var(--fs-title);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
+.home-tile-note {
+  color: var(--color-text-secondary);
+  font-size: var(--fs-body);
+  line-height: 1.4;
+}
+
+.home-tile-action {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  min-height: 2.75rem;
+  font-weight: 600;
+}
+
+.home-sparkline {
+  display: block;
+  width: 100%;
+  height: 2.25rem;
+}
+
+.home-meter {
+  display: block;
+  height: 0.5rem;
+  border-radius: var(--radius-sm);
+  background: var(--tag-neutral-bg);
+  overflow: hidden;
+}
+
+.home-meter-fill {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-sm);
+  background: var(--color-accent);
+}
+
+/* Context cards on a phone: a list of rows in one surface, thin dividers, a
+   chevron; the detail sits beside the figure and what only decorates is dropped. */
+@media (max-width: 47.99rem) {
+  .dashboard-area-cards {
+    gap: 0;
+    margin-inline: calc(-1 * var(--page-gutter));
+    border-block: 1px solid var(--color-border);
+    background: var(--color-surface);
+  }
+
+  .dashboard-area-cards .section {
+    margin-inline: 0;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .dashboard-area-cards .section + .section {
+    border-top: 1px solid var(--color-border);
+  }
+
+  .dashboard-area-cards .home-tile {
+    padding-block: 0.625rem;
+  }
+
+  .home-tile-chevron {
+    display: block;
+  }
+
+  .home-tile-line {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.125rem 0.625rem;
+  }
+
+  .home-tile-line .home-sparkline,
+  .home-tile-note.is-optional {
+    display: none;
+  }
+
+  .home-tile-line .home-meter {
+    order: 3;
+    flex: 1 0 100%;
+    height: 0.25rem;
+    margin-top: var(--space-1);
+  }
+
+  /* A card with nothing to show (or still loading) is one quiet line, not a card's worth of space. */
+  .dashboard-area-cards .home-tile:not(.is-link) {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0 var(--space-3);
+  }
+
+  .dashboard-area-cards .home-tile:not(.is-link) > :not(.home-tile-label) {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .home-tile-line.is-inline {
+    align-items: center;
+  }
+}
+
+/* The page's one hero figure: the daily allowance. */
+.home-hero .daily-allowance-value {
+  margin: 0;
+  font-size: clamp(var(--fs-title), 9vw, var(--fs-hero));
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.home-hero {
+  padding-bottom: 0.625rem;
+}
+
+.home-balances {
+  justify-content: center;
+}
+
+.home-balances-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0;
+}
+
+.home-balances-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-width: 0;
+  padding-left: var(--space-4);
+  border-left: 1px solid var(--color-border);
+}
+
+.home-balances-item:first-child {
+  padding-left: 0;
+  border-left: 0;
+}
+
+.home-balances-item dt {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: 1.5rem;
+  color: var(--color-text-secondary);
+  font-size: var(--fs-body);
+}
+
+.home-balances-item dd {
+  margin: 0;
+  font-size: clamp(1rem, 5vw, var(--fs-title));
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Negative-balance alert: warning tokens, short, the link inline. ------ */
+
+.home-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--page-gutter);
+  border: 1px solid var(--color-warning);
+  border-radius: var(--radius);
+  background: var(--tag-warning-bg);
+  color: var(--color-warning-text);
+}
+
+@media (max-width: 47.99rem) {
+  .home-alert {
+    margin-inline: calc(-1 * var(--page-gutter));
+    border-inline: 0;
+    border-radius: 0;
+  }
+}
+
+.home-alert-icon {
+  flex: none;
+  margin-top: var(--space-1);
+  font-size: var(--fs-row);
+}
+
+.home-alert-text {
+  flex: 1 1 auto;
+  margin: 0;
+  font-size: var(--fs-body);
+  line-height: 1.4;
+}
+
+/* Inline in the sentence, with a 44px hit area that does not grow the line. */
+.home-alert-link {
+  position: relative;
+  color: var(--color-warning-text);
+  font-weight: 600;
   text-decoration: underline;
+  white-space: nowrap;
 }
 
-.period-balance .summary-strip-item a:focus-visible {
+.home-alert-link::after {
+  content: "";
+  position: absolute;
+  inset: -0.875rem -0.5rem;
+}
+
+.home-alert-link:focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
   border-radius: var(--radius-sm);
 }
 
-/* ---- Disponível por dia: stacked under the result in the same area. ---- */
+/* ---- Resultado do período: one thin line — the result, then Entradas and
+   Saídas, each figure a link to its transactions. -------------------------- */
 
-.dashboard-stack {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
+.period-balance {
+  padding: var(--space-2) var(--page-gutter);
 }
+
+@media (min-width: 48rem) {
+  .period-balance {
+    padding: var(--space-3) var(--space-5);
+  }
+}
+
+.period-balance-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-5);
+  margin: 0;
+}
+
+.period-balance-item {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 0.125rem;
+  min-width: 0;
+}
+
+@media (min-width: 48rem) {
+  .period-balance-item {
+    flex: 0 1 auto;
+    flex-direction: row;
+    align-items: baseline;
+    gap: var(--space-2);
+  }
+}
+
+.period-balance-item dt {
+  color: var(--color-text-secondary);
+  font-size: var(--fs-body);
+}
+
+.period-balance-item dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The whole value is the link, with a hit area taller than the text. */
+.period-balance-item a {
+  display: inline-block;
+  padding-block: var(--space-1);
+  color: var(--color-text);
+  font-size: var(--fs-row);
+  font-weight: 600;
+}
+
+.period-balance-item a:hover .money {
+  text-decoration: underline;
+}
+
+.period-balance-item a:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+.period-balance-note {
+  margin: 0.125rem 0 0;
+  color: var(--color-text-secondary);
+  font-size: var(--fs-caption);
+}
+
+@media (max-width: 47.99rem) {
+  .period-balance-note.is-optional {
+    display: none;
+  }
+
+  /* Three figures on one line; the label may take two. */
+  .period-balance-row {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: end;
+    gap: 0 var(--space-3);
+  }
+
+  .period-balance-item dt {
+    font-size: var(--fs-caption);
+  }
+
+  .period-balance-item a {
+    font-size: var(--fs-body);
+  }
+}
+
+/* ---- Pode gastar por dia -------------------------------------------------- */
 
 .daily-allowance-value,
 .daily-allowance-note {
@@ -135,7 +515,7 @@
 
 /* One line of three figures with hairlines between them: label (and the day
    it refers to) quiet, value in ink. Stacks as label/value rows only on the
-   narrowest phones, where three columns would not hold a seven-figure balance. */
+   narrow cards, where three columns would not hold a five-figure balance. */
 .balance-strip {
   display: grid;
   grid-auto-flow: column;
@@ -171,7 +551,7 @@
 .balance-strip-date {
   color: var(--color-text-secondary);
   font-size: var(--fs-caption);
-  font-variui-numeric: tabular-nums;
+  font-variant-numeric: tabular-nums;
 }
 
 /* Stacked as label/value rows when three columns cannot hold the figures:
@@ -179,7 +559,7 @@
    nine-figure balance (`is-long`, set from the formatted text) in a card
    narrower than a tablet. Container queries, so the card's own width
    decides, not the window's. */
-@container projection-summary (max-width: 21.99rem) {
+@container projection-summary (max-width: 29.99rem) {
   .balance-strip {
     grid-auto-flow: row;
   }
@@ -298,7 +678,7 @@
    figure's length (donutFigureSize) so it fits inside the ring. */
 .category-donut-total > strong {
   font-weight: 600;
-  font-variui-numeric: tabular-nums;
+  font-variant-numeric: tabular-nums;
   text-align: center;
   white-space: nowrap;
 }
@@ -377,7 +757,7 @@
   display: flex;
   align-items: baseline;
   gap: var(--space-2);
-  font-variui-numeric: tabular-nums;
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 

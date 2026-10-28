@@ -1,7 +1,7 @@
 import { ReportValuation } from "../shared/ReportValuation";
 import { QuestionCircleOutlined } from "../ui/icons";
 import { Popover, Skeleton } from "../ui";
-import { useMemo } from "react";
+import { calendar } from "../../presentation/calendar";
 import { useNavigate } from "react-router-dom";
 
 import { problemMessage } from "../../presentation/reporting";
@@ -10,16 +10,13 @@ import { UnavailableState } from "../AsyncState";
 import type { Period } from "../../hooks/usePeriod";
 import { periodNavigation } from "../filters/periodNavigation";
 import { ProjectionTimeline } from "../timeline/ProjectionTimeline";
-import { useHomePeriodBounds } from "../../hooks/useHomePeriodBounds";
-import { useTimeline } from "../../hooks/useTimeline";
-import { useToday } from "../../hooks/useToday";
+import { useHomeProjection } from "../../hooks/useHomeProjection";
 import { formatDateOnly } from "../../presentation/dates";
 import { formatReportMoney } from "../../presentation/money";
 import { compareDecimals, isZeroDecimal } from "../../presentation/decimal";
 import { EmptyState, Section } from "../layout";
 import { Money } from "../shared/Money";
-
-const dateFormat = "YYYY-MM-DD";
+import { useCompactScreen } from "../shared/useCompactScreen";
 
 function lowestPoint(points: TimelineDayPoint[]): TimelineDayPoint | null {
   return points.reduce<TimelineDayPoint | null>(
@@ -42,8 +39,9 @@ function ChartHelp() {
       placement="bottomRight"
       content={
         <p className="projection-summary-help">
-          Saldo realizado até hoje e, daí em diante, o que já está previsto, incluindo cenários ativos. Selecione
-          um dia até hoje para ver as transações dele.
+          Saldo realizado até hoje e, daí em diante, o que já está previsto, incluindo cenários ativos. Os círculos
+          nomeiam os maiores eventos previstos (fatura, parcela, recorrência). Selecione um dia até hoje para ver
+          as transações dele.
         </p>
       }
     >
@@ -76,7 +74,7 @@ function hasNoActivity(series: { starting_balance: string; points: TimelineDayPo
   );
 }
 
-/** Same blocks as the loaded card — three figures, then the plot — so nothing jumps when it arrives. */
+/** Same blocks as the loaded card — the figures, then the plot — so nothing jumps when it arrives. */
 function ProjectionSkeleton() {
   return (
     <div role="status" aria-label="Carregando o saldo">
@@ -89,34 +87,9 @@ function ProjectionSkeleton() {
 }
 
 export function ProjectionSummaryCard({ period }: { period: Period }) {
-  const today = useToday();
   const navigate = useNavigate();
-
-  // "Todo o período" is the one window whose bounds live in the database — the
-  // oldest transaction, the last planned installment — so it stays unresolved
-  // until useHomePeriodBounds answers.
-  const { bounds, wholePeriod, isLoading: rangeLoading, error: rangeError, refetch: refetchRange } =
-    useHomePeriodBounds(period);
-  const referenceDate = today.format(dateFormat);
-  const params = useMemo(
-    () => ({
-      // referenceDate is always today, never the start of the window: it is
-      // what anchors the series to the real balance, so days before it read as
-      // history and days after it as projection.
-      referenceDate,
-      from: bounds ? bounds.from : referenceDate,
-      to: bounds ? bounds.to : referenceDate,
-    }),
-    [referenceDate, bounds],
-  );
-  const timeline = useTimeline(params, bounds !== null);
-  const base = timeline.base;
-  const isLoading = timeline.isLoading || rangeLoading;
-  const error = timeline.error ?? rangeError;
-  const retry = () => {
-    if (rangeError) refetchRange();
-    if (timeline.error) timeline.refetch();
-  };
+  const compact = useCompactScreen();
+  const { timeline, base, bounds, wholePeriod, referenceDate, isLoading, error, retry } = useHomeProjection(period);
   const lastPoint = base && base.points.length > 0 ? base.points[base.points.length - 1] : null;
   const finalPoint = lastPoint && lastPoint.date > referenceDate ? lastPoint : null;
   // The server's lowest_balance deliberately ignores the past — a low balance
@@ -125,14 +98,23 @@ export function ProjectionSummaryCard({ period }: { period: Period }) {
   // actually poses: how low did it get?
   const lowest = base ? (finalPoint ? base.lowest_balance : lowestPoint(base.points)) : null;
   const lowestTitle = finalPoint ? "Menor saldo previsto" : "Menor saldo no período";
-  // Three columns hold ordinary balances; a nine-figure one needs a row of its own.
-  const longestFigure = base
-    ? Math.max(
-        ...[base.starting_balance, lowest?.balance, finalPoint?.balance]
-          .filter((value): value is string => value !== undefined)
-          .map((value) => formatReportMoney(value, timeline.currencyCode).length),
-      )
-    : 0;
+  // Each figure is shown once above the fold: today's cash and the month-end
+  // balance are the top band's, and a forecast that goes negative already says
+  // its lowest point in the alert. What is left here is what nothing else says.
+  const monthEnd = calendar(referenceDate).endOf("month").format("YYYY-MM-DD");
+  const shownFinal = finalPoint && finalPoint.date !== monthEnd ? finalPoint : null;
+  const topBandBalance = finalPoint && finalPoint.date === monthEnd ? finalPoint.balance : null;
+  const lowestRepeats =
+    lowest !== null &&
+    finalPoint !== null &&
+    (base?.first_negative != null || (topBandBalance !== null && compareDecimals(lowest.balance, topBandBalance) === 0));
+  const shownLowest = lowest && !lowestRepeats ? lowest : null;
+  // Two columns hold ordinary balances; a nine-figure one needs a row of its own.
+  const longestFigure = Math.max(
+    ...[shownLowest?.balance, shownFinal?.balance]
+      .filter((value): value is string => value !== undefined)
+      .map((value) => formatReportMoney(value, timeline.currencyCode).length),
+  );
 
   return (
     <ReportValuation valuation={timeline.valuation}>
@@ -159,17 +141,18 @@ export function ProjectionSummaryCard({ period }: { period: Period }) {
           {wholePeriod && (
             <p className="projection-summary-period">{periodNavigation(bounds.from, bounds.to)?.label}</p>
           )}
-          <dl className={`balance-strip ${longestFigure > 13 ? "is-long" : ""}`}>
-            <BalanceFigure label="Saldo hoje" value={base.starting_balance} />
-            {lowest && <BalanceFigure label={lowestTitle} value={lowest.balance} date={lowest.date} />}
-            {finalPoint && (
-              <BalanceFigure label="Saldo no fim do período" value={finalPoint.balance} date={finalPoint.date} />
-            )}
-          </dl>
+          {(shownLowest || shownFinal) && (
+            <dl className={`balance-strip ${longestFigure > 13 ? "is-long" : ""}`}>
+              {shownLowest && <BalanceFigure label={lowestTitle} value={shownLowest.balance} date={shownLowest.date} />}
+              {shownFinal && (
+                <BalanceFigure label="Saldo no fim do período" value={shownFinal.balance} date={shownFinal.date} />
+              )}
+            </dl>
+          )}
           <ProjectionTimeline
             series={base}
             referenceDate={referenceDate}
-            height={280}
+            height={compact ? 340 : 320}
             onSelectDay={(date) => navigate(`/transacoes?date_from=${date}&date_to=${date}`)}
           />
         </div>

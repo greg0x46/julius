@@ -51,6 +51,11 @@ authentication configuration that does not depend on the host:
 
 ## Features
 
+- **Optional MCP endpoint** — provider-neutral Streamable HTTP in the same
+  binary, disabled by default, with OAuth, PKCE and explicit owner consent for
+  financial planning tools and separately scoped financial writes with per-operation
+  owner approval in Julius. See [MCP](#mcp).
+
 - **Exact money boundaries** — amounts stay decimal strings through entry,
   editing, calculation and HTTP. BRL display rounds to cents with ties away
   from zero; saved fractional cents and large values retain their precision.
@@ -122,6 +127,12 @@ authentication configuration that does not depend on the host:
   Fixed-amount installments preserve exact remainders without exceeding the
   chosen installment amount. Generation and readjustment are limited to 10,000
   installments per operation; requests exceeding the limit preserve the plan.
+- **Home** — leads with how much you can spend per day until the end of the
+  month, next to today's balance and the projected end-of-month balance. A
+  warning band says when the balance is forecast to go negative; the balance
+  chart names the biggest upcoming events (card bill, installment,
+  recurrence) and the first negative day. Your wealth, your main goal and your
+  total debt are cards linking to their screens.
 - **Financial report** — a single time navigation (Actual → Today → Base
   Projection → Simulation): how much you will have on a future date, your
   lowest balance until then, and how hypothetical scenarios change that answer.
@@ -388,6 +399,224 @@ immediately. Origin checks for writes stay active in both modes. The preference
 is stored in the database; if it does not exist, protected mode is used, and if
 it cannot be read the API becomes unavailable — it never opens because of a
 configuration failure.
+
+### MCP
+
+Set `JULIUS_MCP_ENABLED=true` to serve MCP at `/mcp` in the existing binary.
+Unset or false keeps MCP and its OAuth endpoints disabled (404); invalid values
+prevent startup. Enable authentication in settings first. MCP cannot be enabled
+with `JULIUS_DEMO=true`; open mode rejects MCP and OAuth requests (403).
+SQLite and Postgres persist separate OAuth grants through a new migration.
+
+Configure a remote Streamable HTTP client with the public `/mcp` URL. Julius
+implements the [MCP authorization flow](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization)
+using its own single owner account, independent of any AI provider:
+
+1. An unauthenticated request receives 401 and a `WWW-Authenticate` Bearer
+   challenge pointing to `/.well-known/oauth-protected-resource/mcp`.
+   `/.well-known/oauth-protected-resource` also serves resource metadata.
+2. The client discovers `/.well-known/oauth-authorization-server` and registers
+   at `POST /oauth/register` using OAuth Dynamic Client Registration (RFC 7591).
+   Public clients use `token_endpoint_auth_method: "none"`,
+   `grant_types: ["authorization_code"]`, `response_types: ["code"]` and one
+   or more `redirect_uris`. Registration identifies an application, never a new
+   Julius user. Redirects must use HTTPS, or HTTP on loopback for local clients,
+   and must match a registered URI exactly, including its port.
+3. The client opens `/oauth/authorize` with `response_type=code`, `client_id`,
+   `redirect_uri`, `state`, `scope=mcp:access`, `resource=<public-origin>/mcp`,
+   `code_challenge` and `code_challenge_method=S256`. The owner reviews the
+   client-supplied name, client ID, exact redirect, resource and scope; enters
+   their Julius email/password; and explicitly authorizes or denies access.
+   An existing browser session never skips this step.
+4. The client exchanges the single-use code at `POST /oauth/token` with a
+   form-encoded `grant_type=authorization_code`, `code`, `client_id`,
+   `redirect_uri`, `resource` and the original `code_verifier`. Both resource
+   parameters must be the exact configured public origin plus `/mcp`.
+5. Use the returned token only as `Authorization: Bearer <access_token>` on
+   `/mcp`. Cookies and browser session tokens cannot authorize MCP; OAuth
+   tokens cannot authorize `/api`. REST keeps its cookie, Origin and
+   `X-Julius-Request: 1` requirements.
+
+The `mcp:access` scope permits the read-only planning tools below.
+Request `scope=mcp:access mcp:write` for financial writes; existing read-only
+grants gain no write permission. Write consent permits preparing changes,
+while each change still requires fresh owner approval in Julius.
+Consent explicitly discloses financial reads. Existing grants with this scope
+also permit these reads; revoke them if that access is no longer wanted.
+Unknown scopes are rejected; missing required token scope returns 403 with an
+`insufficient_scope` challenge. The SDK handles protocol negotiation, typed
+tool discovery, JSON-RPC errors and the legacy initialize handshake.
+
+| Tool | Inputs and result |
+|---|---|
+| `get_investment_portfolio` | Required `to`, optional `from`, `group_by` (`none`, `account`, `class`), `source` (`manual`, `synced`), `account_id`; positions, period returns, portfolio/group totals, native figures and FX |
+| `get_net_worth` | Required `from`, `to`; realized cash plus investments, daily history within the range and today's `latest` |
+| `list_goals` | Optional `limit`, `offset`; current progress, target-date projection and required monthly contribution in BRL |
+| `list_payables` | Optional `kind` (`debt`, `receivable`), `limit`, `offset`; actual settled/remaining amounts in BRL, excluding card bills |
+| `list_recurring_commitments` | Optional `limit`, `offset`; active and inactive BRL schedules |
+| `list_scenarios` | Optional `limit`, `offset`; scenario IDs, kinds and activation flags; discovery applies nothing |
+| `list_projection_events` | Required `from`, `to`, optional `scenario_ids`, `limit`, `offset`; dated BRL installments/occurrences with realization state |
+| `get_timeline` | Required `from`, `to`, `reference_date`, optional IANA `timezone`, `scenario_ids`; daily cash, income/expense totals, certainty tiers and reporting coverage |
+
+All dates are inclusive calendar days (`YYYY-MM-DD`). Net-worth, event and
+timeline windows allow at most 366 days. Net worth cannot extend into the
+future; portfolio `to` is clamped to today and echoes `to_clamped`. Portfolio
+`from` may be omitted for inception; `account_id` limits displayed positions,
+not portfolio totals. List pages default to 50 items (maximum 100) and return
+`next_offset`; offset pages should be read while the underlying data is stable.
+Results are limited to 256 KiB; oversized results return a tool error asking
+for a smaller page, date range or account scope, never silently truncated totals.
+
+Hypothetical standalone scenarios require explicit `scenario_ids` (maximum 20),
+even when marked active. Omitting IDs or passing `[]` includes only active
+non-standalone commitments. Selected IDs add to those commitments; unknown IDs
+are rejected. This explicit MCP selection differs from the application's default
+timeline, which includes all active scenarios. Investments, wealth, goals and
+payable balances never include hypotheticals.
+
+Tools reuse Julius's domain engines and application formatters. Monetary values,
+quantities, rates and ratios are decimal strings. Portfolio and wealth reports
+use the configured reference currency and carry FX provenance; goals, payables,
+schedules and projected events remain BRL. Unavailable portfolio figures are
+null with reasons and partial totals are flagged. Unavailable historical wealth
+days have a null `breakdown`; an unvaluable current day fails the tool. Timeline
+FX errors carry native totals and coverage issues (currency, account, date and
+reason). Errors disclose no database details. Tool descriptions/results state
+calculation assumptions, including Modified Dietz, historical FX, zero assumed
+goal appreciation when history is too short, and current FX across projections.
+No write tools, chats or inference calls are exposed.
+
+Consent requests and authorization codes expire after five minutes; access
+tokens expire after one hour, without idle extension. Only SHA-256 hashes of
+random credentials are stored. Grants survive restarts. Clients revoke a token
+with form-encoded `POST /oauth/revoke` (`client_id` and `token`); repeating this
+is harmless. Password change or `julius auth reset-password` invalidates all
+OAuth codes and tokens. Browser logout only revokes that browser session.
+Expired, revoked or wrong-audience tokens return 401; storage failures return
+503 without database details.
+
+Supported methods are public-client registration and authorization code with
+S256 PKCE. Client ID Metadata Documents are **not supported or advertised**;
+clients must support Dynamic Client Registration. There are no client secrets,
+refresh tokens, implicit/password grants, device flow, OIDC identity tokens,
+registration-management API or browser CORS support. The consent page works
+without JavaScript, requires a bound anti-CSRF cookie and matching Origin, and
+cannot be framed. OAuth endpoints allow 120 requests/minute per instance;
+credential checks allow five/minute and one concurrent password hash. At most
+1,000 clients may be registered per database. These limits protect a small
+self-hosted instance; an untrusted public deployment also needs edge abuse
+controls. Application names are self-reported, not verified identities.
+
+Self-hosting requires a reachable HTTPS `JULIUS_PUBLIC_URL` with a valid
+certificate; HTTP is allowed only on loopback for development. Keep discovery,
+`/oauth/*` and `/mcp` reachable at that origin through the TLS reverse proxy.
+Issuer and resource URLs use this configured origin, never forwarded headers.
+An Origin header on MCP, when supplied, must match it. Keep tokens, callback
+codes and passwords out of logs and URLs you share. The encryption master key,
+Pluggy credentials and browser cookie are never issued to MCP clients.
+
+
+#### Financial writes
+
+Write tools prepare an immutable preview; they never commit on an MCP call.
+All require both `mcp:access` and `mcp:write`. Inputs are an optional `id` UUID
+(required for changes to an existing record), a typed `data` object with the
+matching REST body below, and `idempotency_key` for manual creation.
+Discovery publishes the body fields and exact string amount schema.
+
+| Tool | `data` fields |
+|---|---|
+| `assign_transaction_category` | `category_id` (active UUID); includes every sibling installment in the preview |
+| `set_transaction_inclusion` | `state`: `considered` or `ignored` |
+| `create_manual_transaction` | `account_id`, `description`, signed decimal-string `amount`, calendar `occurred_at` (`YYYY-MM-DD`), optional `category_id`; also requires top-level `idempotency_key` |
+| `update_manual_transaction` | Same body as creation, without an idempotency key; manual entries only |
+| `delete_manual_transaction` | `{}`; manual entries only, soft delete |
+| `create_category` | `name`, `kind` (`expense`, `income`, `transfer`), `icon`, `color` from the Julius catalog palette |
+| `update_category` | At least one of `name`, `is_active`, `icon`, `color`; deactivate instead of delete |
+| `create_automation_rule`, `update_automation_rule` | `name`, `is_active`, `logic_operator`, `conditions`, `actions` as in `/api/automation-rules`; `apply_retroactively` must be omitted or false |
+| `delete_automation_rule` | `{}`; previous category/inclusion decisions remain |
+| `get_write_result` | Top-level `request_id`; returns approval state and the final REST status/body |
+
+For example, `create_manual_transaction` accepts:
+
+```json
+{"idempotency_key":"synthetic-entry-001","data":{"account_id":"<account UUID>","description":"Synthetic groceries","amount":"-42.501","occurred_at":"2026-10-01"}}
+```
+
+1. Review the returned `preview`: affected identifiers/count, current objects,
+   requested fields and effects on reporting, balances and financial links.
+   Transfer-unlink previews include the other participants and exact native amounts;
+   those entries survive and resume their category/inclusion reporting decisions.
+   New records have count 1 and no identifier until commit.
+2. Open `approval_url` in the owner's browser. The Julius page identifies the
+   requesting client, shows the exact request and effects, and requires fresh
+   owner credentials plus **Aprovar e aplicar alteração**. Never give the owner
+   password to the MCP client. A prompt instruction or a client boolean cannot
+   approve a write. Denial needs no password.
+3. Call `get_write_result` with `request_id`, using the exact original access
+   token. `pending` does not change data; `applied`, `denied` and `failed` are
+   terminal. A successful approval POST executes once, including concurrent
+   retries. Changed preview data requires a new preview and approval.
+
+Creation keys use the existing persistent owner idempotency contract: 8–128
+printable ASCII characters without whitespace/commas; retry the same normalized
+payload with the same key, including after losing a response. A different
+payload with that key returns a 409 Problem. Domain failures retain sanitized
+REST Problems. A 503 can mean the write committed but its result could not be
+read back: inspect Julius before retrying; always reuse the creation key.
+
+Manual operations refuse provider entries, archived accounts and prohibited
+investment/transfer links just like the UI. Category propagation uses the domain
+installment grouping, capped at 100 identifiers, and rechecks the preview in the
+same serializable transaction as all decisions/events. Other operations address
+one record; arbitrary batches and retroactive rule application are unavailable.
+Rules affect future arrivals/changed sync entries, respecting manual decisions.
+Ignoring cleans up payable, recurring and investment links without changing bank
+cash. Manual creation shares learned categorization, automation and exact money
+with the UI; updates/deletes retain the same service restrictions.
+
+Bodies are limited to 16 KiB; previews to 256 KiB; names to 200 characters,
+descriptions/condition values to 1,000, rule conditions to 20 and actions to 10.
+Amounts are nonzero plain decimal strings of at most 64 characters (no exponent).
+Approvals are instance-local, capped at 100, expire after five minutes and are
+lost on restart; final execution results remain for ten minutes. Use the same
+instance for tool calls and browser approval. Token revocation, expiry, password
+reset or disabling authentication prevents pending approval. Browser requests
+require same-origin POST and an HttpOnly/SameSite CSRF cookie; ordinary MCP calls
+cannot supply approval. There is no HTTP proxy or SQL tool.
+
+To validate in dev with synthetic data, create a manual BRL account in Julius,
+authorize a client with both scopes, prepare the example with that account UUID,
+and check that the account is unchanged until browser approval. Poll the result,
+repeat creation with the same key (one entry), categorize it, then update and
+delete it with separate approvals. A read-only client must fail every write;
+editing/deleting a synced entry must fail. Deny a request and verify it remains
+unchanged. These steps need no live provider credentials; synced restrictions
+and rollback faults are also covered by the integration tests.
+
+The official [Go MCP SDK](https://github.com/modelcontextprotocol/go-sdk) serves
+stateless Streamable HTTP with JSON responses: 1 MiB bodies, 30 seconds and
+16 concurrent requests (429 when busy). OAuth request bodies are limited to
+16 KiB. GET/DELETE MCP streams are unsupported (405); responses use `no-store`.
+SIGINT/SIGTERM drains HTTP for up to 35 seconds before forced closure. There
+are no stored chats, inference calls or provider-specific integrations.
+
+To validate in dev with a synthetic owner and no bank connection:
+
+1. Leave MCP disabled and verify `/mcp` and discovery return 404. Enable it and
+   restart; verify unauthenticated `/mcp` returns 401 with resource metadata.
+2. Connect a client supporting Dynamic Client Registration, follow the consent
+   page, and choose **Negar acesso**: no access token should be issued.
+3. Connect again, review the details, enter the synthetic owner's credentials
+   and choose **Autorizar acesso**. Discovery should list the eight tools above.
+   Call `list_goals` with `{}` and `get_timeline` with today's `from`, `to` and
+   `reference_date`; empty synthetic data should return empty lists/zero BRL
+   figures. With a synthetic investment and dated goal, compare portfolio and
+   goal figures with Investimentos and Metas. Create a hypothetical scenario:
+   it must affect only calls selecting its ID, including if marked active.
+4. Revoke the access token through `/oauth/revoke`, then verify the same token
+   gets 401. Repeat authorization and reset the synthetic owner's password;
+   that token should also get 401. Open mode must reject authorization.
 
 ### Public demo
 

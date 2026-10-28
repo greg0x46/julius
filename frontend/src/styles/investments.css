@@ -62,11 +62,12 @@
 .investment-yield-percent {
   font-size: var(--fs-body);
   font-weight: 500;
-  font-variui-numeric: tabular-nums;
+  font-variant-numeric: tabular-nums;
 }
 
 /* In the table's figure columns the % sits under the amount, like the other quiet lines. */
 .investment-cell-end .investment-yield,
+.list-row-side .investment-yield,
 .investment-period-table .investment-yield {
   flex-direction: column;
   align-items: flex-end;
@@ -110,7 +111,7 @@
 }
 
 .investment-number {
-  font-variui-numeric: tabular-nums;
+  font-variant-numeric: tabular-nums;
 }
 
 /* ---- Forms: two short fields side by side, one column on a phone --------- */
@@ -175,6 +176,7 @@
 }
 
 .investment-fact dt {
+  flex: none;
   color: var(--color-text-secondary);
   font-size: var(--fs-caption);
 }
@@ -216,6 +218,19 @@
 .investment-group-toggle:focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
+}
+
+/* An 18px info glyph is a 40px target on a phone. */
+@media (max-width: 47.99rem) {
+  .investment-hint {
+    position: relative;
+  }
+
+  .investment-hint::after {
+    content: "";
+    position: absolute;
+    inset: -11px;
+  }
 }
 
 .investment-hint-content {
@@ -315,7 +330,7 @@
 .investment-reconcile dd,
 .investment-details dd {
   margin: 0;
-  font-variui-numeric: tabular-nums;
+  font-variant-numeric: tabular-nums;
 }
 
 .investment-reconcile-total {
@@ -357,6 +372,17 @@
   white-space: nowrap;
 }
 
+/* The body's overflow-wrap: anywhere lets a long name collapse into fragments;
+   break-word keeps words whole and still breaks an unbroken ticker. */
+.investment-period-table .investment-position-row > th {
+  overflow-wrap: break-word;
+}
+
+/* Long names in the first column must not squeeze the custody name into a break. */
+.investment-period-table .investment-col-custody {
+  min-width: 6.5rem;
+}
+
 .investment-results.is-updating {
   opacity: 0.6;
   transition: opacity 0.15s;
@@ -379,7 +405,7 @@
   margin-top: var(--space-1);
   color: var(--color-text);
   font-size: var(--fs-body);
-  font-variui-numeric: tabular-nums;
+  font-variant-numeric: tabular-nums;
 }
 
 .investment-mobile-metrics > span {
@@ -488,7 +514,7 @@
 
 .investment-period-table .investment-col-end {
   text-align: right;
-  font-variui-numeric: tabular-nums;
+  font-variant-numeric: tabular-nums;
 }
 
 /* The menu button's tap target (an ::after 8px past the button) must end inside the cell, or the table scrolls sideways. */
@@ -552,7 +578,7 @@
   gap: 0.125rem;
   color: var(--color-text-secondary);
   font-size: var(--fs-caption);
-  font-variui-numeric: tabular-nums;
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 

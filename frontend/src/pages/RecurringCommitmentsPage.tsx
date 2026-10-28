@@ -25,7 +25,7 @@ export function RecurringCommitmentsPage() {
     Boolean((location.state as { prefill?: Partial<RecurringCommitmentDraft> } | null)?.prefill),
   );
   const [editingCommitment, setEditingCommitment] = useState<RecurringCommitment | null>(null);
-  const [initialDraft] = useState<Partial<RecurringCommitmentDraft> | null>(
+  const [initialDraft, setInitialDraft] = useState<Partial<RecurringCommitmentDraft> | null>(
     (location.state as { prefill?: Partial<RecurringCommitmentDraft> } | null)?.prefill ?? null,
   );
   const [togglingCommitmentId, setTogglingCommitmentId] = useState<string | null>(null);
@@ -46,6 +46,7 @@ export function RecurringCommitmentsPage() {
 
   const closeForm = () => {
     setFormOpen(false);
+    setInitialDraft(null);
     if (location.state) navigate(".", { replace: true, state: null });
   };
 
@@ -58,6 +59,7 @@ export function RecurringCommitmentsPage() {
         await commitments.createCommitment(write);
       }
       setFormOpen(false);
+      setInitialDraft(null);
       if (location.state) navigate(".", { replace: true, state: null });
       feedback.success(editingCommitment ? "Salvo" : "Recorrência criada");
     } catch (error) {

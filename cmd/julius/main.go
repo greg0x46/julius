@@ -11,10 +11,13 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
+	"os/signal"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 	_ "time/tzdata" // static binaries have no system zoneinfo for JULIUS_SYNC_SCHEDULE zones
 
@@ -26,6 +29,7 @@ import (
 	"github.com/greg0x46/julius/internal/investments"
 	"github.com/greg0x46/julius/internal/ledger"
 	"github.com/greg0x46/julius/internal/marketdata"
+	"github.com/greg0x46/julius/internal/mcp"
 	"github.com/greg0x46/julius/internal/pluggy"
 	"github.com/greg0x46/julius/internal/quotes"
 	"github.com/greg0x46/julius/internal/settings"
@@ -67,6 +71,10 @@ func main() {
 	if err := config.Validate(); err != nil {
 		log.Fatal(err)
 	}
+	mcpEnabled, err := mcp.ParseEnabled(os.Getenv("JULIUS_MCP_ENABLED"))
+	if err != nil {
+		log.Fatal(err)
+	}
 	master, err := auth.LoadMasterKey()
 	if err != nil {
 		log.Fatal(err)
@@ -85,6 +93,11 @@ func main() {
 	}
 	defer conn.Close()
 	if err := auth.NewStore(conn).Ready(context.Background(), master); err != nil {
+		log.Fatal(err)
+	}
+
+	mcpHandler, err := mcp.NewHandler(mcpEnabled, config, auth.NewStore(conn))
+	if err != nil {
 		log.Fatal(err)
 	}
 
@@ -142,7 +155,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 	if demo {
 		// No provider traffic at all: the demo's data is synthetic and its
@@ -163,10 +176,14 @@ func main() {
 		go quotes.RunSchedule(ctx, conn, marketService)
 	}
 
-	handler := httpapi.NewServer(conn, frontend, secrets, config, marketService)
+	handler := serverHandler(httpapi.NewServer(conn, frontend, secrets, config, marketService), mcpHandler)
 	log.Printf("listening on http://%s", *addr)
 	server := &http.Server{Addr: *addr, Handler: handler, ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 60 * time.Second}
-	if err := server.ListenAndServe(); err != nil {
+	listener, err := net.Listen("tcp", *addr)
+	if err != nil {
+		log.Fatalf("listen: %v", err)
+	}
+	if err := serve(ctx, server, listener); err != nil {
 		log.Fatalf("serve: %v", err)
 	}
 }

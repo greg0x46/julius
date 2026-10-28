@@ -134,3 +134,14 @@ category; it is editable and clearable. Reconciliation eligibility is unchanged.
 Commitment and occurrence amounts, including transaction reconciliation options,
 use exact decimal strings in HTTP responses. Fractional cents are preserved;
 the UI rounds only read-only BRL display ([policy](../../precisao-monetaria.md)).
+
+## MCP reads
+
+`list_recurring_commitments` exposes active/inactive schedules through
+`recurrences.List` and the REST formatter. `list_projection_events` reads dated
+occurrences through `projections.List`, including realization origin/state;
+`get_timeline` suppresses reconciled occurrences through the existing engine.
+Amounts stay BRL for schedules/events. Active non-standalone commitments are
+selected by default; hypotheticals need explicit IDs.
+
+Tool inputs, output bounds and dev validation: [README MCP](../../../README.md#mcp).

@@ -45,7 +45,7 @@ describe("useTransactionInclusion", () => {
       expect(result.current.announcement).toBe("Transação ignorada. Totais atualizados."),
     );
 
-    expect(order).toEqual(["cancel", "put", "invalidate", "invalidate", "refetch", "refetch"]);
+    expect(order).toEqual(["cancel", "put", "invalidate", "invalidate", "invalidate", "refetch", "refetch"]);
     expect(setData).not.toHaveBeenCalled();
     expect(client.invalidateQueries).toHaveBeenCalledWith({
       queryKey: ["transactions"],
