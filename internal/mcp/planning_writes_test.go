@@ -179,3 +179,16 @@ func TestMCPPlanningWriteRejectsInvalidContracts(t *testing.T) {
 		}
 	}
 }
+
+func TestMCPPlanningWriteConsentDisclosure(t *testing.T) {
+	conn := dbtest.OpenSQLite(t)
+	store, _ := setup(t, conn)
+	flow := newFlow(t, store)
+	flow.params.Set("scope", mcpScope+" "+writeScope)
+	body := flow.begin(t).Body.String()
+	for _, text := range []string{"metas, cenários e compromissos recorrentes", "Cada alteração exige sua aprovação no Julius."} {
+		if !strings.Contains(body, text) {
+			t.Fatalf("missing write disclosure %q", text)
+		}
+	}
+}
