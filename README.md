@@ -52,7 +52,8 @@ authentication configuration that does not depend on the host:
 ## Features
 
 - **Optional MCP endpoint** — provider-neutral Streamable HTTP in the same
-  binary, disabled by default, with OAuth, PKCE and explicit owner consent. See [MCP](#mcp).
+  binary, disabled by default, with OAuth, PKCE and explicit owner consent for
+  read-only financial planning tools. See [MCP](#mcp).
 
 - **Exact money boundaries** — amounts stay decimal strings through entry,
   editing, calculation and HTTP. BRL display rounds to cents with ties away
@@ -435,11 +436,51 @@ using its own single owner account, independent of any AI provider:
    tokens cannot authorize `/api`. REST keeps its cookie, Origin and
    `X-Julius-Request: 1` requirements.
 
-The sole scope, `mcp:access`, permits the existing MCP protocol transport.
-There are currently **zero financial tools**; no financial read/write scopes
-are implied. Unknown scopes are rejected; missing required token scope returns
-403 with an `insufficient_scope` challenge. The SDK handles protocol negotiation,
-empty tool discovery, JSON-RPC errors and the legacy initialize handshake.
+The sole scope, `mcp:access`, permits the read-only planning tools below.
+Consent explicitly discloses financial reads. Existing grants with this scope
+also permit these reads; revoke them if that access is no longer wanted.
+Unknown scopes are rejected; missing required token scope returns 403 with an
+`insufficient_scope` challenge. The SDK handles protocol negotiation, typed
+tool discovery, JSON-RPC errors and the legacy initialize handshake.
+
+| Tool | Inputs and result |
+|---|---|
+| `get_investment_portfolio` | Required `to`, optional `from`, `group_by` (`none`, `account`, `class`), `source` (`manual`, `synced`), `account_id`; positions, period returns, portfolio/group totals, native figures and FX |
+| `get_net_worth` | Required `from`, `to`; realized cash plus investments, daily history within the range and today's `latest` |
+| `list_goals` | Optional `limit`, `offset`; current progress, target-date projection and required monthly contribution in BRL |
+| `list_payables` | Optional `kind` (`debt`, `receivable`), `limit`, `offset`; actual settled/remaining amounts in BRL, excluding card bills |
+| `list_recurring_commitments` | Optional `limit`, `offset`; active and inactive BRL schedules |
+| `list_scenarios` | Optional `limit`, `offset`; scenario IDs, kinds and activation flags; discovery applies nothing |
+| `list_projection_events` | Required `from`, `to`, optional `scenario_ids`, `limit`, `offset`; dated BRL installments/occurrences with realization state |
+| `get_timeline` | Required `from`, `to`, `reference_date`, optional IANA `timezone`, `scenario_ids`; daily cash, income/expense totals, certainty tiers and reporting coverage |
+
+All dates are inclusive calendar days (`YYYY-MM-DD`). Net-worth, event and
+timeline windows allow at most 366 days. Net worth cannot extend into the
+future; portfolio `to` is clamped to today and echoes `to_clamped`. Portfolio
+`from` may be omitted for inception; `account_id` limits displayed positions,
+not portfolio totals. List pages default to 50 items (maximum 100) and return
+`next_offset`; offset pages should be read while the underlying data is stable.
+Results are limited to 256 KiB; oversized results return a tool error asking
+for a smaller page, date range or account scope, never silently truncated totals.
+
+Hypothetical standalone scenarios require explicit `scenario_ids` (maximum 20),
+even when marked active. Omitting IDs or passing `[]` includes only active
+non-standalone commitments. Selected IDs add to those commitments; unknown IDs
+are rejected. This explicit MCP selection differs from the application's default
+timeline, which includes all active scenarios. Investments, wealth, goals and
+payable balances never include hypotheticals.
+
+Tools reuse Julius's domain engines and application formatters. Monetary values,
+quantities, rates and ratios are decimal strings. Portfolio and wealth reports
+use the configured reference currency and carry FX provenance; goals, payables,
+schedules and projected events remain BRL. Unavailable portfolio figures are
+null with reasons and partial totals are flagged. Unavailable historical wealth
+days have a null `breakdown`; an unvaluable current day fails the tool. Timeline
+FX errors carry native totals and coverage issues (currency, account, date and
+reason). Errors disclose no database details. Tool descriptions/results state
+calculation assumptions, including Modified Dietz, historical FX, zero assumed
+goal appreciation when history is too short, and current FX across projections.
+No write tools, chats or inference calls are exposed.
 
 Consent requests and authorization codes expire after five minutes; access
 tokens expire after one hour, without idle extension. Only SHA-256 hashes of
@@ -484,7 +525,12 @@ To validate in dev with a synthetic owner and no bank connection:
 2. Connect a client supporting Dynamic Client Registration, follow the consent
    page, and choose **Negar acesso**: no access token should be issued.
 3. Connect again, review the details, enter the synthetic owner's credentials
-   and choose **Autorizar acesso**. Tool discovery should return an empty list.
+   and choose **Autorizar acesso**. Discovery should list the eight tools above.
+   Call `list_goals` with `{}` and `get_timeline` with today's `from`, `to` and
+   `reference_date`; empty synthetic data should return empty lists/zero BRL
+   figures. With a synthetic investment and dated goal, compare portfolio and
+   goal figures with Investimentos and Metas. Create a hypothetical scenario:
+   it must affect only calls selecting its ID, including if marked active.
 4. Revoke the access token through `/oauth/revoke`, then verify the same token
    gets 401. Repeat authorization and reset the synthetic owner's password;
    that token should also get 401. Open mode must reject authorization.

@@ -109,3 +109,13 @@ target) on the date with no new contributions.
 Completion requires `progress >= 1` using exact decimal comparison. The whole
 percentage and ring stay at most 99% below that boundary; reached goals fill the
 ring while their displayed percentage may exceed 100%.
+
+## MCP reads
+
+`list_goals` paginates `goals.List` using the REST goal formatter. Current
+value, progress, target-date projection, required monthly contribution and
+partial/missing return history come from the same engines. Goals stay BRL and
+exclude hypothetical scenarios; the disclosed assumptions retain zero
+appreciation when no monthly return can be measured.
+
+Tool inputs, output bounds and dev validation: [README MCP](../../../README.md#mcp).

@@ -158,8 +158,17 @@ func TestProtocolLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	result, err := session.ListTools(ctx, &sdk.ListToolsParams{})
-	if err != nil || len(result.Tools) != 0 {
+	if err != nil || len(result.Tools) != 8 {
 		t.Fatalf("tool discovery: %v %v", result, err)
+	}
+	for _, tool := range result.Tools {
+		if tool.OutputSchema == nil || tool.Annotations == nil || !tool.Annotations.ReadOnlyHint {
+			t.Fatalf("untyped or writable tool: %s", tool.Name)
+		}
+	}
+	read, err := session.CallTool(ctx, &sdk.CallToolParams{Name: "list_goals", Arguments: map[string]any{}})
+	if err != nil || read.IsError || read.StructuredContent == nil {
+		t.Fatalf("financial read: %+v %v", read, err)
 	}
 	if err := session.Close(); err != nil {
 		t.Fatal(err)

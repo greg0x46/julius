@@ -194,9 +194,10 @@ non-negative and every position is valued.
 mounted at `/mcp` by `cmd/julius`, outside the REST cookie/open-mode gate.
 `JULIUS_MCP_ENABLED` defaults to false (404); invalid boolean values and enabling
 it with demo mode refuse startup. `/mcp/` and descendants are reserved (404),
-including in the SPA fallback. No financial tools are registered yet; tools
-capability and an empty discovery result establish the extension point without
-duplicating domain behavior. Protocol versions, initialize/discovery, transport
+including in the SPA fallback. Eight read-only planning tools are registered by
+`internal/httpapi.RegisterMCPPlanningTools`, sharing domain engines and REST DTO
+formatters without HTTP dispatch or exposing write handlers. Protocol versions,
+initialize/discovery, transport
 errors and JSON-RPC errors are handled by the SDK.
 
 Every MCP request requires a scoped OAuth Bearer token from `internal/mcp`;
@@ -235,8 +236,10 @@ session. Code/token insertion compares the verified owner revision to prevent
 password-reset races; reads also require the current revision. Browser logout
 has no effect on OAuth tokens; password changes/resets revoke all of them.
 
-The sole scope is `mcp:access`, covering today's transport with zero financial
-tools. Unknown requested scopes are rejected. Consent requests and codes last
+The sole scope is `mcp:access`, covering the read-only planning tools as well as
+the transport. Existing grants also permit these reads; consent now explicitly
+discloses financial access and explicit hypothetical selection. Unknown requested
+scopes are rejected. Consent requests and codes last
 five minutes; access tokens last one hour without idle refresh. Only hashes of
 random 32-byte credentials reach storage. Code and consent consumption are
 single-use under concurrent requests. Tokens are bound to the exact configured
@@ -283,3 +286,32 @@ connections and then the database. Tests: `internal/mcp/server_test.go` covers
 configuration, both-dialect access checks, generic SDK discovery, legacy
 initialize, malformed/unsupported requests, unknown tools, limits and
 cancellation; `cmd/julius/server_test.go` pins route isolation and shutdown.
+
+### Financial read inventory
+
+See [README MCP](../../../README.md#mcp) for the tool/input inventory and synthetic
+validation steps. `get_investment_portfolio`, `get_net_worth`, `list_goals`,
+`list_payables`, `list_recurring_commitments`, `list_scenarios`,
+`list_projection_events` and `get_timeline` advertise typed input/output schemas
+and read-only annotations. Decimal types in FX metadata are explicitly described
+as strings. Lists use limit/offset (50 default, 100 maximum); timeline/events/
+wealth ranges are inclusive and at most 366 days; each result is limited to
+256 KiB. Oversized results fail with narrowing instructions rather than dropping
+financial records or altering totals. At most 20 explicit scenario IDs are
+accepted and unknown IDs fail validation.
+
+MCP timeline/event reads explicitly select active non-standalone commitments
+plus requested IDs, excluding even active standalone hypotheticals unless named.
+Actual wealth, goal progress and payable settlements never read scenarios.
+Portfolio and wealth use reference-currency FX; goals/payables/commitments/events
+remain BRL. Assumptions, partial history, unavailable figures and FX provenance
+survive presentation. Domain failures become sanitized tool errors; incomplete
+reporting carries structured coverage JSON in the error text. No financial
+payload accompanies an error.
+
+`internal/httpapi/mcp_planning_test.go` verifies generic SDK calls and output
+schema validation, application parity, exact decimals, mixed/reference currencies,
+unavailable historical FX and portfolio figures, date validation/clamping,
+explicit/empty scenario selection (including an active hypothetical), recurring
+reconciliation, pagination, output bounds and sanitized storage failures.
+Selection and missing-FX tests run on both database dialects.
