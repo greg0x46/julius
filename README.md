@@ -54,7 +54,7 @@ authentication configuration that does not depend on the host:
 - **Optional MCP endpoint** — provider-neutral Streamable HTTP in the same
   binary, disabled by default, with OAuth, PKCE and explicit owner consent for
   financial planning reads and separately scoped writes for goals, scenarios,
-  recurring commitments and transactions. Every write requires owner approval in Julius. See [MCP](#mcp).
+  recurring commitments, transactions and editable investments. Every write requires owner approval in Julius. See [MCP](#mcp).
 
 - **Exact money boundaries** — amounts stay decimal strings through entry,
   editing, calculation and HTTP. BRL display rounds to cents with ties away
@@ -520,7 +520,8 @@ Pluggy credentials and browser cookie are never issued to MCP clients.
 
 Write tools prepare an immutable preview; they never commit on an MCP call.
 All require both `mcp:access` and `mcp:write`. Inputs are an optional `id` UUID
-(required for changes to an existing record), a typed `data` object with the
+(required for changes to an existing record; integrated investment accounts use
+`integrated:<source UUID>`), a typed `data` object with the
 body fields below, and `idempotency_key` for manual transaction creation.
 Discovery publishes the body fields and exact string amount schema.
 
@@ -543,7 +544,31 @@ Discovery publishes the body fields and exact string amount schema.
 | `delete_planned_transaction` | `{}`; requires top-level `scenario_id` and planned transaction `id`; preserves real entries |
 | `create_recurring_commitment`, `update_recurring_commitment` | `name`, `kind` (`income`/`expense`), positive BRL `amount`, `category_id`, `cadence` (`monthly`/`annual`), `day_of_month` (1–31), `start_date`, `is_active`; optional `account_id`, `end_date`, `month_of_year` (required for annual); updates replace schedule fields |
 | `delete_recurring_commitment` | `{}`; removes schedule/reconciliation decisions, preserving real entries; remove any targeting automation reconcile action first |
+| `create_investment_account` | `name`; optional `kind` (`manual`), `currency_code` (`BRL`), `financial_account_id` UUID; provider accounts come from sync |
+| `update_investment_account` | Optional `name`, `active`, `financial_account_id` (null unlinks); integrated custody accepts only the bank link |
+| `delete_investment_account` | `{}`; manual custody without positions or operations only |
+| `create_investment_position` | `account_id` (UUID or `integrated:<source UUID>`), `occurred_on` (`YYYY-MM-DD`), `asset_id` UUID or `name`; optional `ticker`, `asset_type`, `initial_quantity`, `initial_unit_cost`, `initial_value`, `notes` |
+| `update_investment_position` | Optional `name`, `ticker`, `asset_type`, `notes`; manual holdings only; instrument descriptions are shared across holdings of that asset |
+| `delete_investment_position` | `{}`; manual position without operations only |
+| `create_investment_operation`, `update_investment_operation` | `account_id`, `kind` (`initial_balance`, `deposit`, `withdrawal`, `buy`, `sell`, `income`, `fee`, `tax`, `valuation`), `occurred_on` (`YYYY-MM-DD`); optional `position_id`, `amount`, `quantity`, `unit_price`, `fees`, `taxes`, `notes`, as allowed by the investment ledger. Updates replace operation fields. Without `amount`, quantity × unit price supplies the gross amount. |
+| `delete_investment_operation` | `{}`; manual operation without reconciliations or a custody-transfer pair only |
 | `get_write_result` | Top-level `request_id`; returns approval state and the final REST status/body |
+
+Investment monetary fields, quantities and prices are plain decimal strings (at
+most 64 characters, no exponent or JSON numbers). Manual records remain BRL,
+including local positions within integrated custody; a foreign-currency asset
+cannot receive a manual holding. Synced holdings and operations retain their
+native data and currencies. Integrated custody permits local buys/sells only
+for its manual holdings, and cash-only contribution/withdrawal/income/fee/tax
+records without changing provider cash. Transfers, reconciliation writes and
+asset-catalog management are not exposed by these tools.
+
+Investment approval captures the relevant custody ledgers, positions and links;
+up to 500 positions plus operations per affected custody, also subject to the
+256 KiB preview limit. The approval recheck and mutation share a serializable
+transaction. Invalid history (including negative cash or quantity) rolls back
+entirely. Replaying the same approval applies it once; a new tool call prepares
+a new owner approval, not a persistent investment creation idempotency key.
 
 For example, `create_manual_transaction` accepts:
 
@@ -652,7 +677,23 @@ To validate in dev with a synthetic owner and no bank connection:
    figures. With a synthetic investment and dated goal, compare portfolio and
    goal figures with Investimentos and Metas. Create a hypothetical scenario:
    it must affect only calls selecting its ID, including if marked active.
-4. Revoke the access token through `/oauth/revoke`, then verify the same token
+4. With `mcp:access mcp:write`, prepare and approve `create_investment_account`
+   with a synthetic name, then `create_investment_position` in that custody
+   with a synthetic asset name and today's `occurred_on`. Approve a `deposit`
+   of `100`, then a `buy` of quantity `3` at unit price `10`, fees `0.1` and
+   taxes `0.2`, then a `sell` of quantity `1` at `12`, fees `0.2` and taxes
+   `0.3`. Inspect Investimentos: quantity is `2`, cost is `20.2` and cash is
+   `81.2`. Record a `valuation` of `24` for the position and compare
+   `get_investment_portfolio` with the page: yield is `5.2`, costs `0.8`.
+   Before valuation, unavailable period values follow the existing quote
+   coverage rules. Reject a prepared deletion: the operation remains. Approve
+   deletion of the sale and replay that approval: it applies once. An attempted
+   sale of more units than held must fail without changing any record.
+   Provider ownership can additionally be checked with synthetic synced fixtures
+   in the automated tests; no live provider credentials are needed.
+   Pace approvals within the existing limit of five owner login attempts per
+   minute; wait for the next minute after a 429 response.
+5. Revoke the access token through `/oauth/revoke`, then verify the same token
    gets 401. Repeat authorization and reset the synthetic owner's password;
    that token should also get 401. Open mode must reject authorization.
 

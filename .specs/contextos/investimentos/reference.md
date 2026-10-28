@@ -733,3 +733,41 @@ Required `to` is clamped to today; `from`, source, grouping and display-account
 filters match the period endpoint. No scenarios enter this read.
 
 Tool inputs, output bounds and dev validation: [README MCP](../../../README.md#mcp).
+
+## MCP writes
+
+Nine typed tools create, update and delete investment accounts, positions and
+operations (`*_investment_account`, `*_investment_position`,
+`*_investment_operation`). Contracts and synthetic dev steps are in
+[README MCP financial writes](../../../README.md#financial-writes).
+All require `mcp:access mcp:write`, a reviewed preview, and a separate owner
+approval in Julius, including removals. The approval page shows exact requested
+and current quantities, prices, fees, taxes and currencies with Portuguese labels.
+
+`httpapi.PreviewMCPWrite` captures the relevant account, positions, operations,
+reconciliations and asset metadata. Shared instrument edits list the other manual
+holdings they affect. Preview size is bounded to 500 positions plus operations
+per affected custody and the existing 256 KiB ceiling. Execution rechecks that
+snapshot inside the same serializable transaction as the domain mutation.
+Investment `*WithQuerier` mutations let MCP reuse the existing account validation,
+ledger replay, reconciliation guards, cost basis and quote rules without nested
+transactions. A failure rolls everything back. The existing approval manager
+consumes each approval once; another tool call requires another approval.
+Investment creation does not expose a persistent idempotency key.
+
+Manual investment writes remain BRL and accept only bounded plain decimal
+strings, including quantity and price. Synced positions and operations are
+immutable through MCP. Manual positions inside integrated custody remain
+editable; their trades never alter provider cash. Local account-bank links keep
+their existing editability and cash/wealth semantics. Foreign provider data,
+conversion coverage and return calculations are unchanged. Manual holdings of
+foreign assets are refused by the domain guard. Eligible standalone fees/taxes
+and trade fees/taxes use the same ledger rules as REST. Transfers, reconciliation
+writes and asset-catalog writes are outside these tools.
+
+Regression coverage: `internal/mcp/investment_writes_test.go` exercises real
+SDK/OAuth approval, anonymous/read-only rejection, destruction denial/replay,
+precision and portfolio results on SQLite and Postgres.
+`internal/httpapi/mcp_investment_writes_test.go` pins provider ownership,
+manual holdings in synced custody, foreign-asset refusal, negative-history
+rollback, stale/repeated previews, injected failure and the atomic recheck.
