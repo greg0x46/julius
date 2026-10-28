@@ -56,7 +56,7 @@ func (o *oauthServer) registerWrites(server *sdk.Server) {
 	if err != nil {
 		panic(err)
 	}
-	for _, operation := range []string{"assign_transaction_category", "set_transaction_inclusion", "create_manual_transaction", "update_manual_transaction", "delete_manual_transaction", "create_category", "update_category", "create_automation_rule", "update_automation_rule", "delete_automation_rule", "create_goal", "update_goal", "delete_goal", "create_scenario", "update_scenario", "delete_scenario", "create_planned_transaction", "update_planned_transaction", "delete_planned_transaction", "create_recurring_commitment", "update_recurring_commitment", "delete_recurring_commitment"} {
+	for _, operation := range []string{"assign_transaction_category", "set_transaction_inclusion", "create_manual_transaction", "update_manual_transaction", "delete_manual_transaction", "create_category", "update_category", "create_automation_rule", "update_automation_rule", "delete_automation_rule", "create_goal", "update_goal", "delete_goal", "create_scenario", "update_scenario", "delete_scenario", "create_planned_transaction", "update_planned_transaction", "delete_planned_transaction", "create_recurring_commitment", "update_recurring_commitment", "delete_recurring_commitment", "create_manual_account", "update_manual_account", "adjust_manual_account", "create_transfer", "delete_transfer", "create_payable", "update_payable", "delete_payable", "create_payable_link", "delete_payable_link"} {
 		sdk.AddTool(server, &sdk.Tool{Name: operation, OutputSchema: outputSchema, InputSchema: httpapi.MCPWriteInputSchema(operation), Description: "Prepare " + operation + " for owner review. Does not commit. Requires mcp:write. Open approval_url in Julius and have the owner review and approve; never ask for owner credentials in the MCP client. Use get_write_result afterward. Data fields are published in inputSchema; deletes use {}. Planning amounts are BRL. Standalone scenarios affect MCP projections only when explicitly selected in scenario_ids; recurrence schedules follow active commitment selection. No retroactive rule application.", Annotations: &sdk.ToolAnnotations{IdempotentHint: false}}, func(ctx context.Context, _ *sdk.CallToolRequest, in writeToolInput) (*sdk.CallToolResult, writeToolOutput, error) {
 			identity, _ := ctx.Value(writeContextKey{}).(writeIdentity)
 			if !canWrite(identity.Scope) {
@@ -236,8 +236,8 @@ func (o *oauthServer) renderWrite(w http.ResponseWriter, status int, id string, 
 	if a != nil {
 		var data map[string]json.RawMessage
 		_ = json.Unmarshal(a.Preview.Request.Data, &data)
-		labels := map[string]string{"account_id": "Conta", "description": "Descrição", "amount": "Valor assinado", "occurred_at": "Data", "category_id": "Categoria", "state": "Inclusão", "name": "Nome", "kind": "Tipo", "is_active": "Ativa", "icon": "Ícone", "color": "Cor", "conditions": "Condições", "actions": "Ações", "logic_operator": "Operador lógico", "metric": "Métrica", "target_amount": "Valor alvo (BRL)", "target_date": "Data alvo", "notes": "Observações", "projected_at": "Data planejada", "category": "Categoria", "cadence": "Frequência", "day_of_month": "Dia do mês", "month_of_year": "Mês do ano", "start_date": "Data inicial", "end_date": "Data final", "scenario_id": "Cenário"}
-		for _, key := range []string{"account_id", "description", "amount", "occurred_at", "category_id", "state", "name", "kind", "is_active", "icon", "color", "logic_operator", "conditions", "actions", "metric", "target_amount", "target_date", "notes", "projected_at", "category", "cadence", "day_of_month", "month_of_year", "start_date", "end_date", "scenario_id"} {
+		labels := map[string]string{"currency_code": "Moeda", "opening_balance": "Saldo inicial", "archived": "Arquivada", "archived_at": "Arquivada em", "starting_settled_amount": "Valor quitado inicial (BRL)", "settled_amount": "Valor quitado (BRL)", "remaining_amount": "Saldo restante (BRL)", "source_transaction_id": "Lançamento de saída", "destination_transaction_id": "Lançamento de entrada", "fee_transaction_id": "Lançamento da tarifa", "source": "Saída", "destination": "Entrada", "fee": "Tarifa", "total_amount": "Valor total (BRL)", "initial_remaining_amount": "Saldo restante inicial (BRL)", "payable_id": "Pendência", "transaction_id": "Lançamento vinculado", "account_id": "Conta", "description": "Descrição", "amount": "Valor assinado", "occurred_at": "Data", "category_id": "Categoria", "state": "Inclusão", "name": "Nome", "kind": "Tipo", "is_active": "Ativa", "icon": "Ícone", "color": "Cor", "conditions": "Condições", "actions": "Ações", "logic_operator": "Operador lógico", "metric": "Métrica", "target_amount": "Valor alvo (BRL)", "target_date": "Data alvo", "notes": "Observações", "projected_at": "Data planejada", "category": "Categoria", "cadence": "Frequência", "day_of_month": "Dia do mês", "month_of_year": "Mês do ano", "start_date": "Data inicial", "end_date": "Data final", "scenario_id": "Cenário"}
+		for _, key := range []string{"currency_code", "opening_balance", "archived", "source_transaction_id", "destination_transaction_id", "fee_transaction_id", "source", "destination", "fee", "total_amount", "initial_remaining_amount", "payable_id", "transaction_id", "account_id", "description", "amount", "occurred_at", "category_id", "state", "name", "kind", "is_active", "icon", "color", "logic_operator", "conditions", "actions", "metric", "target_amount", "target_date", "notes", "projected_at", "category", "cadence", "day_of_month", "month_of_year", "start_date", "end_date", "scenario_id"} {
 			if value, ok := data[key]; ok {
 				rows = append(rows, row{labels[key], strings.Trim(string(value), `"`)})
 			}
@@ -247,7 +247,7 @@ func (o *oauthServer) renderWrite(w http.ResponseWriter, status int, id string, 
 			if json.Unmarshal(raw, &current) != nil {
 				continue
 			}
-			for _, key := range []string{"id", "account_id", "account_name", "currency_code", "description", "amount", "occurred_at", "name", "kind", "is_active", "internal_category", "inclusion", "metric", "target_amount", "target_date", "notes", "projected_at", "category", "category_id", "cadence", "day_of_month", "month_of_year", "start_date", "end_date", "scenario_id"} {
+			for _, key := range []string{"id", "account_id", "account_name", "currency_code", "description", "amount", "occurred_at", "name", "kind", "is_active", "opening_balance", "archived_at", "source", "destination", "fee", "total_amount", "starting_settled_amount", "settled_amount", "remaining_amount", "payable_id", "transaction_id", "internal_category", "inclusion", "metric", "target_amount", "target_date", "notes", "projected_at", "category", "category_id", "cadence", "day_of_month", "month_of_year", "start_date", "end_date", "scenario_id"} {
 				if value, ok := current[key]; ok {
 					label := labels[key]
 					if label == "" {
@@ -276,6 +276,16 @@ func writeOperationLabel(a *writeAction) string {
 		return ""
 	}
 	return map[string]string{
+		"create_manual_account":       "Criar conta manual",
+		"update_manual_account":       "Alterar conta manual",
+		"adjust_manual_account":       "Registrar ajuste de saldo",
+		"create_transfer":             "Registrar transferência entre contas próprias",
+		"delete_transfer":             "Desvincular transferência",
+		"create_payable":              "Criar dívida ou valor a receber",
+		"update_payable":              "Alterar dívida ou valor a receber",
+		"delete_payable":              "Excluir dívida ou valor a receber",
+		"create_payable_link":         "Vincular lançamento à dívida ou ao valor a receber",
+		"delete_payable_link":         "Desvincular lançamento da dívida ou do valor a receber",
 		"assign_transaction_category": "Atribuir categoria às transações",
 		"set_transaction_inclusion":   "Alterar inclusão nos totais",
 		"create_manual_transaction":   "Criar lançamento manual",

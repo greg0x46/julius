@@ -21,6 +21,7 @@ import (
 	"github.com/greg0x46/julius/internal/categories"
 	"github.com/greg0x46/julius/internal/goals"
 	"github.com/greg0x46/julius/internal/ledger"
+	"github.com/greg0x46/julius/internal/payables"
 	"github.com/greg0x46/julius/internal/recurrences"
 	"github.com/greg0x46/julius/internal/scenarios"
 	"github.com/greg0x46/julius/internal/transactions"
@@ -85,6 +86,9 @@ func PreviewMCPWrite(ctx context.Context, q transactions.Querier, in MCPWriteReq
 			p.Before = append(p.Before, raw)
 		}
 		return err
+	}
+	if isMCPAccountsWrite(in.Operation) {
+		return previewMCPAccountsWrite(ctx, q, p)
 	}
 	switch in.Operation {
 	case "create_manual_transaction", "update_manual_transaction":
@@ -343,6 +347,9 @@ func (w *mcpWriteResponse) WriteHeader(status int) { w.status = status }
 
 func ExecuteMCPWrite(ctx context.Context, conn *sql.DB, approved MCPWritePreview) (MCPWriteResult, error) {
 	in := approved.Request
+	if isMCPAccountsWrite(in.Operation) {
+		return executeMCPAccountsWrite(ctx, conn, approved)
+	}
 	if in.Operation == "delete_scenario" || in.Operation == "delete_planned_transaction" || in.Operation == "update_recurring_commitment" || in.Operation == "delete_recurring_commitment" {
 		tx, err := conn.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
 		if err != nil {
@@ -468,7 +475,7 @@ func MCPWriteError(err error) string {
 		return err.Error() + "; check the identifier and planning fields, then request a new preview"
 	case errors.Is(err, recurrences.ErrLinkedToAutomationRule), errors.Is(err, scenarios.ErrScenarioLinkedToAutomationRule):
 		return "recurring commitment is targeted by an automation rule; remove its reconcile action before deleting"
-	case errors.Is(err, errMCPWriteInput), errors.Is(err, ErrMCPWriteConflict), errors.Is(err, transactions.ErrNotManual), errors.Is(err, transactions.ErrTransactionNotFound), errors.Is(err, categories.ErrCategoryInvalid), errors.Is(err, categories.ErrNotFound), errors.Is(err, automation.ErrNotFound):
+	case errors.Is(err, payables.ErrNotFound), errors.Is(err, payables.ErrLinkNotFound), errors.Is(err, transactions.ErrAccountNotFound), errors.Is(err, transactions.ErrAccountArchived), errors.Is(err, transactions.ErrAccountNotManual), errors.Is(err, transactions.ErrAccountHasMovements), errors.Is(err, transactions.ErrAccountNotActiveManual), errors.Is(err, transactions.ErrInvalidTransfer), errors.Is(err, transactions.ErrTransferLinked), errors.Is(err, transactions.ErrTransferNotFound), errors.Is(err, transactions.ErrInvestmentLinked), errors.Is(err, errMCPWriteInput), errors.Is(err, ErrMCPWriteConflict), errors.Is(err, transactions.ErrNotManual), errors.Is(err, transactions.ErrTransactionNotFound), errors.Is(err, categories.ErrCategoryInvalid), errors.Is(err, categories.ErrNotFound), errors.Is(err, automation.ErrNotFound):
 		return err.Error()
 	default:
 		return "financial write unavailable; request a new preview"
@@ -479,6 +486,20 @@ func MCPWriteError(err error) string {
 func MCPWriteInputSchema(operation string) any {
 	var typ reflect.Type
 	switch operation {
+	case "create_manual_account", "update_manual_account":
+		typ = reflect.TypeFor[manualAccountRequest]()
+	case "adjust_manual_account":
+		typ = reflect.TypeFor[manualAccountAdjustmentRequest]()
+	case "create_transfer":
+		typ = reflect.TypeFor[transferWriteRequest]()
+	case "create_payable":
+		typ = reflect.TypeFor[payableCreateRequest]()
+	case "update_payable":
+		typ = reflect.TypeFor[payableUpdateRequest]()
+	case "create_payable_link":
+		typ = reflect.TypeFor[payableLinkWriteRequest]()
+	case "delete_payable_link":
+		typ = reflect.TypeFor[payableUnlinkWriteRequest]()
 	case "create_manual_transaction", "update_manual_transaction":
 		typ = reflect.TypeFor[manualTransactionRequest]()
 	case "assign_transaction_category":
@@ -505,6 +526,20 @@ func MCPWriteInputSchema(operation string) any {
 	schema, err := jsonschema.ForType(typ, &jsonschema.ForOptions{TypeSchemas: map[reflect.Type]*jsonschema.Schema{reflect.TypeFor[decimal.Decimal](): {Type: "string", Description: "Signed exact decimal string, nonzero, at most 64 characters; no exponent."}}})
 	if err != nil {
 		panic(err)
+	}
+	if operation == "create_manual_account" || operation == "update_manual_account" {
+		schema.Required = []string{"name"}
+	}
+	if operation == "create_payable" {
+		schema.Required = []string{"kind", "name", "total_amount"}
+	}
+	if operation == "create_transfer" {
+		// Either existing movement IDs or complete manual movements; runtime enforces exclusivity.
+		for _, def := range schema.Defs {
+			if def.Properties["occurred_at"] != nil {
+				def.Required = []string{"account_id", "description", "amount", "occurred_at"}
+			}
+		}
 	}
 	// REST PATCH fields and nullable optional category selection remain optional.
 	if operation == "update_category" {
