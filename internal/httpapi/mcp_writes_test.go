@@ -174,3 +174,46 @@ func TestMCPWriteRejectsInvalidInputsAndSyncedEditing(t *testing.T) {
 		}
 	})
 }
+
+func TestMCPWriteTransferCleanupPreview(t *testing.T) {
+	dbtest.Each(t, func(t *testing.T, conn *sql.DB) {
+		ctx := context.Background()
+		source := planningCash(t, conn, "BRL", "100")
+		destination := planningCash(t, conn, "BRL", "0")
+		svc := ledger.Service{DB: conn, OnIgnored: ledger.OnIgnored}
+		debit, err := svc.CreateManual(ctx, transactions.ManualInput{AccountID: source, Description: "Synthetic outgoing", Amount: decimal.RequireFromString("-10.0001"), OccurredAt: time.Now()}, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		credit, err := svc.CreateManual(ctx, transactions.ManualInput{AccountID: destination, Description: "Synthetic incoming", Amount: decimal.RequireFromString("10.0001"), OccurredAt: time.Now()}, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		link, err := transactions.CreateTransfer(ctx, conn, transactions.TransferInput{SourceID: debit.ID, DestinationID: credit.ID})
+		if err != nil {
+			t.Fatal(err)
+		}
+		considered := writePreview(t, conn, "set_transaction_inclusion", debit.ID, map[string]any{"state": "considered"})
+		if considered.AffectedCount != 1 {
+			t.Fatal("considering incorrectly previews transfer cleanup")
+		}
+		deletion := writePreview(t, conn, "delete_manual_transaction", debit.ID, map[string]any{})
+		if deletion.AffectedCount != 2 {
+			t.Fatal("deleting omitted transfer counterpart")
+		}
+		p := writePreview(t, conn, "set_transaction_inclusion", debit.ID, map[string]any{"state": "ignored"})
+		raw, _ := json.Marshal(p)
+		if p.AffectedCount != 2 || !strings.Contains(string(raw), credit.ID) || !strings.Contains(string(raw), link) || !strings.Contains(string(raw), "10.0001") {
+			t.Fatalf("transfer effects missing: %s", raw)
+		}
+		applyWrite(t, conn, p)
+		transfer, err := transactions.GetTransferForTransaction(ctx, conn, credit.ID)
+		if err != nil || transfer != nil {
+			t.Fatal("transfer not removed")
+		}
+		item, found, err := transactions.GetItem(ctx, conn, credit.ID)
+		if err != nil || !found || !item.TotalsEligibility.Included {
+			t.Fatalf("counterpart not preserved: %+v %v", item, err)
+		}
+	})
+}

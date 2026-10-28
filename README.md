@@ -545,6 +545,8 @@ For example, `create_manual_transaction` accepts:
 
 1. Review the returned `preview`: affected identifiers/count, current objects,
    requested fields and effects on reporting, balances and financial links.
+   Transfer-unlink previews include the other participants and exact native amounts;
+   those entries survive and resume their category/inclusion reporting decisions.
    New records have count 1 and no identifier until commit.
 2. Open `approval_url` in the owner's browser. The Julius page identifies the
    requesting client, shows the exact request and effects, and requires fresh

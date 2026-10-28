@@ -327,6 +327,9 @@ Selection and missing-FX tests run on both database dialects.
 names, body fields, bounds and synthetic dev validation. `internal/httpapi/mcp_writes.go`
 validates allowlisted operations, captures before-state, installment identifiers
 and financial links/amounts, and calls existing ledger/automation/category paths.
+Ignore/delete previews include all own-account transfer participants and their
+native amounts and before-state: removing a transfer relationship preserves the
+counterpart entries but changes which reporting decisions apply.
 Tool input schemas reuse the corresponding REST DTO fields; decimal amounts
 are strings. Raw JSON result fields have explicit unconstrained JSON schemas,
 not byte-array schemas. Unknown operations/fields are rejected.

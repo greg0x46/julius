@@ -65,6 +65,7 @@ func PreviewMCPWrite(ctx context.Context, q transactions.Querier, in MCPWriteReq
 		return p, errMCPWriteInput
 	}
 	create := strings.HasPrefix(in.Operation, "create_")
+	cleansLinks := false
 	if (create && in.ID != "") || (!create && !validWriteID(in.ID)) {
 		return p, errMCPWriteInput
 	}
@@ -124,10 +125,11 @@ func PreviewMCPWrite(ctx context.Context, q transactions.Querier, in MCPWriteReq
 		}
 		p.Effect = "Cria ou altera um lançamento manual com valor assinado exato (positivo: entrada; negativo: saída). Contas manuais recalculam o saldo; saldos de contas sincronizadas continuam definidos pelo provedor. Novos lançamentos seguem as regras de categorização e automação do Julius."
 	case "delete_manual_transaction":
+		cleansLinks = true
 		if string(in.Data) != "{}" {
 			return p, errMCPWriteInput
 		}
-		p.Effect = "Exclui o lançamento manual dos relatórios e recalcula o saldo de contas manuais e as faturas. Desvincula pagamentos de pendências e ocorrências recorrentes. O histórico de decisões é preservado."
+		p.Effect = "Exclui o lançamento manual dos relatórios e recalcula o saldo de contas manuais e as faturas. Desvincula pagamentos de pendências, ocorrências recorrentes e transferências entre contas próprias. As contrapartidas são preservadas e passam a seguir suas decisões de categoria e inclusão. O histórico de decisões é preservado."
 	case "assign_transaction_category":
 		var req transactionCategoryRequest
 		if err := decodeMCPWrite(in.Data, &req); err != nil {
@@ -158,7 +160,11 @@ func PreviewMCPWrite(ctx context.Context, q transactions.Querier, in MCPWriteReq
 		if req.State != "considered" && req.State != "ignored" {
 			return p, errMCPWriteInput
 		}
-		p.Effect = "Altera a inclusão nos totais de receitas e despesas. Ignorar não muda o saldo bancário; remove vínculos com pendências, recorrências e investimentos. Reconsiderar não restaura esses vínculos."
+		cleansLinks = req.State == "ignored"
+		p.Effect = "Altera a inclusão nos totais de receitas e despesas. Ignorar não muda o saldo bancário; remove vínculos com pendências, recorrências e investimentos. Também desfaz o vínculo de transferência entre contas próprias; as contrapartidas preservadas passam a seguir suas decisões de categoria e inclusão. Reconsiderar não restaura esses vínculos."
+		if !cleansLinks {
+			p.Effect = "Marca o lançamento como considerado nos totais, respeitando as demais regras de elegibilidade e categoria. Não altera o saldo bancário nem restaura vínculos anteriormente removidos."
+		}
 	case "create_category":
 		var req categoryCreateRequest
 		if err := decodeMCPWrite(in.Data, &req); err != nil {
@@ -253,7 +259,37 @@ func PreviewMCPWrite(ctx context.Context, q transactions.Querier, in MCPWriteReq
 						return p, errMCPWriteInput
 					}
 				}
-				if in.Operation == "set_transaction_inclusion" || in.Operation == "delete_manual_transaction" {
+				if cleansLinks {
+					transfer, err := transactions.GetTransferForTransaction(ctx, q, id)
+					if err != nil {
+						return p, err
+					}
+					if transfer != nil {
+						if err = add(transfer); err != nil {
+							return p, err
+						}
+						participants := []transactions.TransferMovement{transfer.Source, transfer.Destination}
+						if transfer.Fee != nil {
+							participants = append(participants, *transfer.Fee)
+						}
+						for _, movement := range participants {
+							if movement.TransactionID == id {
+								continue
+							}
+							p.AffectedIDs = append(p.AffectedIDs, movement.TransactionID)
+							counterpart, found, err := transactions.GetItem(ctx, q, movement.TransactionID)
+							if err != nil {
+								return p, err
+							}
+							if !found {
+								return p, transactions.ErrTransactionNotFound
+							}
+							if err = add(toItemDTO(counterpart)); err != nil {
+								return p, err
+							}
+						}
+					}
+
 					links, err := mcpTransactionLinks(ctx, q, id)
 					if err != nil {
 						return p, err
@@ -275,6 +311,7 @@ func PreviewMCPWrite(ctx context.Context, q transactions.Querier, in MCPWriteReq
 			_ = add(toRuleDTO(rule))
 		}
 	}
+	sort.Strings(p.AffectedIDs)
 	p.AffectedCount = len(p.AffectedIDs)
 	if create {
 		p.AffectedCount = 1
