@@ -2,6 +2,7 @@
 package mcp
 
 import (
+	"database/sql"
 	"errors"
 	"fmt"
 	"net/http"
@@ -30,7 +31,7 @@ func ParseEnabled(value string) (bool, error) {
 }
 
 // NewHandler never accepts cookies or inherits the REST API's open-access mode.
-// Bearer credentials are existing owner sessions, with the same revocation rules.
+// Bearer credentials are scoped OAuth tokens, isolated from owner sessions.
 func NewHandler(enabled bool, config auth.Config, store *auth.Store) (http.Handler, error) {
 	if !enabled {
 		return http.NotFoundHandler(), nil
@@ -41,6 +42,7 @@ func NewHandler(enabled bool, config auth.Config, store *auth.Store) (http.Handl
 	if config.Demo {
 		return nil, fmt.Errorf("JULIUS_MCP_ENABLED não é permitido com JULIUS_DEMO")
 	}
+	oauth := &oauthServer{store: store, config: config, hashing: make(chan struct{}, 1)}
 	server := sdk.NewServer(&sdk.Implementation{Name: "julius", Version: "1"}, &sdk.ServerOptions{
 		Capabilities: &sdk.ServerCapabilities{Tools: &sdk.ToolCapabilities{}},
 	})
@@ -66,7 +68,7 @@ func NewHandler(enabled bool, config auth.Config, store *auth.Store) (http.Handl
 		}
 		scheme, token, ok := strings.Cut(r.Header.Get("Authorization"), " ")
 		if !ok || !strings.EqualFold(scheme, "Bearer") || token == "" {
-			unauthorized(w)
+			oauth.unauthorized(w)
 			return
 		}
 		enabled, err := settings.AuthenticationEnabled(r.Context(), store.DB)
@@ -78,17 +80,23 @@ func NewHandler(enabled bool, config auth.Config, store *auth.Store) (http.Handl
 			http.Error(w, "MCP requires authentication enabled", http.StatusForbidden)
 			return
 		}
-		if _, err := store.Authenticate(r.Context(), token); err != nil {
-			if errors.Is(err, auth.ErrSession) {
-				unauthorized(w)
+		scope, err := oauth.authenticate(r, token)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				oauth.unauthorized(w)
 			} else {
 				http.Error(w, "Authentication unavailable", http.StatusServiceUnavailable)
 			}
 			return
 		}
+		if scope != mcpScope {
+			w.Header().Set("WWW-Authenticate", `Bearer error="insufficient_scope", scope="`+mcpScope+`", resource_metadata="`+config.PublicURL+`/.well-known/oauth-protected-resource/mcp"`)
+			http.Error(w, "Insufficient scope", http.StatusForbidden)
+			return
+		}
 		transport.ServeHTTP(w, r)
 	})
-	bounded := http.TimeoutHandler(guarded, requestTimeout, "MCP request timed out")
+	bounded := http.TimeoutHandler(oauth.routes(guarded), requestTimeout, "MCP request timed out")
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		// Bound slow body reads as well as work that observes the request context.
@@ -96,9 +104,4 @@ func NewHandler(enabled bool, config auth.Config, store *auth.Store) (http.Handl
 		_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(requestTimeout + 5*time.Second))
 		bounded.ServeHTTP(w, r)
 	}), nil
-}
-
-func unauthorized(w http.ResponseWriter) {
-	w.Header().Set("WWW-Authenticate", `Bearer realm="julius-mcp"`)
-	http.Error(w, "Authentication required", http.StatusUnauthorized)
 }

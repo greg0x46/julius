@@ -52,7 +52,7 @@ authentication configuration that does not depend on the host:
 ## Features
 
 - **Optional MCP endpoint** — provider-neutral Streamable HTTP in the same
-  binary, disabled by default and always authenticated. See [MCP](#mcp).
+  binary, disabled by default, with OAuth, PKCE and explicit owner consent. See [MCP](#mcp).
 
 - **Exact money boundaries** — amounts stay decimal strings through entry,
   editing, calculation and HTTP. BRL display rounds to cents with ties away
@@ -401,41 +401,93 @@ configuration failure.
 ### MCP
 
 Set `JULIUS_MCP_ENABLED=true` to serve MCP at `/mcp` in the existing binary.
-Unset or false keeps it disabled (404); invalid values prevent startup.
-MCP cannot be enabled with `JULIUS_DEMO=true`. SQLite and Postgres use the same
-endpoint and existing owner/session tables, with no migration or separate service.
+Unset or false keeps MCP and its OAuth endpoints disabled (404); invalid values
+prevent startup. Enable authentication in settings first. MCP cannot be enabled
+with `JULIUS_DEMO=true`; open mode rejects MCP and OAuth requests (403).
+SQLite and Postgres persist separate OAuth grants through a new migration.
 
-Enable authentication in the Julius settings first. Sign in through
-`POST /api/auth/login` using the documented Origin and `X-Julius-Request: 1`
-headers, then configure a generic Streamable HTTP MCP client with the returned
-session cookie's **value** as `Authorization: Bearer <session-token>`. Treat it
-as a password; do not put it in URLs or logs. Cookies alone never authorize MCP.
-This foundation does not provide OAuth discovery or automatic client sign-in.
-Use HTTPS outside localhost, as required by `JULIUS_PUBLIC_URL`.
+Configure a remote Streamable HTTP client with the public `/mcp` URL. Julius
+implements the [MCP authorization flow](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization)
+using its own single owner account, independent of any AI provider:
 
-Every MCP request validates the session and the authentication preference. Open
-access mode rejects MCP requests (403), even with a previously issued token.
-Missing, expired or revoked credentials return 401 with a Bearer challenge;
-authentication storage failures return 503. Logout revokes the token; password
-change/reset revokes all tokens. Existing seven-day absolute and 24-hour idle
-session lifetimes apply. An Origin header, when supplied, must exactly match
-`JULIUS_PUBLIC_URL`; non-browser clients may omit it. No CORS access is enabled.
-The REST API retains its own cookie and CSRF requirements.
+1. An unauthenticated request receives 401 and a `WWW-Authenticate` Bearer
+   challenge pointing to `/.well-known/oauth-protected-resource/mcp`.
+   `/.well-known/oauth-protected-resource` also serves resource metadata.
+2. The client discovers `/.well-known/oauth-authorization-server` and registers
+   at `POST /oauth/register` using OAuth Dynamic Client Registration (RFC 7591).
+   Public clients use `token_endpoint_auth_method: "none"`,
+   `grant_types: ["authorization_code"]`, `response_types: ["code"]` and one
+   or more `redirect_uris`. Registration identifies an application, never a new
+   Julius user. Redirects must use HTTPS, or HTTP on loopback for local clients,
+   and must match a registered URI exactly, including its port.
+3. The client opens `/oauth/authorize` with `response_type=code`, `client_id`,
+   `redirect_uri`, `state`, `scope=mcp:access`, `resource=<public-origin>/mcp`,
+   `code_challenge` and `code_challenge_method=S256`. The owner reviews the
+   client-supplied name, client ID, exact redirect, resource and scope; enters
+   their Julius email/password; and explicitly authorizes or denies access.
+   An existing browser session never skips this step.
+4. The client exchanges the single-use code at `POST /oauth/token` with a
+   form-encoded `grant_type=authorization_code`, `code`, `client_id`,
+   `redirect_uri`, `resource` and the original `code_verifier`. Both resource
+   parameters must be the exact configured public origin plus `/mcp`.
+5. Use the returned token only as `Authorization: Bearer <access_token>` on
+   `/mcp`. Cookies and browser session tokens cannot authorize MCP; OAuth
+   tokens cannot authorize `/api`. REST keeps its cookie, Origin and
+   `X-Julius-Request: 1` requirements.
 
-The official [Go MCP SDK](https://github.com/modelcontextprotocol/go-sdk) handles
-protocol negotiation, discovery and errors. The endpoint uses stateless
-Streamable HTTP with JSON responses, supports the legacy initialize handshake,
-and currently discovers **zero tools**; financial tools are subsequent work.
-There are no stored chats, inference calls or provider-specific integrations.
-Requests are limited to 1 MiB, 30 seconds and 16 concurrent requests (429 when
-busy). GET/DELETE streams are unsupported (405), responses use `no-store`, and
-SIGINT/SIGTERM drains HTTP requests for up to 35 seconds before forced closure.
+The sole scope, `mcp:access`, permits the existing MCP protocol transport.
+There are currently **zero financial tools**; no financial read/write scopes
+are implied. Unknown scopes are rejected; missing required token scope returns
+403 with an `insufficient_scope` challenge. The SDK handles protocol negotiation,
+empty tool discovery, JSON-RPC errors and the legacy initialize handshake.
 
-To validate with synthetic data in a local instance: leave the variable unset
-and verify `/mcp` returns 404; enable it and restart, then verify an unauthenticated
-POST returns 401. With a fresh owner session token, connect a generic MCP client
-and list tools: the result is empty. Revoke that session by logging out and
-verify the same token receives 401. No bank connection is needed.
+Consent requests and authorization codes expire after five minutes; access
+tokens expire after one hour, without idle extension. Only SHA-256 hashes of
+random credentials are stored. Grants survive restarts. Clients revoke a token
+with form-encoded `POST /oauth/revoke` (`client_id` and `token`); repeating this
+is harmless. Password change or `julius auth reset-password` invalidates all
+OAuth codes and tokens. Browser logout only revokes that browser session.
+Expired, revoked or wrong-audience tokens return 401; storage failures return
+503 without database details.
+
+Supported methods are public-client registration and authorization code with
+S256 PKCE. Client ID Metadata Documents are **not supported or advertised**;
+clients must support Dynamic Client Registration. There are no client secrets,
+refresh tokens, implicit/password grants, device flow, OIDC identity tokens,
+registration-management API or browser CORS support. The consent page works
+without JavaScript, requires a bound anti-CSRF cookie and matching Origin, and
+cannot be framed. OAuth endpoints allow 120 requests/minute per instance;
+credential checks allow five/minute and one concurrent password hash. At most
+1,000 clients may be registered per database. These limits protect a small
+self-hosted instance; an untrusted public deployment also needs edge abuse
+controls. Application names are self-reported, not verified identities.
+
+Self-hosting requires a reachable HTTPS `JULIUS_PUBLIC_URL` with a valid
+certificate; HTTP is allowed only on loopback for development. Keep discovery,
+`/oauth/*` and `/mcp` reachable at that origin through the TLS reverse proxy.
+Issuer and resource URLs use this configured origin, never forwarded headers.
+An Origin header on MCP, when supplied, must match it. Keep tokens, callback
+codes and passwords out of logs and URLs you share. The encryption master key,
+Pluggy credentials and browser cookie are never issued to MCP clients.
+
+The official [Go MCP SDK](https://github.com/modelcontextprotocol/go-sdk) serves
+stateless Streamable HTTP with JSON responses: 1 MiB bodies, 30 seconds and
+16 concurrent requests (429 when busy). OAuth request bodies are limited to
+16 KiB. GET/DELETE MCP streams are unsupported (405); responses use `no-store`.
+SIGINT/SIGTERM drains HTTP for up to 35 seconds before forced closure. There
+are no stored chats, inference calls or provider-specific integrations.
+
+To validate in dev with a synthetic owner and no bank connection:
+
+1. Leave MCP disabled and verify `/mcp` and discovery return 404. Enable it and
+   restart; verify unauthenticated `/mcp` returns 401 with resource metadata.
+2. Connect a client supporting Dynamic Client Registration, follow the consent
+   page, and choose **Negar acesso**: no access token should be issued.
+3. Connect again, review the details, enter the synthetic owner's credentials
+   and choose **Autorizar acesso**. Tool discovery should return an empty list.
+4. Revoke the access token through `/oauth/revoke`, then verify the same token
+   gets 401. Repeat authorization and reset the synthetic owner's password;
+   that token should also get 401. Open mode must reject authorization.
 
 ### Public demo
 

@@ -199,13 +199,81 @@ capability and an empty discovery result establish the extension point without
 duplicating domain behavior. Protocol versions, initialize/discovery, transport
 errors and JSON-RPC errors are handled by the SDK.
 
-Every request requires a Bearer owner session, validated through
-`auth.Store.Authenticate`; cookies never grant access. Authentication must remain
-enabled in settings (403 when off); setting read failures and session storage
-failures return 503. Invalid/expired/revoked sessions return 401 with
-`WWW-Authenticate`. Session expiry, idle refresh, logout and password reset are
-shared with REST. Origin is optional for non-browser clients, but when present
-must equal the configured public origin. There is no OAuth or CORS integration.
+Every MCP request requires a scoped OAuth Bearer token from `internal/mcp`;
+owner sessions and cookies never grant access. Authentication must remain
+enabled (403 when off); storage failures return 503. Invalid, expired, revoked
+or wrong-resource tokens return 401 with a protected-resource metadata challenge;
+missing `mcp:access` returns 403/`insufficient_scope`. Origin is optional for
+non-browser clients, but when present must equal the configured public origin.
+There is no CORS. `/api` retains its existing cookie/CSRF gate and ignores
+OAuth tokens.
+
+### OAuth authorization
+
+The OAuth handler is mounted outside `/api` by `cmd/julius/server.go`, alongside
+`/mcp`. All routes disappear when MCP is disabled; demo mode refuses startup,
+and the authentication preference is checked before every OAuth request.
+
+| Method / route | Behavior |
+|---|---|
+| GET /.well-known/oauth-protected-resource[/mcp] | RFC 9728 metadata, exact public `/mcp` resource, authorization server and supported scope |
+| GET /.well-known/oauth-authorization-server | RFC 8414 issuer/endpoints, code grant, S256 PKCE, public-client authentication and scopes |
+| POST /oauth/register | RFC 7591 public-client registration; random opaque ID, name and exact HTTPS/loopback redirect URIs |
+| GET /oauth/authorize | Validates client, exact redirect, resource, scope and S256 challenge; renders owner consent |
+| POST /oauth/authorize | Checks bound cookie and Origin; explicit denial or fresh owner credentials plus explicit approval; redirects code/error with state and issuer |
+| POST /oauth/token | Form-encoded code exchange; consumes code atomically and validates client, redirect, resource, PKCE and owner revision |
+| POST /oauth/revoke | Form-encoded client ID/token; idempotent revocation of that client's access token |
+
+Migration `0007_mcp_oauth` adds `oauth_clients` and `oauth_grants` on both
+dialects. These tables start empty when converting legacy databases. Client IDs
+are opaque text. Grant hashes identify consent requests, authorization codes
+and access tokens; grant rows contain client, redirect, resource, scope, PKCE
+challenge, state, CSRF hash, owner revision and expiry. SQLite stores UTC text
+expiry; Postgres uses `TIMESTAMPTZ`. Expired grants are pruned on authorization.
+`auth.Store.VerifyOwner` checks fresh credentials without issuing a browser
+session. Code/token insertion compares the verified owner revision to prevent
+password-reset races; reads also require the current revision. Browser logout
+has no effect on OAuth tokens; password changes/resets revoke all of them.
+
+The sole scope is `mcp:access`, covering today's transport with zero financial
+tools. Unknown requested scopes are rejected. Consent requests and codes last
+five minutes; access tokens last one hour without idle refresh. Only hashes of
+random 32-byte credentials reach storage. Code and consent consumption are
+single-use under concurrent requests. Tokens are bound to the exact configured
+public origin plus `/mcp`; both authorization and token requests require this
+resource. No secret from settings is involved in issuance.
+
+The server-rendered Portuguese consent page (`consent.go`) shows escaped,
+unverified client name, client ID, redirect, resource and scope. It requires
+fresh owner credentials and a separate explicit approval even with a browser
+session. Denial needs no password. An HttpOnly/SameSite=Strict host cookie binds
+the pending request to the browser; consent POST requires exact Origin. CSP
+blocks framing/scripts and restricts the credential form to the same origin;
+responses are no-store and no-referrer. After approval or denial, a fresh HTML
+document navigates to the validated callback with a meta refresh and an escaped
+fallback link, avoiding CSP restrictions on cross-origin form redirects. Failed
+credentials retain the details/email and clear the password.
+OAuth protocol errors use OAuth JSON or a validated redirect, not REST Problems.
+
+Supported registration is RFC 7591 DCR only. Client ID Metadata Documents are
+not supported and their discovery flag is false. Only public clients using
+`none` authentication are supported; no refresh token, implicit/password grant,
+OIDC, device flow, registration-management API or browser CORS. Redirect URIs
+must match exactly, including loopback ports; HTTPS is required except HTTP
+loopback redirects. Deployment requires a valid HTTPS public origin outside
+loopback; no forwarded header determines the issuer/resource. See README MCP
+for client setup and synthetic dev validation.
+
+OAuth routes have a per-instance 120/minute global limit and 16 KiB bodies;
+credential verification is limited to five/minute and one concurrent KDF.
+Registration is capped at 1,000 clients per database. These local limits do not
+replace edge abuse controls for publicly exposed deployments.
+
+Tests in `internal/mcp/oauth_test.go` run on SQLite and Postgres: successful
+registration/consent/exchange/discovery, restart, denial, replay and concurrent
+exchange, malformed registrations, PKCE/client/redirect/resource mismatch,
+expiry, revocation, password reset, insufficient scope, XSS/CSRF, rate limits,
+open mode, anonymous tools and separation from browser sessions and REST.
 
 JSON responses, no persistent MCP sessions, 1 MiB bodies, a 30-second timeout
 (including body reads), and 16 in-flight requests bound resource use. Saturation
