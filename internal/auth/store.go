@@ -81,6 +81,21 @@ func (s *Store) Initialize(ctx context.Context, email, password string, master [
 	return tx.Commit()
 }
 func digest(token string) string { h := sha256.Sum256([]byte(token)); return hex.EncodeToString(h[:]) }
+
+// VerifyOwner checks fresh credentials without creating a browser session.
+func (s *Store) VerifyOwner(ctx context.Context, email, password string) (int, error) {
+	var storedEmail, hash string
+	var revision int
+	if err := s.DB.QueryRowContext(ctx, `SELECT email,password_hash,revision FROM auth_owner WHERE id=1`).Scan(&storedEmail, &hash, &revision); err != nil {
+		return 0, err
+	}
+	valid := checkPassword(password, hash)
+	if !valid || NormalizeEmail(email) != storedEmail {
+		return 0, ErrCredentials
+	}
+	return revision, nil
+}
+
 func (s *Store) Login(ctx context.Context, email, password string) (string, error) {
 	var storedEmail, hash string
 	if err := s.DB.QueryRowContext(ctx, `SELECT email,password_hash FROM auth_owner WHERE id=1`).Scan(&storedEmail, &hash); err != nil {
