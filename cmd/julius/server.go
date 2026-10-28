@@ -11,6 +11,10 @@ import (
 func serverHandler(api, mcp http.Handler) http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("/mcp", mcp)
+	mux.Handle("/oauth/", mcp)
+	mux.Handle("/.well-known/oauth-authorization-server", mcp)
+	mux.Handle("/.well-known/oauth-protected-resource", mcp)
+	mux.Handle("/.well-known/oauth-protected-resource/", mcp)
 	mux.Handle("/mcp/", http.NotFoundHandler())
 	mux.Handle("/", api)
 	return mux
