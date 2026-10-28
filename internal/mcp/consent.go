@@ -47,23 +47,23 @@ func (o *oauthServer) authorize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if p.Get("response_type") != "code" {
-		oauthError(w, 400, "unsupported_response_type")
+		o.authorizationError(w, r, g, "unsupported_response_type")
 		return
 	}
 	if g.Resource != o.resource() {
-		oauthError(w, 400, "invalid_target")
+		o.authorizationError(w, r, g, "invalid_target")
 		return
 	}
 	if g.Scope == "" {
 		g.Scope = mcpScope
 	}
 	if g.Scope != mcpScope {
-		oauthError(w, 400, "invalid_scope")
+		o.authorizationError(w, r, g, "invalid_scope")
 		return
 	}
 	challenge, err := base64.RawURLEncoding.DecodeString(g.Challenge)
 	if p.Get("code_challenge_method") != "S256" || err != nil || len(challenge) != 32 {
-		oauthError(w, 400, "invalid_request")
+		o.authorizationError(w, r, g, "invalid_request")
 		return
 	}
 	if _, err = o.store.DB.ExecContext(r.Context(), `DELETE FROM oauth_grants WHERE expires_at<=?`, db.FormatTime(o.store.Now())); err != nil {
@@ -79,6 +79,15 @@ func (o *oauthServer) authorize(w http.ResponseWriter, r *http.Request) {
 	}
 	http.SetCookie(w, &http.Cookie{Name: o.csrfCookie(), Value: csrf, Path: "/", Secure: o.config.Secure(), HttpOnly: true, SameSite: http.SameSiteStrictMode, MaxAge: 300})
 	o.renderConsent(w, 200, g, name, pending, "", "")
+}
+func (o *oauthServer) authorizationError(w http.ResponseWriter, r *http.Request, g grant, code string) {
+	target, _ := url.Parse(g.Redirect)
+	p := target.Query()
+	p.Set("error", code)
+	p.Set("state", g.State)
+	p.Set("iss", o.config.PublicURL)
+	target.RawQuery = p.Encode()
+	http.Redirect(w, r, target.String(), http.StatusSeeOther)
 }
 func (o *oauthServer) consent(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get("Origin") != o.config.PublicURL {

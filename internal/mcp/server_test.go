@@ -30,11 +30,7 @@ func setup(t *testing.T, conn *sql.DB) (*auth.Store, string) {
 	if err := store.Initialize(ctx, "owner@example.com", "synthetic-password", bytes.Repeat([]byte{42}, 32), nil); err != nil {
 		t.Fatal(err)
 	}
-	token, err := store.Login(ctx, "owner@example.com", "synthetic-password")
-	if err != nil {
-		t.Fatal(err)
-	}
-	return store, token
+	return store, oauthToken(t, store)
 }
 
 func request(t *testing.T, handler http.Handler, token, origin, body string) *httptest.ResponseRecorder {
@@ -117,16 +113,13 @@ func TestAccessBoundary(t *testing.T) {
 		if err := settings.SetAuthenticationEnabled(context.Background(), conn, true); err != nil {
 			t.Fatal(err)
 		}
-		if err := store.Logout(context.Background(), token); err != nil {
+		if _, err := conn.Exec(`DELETE FROM oauth_grants WHERE token_hash=?`, tokenHash(token)); err != nil {
 			t.Fatal(err)
 		}
 		if w := request(t, handler, token, "", `{}`); w.Code != 401 {
 			t.Fatalf("revoked: %d", w.Code)
 		}
-		token, err = store.Login(context.Background(), "owner@example.com", "synthetic-password")
-		if err != nil {
-			t.Fatal(err)
-		}
+		token = oauthToken(t, store)
 		store.Now = func() time.Time { return time.Now().Add(auth.Lifetime + time.Second) }
 		if w := request(t, handler, token, "", `{}`); w.Code != 401 {
 			t.Fatalf("expired: %d", w.Code)
