@@ -54,7 +54,7 @@ authentication configuration that does not depend on the host:
 - **Optional MCP endpoint** — provider-neutral Streamable HTTP in the same
   binary, disabled by default, with OAuth, PKCE and explicit owner consent for
   financial planning reads and separately scoped writes for goals, scenarios,
-  recurring commitments, transactions and editable investments. Financial writes require owner approval in Julius; separately authorized clients can inspect and request guarded maintenance. See [MCP](#mcp).
+  recurring commitments, transactions and editable investments. Financial writes require owner approval in Julius; separately authorized clients can inspect and request guarded maintenance. An optional MCP Apps investment view reuses the Julius interface; ordinary clients retain full text and structured results. See [MCP](#mcp).
 
 - **Exact money boundaries** — amounts stay decimal strings through entry,
   editing, calculation and HTTP. BRL display rounds to cents with ties away
@@ -514,6 +514,60 @@ Issuer and resource URLs use this configured origin, never forwarded headers.
 An Origin header on MCP, when supplied, must match it. Keep tokens, callback
 codes and passwords out of logs and URLs you share. The encryption master key,
 Pluggy credentials and browser cookie are never issued to MCP clients.
+
+
+#### Optional MCP Apps view
+
+The investment portfolio tool can display an interactive snapshot in clients
+supporting the portable [MCP Apps specification](https://github.com/modelcontextprotocol/ext-apps/blob/main/specification/2026-01-26/apps.mdx).
+It reuses Julius's investment summary, positions, currency formatting and partial
+valuation warnings. Search, group expansion, calculation details and **Mostrar
+encerradas** affect only the display; the view never sends tool calls or changes
+financial data. Dates, grouping and account/source filters come from the original
+`get_investment_portfolio` arguments. All calculations stay in the existing domain
+services; there is no provider SDK, client-specific API or second financial UI.
+
+Build with `./build.sh` (Node and Go prerequisites above) and start that embedded
+binary with MCP enabled and normal owner authentication. The asset is bundled
+without external scripts, styles or network requests. Ordinary `go run` builds
+and tests omit it and retain all standard tools. `npm run build` also emits the
+self-contained `frontend/dist/mcp-investments.html` for local inspection.
+
+Manual interoperability check (use only synthetic holdings):
+
+1. In a disposable Julius instance, create a manual investment account and
+   position, record a valuation, and optionally add an unpriced position to check
+   partial warnings. Enable MCP using the OAuth setup above; authorize only
+   `mcp:access` in each test client.
+2. In an MCP Apps host advertising
+   `extensions["io.modelcontextprotocol/ui"].mimeTypes` including
+   `text/html;profile=mcp-app`, call `get_investment_portfolio` with today's
+   `to` (`YYYY-MM-DD`) and `group_by: "account"`. It should discover
+   `_meta.ui.resourceUri`, read `ui://julius/investment-portfolio.html` over the
+   authorized connection, and display **Carteira de investimentos**. Expand a
+   group, search a holding and open **Detalhes do cálculo**. Totals should match
+   Julius's Investments page for the same period and remain unchanged by search.
+3. Repeat the same tool call in an ordinary MCP client without the extension.
+   Expect complete JSON text and `structuredContent`, including totals, positions,
+   partial/unavailable reasons, native amounts and dated FX. Ignoring UI metadata
+   requires no alternate tool or extra scope. Invalid arguments and valuation
+   failures retain the standard tool errors; the view shows a readable error.
+4. Revoke the client in Julius. Further tool calls and resource reads must fail
+   with 401; an invalid Origin or token without `mcp:access` must fail with 403.
+   An already rendered snapshot remains visible until the host removes it; the
+   view has no live subscription or stored data. Do not treat it as live prices.
+
+Interoperability evidence: automated Chromium tests use a sandboxed protocol host
+at 390 and 1440 px to exchange `ui/initialize`, `ui/notifications/initialized`,
+input/result and size notifications, then exercise the actual bundled view with
+synthetic data. Go SDK tests cover Apps and ordinary clients using the shared
+contract, resource MIME/CSP and authorization. These checks are not a claim of a
+manual pass in a third-party client: none was available during implementation.
+Run the steps above on each target host and record its name/version and outcome.
+Hosts that ignore or refuse the UI still have the complete ordinary tool result.
+The view supports MCP Apps protocol `2026-01-26`, inline mode and host light/dark
+theme updates; unsupported negotiation, cancelled/error results and malformed
+portfolio data produce an error directing the user to the tool result.
 
 
 #### Financial writes

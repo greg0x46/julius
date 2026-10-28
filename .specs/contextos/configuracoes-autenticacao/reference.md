@@ -423,3 +423,15 @@ read/write/operations scope separation, strict inputs, sanitized bounded history
 ineligible/unavailable services, concurrent queue requests, token isolation,
 terminal retries, shared quote guards, upstream failure/deferral and shutdown.
 Sync integration coverage runs on SQLite and disposable Postgres.
+
+## Optional MCP Apps resource
+
+Embedded builds register the static investment portfolio HTML resource behind
+`/mcp`'s existing Bearer token, `mcp:access`, revocation and Origin checks.
+`resources/list` and `resources/read` do not introduce routes, scopes or a new
+credential channel. The asset declares an empty domain allowlist and no browser
+permissions. UI-only metadata on `get_investment_portfolio` is optional; clients
+without Apps support receive the same complete typed/text results, and builds
+without the asset omit the resource and its metadata. No writes are issued by
+the view. Details and validation: [investment reference](../investimentos/reference.md#optional-mcp-apps-portfolio)
+and [README MCP Apps](../../../README.md#optional-mcp-apps-view).

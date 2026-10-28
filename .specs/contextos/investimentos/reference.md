@@ -786,3 +786,31 @@ never change that schedule. Server shutdown and a five-minute deadline cancel
 accepted work; client disconnect does not. Existing providers, caching, rate
 limits and retries remain authoritative. Process-local retry receipts, setup and
 synthetic validation: [README operational tools](../../../README.md#operational-tools).
+
+## Optional MCP Apps portfolio
+
+An embedded frontend build also includes `mcp-investments.html`, a self-contained
+MCP Apps resource at `ui://julius/investment-portfolio.html` with MIME
+`text/html;profile=mcp-app`. `get_investment_portfolio` advertises it through
+`_meta.ui.resourceUri`; the input/output schemas, exact decimal strings and full
+text/structured results are unchanged. Ordinary clients can ignore the metadata.
+Without the generated asset (ordinary Go development builds), no UI metadata or
+resource is registered and all standard tools remain usable.
+
+`frontend/src/mcp` adapts host notifications to the existing
+`parseInvestmentPeriod`, `InvestmentPeriodSummary`, `InvestmentPositionsPeriod`
+and `ReportValuation`. Search, closed-position visibility, group expansion and
+calculation disclosures are local presentation only. The app never calls tools,
+REST, external resources or an AI SDK, and performs no financial calculations.
+The host sends the authorized tool result; the static resource contains no data,
+tokens or owner credentials. Resource reads use the same OAuth access/origin gate
+as tools. CSP declares no network, asset or frame domains and no permissions.
+
+Tests: `internal/mcp/apps_test.go` checks shared tool contracts/text parity,
+partial data, portable resource metadata, scopes/revocation and asset absence;
+`frontend/src/mcp/PortfolioApp.test.tsx` checks bridge lifecycle, strict shared
+parsing, error/empty states and visibility-only interactions;
+`frontend/e2e/mcp-app.spec.ts` exercises the built HTML in a sandboxed Chromium
+iframe at mobile and desktop widths. This is a protocol test host, not evidence
+of third-party client interoperability. Manual setup, validation and limitations:
+[README MCP Apps](../../../README.md#optional-mcp-apps-view).
