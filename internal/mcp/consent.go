@@ -12,6 +12,7 @@ import (
 
 	"github.com/greg0x46/julius/internal/auth"
 	"github.com/greg0x46/julius/internal/db"
+	"github.com/greg0x46/julius/internal/mcpaccess"
 )
 
 func (o *oauthServer) csrfCookie() string {
@@ -54,10 +55,10 @@ func (o *oauthServer) authorize(w http.ResponseWriter, r *http.Request) {
 		o.authorizationError(w, r, g, "invalid_target")
 		return
 	}
-	if g.Scope == "" {
+	if g.Scope == "" || g.Scope == "mcp:access" {
 		g.Scope = mcpScope
 	}
-	if g.Scope != mcpScope {
+	if !mcpaccess.ValidScope(g.Scope) {
 		o.authorizationError(w, r, g, "invalid_scope")
 		return
 	}
@@ -78,7 +79,7 @@ func (o *oauthServer) authorize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.SetCookie(w, &http.Cookie{Name: o.csrfCookie(), Value: csrf, Path: "/", Secure: o.config.Secure(), HttpOnly: true, SameSite: http.SameSiteStrictMode, MaxAge: 300})
-	o.renderConsent(w, 200, g, name, pending, "", "")
+	o.renderConsent(w, 200, g, name, pending, "", "", mcpaccess.Read)
 }
 func (o *oauthServer) authorizationError(w http.ResponseWriter, r *http.Request, g grant, code string) {
 	target, _ := url.Parse(g.Redirect)
@@ -118,6 +119,15 @@ func (o *oauthServer) consent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if decision == "allow" {
+		selected := r.PostForm.Get("scope")
+		if selected == "" {
+			selected = mcpaccess.Read
+		}
+		if !mcpaccess.ValidScope(selected) || (selected == mcpaccess.ReadWrite && g.Scope != mcpaccess.ReadWrite) {
+			oauthError(w, 400, "invalid_scope")
+			return
+		}
+
 		if o.limited(true) {
 			w.Header().Set("Retry-After", "60")
 			oauthError(w, 429, "temporarily_unavailable")
@@ -137,7 +147,7 @@ func (o *oauthServer) consent(w http.ResponseWriter, r *http.Request) {
 				o.unavailable(w)
 				return
 			}
-			o.renderConsent(w, 401, g, name, pending, r.PostForm.Get("email"), "E-mail ou senha inválidos.")
+			o.renderConsent(w, 401, g, name, pending, r.PostForm.Get("email"), "E-mail ou senha inválidos.", selected)
 			return
 		}
 		if err != nil {
@@ -145,6 +155,7 @@ func (o *oauthServer) consent(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		g.Revision = revision
+		g.Scope = selected
 	}
 	if _, err = o.load(r, "consent", pending, true); errors.Is(err, sql.ErrNoRows) {
 		oauthError(w, 400, "invalid_request")
@@ -160,6 +171,14 @@ func (o *oauthServer) consent(w http.ResponseWriter, r *http.Request) {
 	if decision == "deny" {
 		p.Set("error", "access_denied")
 	} else {
+		access := mcpaccess.NewStore(o.store.DB)
+		access.Now = o.store.Now
+		id, err := access.Create(r.Context(), g.Client, g.Scope, g.Revision, o.store.Now().Add(accessLifetime+codeLifetime))
+		if err != nil {
+			o.unavailable(w)
+			return
+		}
+		g.Authorization = &id
 		code := randomToken()
 		if err = o.save(r, "code", code, g, codeLifetime); err != nil {
 			o.unavailable(w)
@@ -171,19 +190,21 @@ func (o *oauthServer) consent(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{Name: o.csrfCookie(), Value: "", Path: "/", Secure: o.config.Secure(), HttpOnly: true, SameSite: http.SameSiteStrictMode, MaxAge: -1, Expires: time.Unix(1, 0)})
 	http.Redirect(w, r, target.String(), http.StatusSeeOther)
 }
-func (o *oauthServer) renderConsent(w http.ResponseWriter, status int, g grant, name, pending, email, message string) {
+func (o *oauthServer) renderConsent(w http.ResponseWriter, status int, g grant, name, pending, email, message, selected string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
 	_ = consentPage.Execute(w, struct {
 		Grant                       grant
 		Name, Request, Email, Error string
-	}{g, name, pending, email, message})
+		WriteRequested              bool
+		Selected                    string
+	}{g, name, pending, email, message, g.Scope == mcpaccess.ReadWrite, selected})
 }
 
 var consentPage = template.Must(template.New("consent").Parse(`<!doctype html>
 <html lang="pt-BR"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Autorizar acesso MCP · Julius</title>
-<style>body{margin:0;background:#f5f7fa;color:#172b4d;font:16px system-ui,sans-serif}main{max-width:540px;margin:40px auto;padding:24px}h1{font-size:1.6rem}dt,label{font-weight:600}dd{margin:4px 0 16px;overflow-wrap:anywhere}label{display:block;margin:16px 0 6px}input,button{box-sizing:border-box;font:inherit;border-radius:8px;min-height:44px;padding:10px 14px}input{width:100%;border:1px solid #64748b}button{cursor:pointer;margin:16px 8px 0 0;border:1px solid #2457a6;color:#2457a6;background:white}button[value=allow]{background:#2457a6;color:white}:focus-visible{outline:3px solid #2457a6;outline-offset:3px}[role=alert]{color:#c4302b}@media(max-width:480px){main{margin:0;padding:24px 16px}button{width:100%;margin-right:0}}</style>
+<style>body{margin:0;background:#f5f7fa;color:#172b4d;font:16px system-ui,sans-serif}main{max-width:540px;margin:40px auto;padding:24px}h1{font-size:1.6rem}dt,label{font-weight:600}dd{margin:4px 0 16px;overflow-wrap:anywhere}label{display:block;margin:16px 0 6px}input,button{box-sizing:border-box;font:inherit;border-radius:8px;min-height:44px;padding:10px 14px}input{width:100%;border:1px solid #64748b}input[type=radio]{width:auto;min-height:auto}fieldset{margin-top:16px}button{cursor:pointer;margin:16px 8px 0 0;border:1px solid #2457a6;color:#2457a6;background:white}button[value=allow]{background:#2457a6;color:white}:focus-visible{outline:3px solid #2457a6;outline-offset:3px}[role=alert]{color:#c4302b}@media(max-width:480px){main{margin:0;padding:24px 16px}button{width:100%;margin-right:0}}</style>
 <main><p>Julius</p><h1>Autorizar acesso MCP</h1><p>Este aplicativo solicita acesso ao seu Julius. Confira os dados antes de autorizar.</p>
-<dl><dt>Aplicativo (nome informado pelo cliente)</dt><dd>{{if .Name}}{{.Name}}{{else}}Aplicativo sem nome{{end}}</dd><dt>Identificador do cliente</dt><dd>{{.Grant.Client}}</dd><dt>Endereço de retorno</dt><dd>{{.Grant.Redirect}}</dd><dt>Recurso</dt><dd>{{.Grant.Resource}}</dd><dt>Permissões</dt><dd>Conectar via MCP (<code>{{.Grant.Scope}}</code>). Nenhuma ferramenta de dados financeiros está disponível nesta versão.</dd></dl>
+<dl><dt>Aplicativo (nome informado pelo cliente)</dt><dd>{{if .Name}}{{.Name}}{{else}}Aplicativo sem nome{{end}}</dd><dt>Identificador do cliente</dt><dd>{{.Grant.Client}}</dd><dt>Endereço de retorno</dt><dd>{{.Grant.Redirect}}</dd><dt>Recurso</dt><dd>{{.Grant.Resource}}</dd><dt>Permissões</dt><dd>Consultar dados financeiros{{if .WriteRequested}}; escrita opcional{{end}}. Nenhuma ferramenta financeira está disponível nesta versão.</dd></dl>
 <p>Confirme sua identidade para autorizar.</p>{{if .Error}}<p role="alert">{{.Error}}</p>{{end}}
-<form action="/oauth/authorize" method="post"><input type="hidden" name="request" value="{{.Request}}"><label for="email">E-mail</label><input id="email" name="email" type="email" autocomplete="username" value="{{.Email}}" required maxlength="254"><label for="password">Senha</label><input id="password" name="password" type="password" autocomplete="current-password" required><button type="submit" name="decision" value="allow">Autorizar acesso</button><button type="submit" name="decision" value="deny" formnovalidate>Negar acesso</button></form></main></html>`))
+<form action="/oauth/authorize" method="post"><input type="hidden" name="request" value="{{.Request}}">{{if .WriteRequested}}<fieldset><legend>Permissões deste cliente</legend><label><input type="radio" name="scope" value="mcp:read" {{if ne .Selected "mcp:read mcp:write"}}checked{{end}}> Somente leitura</label><p>Consultar seus dados financeiros pelas ferramentas disponíveis.</p><label><input type="radio" name="scope" value="mcp:read mcp:write" {{if eq .Selected "mcp:read mcp:write"}}checked{{end}}> Leitura e escrita</label><p>Consultar e alterar seus dados financeiros pelas ferramentas disponíveis.</p></fieldset>{{else}}<p>Somente leitura: consultar seus dados financeiros pelas ferramentas disponíveis.</p>{{end}}<p>Você pode reduzir as permissões ou revogar o acesso em Configurações → Segurança. Para ampliar além do autorizado aqui, será necessária uma nova autorização.</p><label for="email">E-mail</label><input id="email" name="email" type="email" autocomplete="username" value="{{.Email}}" required maxlength="254"><label for="password">Senha</label><input id="password" name="password" type="password" autocomplete="current-password" required><button type="submit" name="decision" value="allow">Autorizar acesso</button><button type="submit" name="decision" value="deny" formnovalidate>Negar acesso</button></form></main></html>`))

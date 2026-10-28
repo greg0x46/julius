@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/greg0x46/julius/internal/auth"
+	"github.com/greg0x46/julius/internal/mcpaccess"
 	"github.com/greg0x46/julius/internal/settings"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -46,6 +47,7 @@ func NewHandler(enabled bool, config auth.Config, store *auth.Store) (http.Handl
 	server := sdk.NewServer(&sdk.Implementation{Name: "julius", Version: "1"}, &sdk.ServerOptions{
 		Capabilities: &sdk.ServerCapabilities{Tools: &sdk.ToolCapabilities{}},
 	})
+	server.AddReceivingMiddleware(oauth.permissions(map[string]string{}))
 	transport := sdk.NewStreamableHTTPHandler(func(*http.Request) *sdk.Server { return server }, &sdk.StreamableHTTPOptions{
 		Stateless: true, JSONResponse: true, MaxRequestBodyBytes: 1 << 20,
 		// Reverse proxies may forward a public Host to a loopback listener.
@@ -76,7 +78,12 @@ func NewHandler(enabled bool, config auth.Config, store *auth.Store) (http.Handl
 			http.Error(w, "Authentication unavailable", http.StatusServiceUnavailable)
 			return
 		}
-		if !enabled {
+		mcpEnabled, err := mcpaccess.Enabled(r.Context(), store.DB)
+		if err != nil {
+			http.Error(w, "Configuration unavailable", 503)
+			return
+		}
+		if !enabled || !mcpEnabled {
 			http.Error(w, "MCP requires authentication enabled", http.StatusForbidden)
 			return
 		}
@@ -89,7 +96,7 @@ func NewHandler(enabled bool, config auth.Config, store *auth.Store) (http.Handl
 			}
 			return
 		}
-		if scope != mcpScope {
+		if !mcpaccess.ValidScope(scope) {
 			w.Header().Set("WWW-Authenticate", `Bearer error="insufficient_scope", scope="`+mcpScope+`", resource_metadata="`+config.PublicURL+`/.well-known/oauth-protected-resource/mcp"`)
 			http.Error(w, "Insufficient scope", http.StatusForbidden)
 			return
