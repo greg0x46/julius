@@ -17,7 +17,7 @@
   margin: 0;
   color: var(--color-text-secondary);
   font-size: var(--fs-body);
-  font-variui-numeric: tabular-nums;
+  font-variant-numeric: tabular-nums;
 }
 
 /* The type filter says what it filters, with a visible label. */
@@ -37,6 +37,11 @@
 @media (max-width: 47.99rem) {
   .scenario-kind-filter-label {
     display: none;
+  }
+
+  .scenario-kind-filter .ui-select {
+    min-width: 0;
+    max-width: 10rem;
   }
 }
 

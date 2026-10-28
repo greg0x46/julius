@@ -23,7 +23,11 @@ export function PluggySettings() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ pluggy_client_id: id, pluggy_client_secret: secret, pluggy_item_id: item }),
       });
-      if (!response.ok) throw new Error("Não foi possível salvar as credenciais.");
+      if (!response.ok) {
+        // Surface the server's own sentence (e.g. the demo-mode 403).
+        const problem = (await response.json().catch(() => null)) as { detail?: string } | null;
+        throw new Error(problem?.detail || "Não foi possível salvar as credenciais.");
+      }
       setID("");
       setSecret("");
       setItem("");

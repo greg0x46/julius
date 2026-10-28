@@ -88,7 +88,8 @@ export function TextInput({
       data-size={size}
       onKeyDown={(event) => {
         props.onKeyDown?.(event);
-        if (event.key === "Enter") onPressEnter?.();
+        if (event.key === "Enter" && !event.nativeEvent.isComposing)
+          onPressEnter?.();
       }}
     />
   );
@@ -252,9 +253,10 @@ export function CheckboxControl(
   props: InputHTMLAttributes<HTMLInputElement> & {
     children?: ReactNode;
     indeterminate?: boolean;
+    ref?: Ref<HTMLInputElement>;
   },
 ) {
-  const { children, indeterminate, ...rest } = props;
+  const { children, indeterminate, ref, ...rest } = props;
   return (
     <label className="ui-checkbox-wrapper">
       <input
@@ -262,6 +264,8 @@ export function CheckboxControl(
         type="checkbox"
         ref={(node) => {
           if (node) node.indeterminate = !!indeterminate;
+          if (typeof ref === "function") ref(node);
+          else if (ref) ref.current = node;
         }}
       />
       <span>{children}</span>

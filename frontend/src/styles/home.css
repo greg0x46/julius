@@ -135,7 +135,7 @@
 
 /* One line of three figures with hairlines between them: label (and the day
    it refers to) quiet, value in ink. Stacks as label/value rows only on the
-   narrowest phones, where three columns would not hold a seven-figure balance. */
+   narrow cards, where three columns would not hold a five-figure balance. */
 .balance-strip {
   display: grid;
   grid-auto-flow: column;
@@ -171,7 +171,7 @@
 .balance-strip-date {
   color: var(--color-text-secondary);
   font-size: var(--fs-caption);
-  font-variui-numeric: tabular-nums;
+  font-variant-numeric: tabular-nums;
 }
 
 /* Stacked as label/value rows when three columns cannot hold the figures:
@@ -179,7 +179,7 @@
    nine-figure balance (`is-long`, set from the formatted text) in a card
    narrower than a tablet. Container queries, so the card's own width
    decides, not the window's. */
-@container projection-summary (max-width: 21.99rem) {
+@container projection-summary (max-width: 29.99rem) {
   .balance-strip {
     grid-auto-flow: row;
   }
@@ -298,7 +298,7 @@
    figure's length (donutFigureSize) so it fits inside the ring. */
 .category-donut-total > strong {
   font-weight: 600;
-  font-variui-numeric: tabular-nums;
+  font-variant-numeric: tabular-nums;
   text-align: center;
   white-space: nowrap;
 }
@@ -377,7 +377,7 @@
   display: flex;
   align-items: baseline;
   gap: var(--space-2);
-  font-variui-numeric: tabular-nums;
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 

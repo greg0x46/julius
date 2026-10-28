@@ -246,7 +246,9 @@ the previous amount, and replay adds no expense
 - `/transacoes` — main ledger: filters, grouping, totals, category/inclusion
   edit drawer, "Novo lançamento manual" button and — for a manual entry — a
   "Manual" tag in the list and drawer, with Editar/Excluir actions.
-  `ManualTransactionForm` serves create and edit.
+  `ManualTransactionForm` serves create and edit. Debounced description edits,
+  including clearing the search, survive unrelated filter shortcuts; removing
+  the description chip discards its pending edit.
 - `/contas-e-cartoes` + `/contas-e-cartoes/:id` — native balance rows,
   "Nova conta" drawer (name, currency, opening balance), and manual-only edit,
   signed balance-adjustment, archive/reactivate actions on detail. The detail

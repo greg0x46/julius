@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { expect, it, vi } from "vitest";
-import { Button } from "./controls";
+import { Button, CheckboxControl } from "./controls";
 import { App, Input } from "./compounds";
 import { Select } from "./Select";
 import { Drawer } from "./overlays";
@@ -185,4 +185,39 @@ it("does not dismiss a panel when Escape closes its searchable selector", () => 
   fireEvent.keyDown(screen.getByRole("combobox"), { key: "Escape" });
   expect(close).not.toHaveBeenCalled();
   expect(screen.queryByRole("listbox")).toBeNull();
+});
+
+it("keeps a forwarded checkbox ref and indeterminate state", () => {
+  const ref = { current: null as HTMLInputElement | null };
+  render(<CheckboxControl ref={ref} indeterminate>Todos</CheckboxControl>);
+  expect(ref.current).toBe(screen.getByRole("checkbox"));
+  expect(ref.current?.indeterminate).toBe(true);
+});
+it("ignores Enter while an IME composition is active", () => {
+  const press = vi.fn();
+  render(<Input aria-label="Nome" onPressEnter={press} />);
+  const field = screen.getByLabelText("Nome");
+  fireEvent.keyDown(field, { key: "Enter", isComposing: true });
+  expect(press).not.toHaveBeenCalled();
+  fireEvent.keyDown(field, { key: "Enter" });
+  expect(press).toHaveBeenCalledTimes(1);
+});
+it("starts keyboard navigation at the selected option", async () => {
+  const change = vi.fn();
+  render(
+    <Select
+      aria-label="Conta"
+      value="b"
+      onChange={change}
+      options={[
+        { value: "a", label: "Conta A" },
+        { value: "b", label: "Conta B" },
+        { value: "c", label: "Conta C" },
+      ]}
+    />,
+  );
+  const user = userEvent.setup();
+  screen.getByRole("combobox").focus();
+  await user.keyboard("{ArrowDown}{Enter}");
+  expect(change).toHaveBeenCalledWith("b", expect.anything());
 });

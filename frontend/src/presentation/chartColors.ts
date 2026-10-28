@@ -25,7 +25,7 @@ export const categoryPalette = [
   "#2a78d6", // blue
   "#eb6834", // orange
   "#17a2b8", // teal
-  "#4a3aa7", // violet
+  "var(--color-category-violet)", // violet (lighter in dark theme)
   "#eda100", // yellow
   "#e87ba4", // magenta
 ] as const;

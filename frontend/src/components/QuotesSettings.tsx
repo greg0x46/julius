@@ -235,7 +235,11 @@ function BrapiTokenForm() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ brapi_token: token }),
       });
-      if (!response.ok) throw new Error("Não foi possível salvar o token.");
+      if (!response.ok) {
+        // Surface the server's own sentence (e.g. the demo-mode 403).
+        const problem = (await response.json().catch(() => null)) as { detail?: string } | null;
+        throw new Error(problem?.detail || "Não foi possível salvar o token.");
+      }
       setToken("");
       setSaved(true);
     } catch (err) {

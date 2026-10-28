@@ -133,7 +133,8 @@ type CommitmentDraft = {
   isActive: boolean;
 };
 
-const blankCommitmentDraft: CommitmentDraft = {
+// A function: a module-level `calendar()` would freeze the start date at page load.
+const blankCommitmentDraft = (): CommitmentDraft => ({
   name: "",
   kind: "expense",
   amount: null,
@@ -145,10 +146,10 @@ const blankCommitmentDraft: CommitmentDraft = {
   startDate: calendar(),
   endDate: null,
   isActive: true,
-};
+});
 
 function commitmentDraftFrom(commitment: RecurringCommitment | null): CommitmentDraft {
-  if (!commitment) return blankCommitmentDraft;
+  if (!commitment) return blankCommitmentDraft();
   return {
     name: commitment.name,
     kind: commitment.kind,
@@ -246,7 +247,7 @@ export function AutomationEntryForm({
     setCommitmentMode(mode);
     if (mode === "new") {
       setSelectedCommitmentId(null);
-      setCommitmentDraft(blankCommitmentDraft);
+      setCommitmentDraft(blankCommitmentDraft());
     }
   };
 
@@ -258,7 +259,7 @@ export function AutomationEntryForm({
     if (!nextActionTypes.includes("reconcile")) {
       setCommitmentMode("new");
       setSelectedCommitmentId(null);
-      setCommitmentDraft(blankCommitmentDraft);
+      setCommitmentDraft(blankCommitmentDraft());
     }
     if (!nextActionTypes.includes("set_category") && !nextActionTypes.includes("reconcile")) {
       setCategoryEdited(false);

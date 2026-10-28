@@ -124,7 +124,7 @@
 .credit-usage-meter-caption {
   color: var(--color-text-secondary);
   font-size: var(--fs-caption);
-  font-variui-numeric: tabular-nums;
+  font-variant-numeric: tabular-nums;
 }
 
 /* ---- Account detail ---------------------------------------------------- */
