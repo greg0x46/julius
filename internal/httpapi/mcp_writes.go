@@ -401,6 +401,23 @@ func MCPWriteInputSchema(operation string) any {
 	if strings.HasSuffix(operation, "automation_rule") && !strings.HasPrefix(operation, "delete") {
 		schema.Required = []string{"name", "is_active", "logic_operator", "conditions", "actions"}
 	}
+	var optionalTargets func(*jsonschema.Schema)
+	optionalTargets = func(s *jsonschema.Schema) {
+		if s == nil {
+			return
+		}
+		if s.Properties["scenario_id"] != nil && s.Properties["type"] != nil {
+			s.Required = []string{"type"}
+		}
+		for _, child := range s.Properties {
+			optionalTargets(child)
+		}
+		for _, child := range s.Defs {
+			optionalTargets(child)
+		}
+		optionalTargets(s.Items)
+	}
+	optionalTargets(schema)
 	properties := map[string]any{"data": schema}
 	required := []string{"data"}
 	if !strings.HasPrefix(operation, "create_") {

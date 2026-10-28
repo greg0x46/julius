@@ -6,9 +6,11 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"github.com/google/jsonschema-go/jsonschema"
 	"html/template"
 	"net/http"
 	"net/url"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -49,8 +51,12 @@ type writeToolOutput struct {
 
 func (o *oauthServer) registerWrites(server *sdk.Server) {
 	o.writes = &writeManager{actions: make(map[string]*writeAction)}
+	outputSchema, err := jsonschema.For[writeToolOutput](&jsonschema.ForOptions{TypeSchemas: map[reflect.Type]*jsonschema.Schema{reflect.TypeFor[json.RawMessage](): {}}})
+	if err != nil {
+		panic(err)
+	}
 	for _, operation := range []string{"assign_transaction_category", "set_transaction_inclusion", "create_manual_transaction", "update_manual_transaction", "delete_manual_transaction", "create_category", "update_category", "create_automation_rule", "update_automation_rule", "delete_automation_rule"} {
-		sdk.AddTool(server, &sdk.Tool{Name: operation, InputSchema: httpapi.MCPWriteInputSchema(operation), Description: "Prepare " + operation + " for owner review. Does not commit. Requires mcp:write. Open approval_url in Julius and have the owner review and approve; never ask for owner credentials in the MCP client. Use get_write_result afterward. Data uses the matching Julius REST body; deletes use {}. No retroactive rule application.", Annotations: &sdk.ToolAnnotations{IdempotentHint: false}}, func(ctx context.Context, _ *sdk.CallToolRequest, in writeToolInput) (*sdk.CallToolResult, writeToolOutput, error) {
+		sdk.AddTool(server, &sdk.Tool{Name: operation, OutputSchema: outputSchema, InputSchema: httpapi.MCPWriteInputSchema(operation), Description: "Prepare " + operation + " for owner review. Does not commit. Requires mcp:write. Open approval_url in Julius and have the owner review and approve; never ask for owner credentials in the MCP client. Use get_write_result afterward. Data uses the matching Julius REST body; deletes use {}. No retroactive rule application.", Annotations: &sdk.ToolAnnotations{IdempotentHint: false}}, func(ctx context.Context, _ *sdk.CallToolRequest, in writeToolInput) (*sdk.CallToolResult, writeToolOutput, error) {
 			identity, _ := ctx.Value(writeContextKey{}).(writeIdentity)
 			if !canWrite(identity.Scope) {
 				return nil, writeToolOutput{}, errors.New("mcp:write scope required")
@@ -85,7 +91,7 @@ func (o *oauthServer) registerWrites(server *sdk.Server) {
 			return nil, o.writeOutput(id, o.writes.actions[id]), nil
 		})
 	}
-	sdk.AddTool(server, &sdk.Tool{Name: "get_write_result", Description: "Read a prepared write's preview, approval state and final REST result. Bound to the exact original write-scoped access token. Never commits.", Annotations: &sdk.ToolAnnotations{ReadOnlyHint: true, IdempotentHint: true}}, func(ctx context.Context, _ *sdk.CallToolRequest, in struct {
+	sdk.AddTool(server, &sdk.Tool{Name: "get_write_result", OutputSchema: outputSchema, Description: "Read a prepared write's preview, approval state and final REST result. Bound to the exact original write-scoped access token. Never commits.", Annotations: &sdk.ToolAnnotations{ReadOnlyHint: true, IdempotentHint: true}}, func(ctx context.Context, _ *sdk.CallToolRequest, in struct {
 		RequestID string `json:"request_id"`
 	}) (*sdk.CallToolResult, writeToolOutput, error) {
 		identity, _ := ctx.Value(writeContextKey{}).(writeIdentity)
@@ -209,6 +215,9 @@ func (o *oauthServer) approveWrite(w http.ResponseWriter, r *http.Request) {
 	result, err := httpapi.ExecuteMCPWrite(r.Context(), o.store.DB, a.Preview)
 	if err != nil {
 		a.Error = httpapi.MCPWriteError(err)
+		if errors.Is(err, httpapi.ErrMCPWriteConflict) {
+			a.Error = "Os dados mudaram. Solicite uma nova prévia."
+		}
 	} else {
 		a.Result = &result
 		if result.Status < 400 {
@@ -222,6 +231,7 @@ func (o *oauthServer) approveWrite(w http.ResponseWriter, r *http.Request) {
 func (o *oauthServer) renderWrite(w http.ResponseWriter, status int, id string, a *writeAction, message, email string) {
 	type row struct{ Label, Value string }
 	rows := []row{}
+	beforeRows := []row{}
 	if a != nil {
 		var data map[string]json.RawMessage
 		_ = json.Unmarshal(a.Preview.Request.Data, &data)
@@ -231,14 +241,51 @@ func (o *oauthServer) renderWrite(w http.ResponseWriter, status int, id string, 
 				rows = append(rows, row{labels[key], strings.Trim(string(value), `"`)})
 			}
 		}
+		for _, raw := range a.Preview.Before {
+			var current map[string]json.RawMessage
+			if json.Unmarshal(raw, &current) != nil {
+				continue
+			}
+			for _, key := range []string{"id", "account_id", "account_name", "currency_code", "description", "amount", "occurred_at", "name", "kind", "is_active", "internal_category", "inclusion"} {
+				if value, ok := current[key]; ok {
+					label := labels[key]
+					if label == "" {
+						label = map[string]string{"id": "Identificador", "account_name": "Nome da conta", "currency_code": "Moeda", "internal_category": "Categoria atual", "inclusion": "Inclusão atual"}[key]
+					}
+					var plain string
+					if json.Unmarshal(value, &plain) != nil {
+						plain = string(value)
+					}
+					beforeRows = append(beforeRows, row{label, plain})
+				}
+			}
+		}
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
 	_ = writePage.Execute(w, struct {
-		ID, Message, Email string
-		Action             *writeAction
-		Rows               []row
-	}{id, message, email, a, rows})
+		ID, Message, Email, Operation string
+		Action                        *writeAction
+		Rows, BeforeRows              []row
+	}{id, message, email, writeOperationLabel(a), a, rows, beforeRows})
+}
+
+func writeOperationLabel(a *writeAction) string {
+	if a == nil {
+		return ""
+	}
+	return map[string]string{
+		"assign_transaction_category": "Atribuir categoria às transações",
+		"set_transaction_inclusion":   "Alterar inclusão nos totais",
+		"create_manual_transaction":   "Criar lançamento manual",
+		"update_manual_transaction":   "Alterar lançamento manual",
+		"delete_manual_transaction":   "Excluir lançamento manual",
+		"create_category":             "Criar categoria",
+		"update_category":             "Alterar categoria",
+		"create_automation_rule":      "Criar regra de automação",
+		"update_automation_rule":      "Alterar regra de automação",
+		"delete_automation_rule":      "Excluir regra de automação",
+	}[a.Preview.Request.Operation]
 }
 
 var writePage = template.Must(template.New("write").Parse(`<!doctype html>
@@ -246,10 +293,10 @@ var writePage = template.Must(template.New("write").Parse(`<!doctype html>
 <style>body{margin:0;background:#f5f7fa;color:#172b4d;font:16px system-ui,sans-serif}main{max-width:540px;margin:40px auto;padding:24px}h1{font-size:1.6rem}dt,label{font-weight:600}dd{margin:4px 0 16px;overflow-wrap:anywhere}pre{white-space:pre-wrap;overflow-wrap:anywhere}label{display:block;margin:16px 0 6px}input,button{box-sizing:border-box;font:inherit;border-radius:8px;min-height:44px;padding:10px 14px}input{width:100%;border:1px solid #64748b}button{cursor:pointer;margin:16px 8px 0 0;border:1px solid #2457a6;color:#2457a6;background:white}button[value=allow]{background:#2457a6;color:white}:focus-visible{outline:3px solid #2457a6;outline-offset:3px}[role=alert]{color:#c4302b}@media(max-width:480px){main{margin:0;padding:24px 16px}button{width:100%;margin-right:0}}</style>
 <main><p>Julius</p><h1>Revisar alteração solicitada</h1>{{if .Message}}<p role="alert">{{.Message}}</p>{{end}}
 {{with .Action}}{{if eq .State "pending"}}<p>Confira o efeito desta alteração antes de aprovar.</p>
-<dl><dt>Aplicativo (nome informado pelo cliente)</dt><dd>{{.ClientName}}</dd><dt>Identificador do cliente</dt><dd>{{.ClientID}}</dd><dt>Operação</dt><dd>{{.Preview.Request.Operation}}</dd><dt>Quantidade de registros afetados</dt><dd>{{.Preview.AffectedCount}}</dd><dt>Identificadores afetados</dt><dd>{{range .Preview.AffectedIDs}}{{.}}<br>{{else}}Novo registro (identificador gerado ao aplicar).{{end}}</dd></dl>
+<dl><dt>Aplicativo (nome informado pelo cliente)</dt><dd>{{.ClientName}}</dd><dt>Identificador do cliente</dt><dd>{{.ClientID}}</dd><dt>Operação</dt><dd>{{$.Operation}}</dd><dt>Quantidade de registros afetados</dt><dd>{{.Preview.AffectedCount}}</dd><dt>Identificadores afetados</dt><dd>{{range .Preview.AffectedIDs}}{{.}}<br>{{else}}Novo registro (identificador gerado ao aplicar).{{end}}</dd></dl>
 <p>{{.Preview.Effect}}</p><p>O efeito nos totais será recalculado conforme as regras do Julius.</p>
 <h2>Dados solicitados</h2><dl>{{range $.Rows}}<dt>{{.Label}}</dt><dd>{{.Value}}</dd>{{end}}</dl>
-{{if .Preview.Before}}<h2>Dados atuais</h2>{{range .Preview.Before}}<pre>{{printf "%s" .}}</pre>{{end}}{{end}}
+{{if .Preview.Before}}<h2>Dados atuais</h2><dl>{{range $.BeforeRows}}<dt>{{.Label}}</dt><dd>{{.Value}}</dd>{{end}}</dl><details><summary>Dados atuais completos e vínculos</summary>{{range .Preview.Before}}<pre>{{printf "%s" .}}</pre>{{end}}</details>{{end}}
 <details><summary>Dados da solicitação</summary><pre>{{printf "%s" .Preview.Request.Data}}</pre></details>
 <p>A alteração será aplicada uma única vez após sua aprovação. Confirme sua identidade para autorizar.</p>
 <form action="/oauth/write" method="post"><input type="hidden" name="request" value="{{$.ID}}"><label for="email">E-mail</label><input id="email" name="email" type="email" autocomplete="username" value="{{$.Email}}" required maxlength="254"><label for="password">Senha</label><input id="password" name="password" type="password" autocomplete="current-password" required><button type="submit" name="decision" value="allow">Aprovar e aplicar alteração</button><button type="submit" name="decision" value="deny" formnovalidate>Negar alteração</button></form>

@@ -196,7 +196,8 @@ mounted at `/mcp` by `cmd/julius`, outside the REST cookie/open-mode gate.
 it with demo mode refuse startup. `/mcp/` and descendants are reserved (404),
 including in the SPA fallback. Eight read-only planning tools are registered by
 `internal/httpapi.RegisterMCPPlanningTools`, sharing domain engines and REST DTO
-formatters without HTTP dispatch or exposing write handlers. Protocol versions,
+formatters without HTTP dispatch. Separately scoped writes use a fixed operation allowlist
+and the existing REST validators/handlers or domain category transaction. Protocol versions,
 initialize/discovery, transport
 errors and JSON-RPC errors are handled by the SDK.
 
@@ -223,6 +224,7 @@ and the authentication preference is checked before every OAuth request.
 | GET /oauth/authorize | Validates client, exact redirect, resource, scope and S256 challenge; renders owner consent |
 | POST /oauth/authorize | Checks bound cookie and Origin; explicit denial or fresh owner credentials plus explicit approval; redirects code/error with state and issuer |
 | POST /oauth/token | Form-encoded code exchange; consumes code atomically and validates client, redirect, resource, PKCE and owner revision |
+| GET/POST /oauth/write | Immutable write preview and one-time owner approval/denial; fresh credentials, Origin and browser CSRF binding |
 | POST /oauth/revoke | Form-encoded client ID/token; idempotent revocation of that client's access token |
 
 Migration `0007_mcp_oauth` adds `oauth_clients` and `oauth_grants` on both
@@ -236,8 +238,9 @@ session. Code/token insertion compares the verified owner revision to prevent
 password-reset races; reads also require the current revision. Browser logout
 has no effect on OAuth tokens; password changes/resets revoke all of them.
 
-The sole scope is `mcp:access`, covering the read-only planning tools as well as
-the transport. Existing grants also permit these reads; consent now explicitly
+`mcp:access` covers the transport and read-only tools. Optional `mcp:write`
+requires `mcp:access` too; either scope order is accepted and normalized. Read-only
+grants cannot prepare or inspect writes. Each write needs its own owner approval. Existing grants also permit these reads; consent now explicitly
 discloses financial access and explicit hypothetical selection. Unknown requested
 scopes are rejected. Consent requests and codes last
 five minutes; access tokens last one hour without idle refresh. Only hashes of
@@ -315,3 +318,46 @@ unavailable historical FX and portfolio figures, date validation/clamping,
 explicit/empty scenario selection (including an active hypothetical), recurring
 reconciliation, pagination, output bounds and sanitized storage failures.
 Selection and missing-FX tests run on both database dialects.
+
+
+### Financial write approval
+
+`internal/mcp/writes.go` registers ten preparation tools plus `get_write_result`;
+[README financial writes](../../../README.md#financial-writes) lists exact tool
+names, body fields, bounds and synthetic dev validation. `internal/httpapi/mcp_writes.go`
+validates allowlisted operations, captures before-state, installment identifiers
+and financial links/amounts, and calls existing ledger/automation/category paths.
+Tool input schemas reuse the corresponding REST DTO fields; decimal amounts
+are strings. Raw JSON result fields have explicit unconstrained JSON schemas,
+not byte-array schemas. Unknown operations/fields are rejected.
+
+Every mutation returns an immutable preview and an unguessable approval URL,
+bound to the exact originating write-scoped token. Only the browser's same-origin,
+CSRF-bound POST with fresh owner credentials can execute it. Client-supplied
+approval flags or prompts cannot grant approval. Original grant scope, resource,
+expiry and owner revision are rechecked before application. Revocation and
+open mode block pending actions. The Portuguese server-rendered page reuses
+consent styles/accessibility, escapes client content, displays requested/current
+values and affected IDs/count, and discloses cleanup and reporting effects.
+
+Approval executes once while holding the per-instance action mutex; duplicate
+POSTs/polls return the retained result. Terminal states are applied/denied/failed;
+503 results can be indeterminate after a committed write/read-back failure, so
+inspect data and reuse the persistent manual-creation key. At most 100 actions
+are retained. Pending actions expire in five minutes; execution outcomes in ten.
+Restart loses pending approvals/results, so request another preview; persistent
+creation idempotency survives. Multiple replicas need request affinity.
+
+Before-state changes invalidate approval. Installment categorization rechecks
+membership and every before-state inside the same serializable transaction as
+all decisions/events (100 identifiers maximum). No arbitrary batch or
+retroactive rule application is exposed. One-record manual/category/rule paths
+revalidate the preview before invoking their existing domain service boundaries.
+Read clients can discover schemas but cannot prepare, commit or read write results.
+
+Tests `internal/mcp/writes_test.go` and `internal/httpapi/mcp_writes_test.go`
+exercise real SDK/OAuth HTTP flows, both dialects, read-only/anonymous rejection,
+CSRF/Origin/credentials, denial/replay/concurrency, token binding/revocation,
+expiry, exact money, persistent creation retries/conflicts, soft deletion,
+manual/provider restrictions, categorization cascades, stale previews, rule
+and catalog management, and injected partial failures with full rollback.

@@ -18,6 +18,11 @@ type creditCardMetadata struct {
 	CardNumber        *string `json:"cardNumber"`
 }
 
+// ManualAssignmentIDs returns the complete installment cascade for a manual decision.
+func ManualAssignmentIDs(ctx context.Context, q Querier, transactionID string) ([]string, error) {
+	return findInstallmentGroup(ctx, q, transactionID)
+}
+
 // findInstallmentGroup returns every transaction id sharing the same card
 // purchase as transactionID, always including transactionID itself. Pluggy
 // splits an installment purchase into one financial_transactions row per
@@ -29,11 +34,6 @@ type creditCardMetadata struct {
 // installment fields, description missing the expected suffix) is treated
 // as a standalone transaction, matching AssignManual's pre-cascade
 // behavior.
-// ManualAssignmentIDs returns the complete installment cascade for a manual decision.
-func ManualAssignmentIDs(ctx context.Context, q Querier, transactionID string) ([]string, error) {
-	return findInstallmentGroup(ctx, q, transactionID)
-}
-
 func findInstallmentGroup(ctx context.Context, q Querier, transactionID string) ([]string, error) {
 	var (
 		accountID   string
