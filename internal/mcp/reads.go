@@ -66,7 +66,7 @@ type readPagination struct {
 func registerReadTools(server *sdk.Server, conn *sql.DB) {
 	handlers := httpapi.FinancialReadHandlers(conn)
 	tool := func(name, description string) *sdk.Tool {
-		return &sdk.Tool{Name: name, Description: description + " Results contain HTTP status and the API payload in data. Money uses exact decimal strings; null means unavailable, never zero. No owner data is changed.", Annotations: &sdk.ToolAnnotations{ReadOnlyHint: true, IdempotentHint: true}}
+		return &sdk.Tool{Name: name, Description: description + " Results contain HTTP status and the API payload in data. Pages contain at most 200 items. Money uses exact decimal strings; null monetary values mean unavailable, never zero. No owner data is changed.", Annotations: &sdk.ToolAnnotations{ReadOnlyHint: true, IdempotentHint: true}}
 	}
 	for _, name := range []string{"list_accounts", "list_categories"} {
 		description := "List accounts and cards with native currency balances, credit limits and closing-day metadata."

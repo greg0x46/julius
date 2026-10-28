@@ -61,3 +61,10 @@ follows the same order (learned → rules).
 Category report values use the financial reference currency (default BRL),
 with current FX and its provenance. Catalog and transaction category decisions
 are unchanged; see [Transactions — Consolidated report valuation](../transacoes/reference.md#consolidated-report-valuation).
+
+
+MCP `list_categories` exposes the same catalog, including inactive categories,
+with bounded result pages. `search_transactions` retains category decision
+origin, and `spending_by_category` reuses the real category-breakdown contract.
+See the [tool inventory](../configuracoes-autenticacao/reference.md#mcp-financial-tool-inventory).
+`TestMCPFinancialReadsMatchHTTPFixtures` compares these with the REST fixtures.

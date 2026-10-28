@@ -194,10 +194,10 @@ non-negative and every position is valued.
 mounted at `/mcp` by `cmd/julius`, outside the REST cookie/open-mode gate.
 `JULIUS_MCP_ENABLED` defaults to false (404); invalid boolean values and enabling
 it with demo mode refuse startup. `/mcp/` and descendants are reserved (404),
-including in the SPA fallback. No financial tools are registered yet; tools
-capability and an empty discovery result establish the extension point without
-duplicating domain behavior. Protocol versions, initialize/discovery, transport
-errors and JSON-RPC errors are handled by the SDK.
+including in the SPA fallback. Five financial read tools reuse the allowlisted
+`internal/httpapi.FinancialReadHandlers`; no client-supplied route or URL is
+dispatched. Protocol versions, initialize/discovery, transport errors and
+JSON-RPC errors are handled by the SDK.
 
 Every request requires a Bearer owner session, validated through
 `auth.Store.Authenticate`; cookies never grant access. Authentication must remain
@@ -215,3 +215,52 @@ connections and then the database. Tests: `internal/mcp/server_test.go` covers
 configuration, both-dialect access checks, generic SDK discovery, legacy
 initialize, malformed/unsupported requests, unknown tools, limits and
 cancellation; `cmd/julius/server_test.go` pins route isolation and shutdown.
+
+
+### MCP financial tool inventory
+
+All five tools have `readOnlyHint=true` and `idempotentHint=true`. The transport
+still requires the existing owner Bearer session; OAuth and granular permission
+scopes are not implemented in this checkout. There are no financial write,
+credential, provider payload, or configuration tools.
+
+| Tool | Inputs | Existing REST read contract |
+| --- | --- | --- |
+| `list_accounts` | Optional `page`, `page_size` | `GET /api/accounts`: native bank/card balances, currency, limits and closing metadata, including nullable/unavailable fields. |
+| `list_card_bills` | Required `account_id`; optional pagination | `GET /api/accounts/{id}/bills`: recorded bills in descending due-date order. The open cycle remains in account balance/cycle metadata. |
+| `search_transactions` | Required IANA `timezone`; optional `group_by`, pagination and `filters` | `POST /api/transactions/query`: shared filter DTO and validation; items, category/inclusion decisions, eligibility, all matching native totals and reporting/FX metadata. |
+| `list_categories` | Optional pagination | `GET /api/categories`: includes active and inactive categories with kind, icon and color. |
+| `spending_by_category` | Required IANA `timezone` and `classification` (`outflow`/`inflow`); exactly one of `month=YYYY-MM`, inclusive `date_from`/`date_to`, or `period=all`; optional pagination | `GET /api/transactions/category-breakdown`: real category totals and native/reporting coverage; no scenarios. |
+
+Pagination defaults to page 1 and 50 items; page is 1–1,000,000 and page size
+1–200. Zero selects the default; negatives and larger values fail explicitly.
+Search defaults `group_by` to `none`; valid groups are `none`, `day`, `week`,
+`month`, `year`. Filters preserve the REST singular/plural account/category,
+institution/status, origin/source, card, description, amount and date semantics.
+Date range endpoints are YYYY-MM-DD and must be supplied together. Unknown
+arguments are rejected by the SDK schema. Empty collections remain `[]`.
+
+Structured results (also serialized in text content) are `{status, data,
+pagination?}`. `data` retains the REST JSON payload, exact decimal strings,
+explicit nulls, date-only group/range values, transaction instants and legacy
+midnight timestamp representation of account/bill calendar dates. List/report
+pagination has `{page, page_size, total_items, total_pages}` outside `data`;
+transaction pagination remains the API's `data.page`. Category items are paged,
+but financial totals always cover the entire requested period. Pages beyond the
+end are empty with unchanged counts. No transaction is hidden on eligibility
+grounds; pending/ignored/unclassified rows remain queryable. Financial rules
+and reference-currency valuation are unchanged. Missing FX retains native totals,
+issues and incomplete/unavailable status with null consolidated totals.
+
+REST Problems retain their status and payload and set MCP `isError=true`;
+invalid tool arguments produce SDK tool errors. The adapter rejects source JSON
+above 8 MiB before pagination, rather than returning a silently truncated read;
+clients must narrow transaction/report filters when necessary. Queries reuse the
+existing in-memory ledger aggregation and remain subject to the transport's
+30-second deadline and concurrency limit; this does not add SQL pagination.
+
+Tests: `internal/httpapi/mcp_reads_test.go` compares all five tools through a
+generic SDK client against existing HTTP fixtures, including precision, pending
+cards, ignored/transfer exclusions, native and missing/partial FX reports,
+filters, empty collections, missing accounts and invalid input.
+`internal/mcp/reads_test.go` pins explicit rejection of oversized responses.

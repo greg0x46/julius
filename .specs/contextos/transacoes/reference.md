@@ -428,3 +428,16 @@ consolidated BRL figures already use each entry's reporting-day rate (see
 `internal/reporting`); the reference currency then applies one current
 BRL→reference rate on top, so a non-BRL reference is a presentation valuation
 of that BRL base, not a per-day reconstruction.
+
+
+## MCP reads
+
+`list_accounts`, `list_card_bills`, `search_transactions` and
+`spending_by_category` share the existing REST read handlers through
+`httpapi.FinancialReadHandlers`. There is no second eligibility, balance or
+reporting implementation. Pending entries, ignored/transfer exclusions,
+native amounts, reporting coverage and reference valuation keep the same
+semantics. See the [tool inventory](../configuracoes-autenticacao/reference.md#mcp-financial-tool-inventory)
+for pagination, date representation, authentication and explicit limits.
+Parity tests: `TestMCPFinancialReadsMatchHTTPFixtures`,
+`TestMCPReportingRetainsMissingFXAndNativeMoney`, `TestMCPEmptyAndInvalidReads`.

@@ -52,7 +52,8 @@ authentication configuration that does not depend on the host:
 ## Features
 
 - **Optional MCP endpoint** — provider-neutral Streamable HTTP in the same
-  binary, disabled by default and always authenticated. See [MCP](#mcp).
+  binary, disabled by default and always authenticated, with read-only account,
+  card-bill, transaction, category and spending tools. See [MCP](#mcp).
 
 - **Exact money boundaries** — amounts stay decimal strings through entry,
   editing, calculation and HTTP. BRL display rounds to cents with ties away
@@ -425,7 +426,11 @@ The REST API retains its own cookie and CSRF requirements.
 The official [Go MCP SDK](https://github.com/modelcontextprotocol/go-sdk) handles
 protocol negotiation, discovery and errors. The endpoint uses stateless
 Streamable HTTP with JSON responses, supports the legacy initialize handshake,
-and currently discovers **zero tools**; financial tools are subsequent work.
+and discovers five read-only tools: `list_accounts`, `list_card_bills`,
+`search_transactions`, `list_categories` and `spending_by_category`.
+The [tool inventory](.specs/contextos/configuracoes-autenticacao/reference.md#mcp-financial-tool-inventory)
+documents inputs and response semantics. No credential/configuration reads or
+financial writes are exposed.
 There are no stored chats, inference calls or provider-specific integrations.
 Requests are limited to 1 MiB, 30 seconds and 16 concurrent requests (429 when
 busy). GET/DELETE streams are unsupported (405), responses use `no-store`, and
@@ -434,7 +439,13 @@ SIGINT/SIGTERM drains HTTP requests for up to 35 seconds before forced closure.
 To validate with synthetic data in a local instance: leave the variable unset
 and verify `/mcp` returns 404; enable it and restart, then verify an unauthenticated
 POST returns 401. With a fresh owner session token, connect a generic MCP client
-and list tools: the result is empty. Revoke that session by logging out and
+and list tools: all five tools have read-only annotations. Call
+`list_accounts` with `{}` and `search_transactions` with `{"timezone":"UTC"}`;
+empty accounts/transactions produce empty lists. Create a synthetic manual bank
+account and expense in the UI, then repeat and compare the returned native
+amount, currency and eligibility with Transactions. Call `spending_by_category`
+with `{"timezone":"UTC","period":"all","classification":"outflow"}` and compare
+its total with the same period in Julius. Revoke the session by logging out and
 verify the same token receives 401. No bank connection is needed.
 
 ### Public demo
