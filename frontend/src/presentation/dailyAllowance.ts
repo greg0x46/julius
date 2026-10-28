@@ -8,10 +8,19 @@ import { clampBRLAtZero, divideBRLFloor, minBRL } from "./money";
  * a low point early in the window weighs far more than the same low point at
  * the end. A day whose balance is negative leaves nothing to spend.
  *
+ * Money that has not arrived is not spendable: each day's balance is capped at
+ * `startingBalance` (cash now), i.e. `startingBalance + min(0, net)` where net
+ * is the cumulative future inflows minus outflows. A future inflow therefore
+ * only offsets the outflows already due; any surplus never becomes allowance.
+ *
  * `points` is one point per day, the first being today and the last the end of
  * the month. Spending is assumed to land at the end of each day.
  */
-export function dailyAllowance(points: Pick<TimelineDayPoint, "balance">[]): string {
+export function dailyAllowance(points: Pick<TimelineDayPoint, "balance">[], startingBalance: string): string {
   if (points.length === 0) return "0.00";
-  return minBRL(points.map((point, index) => divideBRLFloor(clampBRLAtZero(point.balance), index + 1)));
+  return minBRL(
+    points.map((point, index) =>
+      divideBRLFloor(clampBRLAtZero(minBRL([point.balance, startingBalance])), index + 1),
+    ),
+  );
 }
