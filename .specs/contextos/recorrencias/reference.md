@@ -159,7 +159,8 @@ actionable conflict while an automation reconcile action targets it.
 
 All require `mcp:write` and separate browser owner approval. Previews include the
 current schedule, manual decisions and targeting rules; changes invalidate the
-approval. Active schedules enter base MCP forecasts, with realized occurrences
+approval. Update/delete recheck the preview and mutate within one serializable
+transaction, including removal of occurrence decisions. Active schedules enter base MCP forecasts, with realized occurrences
 suppressed as before. Synthetic lifecycle, date/amount/ID validation, month-end
 clamping, orphan cleanup, stale previews, linked-rule conflicts and authorization
 are covered by `internal/httpapi/mcp_planning_writes_test.go` and

@@ -343,7 +343,7 @@ func (w *mcpWriteResponse) WriteHeader(status int) { w.status = status }
 
 func ExecuteMCPWrite(ctx context.Context, conn *sql.DB, approved MCPWritePreview) (MCPWriteResult, error) {
 	in := approved.Request
-	if in.Operation == "delete_scenario" || in.Operation == "delete_planned_transaction" {
+	if in.Operation == "delete_scenario" || in.Operation == "delete_planned_transaction" || in.Operation == "update_recurring_commitment" || in.Operation == "delete_recurring_commitment" {
 		tx, err := conn.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
 		if err != nil {
 			return MCPWriteResult{}, err
@@ -352,10 +352,27 @@ func ExecuteMCPWrite(ctx context.Context, conn *sql.DB, approved MCPWritePreview
 		if err = checkMCPPreview(ctx, tx, approved); err != nil {
 			return MCPWriteResult{}, err
 		}
-		if in.Operation == "delete_scenario" {
+		result := MCPWriteResult{Status: http.StatusNoContent}
+		switch in.Operation {
+		case "delete_scenario":
 			err = scenarios.DeleteScenario(ctx, tx, in.ID)
-		} else {
+		case "delete_planned_transaction":
 			err = scenarios.DeleteScenarioTransaction(ctx, tx, in.ID)
+		case "delete_recurring_commitment":
+			err = recurrences.Delete(ctx, tx, in.ID)
+		case "update_recurring_commitment":
+			var req recurringCommitmentWriteRequest
+			_ = json.Unmarshal(in.Data, &req)
+			write, conversionErr := req.toWrite()
+			if conversionErr != nil {
+				return MCPWriteResult{}, errMCPWriteInput
+			}
+			var commitment recurrences.RecurringCommitment
+			commitment, err = recurrences.UpdateWithQuerier(ctx, tx, in.ID, write)
+			if err == nil {
+				result.Status = http.StatusOK
+				result.Data, err = json.Marshal(toRecurringCommitmentDTO(commitment))
+			}
 		}
 		if err != nil {
 			return MCPWriteResult{}, err
@@ -363,7 +380,7 @@ func ExecuteMCPWrite(ctx context.Context, conn *sql.DB, approved MCPWritePreview
 		if err = tx.Commit(); err != nil {
 			return MCPWriteResult{}, err
 		}
-		return MCPWriteResult{Status: http.StatusNoContent}, nil
+		return result, nil
 	}
 	// Category propagation is a bulk mutation: recheck its entire preview inside
 	// the same transaction as all category decisions and events.
@@ -399,7 +416,7 @@ func ExecuteMCPWrite(ctx context.Context, conn *sql.DB, approved MCPWritePreview
 		"create_goal": handleCreateGoal(conn), "update_goal": handleUpdateGoal(conn), "delete_goal": handleDeleteGoal(conn),
 		"create_scenario":            handleCreateStandaloneScenario(conn),
 		"create_planned_transaction": handleCreateScenarioTransaction(conn), "update_planned_transaction": handleUpdateScenarioTransaction(conn),
-		"create_recurring_commitment": handleCreateRecurringCommitment(conn), "update_recurring_commitment": handleUpdateRecurringCommitment(conn), "delete_recurring_commitment": handleDeleteRecurringCommitment(conn),
+		"create_recurring_commitment": handleCreateRecurringCommitment(conn),
 	}
 	if in.Operation == "update_scenario" {
 		var req scenarioCreateRequest
