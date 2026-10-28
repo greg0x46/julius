@@ -8,6 +8,7 @@ import (
 	"errors"
 	"github.com/google/jsonschema-go/jsonschema"
 	"html/template"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"reflect"
@@ -18,6 +19,7 @@ import (
 	"github.com/greg0x46/julius/internal/auth"
 	"github.com/greg0x46/julius/internal/db"
 	"github.com/greg0x46/julius/internal/httpapi"
+	"github.com/greg0x46/julius/internal/httplog"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -127,7 +129,7 @@ func (o *oauthServer) writeGrantActive(ctx context.Context, hash string) (bool, 
 func (o *oauthServer) approveWrite(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodPost {
 		if r.Header.Get("Origin") != o.config.PublicURL {
-			oauthError(w, 403, "access_denied")
+			reject(w, r, 403, "access_denied", invalidOrigin(r), "origin")
 			return
 		}
 		if !parseForm(w, r) {
@@ -142,16 +144,18 @@ func (o *oauthServer) approveWrite(w http.ResponseWriter, r *http.Request) {
 	defer o.writes.mu.Unlock()
 	a, ok := o.writes.actions[id]
 	if !ok || !o.store.Now().Before(a.Expires) {
+		httplog.SetError(r.Context(), "invalid_request", "write_request_not_found", "request")
 		o.renderWrite(w, 410, id, nil, "Solicitação expirada.", "")
 		return
 	}
+	httplog.SetOAuthClient(r.Context(), a.ClientID, a.ClientName)
 	active, err := o.writeGrantActive(r.Context(), a.OwnerHash)
 	if err != nil {
-		o.unavailable(w)
+		o.unavailable(w, r, "db_error")
 		return
 	}
 	if !active {
-		oauthError(w, 403, "access_denied")
+		reject(w, r, 403, "access_denied", "grant_inactive", "")
 		return
 	}
 	if a.State != "pending" {
@@ -167,47 +171,55 @@ func (o *oauthServer) approveWrite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	cookie, err := r.Cookie(cookieName)
-	if err != nil || a.CSRF == "" || subtle.ConstantTimeCompare([]byte(tokenHash(cookie.Value)), []byte(a.CSRF)) != 1 {
-		oauthError(w, 403, "access_denied")
+	if err != nil {
+		reject(w, r, 403, "access_denied", "csrf_cookie_missing", "")
+		return
+	}
+	if a.CSRF == "" || subtle.ConstantTimeCompare([]byte(tokenHash(cookie.Value)), []byte(a.CSRF)) != 1 {
+		reject(w, r, 403, "access_denied", "csrf_mismatch", "")
 		return
 	}
 	decision := r.PostForm.Get("decision")
 	if decision != "allow" && decision != "deny" {
-		oauthError(w, 400, "invalid_request")
+		reject(w, r, 400, "invalid_request", "invalid_decision", "decision")
 		return
 	}
 	if decision == "deny" {
 		a.State = "denied"
+		httplog.SetError(r.Context(), "access_denied", "user_denied", "")
 		o.renderWrite(w, 200, id, a, "", "")
 		return
 	}
 	if o.limited(true) {
-		oauthError(w, 429, "temporarily_unavailable")
+		rateLimited(w, r, "oauth_consent_attempts", "window_exceeded")
 		return
 	}
 	select {
 	case o.hashing <- struct{}{}:
 		defer func() { <-o.hashing }()
 	default:
-		oauthError(w, 429, "temporarily_unavailable")
+		rateLimited(w, r, "oauth_hashing_busy", "busy")
 		return
 	}
 	_, err = o.store.VerifyOwner(r.Context(), r.PostForm.Get("email"), r.PostForm.Get("password"))
 	if errors.Is(err, auth.ErrCredentials) {
+		httplog.SetAuth(r.Context(), httplog.AuthNone, httplog.AuthRejected)
+		httplog.SetError(r.Context(), "invalid_credentials", "invalid_credentials", "")
+		httplog.Event(r.Context(), "oauth.credentials.rejected", slog.String("reason", "invalid_credentials"), slog.String("client_name", a.ClientName), slog.String("client_id_prefix", a.ClientID))
 		o.renderWrite(w, 401, id, a, "E-mail ou senha inválidos.", r.PostForm.Get("email"))
 		return
 	}
 	if err != nil {
-		o.unavailable(w)
+		o.unavailable(w, r, "db_error")
 		return
 	}
 	active, err = o.writeGrantActive(r.Context(), a.OwnerHash)
 	if err != nil {
-		o.unavailable(w)
+		o.unavailable(w, r, "db_error")
 		return
 	}
 	if !active {
-		oauthError(w, 403, "access_denied")
+		reject(w, r, 403, "access_denied", "grant_inactive", "")
 		return
 	}
 	// Consume before execution. A response failure cannot cause a second write.
