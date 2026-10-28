@@ -890,6 +890,13 @@ func TestSPAFallbackAndAssetsAndUnknownAPI(t *testing.T) {
 	if resp.StatusCode != 404 {
 		t.Errorf("unknown api: status=%d, want 404", resp.StatusCode)
 	}
+	for _, path := range []string{"/mcp", "/mcp/", "/mcp/tools"} {
+		resp = doJSON(t, http.MethodGet, srv.URL+path, nil)
+		resp.Body.Close()
+		if resp.StatusCode != 404 {
+			t.Errorf("reserved %s: status=%d, want 404", path, resp.StatusCode)
+		}
+	}
 }
 
 func TestCategoryLifecycleOverHTTP(t *testing.T) {

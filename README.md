@@ -51,6 +51,9 @@ authentication configuration that does not depend on the host:
 
 ## Features
 
+- **Optional MCP endpoint** — provider-neutral Streamable HTTP in the same
+  binary, disabled by default and always authenticated. See [MCP](#mcp).
+
 - **Exact money boundaries** — amounts stay decimal strings through entry,
   editing, calculation and HTTP. BRL display rounds to cents with ties away
   from zero; saved fractional cents and large values retain their precision.
@@ -388,6 +391,45 @@ immediately. Origin checks for writes stay active in both modes. The preference
 is stored in the database; if it does not exist, protected mode is used, and if
 it cannot be read the API becomes unavailable — it never opens because of a
 configuration failure.
+
+### MCP
+
+Set `JULIUS_MCP_ENABLED=true` to serve MCP at `/mcp` in the existing binary.
+Unset or false keeps it disabled (404); invalid values prevent startup.
+MCP cannot be enabled with `JULIUS_DEMO=true`. SQLite and Postgres use the same
+endpoint and existing owner/session tables, with no migration or separate service.
+
+Enable authentication in the Julius settings first. Sign in through
+`POST /api/auth/login` using the documented Origin and `X-Julius-Request: 1`
+headers, then configure a generic Streamable HTTP MCP client with the returned
+session cookie's **value** as `Authorization: Bearer <session-token>`. Treat it
+as a password; do not put it in URLs or logs. Cookies alone never authorize MCP.
+This foundation does not provide OAuth discovery or automatic client sign-in.
+Use HTTPS outside localhost, as required by `JULIUS_PUBLIC_URL`.
+
+Every MCP request validates the session and the authentication preference. Open
+access mode rejects MCP requests (403), even with a previously issued token.
+Missing, expired or revoked credentials return 401 with a Bearer challenge;
+authentication storage failures return 503. Logout revokes the token; password
+change/reset revokes all tokens. Existing seven-day absolute and 24-hour idle
+session lifetimes apply. An Origin header, when supplied, must exactly match
+`JULIUS_PUBLIC_URL`; non-browser clients may omit it. No CORS access is enabled.
+The REST API retains its own cookie and CSRF requirements.
+
+The official [Go MCP SDK](https://github.com/modelcontextprotocol/go-sdk) handles
+protocol negotiation, discovery and errors. The endpoint uses stateless
+Streamable HTTP with JSON responses, supports the legacy initialize handshake,
+and currently discovers **zero tools**; financial tools are subsequent work.
+There are no stored chats, inference calls or provider-specific integrations.
+Requests are limited to 1 MiB, 30 seconds and 16 concurrent requests (429 when
+busy). GET/DELETE streams are unsupported (405), responses use `no-store`, and
+SIGINT/SIGTERM drains HTTP requests for up to 35 seconds before forced closure.
+
+To validate with synthetic data in a local instance: leave the variable unset
+and verify `/mcp` returns 404; enable it and restart, then verify an unauthenticated
+POST returns 401. With a fresh owner session token, connect a generic MCP client
+and list tools: the result is empty. Revoke that session by logging out and
+verify the same token receives 401. No bank connection is needed.
 
 ### Public demo
 
