@@ -20,6 +20,7 @@ import (
 	"github.com/greg0x46/julius/internal/automation"
 	"github.com/greg0x46/julius/internal/categories"
 	"github.com/greg0x46/julius/internal/goals"
+	"github.com/greg0x46/julius/internal/investments"
 	"github.com/greg0x46/julius/internal/ledger"
 	"github.com/greg0x46/julius/internal/recurrences"
 	"github.com/greg0x46/julius/internal/scenarios"
@@ -70,7 +71,7 @@ func PreviewMCPWrite(ctx context.Context, q transactions.Querier, in MCPWriteReq
 	}
 	create := strings.HasPrefix(in.Operation, "create_")
 	cleansLinks := false
-	if (create && in.ID != "") || (!create && !validWriteID(in.ID)) {
+	if (create && in.ID != "") || (!create && !validWriteID(in.ID) && !(strings.HasSuffix(in.Operation, "investment_account") && validCustodyID(in.ID))) {
 		return p, errMCPWriteInput
 	}
 	if in.Operation != "create_manual_transaction" && in.IdempotencyKey != "" {
@@ -234,6 +235,9 @@ func PreviewMCPWrite(ctx context.Context, q transactions.Querier, in MCPWriteReq
 		}
 		p.Effect = "Exclui a regra e suas condições e ações. Decisões anteriores de categoria e inclusão permanecem; a reconciliação automática dependente da regra deixa de ocorrer."
 	default:
+		if investmentWrite(in.Operation) {
+			return previewMCPInvestmentWrite(ctx, q, p)
+		}
 		return previewMCPPlanningWrite(ctx, q, p)
 	}
 	if !create {
@@ -343,6 +347,9 @@ func (w *mcpWriteResponse) WriteHeader(status int) { w.status = status }
 
 func ExecuteMCPWrite(ctx context.Context, conn *sql.DB, approved MCPWritePreview) (MCPWriteResult, error) {
 	in := approved.Request
+	if investmentWrite(in.Operation) {
+		return executeMCPInvestmentWrite(ctx, conn, approved)
+	}
 	if in.Operation == "delete_scenario" || in.Operation == "delete_planned_transaction" || in.Operation == "update_recurring_commitment" || in.Operation == "delete_recurring_commitment" {
 		tx, err := conn.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
 		if err != nil {
@@ -462,6 +469,8 @@ func checkMCPPreview(ctx context.Context, q transactions.Querier, approved MCPWr
 // MCPWriteError only exposes domain errors; storage errors never reach clients.
 func MCPWriteError(err error) string {
 	switch {
+	case errors.Is(err, investments.ErrInvalidInput), errors.Is(err, investments.ErrNotManual), errors.Is(err, investments.ErrIntegratedReadOnly), errors.Is(err, investments.ErrTransferAtomic), errors.Is(err, investments.ErrNegativeCash), errors.Is(err, investments.ErrNegativePosition), errors.Is(err, investments.ErrUnsupportedCurrency), errors.Is(err, investments.ErrOperationHasReconciliations), errors.Is(err, investments.ErrPositionHasOperations), errors.Is(err, investments.ErrAccountHasOperations), errors.Is(err, investments.ErrAccountHasPositions), errors.Is(err, investments.ErrPositionAlreadyExists), errors.Is(err, investments.ErrAssetAlreadyExists), errors.Is(err, investments.ErrFinancialAccountLinked), errors.Is(err, investments.ErrReconciliationConflict), errors.Is(err, investments.ErrInvalidReconciliationLink), errors.Is(err, investments.ErrAccountNotFound), errors.Is(err, investments.ErrPositionNotFound), errors.Is(err, investments.ErrOperationNotFound), errors.Is(err, investments.ErrAssetNotFound):
+		return err.Error() + "; check investment eligibility and request a new preview"
 	case errors.Is(err, sql.ErrNoRows):
 		return "referenced record not found; check the category or account identifier and request a new preview"
 	case errors.Is(err, goals.ErrNotFound), errors.Is(err, goals.ErrInvalidInput), errors.Is(err, scenarios.ErrScenarioNotFound), errors.Is(err, scenarios.ErrTransactionNotFound), errors.Is(err, recurrences.ErrNotFound):
@@ -479,6 +488,16 @@ func MCPWriteError(err error) string {
 func MCPWriteInputSchema(operation string) any {
 	var typ reflect.Type
 	switch operation {
+	case "create_investment_account":
+		typ = reflect.TypeFor[investmentAccountCreateRequest]()
+	case "update_investment_account":
+		typ = reflect.TypeFor[investmentAccountUpdateRequest]()
+	case "create_investment_position":
+		typ = reflect.TypeFor[investmentPositionCreateRequest]()
+	case "update_investment_position":
+		typ = reflect.TypeFor[investmentPositionUpdateRequest]()
+	case "create_investment_operation", "update_investment_operation":
+		typ = reflect.TypeFor[investmentOperationRequest]()
 	case "create_manual_transaction", "update_manual_transaction":
 		typ = reflect.TypeFor[manualTransactionRequest]()
 	case "assign_transaction_category":
@@ -502,9 +521,20 @@ func MCPWriteInputSchema(operation string) any {
 	default:
 		typ = reflect.TypeFor[struct{}]()
 	}
-	schema, err := jsonschema.ForType(typ, &jsonschema.ForOptions{TypeSchemas: map[reflect.Type]*jsonschema.Schema{reflect.TypeFor[decimal.Decimal](): {Type: "string", Description: "Signed exact decimal string, nonzero, at most 64 characters; no exponent."}}})
+	schema, err := jsonschema.ForType(typ, &jsonschema.ForOptions{TypeSchemas: map[reflect.Type]*jsonschema.Schema{reflect.TypeFor[investmentDecimal](): {Type: "string", Pattern: plainWriteDecimal.String(), MaxLength: new(64), Description: "Exact native BRL decimal string; no exponent."}, reflect.TypeFor[investmentText](): {Types: []string{"string", "null"}}, reflect.TypeFor[decimal.Decimal](): {Type: "string", Description: "Signed exact decimal string, nonzero, at most 64 characters; no exponent."}}})
 	if err != nil {
 		panic(err)
+	}
+	switch operation {
+	case "create_investment_account":
+		schema.Required = []string{"name"}
+	case "update_investment_account", "update_investment_position":
+		schema.Required = nil
+	case "create_investment_position":
+		schema.Required = []string{"account_id", "occurred_on"}
+	case "create_investment_operation", "update_investment_operation":
+		schema.Required = []string{"account_id", "kind", "occurred_on"}
+		schema.Properties["kind"] = &jsonschema.Schema{Type: "string", Enum: []any{"initial_balance", "deposit", "withdrawal", "buy", "sell", "income", "fee", "tax", "valuation"}}
 	}
 	// REST PATCH fields and nullable optional category selection remain optional.
 	if operation == "update_category" {

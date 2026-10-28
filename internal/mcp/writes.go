@@ -56,8 +56,8 @@ func (o *oauthServer) registerWrites(server *sdk.Server) {
 	if err != nil {
 		panic(err)
 	}
-	for _, operation := range []string{"assign_transaction_category", "set_transaction_inclusion", "create_manual_transaction", "update_manual_transaction", "delete_manual_transaction", "create_category", "update_category", "create_automation_rule", "update_automation_rule", "delete_automation_rule", "create_goal", "update_goal", "delete_goal", "create_scenario", "update_scenario", "delete_scenario", "create_planned_transaction", "update_planned_transaction", "delete_planned_transaction", "create_recurring_commitment", "update_recurring_commitment", "delete_recurring_commitment"} {
-		sdk.AddTool(server, &sdk.Tool{Name: operation, OutputSchema: outputSchema, InputSchema: httpapi.MCPWriteInputSchema(operation), Description: "Prepare " + operation + " for owner review. Does not commit. Requires mcp:write. Open approval_url in Julius and have the owner review and approve; never ask for owner credentials in the MCP client. Use get_write_result afterward. Data fields are published in inputSchema; deletes use {}. Planning amounts are BRL. Standalone scenarios affect MCP projections only when explicitly selected in scenario_ids; recurrence schedules follow active commitment selection. No retroactive rule application.", Annotations: &sdk.ToolAnnotations{IdempotentHint: false}}, func(ctx context.Context, _ *sdk.CallToolRequest, in writeToolInput) (*sdk.CallToolResult, writeToolOutput, error) {
+	for _, operation := range []string{"assign_transaction_category", "set_transaction_inclusion", "create_manual_transaction", "update_manual_transaction", "delete_manual_transaction", "create_category", "update_category", "create_automation_rule", "update_automation_rule", "delete_automation_rule", "create_goal", "update_goal", "delete_goal", "create_scenario", "update_scenario", "delete_scenario", "create_planned_transaction", "update_planned_transaction", "delete_planned_transaction", "create_recurring_commitment", "update_recurring_commitment", "delete_recurring_commitment", "create_investment_account", "update_investment_account", "delete_investment_account", "create_investment_position", "update_investment_position", "delete_investment_position", "create_investment_operation", "update_investment_operation", "delete_investment_operation"} {
+		sdk.AddTool(server, &sdk.Tool{Name: operation, OutputSchema: outputSchema, InputSchema: httpapi.MCPWriteInputSchema(operation), Description: "Prepare " + operation + " for owner review. Does not commit. Requires mcp:write. Open approval_url in Julius and have the owner review and approve; never ask for owner credentials in the MCP client. Use get_write_result afterward. Data fields are published in inputSchema; deletes use {}. Planning and manual investment amounts are BRL. Investment operations preserve provider-owned holdings and balances; local manual positions inside integrated custody are editable. Fees/taxes follow the investment ledger; no transfers or reconciliation writes. Standalone scenarios affect MCP projections only when explicitly selected in scenario_ids; recurrence schedules follow active commitment selection. No retroactive rule application.", Annotations: &sdk.ToolAnnotations{IdempotentHint: false}}, func(ctx context.Context, _ *sdk.CallToolRequest, in writeToolInput) (*sdk.CallToolResult, writeToolOutput, error) {
 			identity, _ := ctx.Value(writeContextKey{}).(writeIdentity)
 			if !canWrite(identity.Scope) {
 				return nil, writeToolOutput{}, errors.New("mcp:write scope required")
@@ -236,10 +236,10 @@ func (o *oauthServer) renderWrite(w http.ResponseWriter, status int, id string, 
 	if a != nil {
 		var data map[string]json.RawMessage
 		_ = json.Unmarshal(a.Preview.Request.Data, &data)
-		labels := map[string]string{"account_id": "Conta", "description": "Descrição", "amount": "Valor assinado", "occurred_at": "Data", "category_id": "Categoria", "state": "Inclusão", "name": "Nome", "kind": "Tipo", "is_active": "Ativa", "icon": "Ícone", "color": "Cor", "conditions": "Condições", "actions": "Ações", "logic_operator": "Operador lógico", "metric": "Métrica", "target_amount": "Valor alvo (BRL)", "target_date": "Data alvo", "notes": "Observações", "projected_at": "Data planejada", "category": "Categoria", "cadence": "Frequência", "day_of_month": "Dia do mês", "month_of_year": "Mês do ano", "start_date": "Data inicial", "end_date": "Data final", "scenario_id": "Cenário"}
-		for _, key := range []string{"account_id", "description", "amount", "occurred_at", "category_id", "state", "name", "kind", "is_active", "icon", "color", "logic_operator", "conditions", "actions", "metric", "target_amount", "target_date", "notes", "projected_at", "category", "cadence", "day_of_month", "month_of_year", "start_date", "end_date", "scenario_id"} {
+		labels := map[string]string{"account_id": "Conta", "description": "Descrição", "amount": "Valor assinado", "occurred_at": "Data", "category_id": "Categoria", "state": "Inclusão", "name": "Nome", "kind": "Tipo", "is_active": "Ativa", "icon": "Ícone", "color": "Cor", "conditions": "Condições", "actions": "Ações", "logic_operator": "Operador lógico", "metric": "Métrica", "target_amount": "Valor alvo (BRL)", "target_date": "Data alvo", "notes": "Observações", "projected_at": "Data planejada", "category": "Categoria", "cadence": "Frequência", "day_of_month": "Dia do mês", "month_of_year": "Mês do ano", "start_date": "Data inicial", "end_date": "Data final", "scenario_id": "Cenário", "financial_account_id": "Conta bancária vinculada", "position_id": "Posição", "asset_id": "Ativo", "ticker": "Código do ativo", "currency_code": "Moeda", "quantity": "Quantidade", "unit_price": "Preço unitário", "fees": "Taxas", "taxes": "Impostos", "occurred_on": "Data da operação", "initial_quantity": "Quantidade inicial", "initial_unit_cost": "Custo unitário inicial", "initial_value": "Saldo inicial", "asset_type": "Tipo de ativo", "active": "Ativa", "source": "Origem", "is_editable": "Editável", "cash_balance": "Saldo disponível", "current_value": "Valor atual", "total_cost": "Custo de aquisição"}
+		for _, key := range []string{"account_id", "description", "amount", "occurred_at", "category_id", "state", "name", "kind", "is_active", "icon", "color", "logic_operator", "conditions", "actions", "metric", "target_amount", "target_date", "notes", "projected_at", "category", "cadence", "day_of_month", "month_of_year", "start_date", "end_date", "scenario_id", "financial_account_id", "position_id", "asset_id", "ticker", "currency_code", "quantity", "unit_price", "fees", "taxes", "occurred_on", "initial_quantity", "initial_unit_cost", "initial_value", "asset_type", "active", "source", "is_editable", "cash_balance", "current_value", "total_cost"} {
 			if value, ok := data[key]; ok {
-				rows = append(rows, row{labels[key], strings.Trim(string(value), `"`)})
+				rows = append(rows, row{labels[key], investmentApprovalValue(a, key, strings.Trim(string(value), `"`))})
 			}
 		}
 		for _, raw := range a.Preview.Before {
@@ -247,7 +247,7 @@ func (o *oauthServer) renderWrite(w http.ResponseWriter, status int, id string, 
 			if json.Unmarshal(raw, &current) != nil {
 				continue
 			}
-			for _, key := range []string{"id", "account_id", "account_name", "currency_code", "description", "amount", "occurred_at", "name", "kind", "is_active", "internal_category", "inclusion", "metric", "target_amount", "target_date", "notes", "projected_at", "category", "category_id", "cadence", "day_of_month", "month_of_year", "start_date", "end_date", "scenario_id"} {
+			for _, key := range []string{"id", "account_id", "account_name", "currency_code", "description", "amount", "occurred_at", "name", "kind", "is_active", "internal_category", "inclusion", "metric", "target_amount", "target_date", "notes", "projected_at", "category", "category_id", "cadence", "day_of_month", "month_of_year", "start_date", "end_date", "scenario_id", "financial_account_id", "position_id", "asset_id", "ticker", "currency_code", "quantity", "unit_price", "fees", "taxes", "occurred_on", "initial_quantity", "initial_unit_cost", "initial_value", "asset_type", "active", "source", "is_editable", "cash_balance", "current_value", "total_cost"} {
 				if value, ok := current[key]; ok {
 					label := labels[key]
 					if label == "" {
@@ -257,7 +257,7 @@ func (o *oauthServer) renderWrite(w http.ResponseWriter, status int, id string, 
 					if json.Unmarshal(value, &plain) != nil {
 						plain = string(value)
 					}
-					beforeRows = append(beforeRows, row{label, plain})
+					beforeRows = append(beforeRows, row{label, investmentApprovalValue(a, key, plain)})
 				}
 			}
 		}
@@ -271,12 +271,23 @@ func (o *oauthServer) renderWrite(w http.ResponseWriter, status int, id string, 
 	}{id, message, email, writeOperationLabel(a), a, rows, beforeRows})
 }
 
+func investmentApprovalValue(a *writeAction, key, value string) string {
+	if !strings.Contains(a.Preview.Request.Operation, "investment_") || key != "kind" {
+		return value
+	}
+	labels := map[string]string{"buy": "Compra", "sell": "Venda", "fee": "Taxa", "tax": "Imposto", "income": "Rendimento", "deposit": "Aporte", "withdrawal": "Resgate", "valuation": "Avaliação", "initial_balance": "Saldo inicial", "manual": "Manual", "integrated": "Integrada"}
+	if label, ok := labels[value]; ok {
+		return label
+	}
+	return value
+}
+
 func writeOperationLabel(a *writeAction) string {
 	if a == nil {
 		return ""
 	}
 	return map[string]string{
-		"assign_transaction_category": "Atribuir categoria às transações",
+		"delete_investment_operation": "Excluir operação de investimento", "update_investment_operation": "Alterar operação de investimento", "create_investment_operation": "Registrar operação de investimento", "delete_investment_position": "Excluir posição de investimento", "update_investment_position": "Alterar posição de investimento", "create_investment_position": "Criar posição de investimento", "delete_investment_account": "Excluir conta de investimento", "update_investment_account": "Alterar conta de investimento", "create_investment_account": "Criar conta de investimento", "assign_transaction_category": "Atribuir categoria às transações",
 		"set_transaction_inclusion":   "Alterar inclusão nos totais",
 		"create_manual_transaction":   "Criar lançamento manual",
 		"update_manual_transaction":   "Alterar lançamento manual",
