@@ -348,7 +348,7 @@ connections; `api/mcpSettings.test.ts` validates response data and transport.
 
 ### Financial read inventory
 
-See [README MCP](../../../README.md#mcp) for the tool/input inventory and synthetic
+See [README MCP](../../../docs/legacy-readme.md#mcp) for the tool/input inventory and synthetic
 validation steps. `get_investment_portfolio`, `get_net_worth`, `list_goals`,
 `list_payables`, `list_recurring_commitments`, `list_scenarios`,
 `list_projection_events` and `get_timeline` advertise typed input/output schemas
@@ -379,7 +379,7 @@ Selection and missing-FX tests run on both database dialects.
 ### Financial write approval
 
 `internal/mcp/writes.go` registers thirty-one preparation tools plus `get_write_result`;
-[README financial writes](../../../README.md#financial-writes) lists exact tool
+[README financial writes](../../../docs/legacy-readme.md#financial-writes) lists exact tool
 names, body fields, bounds and synthetic dev validation. `internal/httpapi/mcp_writes.go`
 validates allowlisted operations, captures before-state, installment identifiers
 and financial links/amounts, and calls existing ledger/automation/category paths.
@@ -471,7 +471,7 @@ guards, provider cache/retry policy and persistent last-refresh outcomes.
 Receipt `finished` is distinct from quote `success`; failures/deferrals retain
 counts and do not expose upstream errors. History backfill remains separate.
 
-Setup, troubleshooting and synthetic dev steps: [README operational tools](../../../README.md#operational-tools).
+Setup, troubleshooting and synthetic dev steps: [README operational tools](../../../docs/legacy-readme.md#operational-tools).
 `internal/mcp/operations_test.go` covers real OAuth grants, consent disclosure,
 read/write/operations scope separation, strict inputs, sanitized bounded history,
 ineligible/unavailable services, concurrent queue requests, token isolation,

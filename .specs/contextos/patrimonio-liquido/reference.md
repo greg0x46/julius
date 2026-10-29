@@ -93,4 +93,4 @@ currency and each day's FX. Each point has a nullable `breakdown`; unavailable
 days carry no figures. Current valuation failure is a tool error. Liabilities,
 future bills and scenarios remain excluded.
 
-Tool inputs, output bounds and dev validation: [README MCP](../../../README.md#mcp).
+Tool inputs, output bounds and dev validation: [README MCP](../../../docs/legacy-readme.md#mcp).
