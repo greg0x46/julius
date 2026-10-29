@@ -720,7 +720,7 @@ func TestRegisterRejectionsAreDiagnosedFromTheLog(t *testing.T) {
 		{name: "no redirect_uris", body: `{"client_name":"No redirects"}`, reason: "redirect_uris_missing", field: "redirect_uris"},
 		{name: "more than 10 redirect_uris", body: `{"redirect_uris":` + elevenURIs + `}`, reason: "too_many_redirect_uris", field: "redirect_uris", secret: "client.example"},
 		{name: "client_secret_post", body: `{` + validRedirect + `,"token_endpoint_auth_method":"client_secret_post"}`, reason: "unsupported_auth_method", field: "token_endpoint_auth_method", values: []string{"client_secret_post"}},
-		{name: "refresh_token grant", body: `{` + validRedirect + `,"grant_types":["authorization_code","refresh_token"]}`, reason: "unsupported_grant_types", field: "grant_types", values: []string{"authorization_code", "refresh_token"}},
+		{name: "implicit grant", body: `{` + validRedirect + `,"grant_types":["authorization_code","implicit"]}`, reason: "unsupported_grant_types", field: "grant_types", values: []string{"authorization_code", "implicit"}},
 		{name: "id_token response type", body: `{` + validRedirect + `,"response_types":["code","id_token"]}`, reason: "unsupported_response_types", field: "response_types", values: []string{"code", "id_token"}},
 		{name: "http redirect to a public host", body: `{"redirect_uris":["http://example.com/cb"]}`, public: "invalid_redirect_uri", code: "invalid_redirect_uri", reason: "http_non_loopback", field: "redirect_uris", secret: "example.com"},
 		{name: "redirect with userinfo", body: `{"redirect_uris":["https://user@example.com/cb"]}`, public: "invalid_redirect_uri", code: "invalid_redirect_uri", reason: "userinfo", field: "redirect_uris", secret: "user@example.com"},

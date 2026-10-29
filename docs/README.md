@@ -1,36 +1,48 @@
 # Documentation
 
-Start with the section for your task. Some links lead to the
-[previous README](legacy-readme.md), preserved as a temporary reference while
-its useful sections move into dedicated guides. The legacy
-[domain documentation](../.specs/README.md) remains available during migration.
+Start with [Getting started](getting-started.md) to build Julius, create the
+owner account, and sign in for the first time. The guides below use English
+translations of the Portuguese interface labels.
 
-## Getting Started
+## User guides
 
-- [Build and run Julius](../README.md#getting-started) — prerequisites, owner
-  setup, and first sign-in.
+- [Accounts, cards and transfers](guides/accounts.md): connect institutions,
+  maintain manual accounts, review cards and handle multiple currencies.
+- [Transactions and recurring payments](guides/transactions.md): record and
+  categorize entries, control inclusion, automate decisions and import statements.
+- [Investments and market prices](guides/investments.md): maintain holdings,
+  value positions, refresh quotes and read period performance.
+- [Goals, obligations and cash planning](guides/financial-planning.md): estimate
+  contributions, track debts/receivables and distinguish forecasts from actuals.
 
-## User Guides
+## Self-hosting
 
-- [Explore the features](legacy-readme.md#features) — accounts, transactions,
-  categorization, and financial planning.
-- [Track investments by account](legacy-readme.md#investments-by-account).
-- [Track goals](legacy-readme.md#goals).
-- [Connect an AI client with MCP](mcp.md).
+- [Installation](self-hosting/installation.md): published binaries, source builds,
+  persistent storage, and running the service.
+- [Configuration](self-hosting/configuration.md): required environment settings,
+  SQLite, PostgreSQL, and optional integration schedules.
+- [Security](self-hosting/security.md): HTTPS, public origin, secret storage,
+  authentication, and password recovery.
+- [Backups and upgrades](self-hosting/upgrading.md): database and key backups,
+  restoration, safe updates, rollback, and legacy cutover caveats.
 
-## Self-Hosting
-
-- [Set up authentication and encryption](legacy-readme.md#authentication-and-encryption-key).
-- [Install a release](legacy-readme.md#publish-and-install-a-version).
-- [Run with PostgreSQL](legacy-readme.md#running-with-postgres).
-- [Migrate a legacy database](legacy-readme.md#database-schema-generations).
-- [Configure scheduled sync](legacy-readme.md#scheduled-sync).
-- [Configure automatic quotes](legacy-readme.md#automatic-quotes).
+- [Legacy conversion](self-hosting/legacy-conversion.md), [diagnostics](self-hosting/diagnostics.md),
+  [integration schedules](self-hosting/integrations.md), and [public demo](self-hosting/demo.md).
 
 ## Development
 
-- [Run the development servers](legacy-readme.md#run-for-local-development).
-- [Follow commands and contribution conventions](../AGENTS.md).
-- [Understand the domain](../.specs/README.md) — engines, financial invariants,
-  and current feature references.
-- [Run frontend tests and browser journeys](../frontend/TESTING.md).
+- [Development references](development/README.md): architecture, financial invariants,
+  monetary precision, API contracts and context decisions.
+- [Contributor conventions](../AGENTS.md) and [frontend testing](../frontend/TESTING.md).
+
+## Further reading
+
+- [Read your own financial data with Meu Pluggy](guides/open-finance-pluggy.md): Open Finance setup.
+- [MCP setup and authorization](guides/mcp.md): expose the endpoint, connect a
+  compatible client, approve changes and revoke access.
+- [MCP interoperability checks](mcp.md): repeatable smoke validation and client
+  compatibility evidence.
+- [Changelog](../CHANGELOG.md) and
+  [published releases](https://github.com/greg0x46/julius/releases).
+
+Return to the [project README](../README.md).

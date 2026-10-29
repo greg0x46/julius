@@ -388,6 +388,24 @@ func TestOAuthCannotAuthorizeREST(t *testing.T) {
 		}
 	})
 }
+func TestOAuthRegistrationAcceptsRefreshTokenGrant(t *testing.T) {
+	store, _ := setup(t, dbtest.OpenSQLite(t))
+	f := newFlow(t, store)
+	for _, grants := range []string{`["authorization_code","refresh_token"]`, `["refresh_token","authorization_code"]`, `["authorization_code"]`} {
+		body := `{"client_name":"Test client","redirect_uris":["https://client.example/callback"],"token_endpoint_auth_method":"none","grant_types":` + grants + `,"response_types":["code"]}`
+		w := httptest.NewRecorder()
+		f.handler.ServeHTTP(w, httptest.NewRequest("POST", "/oauth/register", strings.NewReader(body)))
+		if w.Code != 201 {
+			t.Fatalf("grant_types %s: %d %s", grants, w.Code, w.Body)
+		}
+		var got struct {
+			Grants []string `json:"grant_types"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil || len(got.Grants) != 1 || got.Grants[0] != "authorization_code" {
+			t.Fatalf("grant_types %s registered %v (%v), want only authorization_code", grants, got.Grants, err)
+		}
+	}
+}
 func TestOAuthRejectsRegistrationAndAbuse(t *testing.T) {
 	store, _ := setup(t, dbtest.OpenSQLite(t))
 	f := newFlow(t, store)

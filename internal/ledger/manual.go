@@ -20,7 +20,7 @@ var ErrItemUnavailable = errors.New("transaction unavailable after commit")
 var ErrIdempotencyConflict = errors.New("idempotency key used with a different request")
 
 // Service owns the lançamento manual flows (see
-// .specs/contextos/transacoes/reference.md). Domain errors from the underlying
+// docs/development/contexts/transactions.md). Domain errors from the underlying
 // packages are returned unchanged so callers can match them with errors.Is.
 type Service struct {
 	DB        *sql.DB

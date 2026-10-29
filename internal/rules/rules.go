@@ -4,7 +4,7 @@
 // expected monthly occurrence against real transactions by category/amount/
 // day). It started as internal/automation/matching.go and was generalized
 // here so both packages share one matching engine instead of two parallel
-// implementations — see .specs/motores-de-dominio.md section 2.
+// implementations — see docs/development/architecture.md (Domain engines).
 package rules
 
 import (

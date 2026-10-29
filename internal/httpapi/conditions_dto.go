@@ -5,7 +5,7 @@ import "github.com/greg0x46/julius/internal/rules"
 // conditionDTO is the wire shape of a rules.Condition, shared by
 // automation_handlers.go and recurrences_handlers.go — both now compose
 // reconciliation/matching rules from the same internal/rules primitives
-// (see .specs/motores-de-dominio.md section 2).
+// (see docs/development/architecture.md (Domain engines)).
 type conditionDTO struct {
 	Field    string `json:"field"`
 	Operator string `json:"operator"`

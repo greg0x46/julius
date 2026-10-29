@@ -58,7 +58,7 @@ const (
 
 // Reconciliation is the resolved status of one occurrence, recomputed on
 // every read from the commitment's schedule, the user's overrides and the
-// automation rule — never stored (principle 1 of .specs/motores-de-dominio.md).
+// automation rule — never stored (principle 1 of docs/development/architecture.md).
 //
 // TransactionID is separate from Transaction on purpose: a manual link can
 // point at a transaction outside whatever candidate window the caller
