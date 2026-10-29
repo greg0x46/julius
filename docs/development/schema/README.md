@@ -1,6 +1,6 @@
 # Schema documentation
 
-#### Documenting the schema with SchemaSpy
+## Document the schema with SchemaSpy
 
 `docker-compose.schemaspy.yml` runs [SchemaSpy](https://schemaspy.org/) against
 a development Postgres reachable from the machine (`host.docker.internal`) and

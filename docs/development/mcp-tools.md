@@ -1,39 +1,7 @@
 # MCP tool reference
 
-Set `JULIUS_MCP_ENABLED=true` to serve MCP at `/mcp` in the existing binary.
-Unset or false keeps MCP and its OAuth endpoints disabled (404); invalid values
-prevent startup. Enable authentication in settings first. MCP cannot be enabled
-with `JULIUS_DEMO=true`; open mode rejects MCP and OAuth requests (403).
-SQLite and Postgres persist separate OAuth grants through a new migration.
-
-Configure a remote Streamable HTTP client with the public `/mcp` URL. Julius
-implements the [MCP authorization flow](https://modelcontextprotocol.io/specification/2025-11-25/basic/authorization)
-using its own single owner account, independent of any AI provider:
-
-1. An unauthenticated request receives 401 and a `WWW-Authenticate` Bearer
-   challenge pointing to `/.well-known/oauth-protected-resource/mcp`.
-   `/.well-known/oauth-protected-resource` also serves resource metadata.
-2. The client discovers `/.well-known/oauth-authorization-server` and registers
-   at `POST /oauth/register` using OAuth Dynamic Client Registration (RFC 7591).
-   Public clients use `token_endpoint_auth_method: "none"`,
-   `grant_types: ["authorization_code"]`, `response_types: ["code"]` and one
-   or more `redirect_uris`. Registration identifies an application, never a new
-   Julius user. Redirects must use HTTPS, or HTTP on loopback for local clients,
-   and must match a registered URI exactly, including its port.
-3. The client opens `/oauth/authorize` with `response_type=code`, `client_id`,
-   `redirect_uri`, `state`, `scope=mcp:access`, `resource=<public-origin>/mcp`,
-   `code_challenge` and `code_challenge_method=S256`. The owner reviews the
-   client-supplied name, client ID, exact redirect, resource and scope; enters
-   their Julius email/password; and explicitly authorizes or denies access.
-   An existing browser session never skips this step.
-4. The client exchanges the single-use code at `POST /oauth/token` with a
-   form-encoded `grant_type=authorization_code`, `code`, `client_id`,
-   `redirect_uri`, `resource` and the original `code_verifier`. Both resource
-   parameters must be the exact configured public origin plus `/mcp`.
-5. Use the returned token only as `Authorization: Bearer <access_token>` on
-   `/mcp`. Cookies and browser session tokens cannot authorize MCP; OAuth
-   tokens cannot authorize `/api`. REST keeps its cookie, Origin and
-   `X-Julius-Request: 1` requirements.
+Follow [MCP setup and authorization](../guides/mcp.md) before using these tools.
+For transport and client checks, see [MCP interoperability](../mcp.md).
 
 The `mcp:access` scope permits the read-only financial, planning and operational tools below.
 Financial read pages contain at most 200 items (default 50); results carry the HTTP status and the API payload in `data`.
@@ -152,7 +120,7 @@ codes and passwords out of logs and URLs you share. The encryption master key,
 Pluggy credentials and browser cookie are never issued to MCP clients.
 
 
-#### Financial writes
+## Financial writes
 
 Write tools prepare an immutable preview; they never commit on an MCP call.
 All require both `mcp:access` and `mcp:write`. Inputs are an optional `id` UUID
@@ -378,7 +346,7 @@ To validate in dev with a synthetic owner and no bank connection:
    gets 401. Repeat authorization and reset the synthetic owner's password;
    that token should also get 401. Open mode must reject authorization.
 
-#### Operational tools
+## Operational tools
 
 Authorize with `scope=mcp:access mcp:write mcp:operations` to request network
 operations. Existing read-only and financial-write tokens gain no operations

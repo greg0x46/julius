@@ -1,6 +1,6 @@
 # Integration schedules and market data
 
-### Scheduled sync
+## Scheduled sync
 
 Since the API routes require a browser session, an external cron can no longer
 trigger `POST /api/sync-runs`. Instead, set `JULIUS_SYNC_SCHEDULE` so the
@@ -15,7 +15,7 @@ If the process is down at that time, the pending sync is queued as soon as it
 starts; a connection that already synced (including manually) after that day's
 time is not repeated. Empty disables it.
 
-### Automatic quotes
+## Automatic quotes
 
 Investment assets with automatic quotes enabled have the price of their manual
 positions fetched automatically and stored in the asset's price series. The

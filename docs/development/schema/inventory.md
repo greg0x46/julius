@@ -168,7 +168,7 @@ tool uses FK order from the baseline, one transaction per table for real copies
 and a rollback transaction with row savepoints for dry-runs. It
 requires a fresh target, replaces only untouched seeded categories, fills any
 new columns from baseline defaults, and reports count, balance and movement-sum
-comparisons. See README "Database schema generations" for cutover instructions.
+comparisons. See the [legacy conversion guide](../../self-hosting/legacy-conversion.md) for cutover instructions.
 
 ## Tables still in use
 

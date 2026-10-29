@@ -65,7 +65,7 @@ marking it ignored — see the note on reporting exclusions in
 
 Database reads (including accounts, cards and investment presentation) use
 `internal/db/types` scan adapters for dates, timestamps, IDs, booleans and
-decimals. The shared boundary is documented in [the doc map](../README.md);
+decimals. The shared boundary is documented in [architecture](../architecture.md#persistence-and-delivery-boundaries);
 ledger rules and persisted formats are unchanged. Account cycle and bill dates use
 calendar-date adapters, including SQLite date-only text and legacy timestamps.
 
@@ -265,7 +265,7 @@ Reconciled investments add `investment_transfer_amount` and `reportable_amount`
 to the entry. The contribution/withdrawal portion does not count in
 income/expense totals, but the full amount remains a cash movement. The reason
 for full exclusion is `investment_transfer`. See
-[`investimentos/reference.md`](investments.md).
+[investments reference](investments.md).
 
 Ingestion: Pluggy, manual entry and statement import are the entry paths today,
 all data providers, not part of this engine — see Open Banking sync and
@@ -278,7 +278,7 @@ User decisions live in their own tables, which ingestion never rewrites: manual
 category and inclusion (`transaction_category_*`, `transaction_inclusion_*`),
 `payable_transaction_links` and `scenario_realizations`. A provider update
 (PENDING → POSTED, corrections) keeps the entry's `id`. Full policy in
-[`sincronizacao-open-banking/reference.md`](open-finance-sync.md).
+[Open Finance sync reference](open-finance-sync.md).
 
 For a manual bank account, native balance is **opening balance + sum of
 signed account-currency amounts of POSTED, undeleted transactions + sum of

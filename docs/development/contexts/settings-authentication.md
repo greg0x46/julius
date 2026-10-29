@@ -58,11 +58,11 @@ SQLite/Postgres target. Unix-second owner/session timestamps become UTC instants
 without extending sessions; encrypted settings, hashes and revisions copy
 unchanged with the same external master key. Dry-run rolls back imported data
 and reports row errors; count and native account balance checks gate completion.
-See README "Database schema generations" for cutover and retry steps.
+See the [legacy conversion guide](../../self-hosting/legacy-conversion.md) for cutover and retry steps.
 
 The server refuses pending configuration or an invalid key. A lost key cannot
 be recovered with the password; key rotation is not implemented. Instructions
-are in the README.
+are in the [security guide](../../self-hosting/security.md).
 
 ## HTTP
 
@@ -72,7 +72,7 @@ are in the README.
 | GET /api/auth/session | Returns authenticated and email when authenticated; false without a session |
 | POST /api/auth/logout | Revokes the current cookie, returns authenticated=false |
 | PUT /api/auth/password | Takes current_password/password, revokes all sessions, returns authenticated=false |
-| PUT /api/auth/config | Enables/disables authentication (see README "open mode") |
+| PUT /api/auth/config | Enables/disables authentication (see [authentication controls](../../self-hosting/security.md#authentication-and-recovery)) |
 | PUT /api/settings/pluggy | Stores pluggy_client_id/pluggy_client_secret encrypted; optional pluggy_item_id (trimmed; whitespace-only is 422) creates a connection in the same transaction unless it already exists, so repeating the call is idempotent; returns saved=true |
 | GET /api/settings/quotes | Returns enabled, time, timezone and last_refresh (or null); never returns the token |
 | PUT /api/settings/quotes | Partially updates enabled/time/timezone and optional brapi_token atomically; returns saved=true |

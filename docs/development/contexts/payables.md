@@ -95,4 +95,4 @@ cascades plans/links. Both retain real transactions, and summaries remain derive
 Tests `TestMCPPayablesLinksAndPlanCleanup`,
 `TestMCPAccountWritesRejectInvalidLinksAndRollback` and
 `TestMCPAccountsToolsLifecycleAndApprovalReplay` run on both dialects. Tool fields,
-limits, approval and synthetic dev validation: [README](../mcp-tools.md#financial-writes).
+limits, approval and synthetic dev validation: [MCP financial writes](../mcp-tools.md#financial-writes).
