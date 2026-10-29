@@ -2,7 +2,7 @@
 
 Use Meu Pluggy to authorize your banks, then the Pluggy developer Application
 to give Julius API access. You need a running Julius instance and its owner
-login; see [Getting started](../../README.md#getting-started).
+login; see [Getting started](../getting-started.md).
 Instructions are in English; Julius button names below match its Portuguese UI.
 
 ## 1. Create your personal account

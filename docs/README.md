@@ -1,37 +1,27 @@
 # Documentation
 
-Start with the section for your task. Some links lead to the
-[previous README](legacy-readme.md), preserved as a temporary reference while
-its useful sections move into dedicated guides. The legacy
-[domain documentation](../.specs/README.md) remains available during migration.
+Start with [Getting started](getting-started.md) to build Julius, create the
+owner account, and sign in for the first time.
 
-## Getting Started
+## Self-hosting
 
-- [Build and run Julius](../README.md#getting-started) — prerequisites, owner
-  setup, and first sign-in.
+- [Installation](self-hosting/installation.md): published binaries, source builds,
+  persistent storage, and running the service.
+- [Configuration](self-hosting/configuration.md): required environment settings,
+  SQLite, PostgreSQL, and optional integration schedules.
+- [Security](self-hosting/security.md): HTTPS, public origin, secret storage,
+  authentication, and password recovery.
+- [Backups and upgrades](self-hosting/upgrading.md): database and key backups,
+  restoration, safe updates, rollback, and legacy cutover caveats.
 
-## User Guides
+## Further reading
 
-- [Read your own financial data with Meu Pluggy](guides/open-finance-pluggy.md) — Open Finance setup.
-- [Explore the features](legacy-readme.md#features) — accounts, transactions,
-  categorization, and financial planning.
-- [Track investments by account](legacy-readme.md#investments-by-account).
-- [Track goals](legacy-readme.md#goals).
-- [Connect an AI client with MCP](mcp.md).
+- [Read your own financial data with Meu Pluggy](guides/open-finance-pluggy.md): Open Finance setup.
+- [MCP integration](mcp.md).
+- [Feature reference](legacy-readme.md#features) in the temporary previous README.
+- [Contributor conventions](../AGENTS.md), [domain documentation](../.specs/README.md),
+  and [frontend testing](../frontend/TESTING.md).
+- [Changelog](../CHANGELOG.md) and
+  [published releases](https://github.com/greg0x46/julius/releases).
 
-## Self-Hosting
-
-- [Set up authentication and encryption](legacy-readme.md#authentication-and-encryption-key).
-- [Install a release](legacy-readme.md#publish-and-install-a-version).
-- [Run with PostgreSQL](legacy-readme.md#running-with-postgres).
-- [Migrate a legacy database](legacy-readme.md#database-schema-generations).
-- [Configure scheduled sync](legacy-readme.md#scheduled-sync).
-- [Configure automatic quotes](legacy-readme.md#automatic-quotes).
-
-## Development
-
-- [Run the development servers](legacy-readme.md#run-for-local-development).
-- [Follow commands and contribution conventions](../AGENTS.md).
-- [Understand the domain](../.specs/README.md) — engines, financial invariants,
-  and current feature references.
-- [Run frontend tests and browser journeys](../frontend/TESTING.md).
+Return to the [project README](../README.md).
