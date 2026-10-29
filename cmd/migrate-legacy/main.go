@@ -184,10 +184,10 @@ func migrateLegacy(src, dst *sql.DB, dry bool, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	// Transfer annotations and goals were introduced after the final legacy schema.
+	// These tables were introduced after the final legacy schema.
 	legacyTables := make([]string, 0, len(tables))
 	for _, table := range tables {
-		if table != "transfer_links" && table != "transfer_transaction_links" && table != "goals" {
+		if table != "transfer_links" && table != "transfer_transaction_links" && table != "goals" && table != "oauth_clients" && table != "oauth_grants" {
 			legacyTables = append(legacyTables, table)
 			continue
 		}
@@ -458,7 +458,7 @@ func copyTable(src *sql.Tx, tx *sql.Tx, table string, meta []column, postgres, d
 
 func validate(ctx context.Context, src, dst transactions.Querier, tables []string, out io.Writer) error {
 	for _, table := range tables {
-		if table == "transfer_links" || table == "transfer_transaction_links" || table == "goals" {
+		if table == "transfer_links" || table == "transfer_transaction_links" || table == "goals" || table == "oauth_clients" || table == "oauth_grants" {
 			var count int
 			if err := dst.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+quote(table)).Scan(&count); err != nil {
 				return err

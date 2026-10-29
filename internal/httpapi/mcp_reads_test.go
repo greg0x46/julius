@@ -2,7 +2,9 @@ package httpapi_test
 
 import (
 	"context"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -11,6 +13,7 @@ import (
 	"time"
 
 	"github.com/greg0x46/julius/internal/auth"
+	"github.com/greg0x46/julius/internal/db"
 	juliusmcp "github.com/greg0x46/julius/internal/mcp"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -26,8 +29,13 @@ func (b mcpReadTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 func financialMCPSession(t *testing.T, conn *sql.DB) *sdk.ClientSession {
 	t.Helper()
 	store := auth.NewStore(conn)
-	token, err := store.Login(context.Background(), "owner@example.com", testPassword)
-	if err != nil {
+	token := "synthetic-read-token"
+	sum := sha256.Sum256([]byte(token))
+	if _, err := conn.Exec(`INSERT INTO oauth_clients(id,name,redirect_uris) VALUES('reads-client','Synthetic','[]')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := conn.Exec(`INSERT INTO oauth_grants(token_hash,kind,client_id,redirect_uri,resource,scope,challenge,state,csrf_hash,revision,expires_at) SELECT ?,'access','reads-client','https://client.example/cb',?,'mcp:access','','','',revision,? FROM auth_owner WHERE id=1`,
+		hex.EncodeToString(sum[:]), testOrigin+"/mcp", db.FormatTime(time.Now().Add(time.Hour))); err != nil {
 		t.Fatal(err)
 	}
 	handler, err := juliusmcp.NewHandler(true, auth.Config{PublicURL: testOrigin}, store)
@@ -37,7 +45,7 @@ func financialMCPSession(t *testing.T, conn *sql.DB) *sdk.ClientSession {
 	server := httptest.NewServer(handler)
 	t.Cleanup(server.Close)
 	client := sdk.NewClient(&sdk.Implementation{Name: "financial-contract-client", Version: "1"}, nil)
-	session, err := client.Connect(context.Background(), &sdk.StreamableClientTransport{Endpoint: server.URL, HTTPClient: &http.Client{Transport: mcpReadTransport{token}}}, nil)
+	session, err := client.Connect(context.Background(), &sdk.StreamableClientTransport{Endpoint: server.URL + "/mcp", HTTPClient: &http.Client{Transport: mcpReadTransport{token}}}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,13 +144,22 @@ func TestMCPFinancialReadsMatchHTTPFixtures(t *testing.T) {
 	insertBill(t, conn, card, time.Date(2026, 10, 25, 0, 0, 0, 0, time.UTC), "1234.567890123456789012")
 	session := financialMCPSession(t, conn)
 	tools, err := session.ListTools(context.Background(), &sdk.ListToolsParams{})
-	if err != nil || len(tools.Tools) != 5 {
+	if err != nil || len(tools.Tools) != 51 {
 		t.Fatalf("discovery: %+v %v", tools, err)
 	}
+	financial := map[string]bool{"list_accounts": true, "list_card_bills": true, "search_transactions": true, "list_categories": true, "spending_by_category": true}
+	found := 0
 	for _, tool := range tools.Tools {
+		if !financial[tool.Name] {
+			continue
+		}
+		found++
 		if tool.Annotations == nil || !tool.Annotations.ReadOnlyHint {
 			t.Fatalf("tool not read-only: %+v", tool)
 		}
+	}
+	if found != len(financial) {
+		t.Fatalf("financial read tools discovered: %d", found)
 	}
 	compareFinancialMCP(t, session, "list_accounts", map[string]any{}, "GET", rest.URL+"/api/accounts", nil)
 	compareFinancialMCP(t, session, "list_categories", map[string]any{}, "GET", rest.URL+"/api/categories", nil)

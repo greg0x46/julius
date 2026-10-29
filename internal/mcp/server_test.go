@@ -30,11 +30,7 @@ func setup(t *testing.T, conn *sql.DB) (*auth.Store, string) {
 	if err := store.Initialize(ctx, "owner@example.com", "synthetic-password", bytes.Repeat([]byte{42}, 32), nil); err != nil {
 		t.Fatal(err)
 	}
-	token, err := store.Login(ctx, "owner@example.com", "synthetic-password")
-	if err != nil {
-		t.Fatal(err)
-	}
-	return store, token
+	return store, oauthToken(t, store)
 }
 
 func request(t *testing.T, handler http.Handler, token, origin, body string) *httptest.ResponseRecorder {
@@ -117,16 +113,13 @@ func TestAccessBoundary(t *testing.T) {
 		if err := settings.SetAuthenticationEnabled(context.Background(), conn, true); err != nil {
 			t.Fatal(err)
 		}
-		if err := store.Logout(context.Background(), token); err != nil {
+		if _, err := conn.Exec(`DELETE FROM oauth_grants WHERE token_hash=?`, tokenHash(token)); err != nil {
 			t.Fatal(err)
 		}
 		if w := request(t, handler, token, "", `{}`); w.Code != 401 {
 			t.Fatalf("revoked: %d", w.Code)
 		}
-		token, err = store.Login(context.Background(), "owner@example.com", "synthetic-password")
-		if err != nil {
-			t.Fatal(err)
-		}
+		token = oauthToken(t, store)
 		store.Now = func() time.Time { return time.Now().Add(auth.Lifetime + time.Second) }
 		if w := request(t, handler, token, "", `{}`); w.Code != 401 {
 			t.Fatalf("expired: %d", w.Code)
@@ -165,8 +158,24 @@ func TestProtocolLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	result, err := session.ListTools(ctx, &sdk.ListToolsParams{})
-	if err != nil || len(result.Tools) != 5 {
+	if err != nil || len(result.Tools) != 51 {
 		t.Fatalf("tool discovery: %v %v", result, err)
+	}
+	readOnly := 0
+	for _, tool := range result.Tools {
+		if tool.Annotations != nil && tool.Annotations.ReadOnlyHint {
+			readOnly++
+		}
+		if tool.OutputSchema == nil || tool.Annotations == nil {
+			t.Fatalf("untyped tool: %s", tool.Name)
+		}
+	}
+	if readOnly != 18 {
+		t.Fatalf("read-only tool annotations: got %d, want 18", readOnly)
+	}
+	read, err := session.CallTool(ctx, &sdk.CallToolParams{Name: "list_goals", Arguments: map[string]any{}})
+	if err != nil || read.IsError || read.StructuredContent == nil {
+		t.Fatalf("financial read: %+v %v", read, err)
 	}
 	if err := session.Close(); err != nil {
 		t.Fatal(err)

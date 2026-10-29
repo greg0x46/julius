@@ -21,7 +21,7 @@ func TestMCPRouteIsolation(t *testing.T) {
 	// Even an open/demo API fallback cannot claim the reserved MCP paths.
 	api := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(204) })
 	handler := serverHandler(api, disabled)
-	for _, path := range []string{"/mcp", "/mcp/", "/mcp/anything", "/api/categories", "/"} {
+	for _, path := range []string{"/mcp", "/mcp/", "/mcp/anything", "/oauth/authorize", "/oauth/token", "/.well-known/oauth-authorization-server", "/.well-known/oauth-protected-resource/mcp", "/api/categories", "/"} {
 		w := httptest.NewRecorder()
 		handler.ServeHTTP(w, httptest.NewRequest("GET", path, nil))
 		want := 204

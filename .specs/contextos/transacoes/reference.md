@@ -429,7 +429,6 @@ consolidated BRL figures already use each entry's reporting-day rate (see
 BRL→reference rate on top, so a non-BRL reference is a presentation valuation
 of that BRL base, not a per-day reconstruction.
 
-
 ## MCP reads
 
 `list_accounts`, `list_card_bills`, `search_transactions` and
@@ -441,3 +440,15 @@ semantics. See the [tool inventory](../configuracoes-autenticacao/reference.md#m
 for pagination, date representation, authentication and explicit limits.
 Parity tests: `TestMCPFinancialReadsMatchHTTPFixtures`,
 `TestMCPReportingRetainsMissingFXAndNativeMoney`, `TestMCPEmptyAndInvalidReads`.
+
+## MCP writes
+
+Manual creation/update/deletion, inclusion decisions and categorization are
+available through separately scoped MCP preparation tools. Each requires a
+Julius browser approval before writing. The adapter reuses `ledger.Service`,
+`ledger.OnIgnored` and existing validation, preserving exact decimals, persistent
+creation idempotency, manual-only restrictions and cleanup. Installment category
+cascades show all IDs (maximum 100) and revalidate atomically; no arbitrary batch.
+
+Tool inputs, approval contract, limits and synthetic dev validation:
+[README financial writes](../../../docs/legacy-readme.md#financial-writes).

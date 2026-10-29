@@ -67,3 +67,12 @@ plan (scenario).
 Money forms and plan allocations submit decimal strings; remaining amounts,
 minimums and comparisons preserve fractional cents. Read-only BRL figures round
 half away from zero ([policy](../../precisao-monetaria.md)).
+
+## MCP reads
+
+`list_payables` lists debts/receivables, optionally filtered by kind, through
+`payables.List` and `SummarizeAll` and the REST formatter. Settled/remaining
+amounts and status are actual BRL state, never simulated repayments. Credit-card
+bills are outside this list.
+
+Tool inputs, output bounds and dev validation: [README MCP](../../../docs/legacy-readme.md#mcp).

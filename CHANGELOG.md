@@ -4,6 +4,28 @@ Notable changes per release. A section is added by `scripts/update-changelog.sh`
 only when a release is prepared, and the release job publishes that same text as
 the GitHub release notes. Newest release first.
 
+## v0.16.0 — 2026-10-28
+
+### Features
+
+- **mcp:** Manage goals, scenarios and recurring commitments ([#184](https://github.com/greg0x46/julius/pull/184))
+- **mcp:** Manage investment positions and operations ([#185](https://github.com/greg0x46/julius/pull/185))
+- **mcp:** Expose guarded sync and operational tools ([#187](https://github.com/greg0x46/julius/pull/187))
+
+## v0.15.0 — 2026-10-28
+
+### Features
+
+- **mcp:** Add optional, provider-agnostic MCP server ([#175](https://github.com/greg0x46/julius/pull/175))
+- **home:** Add an allowance hero, forecast warnings and context cards ([#176](https://github.com/greg0x46/julius/pull/176))
+- **mcp:** Add standard OAuth authorization for MCP clients ([#177](https://github.com/greg0x46/julius/pull/177))
+- **mcp:** Expose goals, investments, net worth and projection reads ([#180](https://github.com/greg0x46/julius/pull/180))
+- **mcp:** Support safe transaction and categorization writes ([#182](https://github.com/greg0x46/julius/pull/182))
+
+### Fixes
+
+- **frontend:** Fix stale data, overlays, period navigator and layout issues ([#174](https://github.com/greg0x46/julius/pull/174))
+
 ## v0.14.1 — 2026-10-27
 
 ### Fixes
