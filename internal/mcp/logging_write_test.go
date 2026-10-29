@@ -48,6 +48,7 @@ func TestWriteApprovalPageIsDiagnosed(t *testing.T) {
 			authed string // auth_result
 		}{
 			{name: "origin", cookie: cookie, origin: "https://evil.example", status: 403, want: wantError{code: "access_denied", reason: "origin_mismatch", field: "origin"}, event: "security.invalid_origin", reason: "origin_mismatch", authed: "not_required"},
+			{name: "null origin", cookie: cookie, origin: "null", status: 403, want: wantError{code: "access_denied", reason: "origin_null", field: "origin"}, event: "security.invalid_origin", reason: "origin_null", authed: "not_required"},
 			{name: "no origin", cookie: cookie, status: 403, want: wantError{code: "access_denied", reason: "origin_missing", field: "origin"}, event: "security.invalid_origin", reason: "origin_missing", authed: "not_required"},
 			{name: "missing cookie", origin: testConfig.PublicURL, status: 403, want: wantError{code: "access_denied", reason: "csrf_cookie_missing"}, authed: "not_required"},
 			{name: "forged cookie", cookie: &http.Cookie{Name: cookie.Name, Value: "forged"}, origin: testConfig.PublicURL, status: 403, want: wantError{code: "access_denied", reason: "csrf_mismatch"}, authed: "not_required"},

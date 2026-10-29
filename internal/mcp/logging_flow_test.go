@@ -293,6 +293,7 @@ func TestConsentRejectionsAreDiagnosed(t *testing.T) {
 			client bool
 		}{
 			{name: "origin mismatch", form: form(nil), cookie: f.cookie, origin: "https://evil.example", status: 403, code: "access_denied", want: wantError{code: "access_denied", reason: "origin_mismatch", field: "origin"}, event: map[string]string{"reason": "origin_mismatch"}},
+			{name: "origin null", form: form(nil), cookie: f.cookie, origin: "null", status: 403, code: "access_denied", want: wantError{code: "access_denied", reason: "origin_null", field: "origin"}, event: map[string]string{"reason": "origin_null"}},
 			{name: "origin missing", form: form(nil), cookie: f.cookie, status: 403, code: "access_denied", want: wantError{code: "access_denied", reason: "origin_missing", field: "origin"}, event: map[string]string{"reason": "origin_missing"}},
 			{name: "request not found", form: form(func(v url.Values) { v.Set("request", "no-such-request") }), cookie: f.cookie, origin: testConfig.PublicURL, status: 400, code: "invalid_request", want: wantError{code: "invalid_request", reason: "consent_request_not_found", field: "request"}},
 			{name: "duplicate request", form: form(func(v url.Values) { v.Add("request", "other-request") }), cookie: f.cookie, origin: testConfig.PublicURL, status: 400, code: "invalid_request", want: wantError{code: "invalid_request", reason: "duplicate_parameter", field: "request"}},
