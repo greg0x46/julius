@@ -399,9 +399,10 @@ not byte-array schemas. Unknown operations/fields are rejected.
 Every mutation returns an immutable preview and an unguessable approval URL,
 bound to the exact originating write-scoped token. Only the browser's same-origin,
 CSRF-bound POST with fresh owner credentials can execute it. Client-supplied
-approval flags or prompts cannot grant approval. Original grant scope, resource,
-expiry and owner revision are rechecked before application. Revocation and
-open mode block pending actions. The Portuguese server-rendered page reuses
+approval flags or prompts cannot grant approval. Original token and current
+connection scope, resource, expiry, revocation and owner revision are rechecked when viewing the preview and before application.
+Runtime disable and open mode also block pending actions, including after the
+owner credential check. The Portuguese server-rendered page reuses
 consent styles/accessibility, escapes client content, displays requested/current
 values and affected IDs/count, and discloses cleanup and reporting effects.
 
