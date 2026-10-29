@@ -1,7 +1,19 @@
 # Documentation
 
 Start with [Getting started](getting-started.md) to build Julius, create the
-owner account, and sign in for the first time.
+owner account, and sign in for the first time. The guides below use English
+translations of the Portuguese interface labels.
+
+## User guides
+
+- [Accounts, cards and transfers](guides/accounts.md): connect institutions,
+  maintain manual accounts, review cards and handle multiple currencies.
+- [Transactions and recurring payments](guides/transactions.md): record and
+  categorize entries, control inclusion, automate decisions and import statements.
+- [Investments and market prices](guides/investments.md): maintain holdings,
+  value positions, refresh quotes and read period performance.
+- [Goals, obligations and cash planning](guides/financial-planning.md): estimate
+  contributions, track debts/receivables and distinguish forecasts from actuals.
 
 ## Self-hosting
 
