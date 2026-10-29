@@ -27,14 +27,14 @@ Self-hosted and owner-controlled, Julius runs as one Go binary with an embedded 
 
 Follow [Getting started](docs/getting-started.md) to build Julius, create the owner account, and sign in locally. Pluggy is optional: start with manual accounts and CSV imports.
 
-For a hosted instance or prebuilt Linux binary, see [installation](docs/self-hosting/installation.md). Remote access requires HTTPS; keep the encryption key safe and backed up separately from the database.
+For a hosted instance or prebuilt Linux binary, see [installation](docs/self-hosting/installation.md). Pluggy is optional: to connect your banks, follow the [Meu Pluggy setup guide](docs/guides/open-finance-pluggy.md). Remote access requires HTTPS; keep the encryption key safe and backed up separately from the database.
 
 ## Documentation
 
 - **Getting Started** — [first build, owner account, and first login](docs/getting-started.md).
-- **User Guides** — [feature details in the temporary migration reference](docs/legacy-readme.md#features).
+- **User Guides** — [connect banks with Meu Pluggy](docs/guides/open-finance-pluggy.md) and [feature details in the temporary migration reference](docs/legacy-readme.md#features).
 - **Self-Hosting** — [installation](docs/self-hosting/installation.md), [configuration and PostgreSQL](docs/self-hosting/configuration.md), [security and authentication](docs/self-hosting/security.md), and [backups, restore, and upgrades](docs/self-hosting/upgrading.md).
-- **MCP** — [self-hosted setup, client checks and troubleshooting](docs/mcp.md).
+- **MCP** — [setup and authorization](docs/guides/mcp.md), and [interoperability checks](docs/mcp.md).
 - **Development** — [commands and conventions](AGENTS.md), [architecture and financial references](docs/development/README.md), and [frontend testing](frontend/TESTING.md).
 
 See the [documentation index](docs/README.md) for all guides. The [previous README](docs/legacy-readme.md) remains a temporary reference for feature details, MCP, legacy database conversion, and contributor release procedures until those sections have durable guides.
