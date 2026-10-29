@@ -12,7 +12,7 @@ and `mcp:operations` scopes and owner approval; see
 
 ## Deployment
 
-1. Follow [installation and authentication](../README.md#authentication) to
+1. Follow [installation and authentication](legacy-readme.md#authentication-and-encryption-key) to
    build/install Julius, configure its database and master key, and initialize
    the owner. Enable authentication in settings. Use a separate disposable
    database and synthetic owner when testing; do not use demo mode, which
@@ -20,7 +20,12 @@ and `mcp:operations` scopes and owner approval; see
 2. Set `JULIUS_PUBLIC_URL` to the externally reachable HTTPS origin, without a
    path or trailing slash, and `JULIUS_MCP_ENABLED=true`; restart Julius. Keep
    the master key configured as for an ordinary deployment. MCP defaults to
-   disabled: `/mcp`, OAuth and discovery return 404 until enabled.
+   disabled by this server setting: `/mcp`, OAuth and discovery return 404 until
+   enabled. In **Configurações → Segurança → Clientes MCP**, also check
+   **Permitir acesso MCP**. This persisted owner control defaults to enabled
+   but cannot override the environment setting. Turning it off blocks further
+   MCP/OAuth requests with 403 immediately, without a restart; re-enabling it
+   resumes unexpired, non-revoked connections.
 3. Terminate TLS with a trusted certificate at your reverse proxy. Forward
    `/mcp`, `/oauth/*`, `/.well-known/oauth-authorization-server` and
    `/.well-known/oauth-protected-resource[/mcp]` to the same Julius instance.
@@ -49,9 +54,21 @@ Access tokens last one hour, with no refresh tokens. Reconnect and authorize
 again after expiry. To revoke one token, the client sends a form-encoded
 `POST /oauth/revoke` with `client_id` and `token`, without an Authorization header
 (public-client authentication is `none`). Repeating revocation is harmless.
-Password change/reset revokes all OAuth grants; browser logout does not. Until
-there is an owner grant-management UI, use the client revocation function or
-password reset. Do not assume removing a client locally revokes its token.
+The owner can also revoke an individual connection in **Configurações →
+Segurança → Clientes MCP** using **Revogar acesso** and confirming. Each fresh
+consent creates a separate connection, even for the same client; inspect its
+client ID and authorization date. Revocation blocks outstanding codes and
+subsequent calls; an execution already in flight may finish. The page also
+shows last use, expiry and revoked/expired connections.
+
+For an active connection, use **Permissões** and **Salvar permissões** to reduce
+or restore its read/read-write/read-write-operations tier within its original
+consent ceiling. Broader access requires fresh authorization; revoked or expired
+connections cannot be restored. The effective token scope also bounds access.
+These controls require the authenticated owner and are unavailable in open/demo
+mode. Disabling **Permitir acesso MCP** leaves the connection list and revocation
+controls usable. Password change/reset revokes all OAuth grants; browser logout
+does not. Do not assume removing a client locally revokes its token.
 
 ## Repeatable automated smoke test
 
@@ -86,12 +103,13 @@ test data afterward. No running Julius instance or bank connection is needed.
 | [MCP Inspector CLI](https://github.com/modelcontextprotocol/inspector/tree/0.21.1), `TestInspectorClientInterop` | Authenticated Streamable HTTP initialize and tool discovery; both dialects |
 | OAuth/access boundary tests | Missing/expired/wrong-resource/revoked tokens, insufficient scope, CSRF, owner reset, open mode and browser/REST separation rejected; both dialects |
 
-Validation record (2026-10-28): Go SDK 1.8.0, Python SDK 1.26.0 and Inspector
-CLI 0.21.1 passed the checks above on SQLite and PostgreSQL 17. The full Go
-suite, frontend lint/typecheck and 907 unit tests, six Playwright journeys,
-embedded-frontend build, release-script tests, production npm audit and
-reachable-code vulnerability scan passed. Interactive Inspector OAuth and
-remote AI applications remain manual checks, unverified in this run.
+Validation evidence at PR head `a3856ec`: GitHub's Frontend (Node) check
+passed; Backend (Go) failed. The PR description reports earlier local successes,
+but those claims do not establish a passing backend or external-client check on
+that head. The commands and expected results above are the repeatable validation
+procedure; confirm the final commit's CI results before reporting interoperability
+as verified. Interactive Inspector OAuth and remote AI applications remain
+manual checks without a recorded result here.
 
 Inspector uses the TypeScript SDK; the Go and Python SDKs are independent
 implementations. The Inspector CLI test supplies a synthetic token issued by
@@ -122,8 +140,9 @@ which loopback automated tests cannot validate.
    particular Inspector version cannot send the required resource or DCR
    fields, record that as a client compatibility failure; do not weaken Julius
    checks. The CLI test above isolates transport from interactive OAuth.
-3. Revoke through the client, or submit the form-encoded revocation request
-   described above. Retry using the old token: expect 401. Reauthorize, reset
+3. In **Configurações → Segurança → Clientes MCP**, revoke the matching
+   connection, or use client revocation as described above. Retry using the old
+   token: expect 401. Reauthorize, reset
    the synthetic owner's password and retry: expect 401 again.
 4. Repeat with another remote MCP application that supports the listed OAuth
    requirements. Record client/version, Julius commit, database dialect,
@@ -142,10 +161,10 @@ Do not report those clients as verified without completing their manual check.
 
 | Symptom | Check/action |
 | --- | --- |
-| 404 on MCP/discovery | Enable MCP and restart; ensure proxy routes reach Julius rather than the SPA. `/mcp/` is intentionally different from `/mcp`. |
+| 404 on MCP/discovery | Set `JULIUS_MCP_ENABLED=true` and restart; ensure proxy routes reach Julius rather than the SPA. `/mcp/` is intentionally different from `/mcp`. |
 | 401 with Bearer challenge | Discover metadata and authorize; check expiry, revocation, owner password reset and exact resource. Cookies cannot authorize MCP. |
 | 403 / `insufficient_scope` | Token must contain `mcp:access`; unknown requested scopes are rejected with OAuth `invalid_scope`. Obtain a new grant. |
-| 403 / `access_denied` | Owner denied consent, authentication is off, or browser Origin/CSRF binding failed. Keep auth enabled; use the exact configured origin, allow the consent cookie and restart authorization in the same browser. |
+| 403 / `access_denied` | Owner denied consent, authentication or **Permitir acesso MCP** is off, or browser Origin/CSRF binding failed. Enable authentication and the owner MCP control; use the exact configured origin, allow the consent cookie and restart authorization in the same browser. |
 | `invalid_client` / redirect rejected | Use DCR with `none`, no Authorization header/client secret at token/revoke endpoints, and the exact registered callback including loopback port. Client ID Metadata Documents are unsupported. |
 | `invalid_grant` | Start fresh authorization; codes are single-use, last five minutes and bind client, redirect, resource, PKCE and owner revision. |
 | Connection fails only remotely | Check DNS, trusted TLS, firewall reachability from the client and proxy forwarding; private loopback URLs are not remotely reachable. |
@@ -160,4 +179,4 @@ Other unsupported flows: refresh tokens, implicit/password/device grants, OIDC,
 confidential client secrets, registration management and browser CORS. Turning
 authentication off rejects existing MCP tokens with 403. MCP cannot be enabled
 in demo mode. Security defaults and precise limits also appear in
-[README MCP](../README.md#mcp).
+[MCP reference](legacy-readme.md#mcp).

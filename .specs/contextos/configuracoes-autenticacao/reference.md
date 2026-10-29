@@ -389,8 +389,9 @@ demo blocks management. Clients never gain REST access through an OAuth token.
 | PATCH /api/settings/mcp/connections/{id} | Sets a scope tier (read, read/write, read/write/operate) within the original consent ceiling; expired/revoked/escalating changes return 409 |
 | DELETE /api/settings/mcp/connections/{id} | Idempotently records revocation for that connection; unknown IDs return 409 |
 
-Security settings reuses Section, Switch, Select and Popconfirm, with loading,
-retry, empty, unavailable-server and per-action error states. Names are explicitly
+**Configurações → Segurança → Clientes MCP** reuses Section, Switch, Select
+and Popconfirm, with loading, retry, empty, unavailable-server and per-action
+error states. Names are explicitly
 self-reported in consent; IDs distinguish identical names. Read-only consent has
 no tier selector. Active broader consent can be reduced and restored within its
 ceiling; broader access requires new consent. Revoked/expired rows retain dates
