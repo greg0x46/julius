@@ -9,6 +9,7 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/greg0x46/julius/internal/httplog"
 	"github.com/greg0x46/julius/internal/reporting"
 )
 
@@ -22,7 +23,10 @@ type Problem struct {
 	Detail string `json:"detail,omitempty"`
 }
 
+// writeProblem also feeds kind to the access log as error_code, so callers
+// must pass literals (see httplog.SetError); never client text.
 func writeProblem(w http.ResponseWriter, status int, kind, title, detail string) {
+	httplog.SetWriterError(w, kind)
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(Problem{
@@ -38,6 +42,7 @@ func writeReportingProblem(w http.ResponseWriter, err error) bool {
 	if !errors.As(err, &incomplete) {
 		return false
 	}
+	httplog.SetWriterError(w, "reporting-fx-unavailable")
 	w.Header().Set("Content-Type", "application/problem+json")
 	w.WriteHeader(http.StatusServiceUnavailable)
 	_ = json.NewEncoder(w).Encode(struct {

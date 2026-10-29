@@ -47,7 +47,8 @@ func (o *oauthServer) permissions(scopes map[string]string) sdk.Middleware {
 				return nil, errors.New("MCP unavailable")
 			}
 			// Recheck current persistence at execution, including queued calls.
-			scope, err := o.authenticate((&http.Request{}).WithContext(ctx), token)
+			access, err := o.authenticate((&http.Request{}).WithContext(ctx), token)
+			scope := access.Scope
 			if err != nil || !mcpaccess.ValidScope(scope) || (scopes != nil && mcpaccess.Rank(scope) < mcpaccess.Rank(required)) {
 				return nil, errors.New("Insufficient MCP permission")
 			}

@@ -3,6 +3,8 @@ package httpapi
 import (
 	"context"
 	"errors"
+	"fmt"
+	"log/slog"
 	"net/http"
 	"path"
 	"strings"
@@ -10,8 +12,12 @@ import (
 	"time"
 
 	"github.com/greg0x46/julius/internal/auth"
+	"github.com/greg0x46/julius/internal/httplog"
 	"github.com/greg0x46/julius/internal/settings"
 )
+
+// errNoCookie is auth.ErrSession for a request that carried no session cookie.
+var errNoCookie = fmt.Errorf("%w (no cookie)", auth.ErrSession)
 
 type identityKey struct{}
 type authenticationEnabledKey struct{}
@@ -70,7 +76,7 @@ func (a *authAPI) setCookie(w http.ResponseWriter, token string) {
 func (a *authAPI) identity(r *http.Request) (identity, error) {
 	cookie, err := r.Cookie(a.cookieName())
 	if err != nil {
-		return identity{}, auth.ErrSession
+		return identity{}, errNoCookie
 	}
 	email, err := a.store.Authenticate(r.Context(), cookie.Value)
 	return identity{Email: email, Token: cookie.Value}, err
@@ -87,16 +93,28 @@ func (a *authAPI) gate(next http.Handler) http.Handler {
 		if !a.config.Demo {
 			var err error
 			if enabled, err = settings.AuthenticationEnabled(r.Context(), a.store.DB); err != nil {
+				httplog.SetError(r.Context(), "auth-config-unavailable", "auth_config_unavailable", "")
 				writeProblem(w, 503, "auth-config-unavailable", "Configuração de autenticação indisponível", "Tente novamente em instantes.")
 				return
 			}
 		}
 		if r.Method != "GET" && r.Method != "HEAD" && r.Method != "OPTIONS" {
-			if r.Header.Get("Origin") != a.config.PublicURL || r.Header.Get("X-Julius-Request") != "1" {
+			if origin := r.Header.Get("Origin"); origin != a.config.PublicURL || r.Header.Get("X-Julius-Request") != "1" {
+				// Categories only: neither header value is logged.
+				reason := "origin_mismatch"
+				switch {
+				case origin == a.config.PublicURL:
+					reason = "request_header_missing"
+				case origin == "":
+					reason = "origin_missing"
+				}
+				httplog.Event(r.Context(), "security.invalid_origin", slog.String("reason", reason))
+				httplog.SetError(r.Context(), "invalid-origin", reason, "")
 				writeProblem(w, 403, "invalid-origin", "Origem da solicitação inválida", "")
 				return
 			}
 			if a.config.Demo && demoBlocked(r) {
+				httplog.SetError(r.Context(), "demo-mode", "demo_blocked", "")
 				writeProblem(w, 403, "demo-mode", "Indisponível na demonstração", "Este recurso fica desativado no ambiente de demonstração.")
 				return
 			}
@@ -106,9 +124,16 @@ func (a *authAPI) gate(next http.Handler) http.Handler {
 		if !public {
 			who, err := a.identity(r)
 			if err != nil {
-				a.authError(w, err)
+				// Infrastructure failures also deny access; the cause is in error_code.
+				typ := httplog.AuthSession
+				if errors.Is(err, errNoCookie) {
+					typ = httplog.AuthNone
+				}
+				httplog.SetAuth(r.Context(), typ, httplog.AuthRejected)
+				a.authError(w, r, err)
 				return
 			}
+			httplog.SetAuth(r.Context(), httplog.AuthSession, httplog.AuthOK)
 			r = r.WithContext(context.WithValue(r.Context(), identityKey{}, who))
 		}
 		next.ServeHTTP(w, r)
@@ -124,11 +149,20 @@ func demoBlocked(r *http.Request) bool {
 	return strings.HasPrefix(p, "/api/auth/") || strings.HasPrefix(p, "/api/settings/") ||
 		p == "/api/sync-runs" || p == "/api/data-sources" || strings.HasPrefix(p, "/api/data-sources/")
 }
-func (a *authAPI) authError(w http.ResponseWriter, err error) {
+func (a *authAPI) authError(w http.ResponseWriter, r *http.Request, err error) {
 	if errors.Is(err, auth.ErrSession) || errors.Is(err, auth.ErrCredentials) {
+		reason := "invalid_session"
+		switch {
+		case errors.Is(err, errNoCookie):
+			reason = "missing_session"
+		case errors.Is(err, auth.ErrCredentials):
+			reason = "invalid_credentials"
+		}
+		httplog.SetError(r.Context(), "unauthorized", reason, "")
 		writeProblem(w, 401, "unauthorized", "Autenticação necessária", "E-mail ou senha incorretos, ou sessão expirada.")
 		return
 	}
+	httplog.SetError(r.Context(), "auth-unavailable", "auth_unavailable", "")
 	writeProblem(w, 503, "auth-unavailable", "Autenticação indisponível", "Tente novamente em instantes.")
 }
 func (a *authAPI) session(w http.ResponseWriter, r *http.Request) {
@@ -142,23 +176,29 @@ func (a *authAPI) session(w http.ResponseWriter, r *http.Request) {
 	}
 	who, err := a.identity(r)
 	if errors.Is(err, auth.ErrSession) {
+		// Expected probe result, not a rejection.
 		writeJSON(w, 200, map[string]any{"authenticated": false, "authentication_enabled": true})
 		return
 	}
 	if err != nil {
-		a.authError(w, err)
+		a.authError(w, r, err)
 		return
 	}
+	httplog.SetAuth(r.Context(), httplog.AuthSession, httplog.AuthOK)
 	writeJSON(w, 200, map[string]any{"authenticated": true, "authentication_enabled": true, "email": who.Email})
 }
-func (a *authAPI) acquire(w http.ResponseWriter, email string) bool {
+func (a *authAPI) acquire(w http.ResponseWriter, r *http.Request, email string) bool {
+	limiter, reason := "auth_attempts", "window_exceeded"
 	if !a.limited(email) {
 		select {
 		case a.hashing <- struct{}{}:
 			return true
 		default:
+			limiter, reason = "auth_hashing_busy", "busy"
 		}
 	}
+	httplog.Event(r.Context(), "security.rate_limited", slog.String("reason", reason), slog.String("limiter", limiter))
+	httplog.SetError(r.Context(), "too-many-attempts", reason, "")
 	w.Header().Set("Retry-After", "60")
 	writeProblem(w, 429, "too-many-attempts", "Muitas tentativas", "Tente novamente em um minuto.")
 	return false
@@ -177,16 +217,23 @@ func (a *authAPI) login(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, 422, "invalid-login", "Solicitação inválida", "")
 		return
 	}
-	if !a.acquire(w, req.Email) {
+	if !a.acquire(w, r, req.Email) {
 		return
 	}
 	defer func() { <-a.hashing }()
 	token, err := a.store.Login(r.Context(), req.Email, req.Password)
 	if err != nil {
-		a.authError(w, err)
+		// Only rejected credentials count as a failed login; an unavailable
+		// store is an outage, reported as such by authError.
+		if errors.Is(err, auth.ErrCredentials) {
+			httplog.SetAuth(r.Context(), httplog.AuthNone, httplog.AuthRejected)
+			httplog.Event(r.Context(), "auth.login.failure", slog.String("reason", "invalid_credentials"))
+		}
+		a.authError(w, r, err)
 		return
 	}
 	a.setCookie(w, token)
+	httplog.Event(r.Context(), "auth.login.success")
 	writeJSON(w, 200, map[string]any{"authenticated": true, "authentication_enabled": true, "email": auth.NormalizeEmail(req.Email)})
 }
 func (a *authAPI) logout(w http.ResponseWriter, r *http.Request) {
@@ -196,9 +243,10 @@ func (a *authAPI) logout(w http.ResponseWriter, r *http.Request) {
 	}
 	who := r.Context().Value(identityKey{}).(identity)
 	if err := a.store.Logout(r.Context(), who.Token); err != nil {
-		a.authError(w, err)
+		a.authError(w, r, err)
 		return
 	}
+	httplog.Event(r.Context(), "auth.logout")
 	a.setCookie(w, "")
 	writeJSON(w, 200, map[string]bool{"authenticated": false, "authentication_enabled": true})
 }
@@ -217,12 +265,12 @@ func (a *authAPI) password(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	who := r.Context().Value(identityKey{}).(identity)
-	if !a.acquire(w, who.Email) {
+	if !a.acquire(w, r, who.Email) {
 		return
 	}
 	defer func() { <-a.hashing }()
 	if err := a.store.ChangePassword(r.Context(), req.CurrentPassword, req.Password); err != nil {
-		a.authError(w, err)
+		a.authError(w, r, err)
 		return
 	}
 	a.setCookie(w, "")

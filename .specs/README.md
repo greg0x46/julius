@@ -60,7 +60,7 @@ renamed. Frontend routes and UI labels are also Portuguese.
 | `patrimonio-liquido` | Wealth (patrimônio; folder name is historical) | `networth` |
 | `metas` | Goals (target vs. a global metric) | `goals` |
 | `investimentos` | Investments, quotes, reconciliation | `investments`, `quotes`, `marketdata` |
-| `configuracoes-autenticacao` | Settings, authentication | `auth`, `settings` |
+| `configuracoes-autenticacao` | Settings, authentication, HTTP access log | `auth`, `settings`, `httplog` |
 
 ## Financial API contracts
 

@@ -10,6 +10,7 @@ import (
 
 	"github.com/greg0x46/julius/internal/auth"
 	"github.com/greg0x46/julius/internal/exchange"
+	"github.com/greg0x46/julius/internal/httplog"
 	"github.com/greg0x46/julius/internal/ledger"
 	"github.com/greg0x46/julius/internal/marketdata"
 	"github.com/greg0x46/julius/internal/settings"
@@ -209,7 +210,8 @@ func NewServer(db *sql.DB, frontend fs.FS, secrets *settings.Secrets, config aut
 
 	mux.Handle("/", spaHandler(frontend))
 
-	return limitBody(authentication.gate(mux))
+	// Outermost, so even rejections from limitBody and the gate name the route.
+	return httplog.WithRoute(mux, limitBody(authentication.gate(mux)))
 }
 
 func handleHealth(db *sql.DB) http.HandlerFunc {
