@@ -148,7 +148,7 @@ func TestMCPFinancialReadsMatchHTTPFixtures(t *testing.T) {
 	insertBill(t, conn, card, time.Date(2026, 10, 25, 0, 0, 0, 0, time.UTC), "1234.567890123456789012")
 	session := financialMCPSession(t, conn)
 	tools, err := session.ListTools(context.Background(), &sdk.ListToolsParams{})
-	if err != nil || len(tools.Tools) != 51 {
+	if err != nil || len(tools.Tools) != 61 {
 		t.Fatalf("discovery: %+v %v", tools, err)
 	}
 	financial := map[string]bool{"list_accounts": true, "list_card_bills": true, "search_transactions": true, "list_categories": true, "spending_by_category": true}

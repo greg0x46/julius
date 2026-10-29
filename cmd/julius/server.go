@@ -3,10 +3,18 @@ package main
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"net"
 	"net/http"
 	"time"
+
+	"github.com/greg0x46/julius/internal/httplog"
 )
+
+// loggedHandler puts the access log around every route served by serverHandler.
+func loggedHandler(logger *slog.Logger, api, mcp http.Handler) http.Handler {
+	return httplog.Middleware(logger)(serverHandler(api, mcp))
+}
 
 func serverHandler(api, mcp http.Handler) http.Handler {
 	mux := http.NewServeMux()

@@ -119,39 +119,10 @@ func CreateTransfer(ctx context.Context, q Querier, in TransferInput) (string, e
 			return "", err
 		}
 	}
-	for _, id := range ids {
-		if err := RequireNoTransferLink(ctx, q, id); err != nil {
-			return "", err
-		}
-		if err := requireNoInvestmentLinks(ctx, q, id); err != nil {
-			return "", err
-		}
-	}
-	source, err := transferMovement(ctx, q, in.SourceID)
-	if err != nil {
+	if err := ValidateTransfer(ctx, q, in); err != nil {
 		return "", err
 	}
-	destination, err := transferMovement(ctx, q, in.DestinationID)
-	if err != nil {
-		return "", err
-	}
-	sent, received := decimal.RequireFromString(*source.Amount), decimal.RequireFromString(*destination.Amount)
-	if source.AccountID == destination.AccountID || !sent.IsNegative() || !received.IsPositive() || (source.CurrencyCode == destination.CurrencyCode && !sent.Abs().Equal(received)) {
-		return "", ErrInvalidTransfer
-	}
-	if in.FeeID != "" {
-		fee, err := transferMovement(ctx, q, in.FeeID)
-		if err != nil {
-			return "", err
-		}
-		item, found, err := GetItem(ctx, q, in.FeeID)
-		if err != nil {
-			return "", err
-		}
-		if !found || !decimal.RequireFromString(*fee.Amount).IsNegative() || !item.TotalsEligibility.Included || (fee.AccountID != source.AccountID && fee.AccountID != destination.AccountID) {
-			return "", ErrInvalidTransfer
-		}
-	}
+
 	id := uuid.NewString()
 	if _, err := q.ExecContext(ctx, `INSERT INTO transfer_links (id, created_at) VALUES (?, ?)`, id, db.FormatTime(time.Now())); err != nil {
 		return "", err
@@ -171,6 +142,51 @@ func CreateTransfer(ctx context.Context, q Querier, in TransferInput) (string, e
 		}
 	}
 	return id, nil
+}
+
+// ValidateTransfer checks native movements and existing reconciliations without writing.
+func ValidateTransfer(ctx context.Context, q Querier, in TransferInput) error {
+	if in.SourceID == "" || in.DestinationID == "" || in.SourceID == in.DestinationID || (in.FeeID != "" && (in.FeeID == in.SourceID || in.FeeID == in.DestinationID)) {
+		return ErrInvalidTransfer
+	}
+	ids := []string{in.SourceID, in.DestinationID}
+	if in.FeeID != "" {
+		ids = append(ids, in.FeeID)
+	}
+	for _, id := range ids {
+		if err := RequireNoTransferLink(ctx, q, id); err != nil {
+			return err
+		}
+		if err := requireNoInvestmentLinks(ctx, q, id); err != nil {
+			return err
+		}
+	}
+	source, err := transferMovement(ctx, q, in.SourceID)
+	if err != nil {
+		return err
+	}
+	destination, err := transferMovement(ctx, q, in.DestinationID)
+	if err != nil {
+		return err
+	}
+	sent, received := decimal.RequireFromString(*source.Amount), decimal.RequireFromString(*destination.Amount)
+	if source.AccountID == destination.AccountID || !sent.IsNegative() || !received.IsPositive() || (source.CurrencyCode == destination.CurrencyCode && !sent.Abs().Equal(received)) {
+		return ErrInvalidTransfer
+	}
+	if in.FeeID != "" {
+		fee, err := transferMovement(ctx, q, in.FeeID)
+		if err != nil {
+			return err
+		}
+		item, found, err := GetItem(ctx, q, in.FeeID)
+		if err != nil {
+			return err
+		}
+		if !found || !decimal.RequireFromString(*fee.Amount).IsNegative() || !item.TotalsEligibility.Included || (fee.AccountID != source.AccountID && fee.AccountID != destination.AccountID) {
+			return ErrInvalidTransfer
+		}
+	}
+	return nil
 }
 
 func GetTransferForTransaction(ctx context.Context, q Querier, transactionID string) (*AccountTransfer, error) {

@@ -1,0 +1,2 @@
+# Test-only independent MCP client; never needed by the Julius binary.
+mcp==1.26.0

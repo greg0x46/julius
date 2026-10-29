@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -143,90 +144,134 @@ func (b bearerTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 }
 
 func TestProtocolLifecycle(t *testing.T) {
-	store, token := setup(t, dbtest.OpenSQLite(t))
-	handler, err := NewHandler(true, testConfig, store)
-	if err != nil {
-		t.Fatal(err)
-	}
-	srv := httptest.NewServer(handler)
-	defer srv.Close()
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	client := sdk.NewClient(&sdk.Implementation{Name: "generic-test", Version: "1"}, nil)
-	session, err := client.Connect(ctx, &sdk.StreamableClientTransport{Endpoint: srv.URL + "/mcp", HTTPClient: &http.Client{Transport: bearerTransport{token}}}, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	result, err := session.ListTools(ctx, &sdk.ListToolsParams{})
-	if err != nil || len(result.Tools) != 51 {
-		t.Fatalf("tool discovery: %v %v", result, err)
-	}
-	readOnly := 0
-	for _, tool := range result.Tools {
-		if tool.Annotations != nil && tool.Annotations.ReadOnlyHint {
-			readOnly++
-		}
-		if tool.OutputSchema == nil || tool.Annotations == nil {
-			t.Fatalf("untyped tool: %s", tool.Name)
-		}
-	}
-	if readOnly != 18 {
-		t.Fatalf("read-only tool annotations: got %d, want 18", readOnly)
-	}
-	read, err := session.CallTool(ctx, &sdk.CallToolParams{Name: "list_goals", Arguments: map[string]any{}})
-	if err != nil || read.IsError || read.StructuredContent == nil {
-		t.Fatalf("financial read: %+v %v", read, err)
-	}
-	if err := session.Close(); err != nil {
-		t.Fatal(err)
-	}
-	// Exercise the initialize handshake used by pre-2026 clients too.
-	w := request(t, handler, token, testConfig.PublicURL, `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","clientInfo":{"name":"generic","version":"1"},"capabilities":{}}}`)
-	if w.Code != 200 || !strings.Contains(w.Body.String(), `"protocolVersion":"2025-11-25"`) || w.Header().Get("Mcp-Session-Id") != "" {
-		t.Fatalf("initialize: %d %s", w.Code, w.Body)
-	}
-	if w := request(t, handler, token, "", `{`); w.Code != 400 {
-		t.Fatalf("malformed JSON: %d %s", w.Code, w.Body)
-	}
-	if w := request(t, handler, token, "", `{"jsonrpc":"2.0","id":2,"method":"unknown"}`); w.Code != 400 {
-		t.Fatalf("unsupported method: %d %s", w.Code, w.Body)
-	}
-	for _, tc := range []struct {
-		body string
-		code int
-	}{
-		{`{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"missing","arguments":{}}}`, -32602},
-	} {
-		w := request(t, handler, token, "", tc.body)
-		var response struct {
-			Error struct {
-				Code int `json:"code"`
-			} `json:"error"`
-		}
-		if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil || response.Error.Code != tc.code {
-			t.Fatalf("protocol error: %d %s (%v)", w.Code, w.Body, err)
-		}
-	}
-	if w := request(t, handler, token, "", strings.Repeat("x", (1<<20)+1)); w.Code != 413 {
-		t.Fatalf("oversize: %d %s", w.Code, w.Body)
-	}
-	for _, method := range []string{"GET", "DELETE"} {
-		r, _ := http.NewRequestWithContext(ctx, method, srv.URL+"/mcp", nil)
-		resp, err := (&http.Client{Transport: bearerTransport{token}}).Do(r)
+	dbtest.Each(t, func(t *testing.T, conn *sql.DB) {
+		store, token := setup(t, conn)
+		goalID := seedInteropGoal(t, conn)
+		handler, err := NewHandler(true, testConfig, store)
 		if err != nil {
 			t.Fatal(err)
 		}
-		io.Copy(io.Discard, resp.Body)
-		resp.Body.Close()
-		if resp.StatusCode != 405 {
-			t.Fatalf("%s: %d", method, resp.StatusCode)
+		srv := httptest.NewServer(handler)
+		defer srv.Close()
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		client := sdk.NewClient(&sdk.Implementation{Name: "generic-test", Version: "1"}, nil)
+		session, err := client.Connect(ctx, &sdk.StreamableClientTransport{Endpoint: srv.URL + "/mcp", HTTPClient: &http.Client{Transport: bearerTransport{token}}}, nil)
+		if err != nil {
+			t.Fatal(err)
 		}
-	}
-	shutdownCtx, stop := context.WithTimeout(context.Background(), time.Second)
-	defer stop()
-	if err := srv.Config.Shutdown(shutdownCtx); err != nil {
-		t.Fatal(err)
-	}
+		result, err := session.ListTools(ctx, &sdk.ListToolsParams{})
+		if err != nil || len(result.Tools) != 61 {
+			t.Fatalf("tool discovery: %v %v", result, err)
+		}
+		readOnly := 0
+		for _, tool := range result.Tools {
+			if tool.Annotations != nil && tool.Annotations.ReadOnlyHint {
+				readOnly++
+			}
+			if tool.OutputSchema == nil || tool.Annotations == nil {
+				t.Fatalf("untyped tool: %s", tool.Name)
+			}
+		}
+		if readOnly != 18 {
+			t.Fatalf("read-only tool annotations: got %d, want 18", readOnly)
+		}
+		read, err := session.CallTool(ctx, &sdk.CallToolParams{Name: "list_goals", Arguments: map[string]any{}})
+		if err != nil || read.IsError || read.StructuredContent == nil {
+			t.Fatalf("financial read: %+v %v", read, err)
+		}
+		payload, err := json.Marshal(read.StructuredContent)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var resultGoals struct {
+			CurrencyCode string `json:"currency_code"`
+			Items        []struct {
+				ID           string `json:"id"`
+				Name         string `json:"name"`
+				Metric       string `json:"metric"`
+				TargetAmount string `json:"target_amount"`
+				CurrentValue string `json:"current_value"`
+				Progress     string `json:"progress"`
+			} `json:"items"`
+		}
+		if err := json.Unmarshal(payload, &resultGoals); err != nil {
+			t.Fatal(err)
+		}
+		if resultGoals.CurrencyCode != "BRL" || len(resultGoals.Items) != 1 {
+			t.Fatalf("financial read: %s", payload)
+		}
+		goal := resultGoals.Items[0]
+		if goal.ID != goalID || goal.Name != "Synthetic interoperability goal" || goal.Metric != "invested_value" || goal.TargetAmount != "12345.67" || goal.CurrentValue != "0" || goal.Progress != "0.0000000000000000" {
+			t.Fatalf("financial fixture: %s", payload)
+		}
+		if _, err := session.CallTool(ctx, &sdk.CallToolParams{Name: "missing", Arguments: map[string]any{}}); err == nil {
+			t.Fatal("SDK accepted unknown tool")
+		}
+		flow := newFlow(t, store)
+		fresh := flow.token(t, flow.approve(t))
+		revocable, err := client.Connect(ctx, &sdk.StreamableClientTransport{Endpoint: srv.URL + "/mcp", HTTPClient: &http.Client{Transport: bearerTransport{fresh}}}, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer revocable.Close()
+		if w := oauthRequest(handler, "POST", "/oauth/revoke", url.Values{"client_id": {flow.client}, "token": {fresh}}.Encode(), nil, ""); w.Code != 200 {
+			t.Fatalf("revoke: %d", w.Code)
+		}
+		if _, err := revocable.ListTools(ctx, &sdk.ListToolsParams{}); err == nil {
+			t.Fatal("active SDK connection retained revoked access")
+		}
+		if err := session.Close(); err != nil {
+			t.Fatal(err)
+		}
+		// Exercise the initialize handshake used by pre-2026 clients too.
+		w := request(t, handler, token, testConfig.PublicURL, `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","clientInfo":{"name":"generic","version":"1"},"capabilities":{}}}`)
+		if w.Code != 200 || !strings.Contains(w.Body.String(), `"protocolVersion":"2025-11-25"`) || w.Header().Get("Mcp-Session-Id") != "" {
+			t.Fatalf("initialize: %d %s", w.Code, w.Body)
+		}
+		if w := request(t, handler, token, "", `{`); w.Code != 400 {
+			t.Fatalf("malformed JSON: %d %s", w.Code, w.Body)
+		}
+		if w := request(t, handler, token, "", `{"jsonrpc":"2.0","id":2,"method":"unknown"}`); w.Code != 400 {
+			t.Fatalf("unsupported method: %d %s", w.Code, w.Body)
+		}
+		for _, tc := range []struct {
+			body string
+			code int
+		}{
+			{`{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"missing","arguments":{}}}`, -32602},
+		} {
+			w := request(t, handler, token, "", tc.body)
+			var response struct {
+				Error struct {
+					Code int `json:"code"`
+				} `json:"error"`
+			}
+			if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil || response.Error.Code != tc.code {
+				t.Fatalf("protocol error: %d %s (%v)", w.Code, w.Body, err)
+			}
+		}
+		if w := request(t, handler, token, "", strings.Repeat("x", (1<<20)+1)); w.Code != 413 {
+			t.Fatalf("oversize: %d %s", w.Code, w.Body)
+		}
+		for _, method := range []string{"GET", "DELETE"} {
+			r, _ := http.NewRequestWithContext(ctx, method, srv.URL+"/mcp", nil)
+			resp, err := (&http.Client{Transport: bearerTransport{token}}).Do(r)
+			if err != nil {
+				t.Fatal(err)
+			}
+			io.Copy(io.Discard, resp.Body)
+			resp.Body.Close()
+			if resp.StatusCode != 405 {
+				t.Fatalf("%s: %d", method, resp.StatusCode)
+			}
+		}
+		shutdownCtx, stop := context.WithTimeout(context.Background(), time.Second)
+		defer stop()
+		if err := srv.Config.Shutdown(shutdownCtx); err != nil {
+			t.Fatal(err)
+		}
+	})
 }
 
 func TestConcurrentRequestsAreBounded(t *testing.T) {
