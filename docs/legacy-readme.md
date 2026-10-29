@@ -437,7 +437,8 @@ using its own single owner account, independent of any AI provider:
    tokens cannot authorize `/api`. REST keeps its cookie, Origin and
    `X-Julius-Request: 1` requirements.
 
-The `mcp:access` scope permits the read-only planning and operational tools below.
+The `mcp:access` scope permits the read-only financial, planning and operational tools below.
+Financial read pages contain at most 200 items (default 50); results carry the HTTP status and the API payload in `data`.
 Request `scope=mcp:access mcp:write` for financial writes; the owner may grant
 less than requested on the consent page, and existing read-only grants gain no
 write permission. Write consent permits preparing changes,
@@ -450,6 +451,11 @@ tool discovery, JSON-RPC errors and the legacy initialize handshake.
 
 | Tool | Inputs and result |
 |---|---|
+| `list_accounts` | Optional `page`, `page_size`; accounts and cards with native balances, credit limits and closing-day metadata |
+| `list_card_bills` | Required `account_id`, optional `page`, `page_size`; recorded card bills (the open bill is the account balance, never fabricated) |
+| `search_transactions` | Required `timezone`; REST query filters, inclusive `YYYY-MM-DD` ranges, `group_by` (`none`, `day`, `week`, `month`, `year`); page totals cover all matches, with explicit eligibility, native totals and reporting coverage/FX |
+| `list_categories` | Optional `page`, `page_size`; catalog including inactive categories |
+| `spending_by_category` | Required `timezone`; the REST category-breakdown contract (period, classification) with reporting coverage and FX |
 | `get_investment_portfolio` | Required `to`, optional `from`, `group_by` (`none`, `account`, `class`), `source` (`manual`, `synced`), `account_id`; positions, period returns, portfolio/group totals, native figures and FX |
 | `get_net_worth` | Required `from`, `to`; realized cash plus investments, daily history within the range and today's `latest` |
 | `list_goals` | Optional `limit`, `offset`; current progress, target-date projection and required monthly contribution in BRL |
