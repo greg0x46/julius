@@ -17,7 +17,8 @@ from those DTOs; it is not production data or an API schema generator.
   boundary. Formatting to cents must not feed back into the ledger.
 - An amount without its currency is not a money pair. `null` means unknown or
   inapplicable, not zero, BRL or an empty string. Currency totals stay separated;
-  Consolidated reports disclose missing FX; affected totals are unavailable, while native money remains accessible.
+  consolidated reports disclose missing FX; affected totals are unavailable,
+  while native money remains accessible.
 - Instants use RFC3339/RFC3339Nano with an offset, normally `Z`. Preserve the
   original string; JavaScript Date loses sub-millisecond precision. Calendar
   days use `YYYY-MM-DD`, without a timezone conversion. Account/bill dates and
@@ -41,8 +42,9 @@ from those DTOs; it is not production data or an API schema generator.
 ## Critical read inventory
 
 For exact field names/nullability, follow the DTO and parser columns; the
-fixture verifies their serialized agreement. Shared decisions are in [context decisions](context-decisions.md); the
-linked legacy context references retain feature inventories during migration.
+fixture verifies their serialized agreement. Shared decisions are in
+[context decisions](context-decisions.md); linked legacy context references
+retain feature inventories during migration.
 
 | API | Go DTO / conversion | TypeScript parser | Money / dates / nullable fields |
 | --- | --- | --- | --- |
@@ -72,7 +74,7 @@ linked legacy context references retain feature inventories during migration.
 | Investment custody / positions | backend custody kind `manual` / `integrated` (frontend also accepts historical `synced`); position source `manual` / `synced`; valuation basis `cost_basis` / `manual_valuation` / `provider_balance` / `market_quote`. Cost basis is not evidence of market appreciation. |
 | Investment operations | kind `initial_balance`, `deposit`, `withdrawal`, `buy`, `sell`, `income`, `fee`, `tax`, `valuation`, `transfer_out`, `transfer_in`; source `manual` / `synced`. Read-only behavior follows is_editable rather than a frontend inference. |
 | Investment yield | source `informado` / `calculado` / null; unavailable reasons `sem_historico`, `historico_incompleto`, `saldo_indisponivel`. Unknown return must not be presented as zero profit. |
-| Timeline | tier `realizado` / `confirmado` / `projetado` / `hipotetico`; source `real` / `investment` / `recorrente` / `plano_pagamento` / `cenario`. Hypotheticals require explicit scenario_ids. Cash amount and reportable amount are different readings; transfer cash must not become income/expense. |
+| Timeline | tier `realizado` / `confirmado` / `projetado` / `hipotetico`; source `real` / `investment` / `recorrente` / `plano_pagamento` / `cenario`. Scenario participation follows the active/explicit selection modes in [architecture](architecture.md#cross-cutting-principles). Cash amount and reportable amount are different readings; transfer cash must not become income/expense. |
 
 ## Writes and compatibility
 

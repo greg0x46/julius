@@ -450,7 +450,7 @@ select((.event // "") | startswith("security.") or startswith("auth.") or starts
 
 Retention belongs to the host (journald, the container runtime). The fields,
 events and error catalog are in the
-[reference](.specs/contextos/configuracoes-autenticacao/reference.md#http-access-log-and-security-events).
+[reference](../.specs/contextos/configuracoes-autenticacao/reference.md#http-access-log-and-security-events).
 
 ### MCP
 
