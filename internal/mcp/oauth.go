@@ -138,10 +138,15 @@ func rateLimited(w http.ResponseWriter, r *http.Request, limiter, reason string)
 
 // invalidOrigin logs the security event for a request whose Origin is not the
 // public origin and returns the reason. The value itself is never logged.
+// origin_null is what a browser sends from a form whose page has Referrer-Policy
+// no-referrer (see oauthReferrerPolicy).
 func invalidOrigin(r *http.Request) string {
 	reason := "origin_mismatch"
-	if r.Header.Get("Origin") == "" {
+	switch r.Header.Get("Origin") {
+	case "":
 		reason = "origin_missing"
+	case "null":
+		reason = "origin_null"
 	}
 	httplog.Event(r.Context(), "security.invalid_origin", slog.String("reason", reason))
 	return reason
@@ -193,6 +198,13 @@ func (o *oauthServer) limited(login bool) bool {
 	o.requests++
 	return o.requests > 120
 }
+
+// oauthReferrerPolicy must stay same-origin: with no-referrer a browser submits
+// the consent and write-approval forms with "Origin: null", which the strict
+// Origin check rejects. Cross-origin navigations still send no Referer, so the
+// callback URL (code, state) does not leak to the client or any third party.
+const oauthReferrerPolicy = "same-origin"
+
 func (o *oauthServer) routes(transport http.Handler) http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("/mcp", transport)
@@ -209,7 +221,7 @@ func (o *oauthServer) routes(transport http.Handler) http.Handler {
 	return httplog.WithRoute(mux, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("Pragma", "no-cache")
-		w.Header().Set("Referrer-Policy", "no-referrer")
+		w.Header().Set("Referrer-Policy", oauthReferrerPolicy)
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'")
 		w.Header().Set("X-Frame-Options", "DENY")
