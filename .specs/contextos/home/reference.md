@@ -183,8 +183,8 @@ states as a single quiet line; sparkline and secondary notes dropped).
   plan installments as "Parcela", recurrences by name — ranked by exact amount,
   one per day, never on the first negative day. Labels have a halo in the surface color and
   sit to the dot's left in the last 40% of the window so they stay inside the
-  plot. Scenarios are not part of this
-  view.
+  plot. The chart includes scenarios explicitly activated through Settings →
+  Scenarios; there is no separate simulation comparison in this view.
 - `SpendingByCategoryCard` — spending by category, read from
   `GET /api/transactions/category-breakdown` (Transactions context).
 - `NetWorthSummaryCard` — link to `/patrimonio`: latest wealth (cash plus
