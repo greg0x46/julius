@@ -4,6 +4,19 @@ Notable changes per release. A section is added by `scripts/update-changelog.sh`
 only when a release is prepared, and the release job publishes that same text as
 the GitHub release notes. Newest release first.
 
+## v0.17.0 — 2026-10-29
+
+### Features
+
+- **settings:** Manage MCP authorizations, scopes and revocation ([#178](https://github.com/greg0x46/julius/pull/178))
+- **mcp:** Expose core financial read tools ([#179](https://github.com/greg0x46/julius/pull/179))
+- **mcp:** Manage manual accounts, transfers and payables ([#186](https://github.com/greg0x46/julius/pull/186))
+- **observability:** Add structured HTTP access logs and security events ([#200](https://github.com/greg0x46/julius/pull/200))
+
+### Fixes
+
+- **home:** Do not count future inflows as spendable in the daily allowance ([#189](https://github.com/greg0x46/julius/pull/189))
+
 ## v0.16.0 — 2026-10-28
 
 ### Features
