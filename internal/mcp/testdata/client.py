@@ -81,7 +81,7 @@ async def main():
                 assert initialized.serverInfo.name == "julius"
                 assert initialized.capabilities.tools is not None
                 tools = await session.list_tools()
-                assert len(tools.tools) == 51
+                assert len(tools.tools) == 61
                 read = await session.call_tool("list_goals", {})
                 assert not read.isError and read.structuredContent is not None
                 payload = read.structuredContent
