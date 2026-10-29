@@ -144,7 +144,7 @@ occurrences through `projections.List`, including realization origin/state;
 Amounts stay BRL for schedules/events. Active non-standalone commitments are
 selected by default; hypotheticals need explicit IDs.
 
-Tool inputs, output bounds and dev validation: [README MCP](../../../README.md#mcp).
+Tool inputs, output bounds and dev validation: [README MCP](../../../docs/legacy-readme.md#mcp).
 
 ## MCP writes
 

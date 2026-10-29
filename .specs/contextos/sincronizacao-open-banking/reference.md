@@ -137,4 +137,4 @@ uniqueness, partial enqueue outcomes, worker claims/leases and scheduling stay
 unchanged. Repeated keys return the original receipt within the process/token
 retention period; a new intentional request needs a new key. MCP exposes neither
 provider item IDs nor credentials. Setup, retry limits and validation:
-[README operational tools](../../../README.md#operational-tools).
+[README operational tools](../../../docs/legacy-readme.md#operational-tools).

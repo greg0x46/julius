@@ -16,8 +16,8 @@ as an option. For online access, the host must provide HTTPS.
 ## Domain documentation and contributing
 
 Contributions, new features and refactors are welcome. Coding agents: start at
-[`AGENTS.md`](AGENTS.md). Before touching an area
-of the domain, see [`.specs/README.md`](.specs/README.md) — the navigation hub
+[`AGENTS.md`](../AGENTS.md). Before touching an area
+of the domain, see [`.specs/README.md`](../.specs/README.md) — the navigation hub
 of the `.specs/` folder, with the domain architecture
 (`motores-de-dominio.md`), the current state of each feature
 (`contextos/<context>/reference.md`) and the historical rationale behind design
@@ -62,7 +62,7 @@ authentication configuration that does not depend on the host:
   Historical balance minima use exact comparisons to select their value and date.
   The balance chart includes commitments due today in today's end-of-day point;
   **Saldo hoje** shows the current cash balance.
-  See the [monetary precision policy](.specs/precisao-monetaria.md).
+  See the [monetary precision policy](../.specs/precisao-monetaria.md).
 
 - **Build identifier** — every signed-in page has a small footer showing the
   release tag, `stage` or `dev`, with a link to the build commit when available.
@@ -183,7 +183,7 @@ corrections to operations recompute subsequent costs and are rejected if they
 would produce negative cash or a negative position.
 
 Contracts and limits are in the
-[investments reference](.specs/contextos/investimentos/reference.md).
+[investments reference](../.specs/contextos/investimentos/reference.md).
 
 ## Goals
 
@@ -197,7 +197,7 @@ value and percentage of the target expected on the date without new
 contributions, and the monthly contribution needed to reach it. It is an
 estimate that assumes the past return repeats. Nothing is stored besides the
 target. See the
-[goals reference](.specs/contextos/metas/reference.md).
+[goals reference](../.specs/contextos/metas/reference.md).
 
 ## Tech stack
 
@@ -257,7 +257,7 @@ Changes flow `agent/*` or feature branch → **`stage`** → release PR → **`m
 2. A release candidate is cut automatically, not by hand. When Backend (Go) and
    Frontend (Node) have passed on the exact `stage` head and there is something
    to release, `release/vX.Y.Z` is cut from that commit. Its only extra commit
-   adds the `vX.Y.Z` section to [`CHANGELOG.md`](CHANGELOG.md)
+   adds the `vX.Y.Z` section to [`CHANGELOG.md`](../CHANGELOG.md)
    (`scripts/update-changelog.sh`; the only place the changelog is written), and
    a pull request `chore(release): vX.Y.Z` into `main` lists the original pull
    requests and `Closes #N` for their issues. The candidate is frozen: pull
@@ -304,14 +304,14 @@ The scripts have shell tests that run against throwaway Git histories:
 `scripts/tests/run.sh`.
 
 Dependabot version updates open against `stage`. Security updates still open
-against `main`; see "Dependabot" in [`AGENTS.md`](AGENTS.md) for how they are
+against `main`; see "Dependabot" in [`AGENTS.md`](../AGENTS.md) for how they are
 handled.
 
 **Database.** Every change merged into `stage` is migrated on the persistent
 development database before it reaches production, and nothing restores that
 database automatically. Migrations must therefore be forward-only (never edit
 one that is already merged; add a new one) and safe on existing data. For the numbering rules see
-[`internal/db/migrations/README.md`](internal/db/migrations/README.md).
+[`internal/db/migrations/README.md`](../internal/db/migrations/README.md).
 
 ### Authentication and encryption key
 
@@ -848,7 +848,7 @@ Do not change the old database's migration version to bypass the guard.
 
 The source opens read-only without applying migrations. IDs, encrypted settings,
 raw payloads, sessions and user decisions carry over; auth timestamps and calendar
-fields follow the documented [conversion contract](.specs/reorganizacao-schema/inventario.md).
+fields follow the documented [conversion contract](../.specs/reorganizacao-schema/inventario.md).
 Postgres rejects legacy IDs that cannot fit its UUID columns; SQLite preserves
 opaque legacy IDs. No rounding or guessed values are used. An interrupted or
 failed real copy can leave earlier tables committed: discard only the separate
@@ -966,7 +966,7 @@ scheduler immediately; other persisted changes are checked every minute.
 By default Yahoo Finance is the primary source for both markets; brapi is the
 B3 fallback and CoinGecko the crypto one. The optional brapi token is
 configured in the UI. Details in the
-[investments reference](.specs/contextos/investimentos/reference.md#automatic-quotes).
+[investments reference](../.specs/contextos/investimentos/reference.md#automatic-quotes).
 
 Assets are registered with a financial class (fixed income, variable income,
 multi-market, currency, crypto assets or other) and an instrument type. The
@@ -1046,11 +1046,11 @@ The release scripts (`scripts/next-version.sh`, `update-changelog.sh`,
 `scripts/tests/run.sh`, which CI also runs.
 
 The frontend suite runs as two Vitest projects (jsdom and plain Node); see
-[`frontend/TESTING.md`](frontend/TESTING.md) for the split and worker count.
+[`frontend/TESTING.md`](../frontend/TESTING.md) for the split and worker count.
 
 `npm run test:e2e` runs the financial browser journeys against isolated local
 Julius servers and disposable SQLite databases, without Pluggy credentials.
-See [`frontend/TESTING.md`](frontend/TESTING.md#financial-browser-journeys-playwright)
+See [`frontend/TESTING.md`](../frontend/TESTING.md#financial-browser-journeys-playwright)
 for installation, coverage and failure evidence. CI runs the same suite.
 
 ## Open Finance & Pluggy
@@ -1074,6 +1074,6 @@ during setup.
 
 ## Project structure
 
-Package map, commands and conventions: [`AGENTS.md`](AGENTS.md). What each area
-does today (routes, pages, implementation status): [`.specs/README.md`](.specs/README.md)
+Package map, commands and conventions: [`AGENTS.md`](../AGENTS.md). What each area
+does today (routes, pages, implementation status): [`.specs/README.md`](../.specs/README.md)
 and each context's `reference.md` under `.specs/contextos/`.
