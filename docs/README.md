@@ -28,6 +28,7 @@ translations of the Portuguese interface labels.
 
 ## Further reading
 
+- [Read your own financial data with Meu Pluggy](guides/open-finance-pluggy.md): Open Finance setup.
 - [MCP integration](mcp.md).
 - [Temporary previous README](legacy-readme.md).
 - [Contributor conventions](../AGENTS.md), [domain documentation](../.specs/README.md),
