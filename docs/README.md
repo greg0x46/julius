@@ -16,6 +16,7 @@ owner account, and sign in for the first time.
 
 ## Further reading
 
+- [Read your own financial data with Meu Pluggy](guides/open-finance-pluggy.md): Open Finance setup.
 - [MCP integration](mcp.md).
 - [Feature reference](legacy-readme.md#features) in the temporary previous README.
 - [Contributor conventions](../AGENTS.md), [domain documentation](../.specs/README.md),
