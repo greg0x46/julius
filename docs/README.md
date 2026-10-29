@@ -29,8 +29,11 @@ translations of the Portuguese interface labels.
 ## Further reading
 
 - [Read your own financial data with Meu Pluggy](guides/open-finance-pluggy.md): Open Finance setup.
-- [MCP integration](mcp.md).
-- [Temporary previous README](legacy-readme.md).
+- [MCP setup and authorization](guides/mcp.md): expose the endpoint, connect a
+  compatible client, approve changes and revoke access.
+- [MCP interoperability checks](mcp.md): repeatable smoke validation and client
+  compatibility evidence.
+- [Feature reference](legacy-readme.md#features) in the temporary previous README.
 - [Contributor conventions](../AGENTS.md), [domain documentation](../.specs/README.md),
   and [frontend testing](../frontend/TESTING.md).
 - [Changelog](../CHANGELOG.md) and
