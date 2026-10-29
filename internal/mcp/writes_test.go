@@ -248,7 +248,7 @@ func TestMCPWritePendingAuthorizationChanges(t *testing.T) {
 		{"stale connection revision", `UPDATE mcp_authorizations SET revision=revision+1 WHERE id=?`, false},
 		{"read-only token", `UPDATE oauth_grants SET scope='mcp:access' WHERE authorization_id=?`, false},
 		{"expired token", `UPDATE oauth_grants SET expires_at='2000-01-01T00:00:00Z' WHERE authorization_id=?`, false},
-		{"owner revision", `UPDATE auth_owner SET revision=revision+1 WHERE id=1 AND ? IS NOT NULL`, true},
+		{"owner revision", `UPDATE auth_owner SET revision=revision+1 WHERE id=1 AND CAST(? AS TEXT) IS NOT NULL`, true},
 		{"MCP disabled", "", true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
