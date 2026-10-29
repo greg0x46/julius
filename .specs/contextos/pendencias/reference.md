@@ -75,4 +75,4 @@ half away from zero ([policy](../../precisao-monetaria.md)).
 amounts and status are actual BRL state, never simulated repayments. Credit-card
 bills are outside this list.
 
-Tool inputs, output bounds and dev validation: [README MCP](../../../README.md#mcp).
+Tool inputs, output bounds and dev validation: [README MCP](../../../docs/legacy-readme.md#mcp).

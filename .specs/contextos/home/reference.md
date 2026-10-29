@@ -263,4 +263,4 @@ is optional on `BuildParams`; omitting it preserves existing application behavio
 Reporting summaries in both MCP and REST share the converted base summary, so
 reference-currency conversion occurs once (including the period's coverage).
 
-Tool inputs, output bounds and dev validation: [README MCP](../../../README.md#mcp).
+Tool inputs, output bounds and dev validation: [README MCP](../../../docs/legacy-readme.md#mcp).
