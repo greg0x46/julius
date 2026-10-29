@@ -3,7 +3,7 @@
 Julius: self-hosted personal finance tracker for a single owner. One Go binary
 (`net/http`, no framework) with the React/TypeScript frontend embedded. SQLite
 by default, Postgres optional. Bank data comes from Pluggy (Open Finance) or
-manual/CSV entries. User-facing docs: [`README.md`](README.md). Formerly named
+manual/CSV entries. User-facing docs: [`docs/README.md`](docs/README.md). Formerly named
 Contadinho: the GitHub repo and some local paths still say `contadinho`.
 
 Keep comments brief; don’t restate what the code already makes clear.
@@ -204,6 +204,18 @@ PR becomes stale once `main` advances and is closed and re-cut by the
 promotion automation.
 
 **Docs and hygiene.**
+- Write documentation in English only. Use direct, short sentences and
+  task-oriented headings; give prerequisites, steps and expected results when
+  explaining a task.
+- Document implemented behavior only in user guides and references. Keep
+  proposals in explicitly labeled design specs or backlog documents.
+- Keep one source for each topic; link to it instead of duplicating content.
+- Keep [`docs/README.md`](docs/README.md) and its links accurate as pages are
+  added or moved. Create directories only when they contain useful pages;
+  don't add placeholder pages.
+- Preserve `.specs/` until the dedicated migration and cleanup issues are
+  complete; these editorial rules do not require renaming or translating
+  legacy files in bulk.
 - Finishing a feature or behavior change: update the matching
   `.specs/contextos/<context>/reference.md` in the same PR (and README
   "Features" if user-visible). Delete a design spec once it is implemented.
