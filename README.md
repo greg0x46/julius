@@ -25,36 +25,19 @@ Self-hosted and owner-controlled, Julius runs as one Go binary with an embedded 
 
 ## Getting started
 
-From a checkout, with Go 1.26.10+, Node.js 24.15+ (or 26+), npm, and OpenSSL installed:
+Follow [Getting started](docs/getting-started.md) to build Julius, create the owner account, and sign in locally. Pluggy is optional: start with manual accounts and CSV imports.
 
-```sh
-./build.sh
-
-# Generate the encryption key once, outside the repository; refuse to overwrite it.
-mkdir -p "$HOME/.config/julius"
-(umask 077; set -C; openssl rand -base64 32 > "$HOME/.config/julius/master.key")
-export JULIUS_MASTER_KEY_FILE="$HOME/.config/julius/master.key"
-export JULIUS_PUBLIC_URL="http://localhost:4200"
-
-./julius auth init -db ./julius.db
-./julius -db ./julius.db
-```
-
-The initialization command prompts for the owner's email and password. Open <http://localhost:4200> and sign in. Pluggy is optional: start with manual accounts, or configure Pluggy credentials in **Configurações** to connect your banks.
-
-Keep the key safe and back it up separately from the database; you need the same key on every restart. Set exactly one of `JULIUS_MASTER_KEY_FILE` or `JULIUS_MASTER_KEY` (a Base64-encoded 32-byte key). For remote access, set `JULIUS_PUBLIC_URL` to the browser-facing HTTPS origin and serve Julius through HTTPS; local HTTP is for development only.
+For a hosted instance or prebuilt Linux binary, see [installation](docs/self-hosting/installation.md). Remote access requires HTTPS; keep the encryption key safe and backed up separately from the database.
 
 ## Documentation
 
-- **Getting Started** — [quick start](#getting-started).
+- **Getting Started** — [first build, owner account, and first login](docs/getting-started.md).
 - **User Guides** — [accounts and cards](docs/guides/accounts.md), [transactions and recurring payments](docs/guides/transactions.md), [investments and market prices](docs/guides/investments.md), and [financial planning](docs/guides/financial-planning.md).
-- **Self-Hosting** — [authentication and encryption](docs/legacy-readme.md#authentication-and-encryption-key), [PostgreSQL](docs/legacy-readme.md#running-with-postgres), and [releases and installation](docs/legacy-readme.md#publish-and-install-a-version).
+- **Self-Hosting** — [installation](docs/self-hosting/installation.md), [configuration and PostgreSQL](docs/self-hosting/configuration.md), [security and authentication](docs/self-hosting/security.md), and [backups, restore, and upgrades](docs/self-hosting/upgrading.md).
 - **MCP** — [self-hosted setup, client checks and troubleshooting](docs/mcp.md).
 - **Development** — [commands and conventions](AGENTS.md), [domain documentation](.specs/README.md), and [frontend testing](frontend/TESTING.md).
 
-Browse the [documentation index](docs/README.md) for all guides.
-
-The [previous README](docs/legacy-readme.md) is preserved in full as a temporary migration reference, including authentication, MCP, database, release, and deployment instructions. Subsequent documentation issues must migrate useful sections into durable guides and add or update their own README links. Remove the temporary reference once that migration is complete.
+See the [documentation index](docs/README.md) for all guides. The [previous README](docs/legacy-readme.md) remains a temporary reference for MCP, legacy database conversion, and contributor release procedures until those sections have durable guides.
 
 ## Tech stack
 
