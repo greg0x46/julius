@@ -8,6 +8,7 @@ import (
 	"errors"
 	"github.com/google/jsonschema-go/jsonschema"
 	"html/template"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"reflect"
@@ -18,6 +19,7 @@ import (
 	"github.com/greg0x46/julius/internal/auth"
 	"github.com/greg0x46/julius/internal/db"
 	"github.com/greg0x46/julius/internal/httpapi"
+	"github.com/greg0x46/julius/internal/httplog"
 	"github.com/greg0x46/julius/internal/mcpaccess"
 	"github.com/greg0x46/julius/internal/settings"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -58,8 +60,8 @@ func (o *oauthServer) registerWrites(server *sdk.Server) {
 	if err != nil {
 		panic(err)
 	}
-	for _, operation := range []string{"assign_transaction_category", "set_transaction_inclusion", "create_manual_transaction", "update_manual_transaction", "delete_manual_transaction", "create_category", "update_category", "create_automation_rule", "update_automation_rule", "delete_automation_rule", "create_goal", "update_goal", "delete_goal", "create_scenario", "update_scenario", "delete_scenario", "create_planned_transaction", "update_planned_transaction", "delete_planned_transaction", "create_recurring_commitment", "update_recurring_commitment", "delete_recurring_commitment", "create_investment_account", "update_investment_account", "delete_investment_account", "create_investment_position", "update_investment_position", "delete_investment_position", "create_investment_operation", "update_investment_operation", "delete_investment_operation"} {
-		sdk.AddTool(server, &sdk.Tool{Name: operation, OutputSchema: outputSchema, InputSchema: httpapi.MCPWriteInputSchema(operation), Description: "Prepare " + operation + " for owner review. Does not commit. Requires mcp:write. Open approval_url in Julius and have the owner review and approve; never ask for owner credentials in the MCP client. Use get_write_result afterward. Data fields are published in inputSchema; deletes use {}. Planning and manual investment amounts are BRL. Investment operations preserve provider-owned holdings and balances; local manual positions inside integrated custody are editable. Fees/taxes follow the investment ledger; no transfers or reconciliation writes. Standalone scenarios affect MCP projections only when explicitly selected in scenario_ids; recurrence schedules follow active commitment selection. No retroactive rule application.", Annotations: &sdk.ToolAnnotations{IdempotentHint: false}}, func(ctx context.Context, _ *sdk.CallToolRequest, in writeToolInput) (*sdk.CallToolResult, writeToolOutput, error) {
+	for _, operation := range []string{"assign_transaction_category", "set_transaction_inclusion", "create_manual_transaction", "update_manual_transaction", "delete_manual_transaction", "create_category", "update_category", "create_automation_rule", "update_automation_rule", "delete_automation_rule", "create_goal", "update_goal", "delete_goal", "create_scenario", "update_scenario", "delete_scenario", "create_planned_transaction", "update_planned_transaction", "delete_planned_transaction", "create_recurring_commitment", "update_recurring_commitment", "delete_recurring_commitment", "create_manual_account", "update_manual_account", "adjust_manual_account", "create_transfer", "delete_transfer", "create_payable", "update_payable", "delete_payable", "create_payable_link", "delete_payable_link", "create_investment_account", "update_investment_account", "delete_investment_account", "create_investment_position", "update_investment_position", "delete_investment_position", "create_investment_operation", "update_investment_operation", "delete_investment_operation"} {
+		sdk.AddTool(server, &sdk.Tool{Name: operation, OutputSchema: outputSchema, InputSchema: httpapi.MCPWriteInputSchema(operation), Description: "Prepare " + operation + " for owner review. Does not commit. Requires mcp:write. Open approval_url in Julius and have the owner review and approve; never ask for owner credentials in the MCP client. Use get_write_result afterward. Data fields are published in inputSchema; deletes use {}. Planning, payable and manual investment amounts are BRL. Account balances, adjustments and transfer movements use each account's original currency. Investment operations preserve provider-owned holdings and balances; local manual positions inside integrated custody are editable. Fees/taxes follow the investment ledger; no transfers or reconciliation writes. Standalone scenarios affect MCP projections only when explicitly selected in scenario_ids; recurrence schedules follow active commitment selection. No retroactive rule application.", Annotations: &sdk.ToolAnnotations{IdempotentHint: false}}, func(ctx context.Context, _ *sdk.CallToolRequest, in writeToolInput) (*sdk.CallToolResult, writeToolOutput, error) {
 			identity, _ := ctx.Value(writeContextKey{}).(writeIdentity)
 			if !canWrite(identity.Scope) {
 				return nil, writeToolOutput{}, errors.New("mcp:write scope required")
@@ -138,7 +140,7 @@ func (o *oauthServer) writeGrantActive(ctx context.Context, hash string) (bool, 
 func (o *oauthServer) approveWrite(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodPost {
 		if r.Header.Get("Origin") != o.config.PublicURL {
-			oauthError(w, 403, "access_denied")
+			reject(w, r, 403, "access_denied", invalidOrigin(r), "origin")
 			return
 		}
 		if !parseForm(w, r) {
@@ -153,16 +155,18 @@ func (o *oauthServer) approveWrite(w http.ResponseWriter, r *http.Request) {
 	defer o.writes.mu.Unlock()
 	a, ok := o.writes.actions[id]
 	if !ok || !o.store.Now().Before(a.Expires) {
+		httplog.SetError(r.Context(), "invalid_request", "write_request_not_found", "request")
 		o.renderWrite(w, 410, id, nil, "Solicitação expirada.", "")
 		return
 	}
+	httplog.SetOAuthClient(r.Context(), a.ClientID, a.ClientName)
 	active, err := o.writeGrantActive(r.Context(), a.OwnerHash)
 	if err != nil {
-		o.unavailable(w)
+		o.unavailable(w, r, "db_error")
 		return
 	}
 	if !active {
-		oauthError(w, 403, "access_denied")
+		reject(w, r, 403, "access_denied", "grant_inactive", "")
 		return
 	}
 	if a.State != "pending" {
@@ -178,47 +182,55 @@ func (o *oauthServer) approveWrite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	cookie, err := r.Cookie(cookieName)
-	if err != nil || a.CSRF == "" || subtle.ConstantTimeCompare([]byte(tokenHash(cookie.Value)), []byte(a.CSRF)) != 1 {
-		oauthError(w, 403, "access_denied")
+	if err != nil {
+		reject(w, r, 403, "access_denied", "csrf_cookie_missing", "")
+		return
+	}
+	if a.CSRF == "" || subtle.ConstantTimeCompare([]byte(tokenHash(cookie.Value)), []byte(a.CSRF)) != 1 {
+		reject(w, r, 403, "access_denied", "csrf_mismatch", "")
 		return
 	}
 	decision := r.PostForm.Get("decision")
 	if decision != "allow" && decision != "deny" {
-		oauthError(w, 400, "invalid_request")
+		reject(w, r, 400, "invalid_request", "invalid_decision", "decision")
 		return
 	}
 	if decision == "deny" {
 		a.State = "denied"
+		httplog.SetError(r.Context(), "access_denied", "user_denied", "")
 		o.renderWrite(w, 200, id, a, "", "")
 		return
 	}
 	if o.limited(true) {
-		oauthError(w, 429, "temporarily_unavailable")
+		rateLimited(w, r, "oauth_consent_attempts", "window_exceeded")
 		return
 	}
 	select {
 	case o.hashing <- struct{}{}:
 		defer func() { <-o.hashing }()
 	default:
-		oauthError(w, 429, "temporarily_unavailable")
+		rateLimited(w, r, "oauth_hashing_busy", "busy")
 		return
 	}
 	_, err = o.store.VerifyOwner(r.Context(), r.PostForm.Get("email"), r.PostForm.Get("password"))
 	if errors.Is(err, auth.ErrCredentials) {
+		httplog.SetAuth(r.Context(), httplog.AuthNone, httplog.AuthRejected)
+		httplog.SetError(r.Context(), "invalid_credentials", "invalid_credentials", "")
+		httplog.Event(r.Context(), "oauth.credentials.rejected", slog.String("reason", "invalid_credentials"), slog.String("client_name", a.ClientName), slog.String("client_id_prefix", a.ClientID))
 		o.renderWrite(w, 401, id, a, "E-mail ou senha inválidos.", r.PostForm.Get("email"))
 		return
 	}
 	if err != nil {
-		o.unavailable(w)
+		o.unavailable(w, r, "db_error")
 		return
 	}
 	active, err = o.writeGrantActive(r.Context(), a.OwnerHash)
 	if err != nil {
-		o.unavailable(w)
+		o.unavailable(w, r, "db_error")
 		return
 	}
 	if !active {
-		oauthError(w, 403, "access_denied")
+		reject(w, r, 403, "access_denied", "grant_inactive", "")
 		return
 	}
 	// Consume before execution. A response failure cannot cause a second write.
@@ -247,8 +259,8 @@ func (o *oauthServer) renderWrite(w http.ResponseWriter, status int, id string, 
 	if a != nil {
 		var data map[string]json.RawMessage
 		_ = json.Unmarshal(a.Preview.Request.Data, &data)
-		labels := map[string]string{"account_id": "Conta", "description": "Descrição", "amount": "Valor assinado", "occurred_at": "Data", "category_id": "Categoria", "state": "Inclusão", "name": "Nome", "kind": "Tipo", "is_active": "Ativa", "icon": "Ícone", "color": "Cor", "conditions": "Condições", "actions": "Ações", "logic_operator": "Operador lógico", "metric": "Métrica", "target_amount": "Valor alvo (BRL)", "target_date": "Data alvo", "notes": "Observações", "projected_at": "Data planejada", "category": "Categoria", "cadence": "Frequência", "day_of_month": "Dia do mês", "month_of_year": "Mês do ano", "start_date": "Data inicial", "end_date": "Data final", "scenario_id": "Cenário", "financial_account_id": "Conta bancária vinculada", "position_id": "Posição", "asset_id": "Ativo", "ticker": "Código do ativo", "currency_code": "Moeda", "quantity": "Quantidade", "unit_price": "Preço unitário", "fees": "Taxas", "taxes": "Impostos", "occurred_on": "Data da operação", "initial_quantity": "Quantidade inicial", "initial_unit_cost": "Custo unitário inicial", "initial_value": "Saldo inicial", "asset_type": "Tipo de ativo", "active": "Ativa", "source": "Origem", "is_editable": "Editável", "cash_balance": "Saldo disponível", "current_value": "Valor atual", "total_cost": "Custo de aquisição"}
-		for _, key := range []string{"account_id", "description", "amount", "occurred_at", "category_id", "state", "name", "kind", "is_active", "icon", "color", "logic_operator", "conditions", "actions", "metric", "target_amount", "target_date", "notes", "projected_at", "category", "cadence", "day_of_month", "month_of_year", "start_date", "end_date", "scenario_id", "financial_account_id", "position_id", "asset_id", "ticker", "currency_code", "quantity", "unit_price", "fees", "taxes", "occurred_on", "initial_quantity", "initial_unit_cost", "initial_value", "asset_type", "active", "source", "is_editable", "cash_balance", "current_value", "total_cost"} {
+		labels := map[string]string{"currency_code": "Moeda", "opening_balance": "Saldo inicial", "archived": "Arquivada", "archived_at": "Arquivada em", "starting_settled_amount": "Valor quitado inicial (BRL)", "settled_amount": "Valor quitado (BRL)", "remaining_amount": "Saldo restante (BRL)", "source_transaction_id": "Lançamento de saída", "destination_transaction_id": "Lançamento de entrada", "fee_transaction_id": "Lançamento da tarifa", "source": "Origem", "destination": "Entrada", "fee": "Tarifa", "total_amount": "Valor total (BRL)", "initial_remaining_amount": "Saldo restante inicial (BRL)", "payable_id": "Pendência", "transaction_id": "Lançamento vinculado", "account_id": "Conta", "description": "Descrição", "amount": "Valor assinado", "occurred_at": "Data", "category_id": "Categoria", "state": "Inclusão", "name": "Nome", "kind": "Tipo", "is_active": "Ativa", "icon": "Ícone", "color": "Cor", "conditions": "Condições", "actions": "Ações", "logic_operator": "Operador lógico", "metric": "Métrica", "target_amount": "Valor alvo (BRL)", "target_date": "Data alvo", "notes": "Observações", "projected_at": "Data planejada", "category": "Categoria", "cadence": "Frequência", "day_of_month": "Dia do mês", "month_of_year": "Mês do ano", "start_date": "Data inicial", "end_date": "Data final", "scenario_id": "Cenário", "financial_account_id": "Conta bancária vinculada", "position_id": "Posição", "asset_id": "Ativo", "ticker": "Código do ativo", "quantity": "Quantidade", "unit_price": "Preço unitário", "fees": "Taxas", "taxes": "Impostos", "occurred_on": "Data da operação", "initial_quantity": "Quantidade inicial", "initial_unit_cost": "Custo unitário inicial", "initial_value": "Saldo inicial", "asset_type": "Tipo de ativo", "active": "Ativa", "is_editable": "Editável", "cash_balance": "Saldo disponível", "current_value": "Valor atual", "total_cost": "Custo de aquisição"}
+		for _, key := range []string{"currency_code", "opening_balance", "archived", "source_transaction_id", "destination_transaction_id", "fee_transaction_id", "source", "destination", "fee", "total_amount", "initial_remaining_amount", "payable_id", "transaction_id", "account_id", "description", "amount", "occurred_at", "category_id", "state", "name", "kind", "is_active", "icon", "color", "logic_operator", "conditions", "actions", "metric", "target_amount", "target_date", "notes", "projected_at", "category", "cadence", "day_of_month", "month_of_year", "start_date", "end_date", "scenario_id", "financial_account_id", "position_id", "asset_id", "ticker", "quantity", "unit_price", "fees", "taxes", "occurred_on", "initial_quantity", "initial_unit_cost", "initial_value", "asset_type", "active", "is_editable", "cash_balance", "current_value", "total_cost"} {
 			if value, ok := data[key]; ok {
 				rows = append(rows, row{labels[key], investmentApprovalValue(a, key, strings.Trim(string(value), `"`))})
 			}
@@ -258,7 +270,7 @@ func (o *oauthServer) renderWrite(w http.ResponseWriter, status int, id string, 
 			if json.Unmarshal(raw, &current) != nil {
 				continue
 			}
-			for _, key := range []string{"id", "account_id", "account_name", "currency_code", "description", "amount", "occurred_at", "name", "kind", "is_active", "internal_category", "inclusion", "metric", "target_amount", "target_date", "notes", "projected_at", "category", "category_id", "cadence", "day_of_month", "month_of_year", "start_date", "end_date", "scenario_id", "financial_account_id", "position_id", "asset_id", "ticker", "currency_code", "quantity", "unit_price", "fees", "taxes", "occurred_on", "initial_quantity", "initial_unit_cost", "initial_value", "asset_type", "active", "source", "is_editable", "cash_balance", "current_value", "total_cost"} {
+			for _, key := range []string{"id", "account_id", "account_name", "currency_code", "description", "amount", "occurred_at", "name", "kind", "is_active", "opening_balance", "archived_at", "source", "destination", "fee", "total_amount", "starting_settled_amount", "settled_amount", "remaining_amount", "payable_id", "transaction_id", "internal_category", "inclusion", "metric", "target_amount", "target_date", "notes", "projected_at", "category", "category_id", "cadence", "day_of_month", "month_of_year", "start_date", "end_date", "scenario_id", "financial_account_id", "position_id", "asset_id", "ticker", "quantity", "unit_price", "fees", "taxes", "occurred_on", "initial_quantity", "initial_unit_cost", "initial_value", "asset_type", "active", "is_editable", "cash_balance", "current_value", "total_cost"} {
 				if value, ok := current[key]; ok {
 					label := labels[key]
 					if label == "" {
@@ -298,6 +310,16 @@ func writeOperationLabel(a *writeAction) string {
 		return ""
 	}
 	return map[string]string{
+		"create_manual_account":       "Criar conta manual",
+		"update_manual_account":       "Alterar conta manual",
+		"adjust_manual_account":       "Registrar ajuste de saldo",
+		"create_transfer":             "Registrar transferência entre contas próprias",
+		"delete_transfer":             "Desvincular transferência",
+		"create_payable":              "Criar dívida ou valor a receber",
+		"update_payable":              "Alterar dívida ou valor a receber",
+		"delete_payable":              "Excluir dívida ou valor a receber",
+		"create_payable_link":         "Vincular lançamento à dívida ou ao valor a receber",
+		"delete_payable_link":         "Desvincular lançamento da dívida ou do valor a receber",
 		"delete_investment_operation": "Excluir operação de investimento", "update_investment_operation": "Alterar operação de investimento", "create_investment_operation": "Registrar operação de investimento", "delete_investment_position": "Excluir posição de investimento", "update_investment_position": "Alterar posição de investimento", "create_investment_position": "Criar posição de investimento", "delete_investment_account": "Excluir conta de investimento", "update_investment_account": "Alterar conta de investimento", "create_investment_account": "Criar conta de investimento", "assign_transaction_category": "Atribuir categoria às transações",
 		"set_transaction_inclusion":   "Alterar inclusão nos totais",
 		"create_manual_transaction":   "Criar lançamento manual",
