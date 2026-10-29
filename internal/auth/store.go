@@ -201,6 +201,9 @@ func (s *Store) replacePassword(ctx context.Context, old *string, password strin
 	if n != 1 {
 		return ErrCredentials
 	}
+	if _, err = tx.ExecContext(ctx, `UPDATE mcp_authorizations SET revoked_at=? WHERE revoked_at IS NULL`, db.FormatTime(s.Now())); err != nil {
+		return err
+	}
 	if _, err = tx.ExecContext(ctx, `DELETE FROM auth_sessions`); err != nil {
 		return err
 	}

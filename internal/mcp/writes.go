@@ -18,6 +18,8 @@ import (
 	"github.com/greg0x46/julius/internal/auth"
 	"github.com/greg0x46/julius/internal/db"
 	"github.com/greg0x46/julius/internal/httpapi"
+	"github.com/greg0x46/julius/internal/mcpaccess"
+	"github.com/greg0x46/julius/internal/settings"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -117,12 +119,21 @@ func (o *oauthServer) writeOutput(id string, a *writeAction) writeToolOutput {
 	return out
 }
 func (o *oauthServer) writeGrantActive(ctx context.Context, hash string) (bool, error) {
-	var scope string
-	err := o.store.DB.QueryRowContext(ctx, `SELECT scope FROM oauth_grants WHERE token_hash=? AND kind='access' AND resource=? AND expires_at>? AND revision=(SELECT revision FROM auth_owner WHERE id=1)`, hash, o.resource(), db.FormatTime(o.store.Now())).Scan(&scope)
+	enabled, err := mcpaccess.Enabled(ctx, o.store.DB)
+	if err != nil || !enabled {
+		return false, err
+	}
+	enabled, err = settings.AuthenticationEnabled(ctx, o.store.DB)
+	if err != nil || !enabled {
+		return false, err
+	}
+	var scope, tokenScope string
+	now := db.FormatTime(o.store.Now())
+	err = o.store.DB.QueryRowContext(ctx, `SELECT a.scope,g.scope FROM oauth_grants g JOIN mcp_authorizations a ON a.id=g.authorization_id WHERE g.token_hash=? AND g.kind='access' AND g.resource=? AND g.expires_at>? AND g.revision=(SELECT revision FROM auth_owner WHERE id=1) AND a.revoked_at IS NULL AND a.expires_at>? AND a.revision=(SELECT revision FROM auth_owner WHERE id=1)`, hash, o.resource(), now, now).Scan(&scope, &tokenScope)
 	if errors.Is(err, sql.ErrNoRows) {
 		return false, nil
 	}
-	return canWrite(scope), err
+	return canWrite(mcpaccess.Narrowest(scope, tokenScope)), err
 }
 func (o *oauthServer) approveWrite(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodPost {
