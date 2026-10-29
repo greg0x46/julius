@@ -396,6 +396,7 @@ func TestConsentCredentialsDenyAndGrantEvents(t *testing.T) {
 		f.begin(t)
 		sink.drain()
 		allow.Set("request", f.pending)
+		allow.Set("scope", mcpScope+" "+writeScope)
 		consentCallback(t, postForm(h, "/oauth/authorize", allow, f.cookie, testConfig.PublicURL))
 		c = sink.one(t)
 		c.expectEvent(t, "oauth.consent.granted", map[string]string{"scope": mcpScope + " " + writeScope, "client_name": "Synthetic assistant", "client_id_prefix": prefix})

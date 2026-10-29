@@ -71,4 +71,4 @@ decision/event commits together after a serializable preview recheck. Catalog
 updates preserve existing decisions; category deletion is not exposed.
 
 Tool inputs, approval contract, limits and synthetic dev validation:
-[README financial writes](../../../README.md#financial-writes).
+[README financial writes](../../../docs/legacy-readme.md#financial-writes).

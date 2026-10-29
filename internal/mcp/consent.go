@@ -15,6 +15,7 @@ import (
 	"github.com/greg0x46/julius/internal/auth"
 	"github.com/greg0x46/julius/internal/db"
 	"github.com/greg0x46/julius/internal/httplog"
+	"github.com/greg0x46/julius/internal/mcpaccess"
 )
 
 func (o *oauthServer) csrfCookie() string {
@@ -90,7 +91,7 @@ func (o *oauthServer) authorize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.SetCookie(w, &http.Cookie{Name: o.csrfCookie(), Value: csrf, Path: "/", Secure: o.config.Secure(), HttpOnly: true, SameSite: http.SameSiteStrictMode, MaxAge: 300})
-	o.renderConsent(w, 200, g, name, pending, "", "")
+	o.renderConsent(w, 200, g, name, pending, "", "", mcpaccess.Read)
 }
 
 // authorizationError redirects the error to the validated client; code, reason
@@ -140,7 +141,17 @@ func (o *oauthServer) consent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	clientAttrs := []slog.Attr{slog.String("client_name", name), slog.String("client_id_prefix", g.Client)}
+	selected := ""
 	if decision == "allow" {
+		// The owner may grant less than the client requested, never more.
+		selected = r.PostForm.Get("scope")
+		if selected == "" {
+			selected = mcpaccess.Read
+		}
+		if !mcpaccess.ValidScope(selected) || mcpaccess.Rank(selected) > mcpaccess.Rank(g.Scope) {
+			reject(w, r, 400, "invalid_scope", "scope_exceeds_request", "scope")
+			return
+		}
 		if o.limited(true) {
 			w.Header().Set("Retry-After", "60")
 			rateLimited(w, r, "oauth_consent_attempts", "window_exceeded")
@@ -163,7 +174,7 @@ func (o *oauthServer) consent(w http.ResponseWriter, r *http.Request) {
 				o.unavailable(w, r, "db_error")
 				return
 			}
-			o.renderConsent(w, 401, g, registered, pending, r.PostForm.Get("email"), "E-mail ou senha inválidos.")
+			o.renderConsent(w, 401, g, registered, pending, r.PostForm.Get("email"), "E-mail ou senha inválidos.", selected)
 			return
 		}
 		if err != nil {
@@ -171,6 +182,7 @@ func (o *oauthServer) consent(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		g.Revision = revision
+		g.Scope = selected
 	}
 	if _, err = o.consume(r, "consent", pending); errors.Is(err, sql.ErrNoRows) {
 		reject(w, r, 400, "invalid_request", "consent_request_not_found", "request")
@@ -188,6 +200,14 @@ func (o *oauthServer) consent(w http.ResponseWriter, r *http.Request) {
 		httplog.SetError(r.Context(), "access_denied", "user_denied", "")
 		httplog.Event(r.Context(), "oauth.consent.denied", clientAttrs...)
 	} else {
+		access := mcpaccess.NewStore(o.store.DB)
+		access.Now = o.store.Now
+		id, err := access.Create(r.Context(), g.Client, g.Scope, g.Revision, o.store.Now().Add(accessLifetime+codeLifetime))
+		if err != nil {
+			o.unavailable(w, r, "db_error")
+			return
+		}
+		g.Authorization = &id
 		code := randomToken()
 		if err = o.save(r, "code", code, g, codeLifetime); err != nil {
 			o.unavailable(w, r, "db_error")
@@ -202,23 +222,24 @@ func (o *oauthServer) consent(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	_ = callbackPage.Execute(w, target.String())
 }
-func (o *oauthServer) renderConsent(w http.ResponseWriter, status int, g grant, name, pending, email, message string) {
+func (o *oauthServer) renderConsent(w http.ResponseWriter, status int, g grant, name, pending, email, message, selected string) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(status)
 	_ = consentPage.Execute(w, struct {
 		Grant                       grant
 		CanWrite, CanOperate        bool
 		Name, Request, Email, Error string
-	}{g, canWrite(g.Scope), canOperate(g.Scope), name, pending, email, message})
+		Selected                    string
+	}{g, canWrite(g.Scope), canOperate(g.Scope), name, pending, email, message, selected})
 }
 
 var consentPage = template.Must(template.New("consent").Parse(`<!doctype html>
 <html lang="pt-BR"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Autorizar acesso MCP · Julius</title>
-<style>body{margin:0;background:#f5f7fa;color:#172b4d;font:16px system-ui,sans-serif}main{max-width:540px;margin:40px auto;padding:24px}h1{font-size:1.6rem}dt,label{font-weight:600}dd{margin:4px 0 16px;overflow-wrap:anywhere}label{display:block;margin:16px 0 6px}input,button{box-sizing:border-box;font:inherit;border-radius:8px;min-height:44px;padding:10px 14px}input{width:100%;border:1px solid #64748b}button{cursor:pointer;margin:16px 8px 0 0;border:1px solid #2457a6;color:#2457a6;background:white}button[value=allow]{background:#2457a6;color:white}:focus-visible{outline:3px solid #2457a6;outline-offset:3px}[role=alert]{color:#c4302b}@media(max-width:480px){main{margin:0;padding:24px 16px}button{width:100%;margin-right:0}}</style>
+<style>body{margin:0;background:#f5f7fa;color:#172b4d;font:16px system-ui,sans-serif}main{max-width:540px;margin:40px auto;padding:24px}h1{font-size:1.6rem}dt,label{font-weight:600}dd{margin:4px 0 16px;overflow-wrap:anywhere}label{display:block;margin:16px 0 6px}input,button{box-sizing:border-box;font:inherit;border-radius:8px;min-height:44px;padding:10px 14px}input{width:100%;border:1px solid #64748b}input[type=radio]{width:auto;min-height:auto}fieldset{margin-top:16px}button{cursor:pointer;margin:16px 8px 0 0;border:1px solid #2457a6;color:#2457a6;background:white}button[value=allow]{background:#2457a6;color:white}:focus-visible{outline:3px solid #2457a6;outline-offset:3px}[role=alert]{color:#c4302b}@media(max-width:480px){main{margin:0;padding:24px 16px}button{width:100%;margin-right:0}}</style>
 <main><p>Julius</p><h1>Autorizar acesso MCP</h1><p>Este aplicativo solicita acesso ao seu Julius. Confira os dados antes de autorizar.</p>
 <dl><dt>Aplicativo (nome informado pelo cliente)</dt><dd>{{if .Name}}{{.Name}}{{else}}Aplicativo sem nome{{end}}</dd><dt>Identificador do cliente</dt><dd>{{.Grant.Client}}</dd><dt>Endereço de retorno</dt><dd>{{.Grant.Redirect}}</dd><dt>Recurso</dt><dd>{{.Grant.Resource}}</dd><dt>Permissões</dt><dd>Consultar seus dados financeiros e o andamento das sincronizações via MCP (<code>{{.Grant.Scope}}</code>), incluindo investimentos, patrimônio, metas e projeções. {{if .CanWrite}}Solicitar alterações em transações manuais, categorias, inclusão nos totais, regras de categorização, metas, cenários e compromissos recorrentes, além de contas, posições e operações de investimento editáveis. Cada alteração financeira exige sua aprovação no Julius.{{else}}Acesso somente para leitura.{{end}} {{if .CanOperate}}Solicitar sincronizações e atualizações de cotações, conforme a configuração do Julius. Ao autorizar este acesso, você permite essas solicitações sem uma nova aprovação por operação.{{end}} Cenários hipotéticos entram nos cálculos apenas quando selecionados.</dd></dl>
 <p>Confirme sua identidade para autorizar.</p>{{if .Error}}<p role="alert">{{.Error}}</p>{{end}}
-<form action="/oauth/authorize" method="post"><input type="hidden" name="request" value="{{.Request}}"><label for="email">E-mail</label><input id="email" name="email" type="email" autocomplete="username" value="{{.Email}}" required maxlength="254"><label for="password">Senha</label><input id="password" name="password" type="password" autocomplete="current-password" required><button type="submit" name="decision" value="allow">Autorizar acesso</button><button type="submit" name="decision" value="deny" formnovalidate>Negar acesso</button></form></main></html>`))
+<form action="/oauth/authorize" method="post"><input type="hidden" name="request" value="{{.Request}}"><fieldset><legend>Permissões deste cliente</legend><label><input type="radio" name="scope" value="mcp:access" {{if and (ne .Selected "mcp:access mcp:write") (ne .Selected "mcp:access mcp:write mcp:operations")}}checked{{end}}> Somente leitura</label>{{if .CanWrite}}<label><input type="radio" name="scope" value="mcp:access mcp:write" {{if eq .Selected "mcp:access mcp:write"}}checked{{end}}> Leitura e escrita</label>{{end}}{{if .CanOperate}}<label><input type="radio" name="scope" value="mcp:access mcp:write mcp:operations" {{if eq .Selected "mcp:access mcp:write mcp:operations"}}checked{{end}}> Leitura, escrita e operações</label>{{end}}</fieldset><p>Você pode reduzir as permissões ou revogar o acesso em Configurações → Segurança. Para ampliar além do autorizado aqui, será necessária uma nova autorização.</p><label for="email">E-mail</label><input id="email" name="email" type="email" autocomplete="username" value="{{.Email}}" required maxlength="254"><label for="password">Senha</label><input id="password" name="password" type="password" autocomplete="current-password" required><button type="submit" name="decision" value="allow">Autorizar acesso</button><button type="submit" name="decision" value="deny" formnovalidate>Negar acesso</button></form></main></html>`))
 
 var callbackPage = template.Must(template.New("callback").Parse(`<!doctype html>
 <html lang="pt-BR"><meta charset="utf-8"><meta http-equiv="refresh" content="0;url={{.}}"><title>Retornar ao aplicativo · Julius</title>

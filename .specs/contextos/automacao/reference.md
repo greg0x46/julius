@@ -85,4 +85,4 @@ REST rule-save/retroactive-apply split boundary. Prior decisions survive rule
 deletion, and future/changed sync entries keep the existing precedence.
 
 Tool inputs, approval contract, limits and synthetic dev validation:
-[README financial writes](../../../README.md#financial-writes).
+[README financial writes](../../../docs/legacy-readme.md#financial-writes).

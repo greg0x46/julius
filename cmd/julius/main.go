@@ -76,6 +76,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	config.MCPEnabled = mcpEnabled
 	master, err := auth.LoadMasterKey()
 	if err != nil {
 		log.Fatal(err)
