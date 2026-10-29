@@ -44,7 +44,7 @@ export function DailyAllowanceCard() {
       <HomeTile label={`${title} até ${formatDayMonth(timeline.monthEnd)}`} className="home-hero">
         {base.balance_reporting?.status === "stale" && <p role="status">Saldo convertido com cotações desatualizadas.</p>}
         <p className="daily-allowance-value">
-          <Money value={dailyAllowance(base.points)} tone="neutral" />
+          <Money value={dailyAllowance(base.points, base.starting_balance)} tone="neutral" />
           <span className="daily-allowance-unit"> / dia</span>
         </p>
         <p className="daily-allowance-note">

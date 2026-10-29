@@ -10,6 +10,7 @@ import (
 
 	"github.com/greg0x46/julius/internal/auth"
 	"github.com/greg0x46/julius/internal/exchange"
+	"github.com/greg0x46/julius/internal/httplog"
 	"github.com/greg0x46/julius/internal/ledger"
 	"github.com/greg0x46/julius/internal/marketdata"
 	"github.com/greg0x46/julius/internal/settings"
@@ -35,6 +36,10 @@ func NewServer(db *sql.DB, frontend fs.FS, secrets *settings.Secrets, config aut
 	mux.HandleFunc("POST /api/auth/logout", authentication.logout)
 	mux.HandleFunc("PUT /api/auth/password", authentication.password)
 	mux.HandleFunc("PUT /api/auth/config", authentication.updateConfig)
+	mux.HandleFunc("GET /api/settings/mcp", authentication.getMCP)
+	mux.HandleFunc("PUT /api/settings/mcp", authentication.updateMCP)
+	mux.HandleFunc("PATCH /api/settings/mcp/connections/{id}", authentication.changeMCPConnection)
+	mux.HandleFunc("DELETE /api/settings/mcp/connections/{id}", authentication.changeMCPConnection)
 	mux.HandleFunc("PUT /api/settings/pluggy", handlePluggySettings(db, secrets))
 	mux.HandleFunc("GET /api/settings/quotes", handleGetQuotesSettings(db))
 	mux.HandleFunc("PUT /api/settings/quotes", handleQuotesSettings(db, secrets))
@@ -205,7 +210,8 @@ func NewServer(db *sql.DB, frontend fs.FS, secrets *settings.Secrets, config aut
 
 	mux.Handle("/", spaHandler(frontend))
 
-	return limitBody(authentication.gate(mux))
+	// Outermost, so even rejections from limitBody and the gate name the route.
+	return httplog.WithRoute(mux, limitBody(authentication.gate(mux)))
 }
 
 func handleHealth(db *sql.DB) http.HandlerFunc {

@@ -132,10 +132,14 @@ states as a single quiet line; sparkline and secondary notes dropped).
   independent of the selected period: `base.points` has one point per day,
   today's first, already net of real entries, plan installments, unreconciled
   recurrences and bills due today.
-  Value = the minimum, over days k = 1..N (today = 1), of `max(0, balance_k) / k`,
-  truncated to the cent (`presentation/dailyAllowance.ts`): spending d per day
-  leaves `balance_k - k·d` on day k, so that minimum is the largest d that never
+  Value = the minimum, over days k = 1..N (today = 1), of
+  `max(0, min(balance_k, starting_balance)) / k`, truncated to the cent
+  (`presentation/dailyAllowance.ts`): spending d per day leaves
+  `balance_k - k·d` on day k, so that minimum is the largest d that never
   zeroes the balance — an early dip weighs more than the same dip at month end.
+  The `starting_balance` cap (cash now) keeps money that has not arrived out of
+  the allowance: a future inflow only offsets the outflows already due, and any
+  surplus never becomes spendable.
   Assumes spending at the end of each day. The cent math (`clampBRLAtZero`,
   `minBRL`, `divideBRLFloor`, which rejects negative values) lives in
   `presentation/money.ts`. "Today" rolls over at midnight (`useToday`). The
@@ -259,4 +263,4 @@ is optional on `BuildParams`; omitting it preserves existing application behavio
 Reporting summaries in both MCP and REST share the converted base summary, so
 reference-currency conversion occurs once (including the period's coverage).
 
-Tool inputs, output bounds and dev validation: [README MCP](../../../README.md#mcp).
+Tool inputs, output bounds and dev validation: [README MCP](../../../docs/legacy-readme.md#mcp).

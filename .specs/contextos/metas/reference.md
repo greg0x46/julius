@@ -118,7 +118,7 @@ partial/missing return history come from the same engines. Goals stay BRL and
 exclude hypothetical scenarios; the disclosed assumptions retain zero
 appreciation when no monthly return can be measured.
 
-Tool inputs, output bounds and dev validation: [README MCP](../../../README.md#mcp).
+Tool inputs, output bounds and dev validation: [README MCP](../../../docs/legacy-readme.md#mcp).
 
 ## MCP writes
 

@@ -581,23 +581,40 @@ type CreateLinkResult struct {
 // anyway) and pass its Kind through rather than this function re-fetching
 // it.
 func CreateLink(ctx context.Context, conn *sql.DB, kind Kind, payableID, transactionID string) (CreateLinkResult, error) {
-	if _, err := Get(ctx, conn, payableID); errors.Is(err, ErrNotFound) {
-		return CreateLinkResult{Status: StatusPayableNotFound}, nil
-	} else if err != nil {
-		return CreateLinkResult{}, err
-	}
-
-	snapshot, found, err := loadTransaction(ctx, conn, transactionID)
+	tx, err := conn.BeginTx(ctx, nil)
 	if err != nil {
 		return CreateLinkResult{}, err
 	}
+	defer tx.Rollback()
+	result, err := CreateLinkWithQuerier(ctx, tx, kind, payableID, transactionID)
+	if err != nil || result.Status != StatusCreated {
+		return result, err
+	}
+	if err := tx.Commit(); err != nil {
+		return CreateLinkResult{}, err
+	}
+	return result, nil
+}
+
+// ValidateLink checks the same eligibility as creation without writing.
+func ValidateLink(ctx context.Context, q Querier, kind Kind, payableID, transactionID string) (CreateLinkResult, *money.EffectiveMoney, error) {
+	if _, err := Get(ctx, q, payableID); errors.Is(err, ErrNotFound) {
+		return CreateLinkResult{Status: StatusPayableNotFound}, nil, nil
+	} else if err != nil {
+		return CreateLinkResult{}, nil, err
+	}
+
+	snapshot, found, err := loadTransaction(ctx, q, transactionID)
+	if err != nil {
+		return CreateLinkResult{}, nil, err
+	}
 	if !found {
-		return CreateLinkResult{Status: StatusTransactionNotFound}, nil
+		return CreateLinkResult{Status: StatusTransactionNotFound}, nil, nil
 	}
 
 	var existingLinkID sql.NullString
-	if err := conn.QueryRowContext(ctx, `SELECT id FROM payable_transaction_links WHERE transaction_id = ?`, transactionID).Scan(dbtypes.ID(&existingLinkID)); err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return CreateLinkResult{}, err
+	if err := q.QueryRowContext(ctx, `SELECT id FROM payable_transaction_links WHERE transaction_id = ?`, transactionID).Scan(dbtypes.ID(&existingLinkID)); err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return CreateLinkResult{}, nil, err
 	}
 	alreadyLinked := existingLinkID.Valid
 
@@ -605,19 +622,24 @@ func CreateLink(ctx context.Context, conn *sql.DB, kind Kind, payableID, transac
 	eff := money.SelectEffectiveMoney(snapshot.amountInAcct, snapshot.acctCurrency, snapshot.amount, snapshot.currencyCode)
 	eligibility := EligibilityForLink(kind, classification, inclusionStateFor(snapshot), eff, alreadyLinked)
 	if eligibility.Reason != nil && *eligibility.Reason == ReasonAlreadyLinked {
-		return CreateLinkResult{Status: StatusConflict}, nil
+		return CreateLinkResult{Status: StatusConflict}, nil, nil
 	}
 	if !eligibility.Eligible {
-		return CreateLinkResult{Status: StatusIneligible, Reason: eligibility.Reason}, nil
+		return CreateLinkResult{Status: StatusIneligible, Reason: eligibility.Reason}, nil, nil
 	}
 
-	link := Link{ID: uuid.NewString(), PayableID: payableID, TransactionID: transactionID, LinkedAmount: eff.Value.Abs(), LinkedAt: time.Now().UTC()}
-	tx, err := conn.BeginTx(ctx, nil)
-	if err != nil {
-		return CreateLinkResult{}, err
+	return CreateLinkResult{Status: StatusCreated}, eff, nil
+}
+
+// CreateLinkWithQuerier requires a caller-owned transaction, rolled back on any non-created result.
+func CreateLinkWithQuerier(ctx context.Context, q Querier, kind Kind, payableID, transactionID string) (CreateLinkResult, error) {
+	result, eff, err := ValidateLink(ctx, q, kind, payableID, transactionID)
+	if err != nil || result.Status != StatusCreated {
+		return result, err
 	}
-	defer tx.Rollback()
-	_, err = tx.ExecContext(ctx, `
+	link := Link{ID: uuid.NewString(), PayableID: payableID, TransactionID: transactionID, LinkedAmount: eff.Value.Abs(), LinkedAt: time.Now().UTC()}
+
+	_, err = q.ExecContext(ctx, `
 		INSERT INTO payable_transaction_links (id, payable_id, transaction_id, linked_amount, linked_at)
 		VALUES (?, ?, ?, ?, ?)`,
 		link.ID, link.PayableID, link.TransactionID, money.CanonicalDecimal(link.LinkedAmount), db.FormatTime(link.LinkedAt),
@@ -631,15 +653,12 @@ func CreateLink(ctx context.Context, conn *sql.DB, kind Kind, payableID, transac
 		}
 		return CreateLinkResult{}, err
 	}
-	if err := createSettlement(ctx, tx, link); err != nil {
+	if err := createSettlement(ctx, q, link); err != nil {
 		if db.IsUniqueViolationOn(err,
 			db.ConstraintOneCompleteEventTransactionSQLite,
 			db.ConstraintOneCompleteEventTransactionPostgres) {
 			return CreateLinkResult{Status: StatusConflict}, nil
 		}
-		return CreateLinkResult{}, err
-	}
-	if err := tx.Commit(); err != nil {
 		return CreateLinkResult{}, err
 	}
 	return CreateLinkResult{Status: StatusCreated, Link: &link}, nil
@@ -676,34 +695,43 @@ func createSettlement(ctx context.Context, q Querier, link Link) error {
 // scoping check explicit here rather than delegating it to a WHERE clause
 // that would silently no-op on a mismatched payable_id).
 func DeleteLink(ctx context.Context, conn *sql.DB, payableID, linkID string) (bool, error) {
+	tx, err := conn.BeginTx(ctx, nil)
+	if err != nil {
+		return false, err
+	}
+	defer tx.Rollback()
+	found, err := DeleteLinkWithQuerier(ctx, tx, payableID, linkID)
+	if err != nil || !found {
+		return found, err
+	}
+	if err := tx.Commit(); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// DeleteLinkWithQuerier removes a scoped link and its dependent realizations in the caller's transaction.
+func DeleteLinkWithQuerier(ctx context.Context, q Querier, payableID, linkID string) (bool, error) {
 	var storedPayableID, transactionID string
-	err := conn.QueryRowContext(ctx, `SELECT payable_id, transaction_id FROM payable_transaction_links WHERE id = ?`, linkID).Scan(dbtypes.ID(&storedPayableID), dbtypes.ID(&transactionID))
+	err := q.QueryRowContext(ctx, `SELECT payable_id, transaction_id FROM payable_transaction_links WHERE id = ?`, linkID).Scan(dbtypes.ID(&storedPayableID), dbtypes.ID(&transactionID))
 	if errors.Is(err, sql.ErrNoRows) || (err == nil && storedPayableID != payableID) {
 		return false, nil
 	}
 	if err != nil {
 		return false, err
 	}
-	tx, err := conn.BeginTx(ctx, nil)
-	if err != nil {
+	if _, err := q.ExecContext(ctx, `DELETE FROM payable_transaction_links WHERE id = ?`, linkID); err != nil {
 		return false, err
 	}
-	defer tx.Rollback()
-	if _, err := tx.ExecContext(ctx, `DELETE FROM payable_transaction_links WHERE id = ?`, linkID); err != nil {
-		return false, err
-	}
-	if _, err := tx.ExecContext(ctx, `
+	if _, err := q.ExecContext(ctx, `
 		DELETE FROM scenario_realizations
 		WHERE relation_type = 'settlement' AND transaction_id = ?`, transactionID); err != nil {
 		return false, err
 	}
-	if _, err := tx.ExecContext(ctx, `
+	if _, err := q.ExecContext(ctx, `
 		DELETE FROM scenario_realizations
 		WHERE relation_type = 'allocation' AND transaction_id = ?
 		  AND scenario_id IN (SELECT id FROM scenarios WHERE payable_id = ?)`, transactionID, payableID); err != nil {
-		return false, err
-	}
-	if err := tx.Commit(); err != nil {
 		return false, err
 	}
 	return true, nil

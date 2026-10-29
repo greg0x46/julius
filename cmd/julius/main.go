@@ -11,6 +11,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -75,6 +76,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	config.MCPEnabled = mcpEnabled
 	master, err := auth.LoadMasterKey()
 	if err != nil {
 		log.Fatal(err)
@@ -180,7 +182,7 @@ func main() {
 		go quotes.RunSchedule(ctx, conn, marketService)
 	}
 
-	handler := serverHandler(httpapi.NewServer(conn, frontend, secrets, config, marketService), mcpHandler)
+	handler := loggedHandler(slog.New(slog.NewJSONHandler(os.Stderr, nil)), httpapi.NewServer(conn, frontend, secrets, config, marketService), mcpHandler)
 	log.Printf("listening on http://%s", *addr)
 	server := &http.Server{Addr: *addr, Handler: handler, ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 60 * time.Second}
 	listener, err := net.Listen("tcp", *addr)

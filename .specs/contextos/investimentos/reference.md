@@ -732,14 +732,14 @@ partial totals and null unavailable figures keep their existing semantics.
 Required `to` is clamped to today; `from`, source, grouping and display-account
 filters match the period endpoint. No scenarios enter this read.
 
-Tool inputs, output bounds and dev validation: [README MCP](../../../README.md#mcp).
+Tool inputs, output bounds and dev validation: [README MCP](../../../docs/legacy-readme.md#mcp).
 
 ## MCP writes
 
 Nine typed tools create, update and delete investment accounts, positions and
 operations (`*_investment_account`, `*_investment_position`,
 `*_investment_operation`). Contracts and synthetic dev steps are in
-[README MCP financial writes](../../../README.md#financial-writes).
+[README MCP financial writes](../../../docs/legacy-readme.md#financial-writes).
 All require `mcp:access mcp:write`, a reviewed preview, and a separate owner
 approval in Julius, including removals. The approval page shows exact requested
 and current quantities, prices, fees, taxes and currencies with Portuguese labels.
@@ -785,4 +785,4 @@ separate. Manual requests remain eligible with the daily schedule disabled and
 never change that schedule. Server shutdown and a five-minute deadline cancel
 accepted work; client disconnect does not. Existing providers, caching, rate
 limits and retries remain authoritative. Process-local retry receipts, setup and
-synthetic validation: [README operational tools](../../../README.md#operational-tools).
+synthetic validation: [README operational tools](../../../docs/legacy-readme.md#operational-tools).
