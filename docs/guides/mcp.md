@@ -8,8 +8,8 @@ client's data policy before granting it access to financial information.
 
 ## Enable and discover the endpoint
 
-1. Follow the [quick start](../../README.md#getting-started) and
-   [authentication setup](../legacy-readme.md#authentication-and-encryption-key).
+1. Follow the [getting started](../getting-started.md) and
+   [authentication setup](../self-hosting/security.md#authentication-and-recovery).
    Initialize the owner account, retain the encryption master key, and keep
    authentication enabled in settings. Open mode rejects MCP access; demo mode
    refuses MCP enablement. Use synthetic data in a disposable deployment for

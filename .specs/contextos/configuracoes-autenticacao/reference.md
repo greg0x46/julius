@@ -88,6 +88,8 @@ Login and password change share limits of five attempts/minute per email and
 thirty global, in bounded memory, plus one concurrent KDF operation. Excess or
 contention: 429 with `Retry-After`. Credential messages are generic; the KDF
 also runs for a wrong email. Authentication bodies are limited to 4 KiB.
+Every route, REST or OAuth/MCP, is covered by the access log and security
+events described in "HTTP access log and security events" below.
 
 ## Frontend
 
@@ -563,3 +565,369 @@ read/write/operations scope separation, strict inputs, sanitized bounded history
 ineligible/unavailable services, concurrent queue requests, token isolation,
 terminal retries, shared quote guards, upstream failure/deferral and shutdown.
 Sync integration coverage runs on SQLite and disposable Postgres.
+
+## HTTP access log and security events
+
+`internal/httplog` writes the HTTP access log and a closed set of security
+events with `log/slog` JSON on stderr. `cmd/julius/server.go:loggedHandler`
+wraps the whole server, so a new route is logged without further work.
+
+### Model
+
+- One middleware creates a per-request record in the request context. It
+  generates the `request_id` (128 random bits, 32 hex characters), never reads
+  it from a header and never returns it to the client.
+- Handlers only report controlled codes and reasons (`httplog.SetError`,
+  `SetErrorValues`, `SetAuth`, `SetOAuthClient`) and emit events
+  (`httplog.Event`); they never format a log line. `writeProblem` feeds its
+  `kind` to `error_code`; `httplog.WithRoute` names the route even for requests
+  rejected before the router.
+- When the handler returns (also on a panic, which is re-raised) the middleware
+  writes one `http_request` line, unless the request is routine noise. Event
+  lines are written when the action completes and carry the same `request_id`.
+- Nothing is stored in the database. Every line also has the `slog` fields
+  `time`, `level` and `msg` (equal to `event`).
+
+### `http_request` fields
+
+| Field | Type | Appears | Meaning |
+|---|---|---|---|
+| `event` | string | always | `http_request` |
+| `request_id` | string | always | 32 lowercase hex characters, unique per request, shared with the request's events |
+| `method` | string | always | A standard HTTP method, otherwise `OTHER` |
+| `route` | string | always | The `ServeMux` pattern that matched (`GET /api/accounts/{id}`, `/mcp`, `/oauth/`, `/`), at most 128 runes; `unmatched` if none. Never a path value or query |
+| `status` | int | always | Final status. 1xx are not final except 101 (hijack); a handler that returns without writing is `200` |
+| `duration_ms` | float | always | Wall time, microsecond precision |
+| `response_bytes` | int | always | Bytes the handler wrote to the body (not headers) |
+| `peer_ip` | string | always | IP of the TCP peer (IPv4-mapped IPv6 unmapped, zone dropped); `unknown` when not an IP |
+| `forwarded_ip` | string | a valid header is present | **Unverified**, diagnostics only; never used for authorization, rate limits or URLs. `CF-Connecting-IP` wins whenever present (if repeated or invalid the field is omitted, with no fallback); otherwise the first element of the first `X-Forwarded-For` line. Zones, unspecified and malformed values are omitted |
+| `user_agent` | string | non-empty | Sanitized, at most 200 runes |
+| `auth_type` | string | always | `none`, `session` or `oauth` |
+| `auth_result` | string | always | `not_required`, `ok` or `rejected` |
+| `client_name` | string | OAuth client known | Registered name, sanitized, at most 100 runes |
+| `client_id_prefix` | string | OAuth client known | First 8 characters of the client id |
+| `error_code` | string | handler reported | Controlled code, see the catalog |
+| `error_reason` | string | handler reported | Controlled sub-reason |
+| `invalid_field` | string | handler reported | Name of the input that failed, from a fixed list |
+| `invalid_values` | string array | handler reported | At most 8 categorical values, each from a fixed list or `other` |
+
+`error_code`, `error_reason`, `invalid_field` and `invalid_values` entries
+match `^[a-z0-9_.:-]{1,64}$`; anything else is logged as `invalid_value`.
+
+**Levels:** status 5xx `error`, 4xx `warn`, everything else `info`; a panic is
+always `error`.
+
+**`auth_type` / `auth_result`.** Every request starts as `none` /
+`not_required`; only code that really validates credentials changes it.
+
+| Situation | `auth_type` | `auth_result` |
+|---|---|---|
+| Public route, static file, health, OAuth metadata, REST with authentication off or in demo mode | `none` | `not_required` |
+| Private `/api` route without a session cookie (401 `missing_session`) | `none` | `rejected` |
+| Private `/api` route, cookie unknown, expired, revoked or malformed (401 `invalid_session`), or session store failure (503) | `session` | `rejected` |
+| Private `/api` route with a valid session | `session` | `ok` |
+| `GET /api/auth/session` with a valid session | `session` | `ok` |
+| `GET /api/auth/session` without or with an invalid session | `none` | `not_required` (the 200 `authenticated:false` is the expected answer, never a rejection); a store failure is a 503 |
+| `POST /api/auth/login`, wrong credentials | `none` | `rejected` |
+| `POST /api/auth/login`, success, validation error or 429 | `none` | `not_required` (the request creates a session, it does not use one) |
+| Failure of the Origin / `X-Julius-Request` check or of the demo guard | `none` | `not_required` (they run before authentication) |
+| `/mcp` without an `Authorization` header or with a non-Bearer scheme | `none` | `rejected` |
+| `/mcp`, Bearer token unknown, expired, revoked or for another resource | `oauth` | `rejected` |
+| `/mcp`, storage failure while checking settings or the token (503) | `oauth` | `rejected` |
+| `/mcp`, valid token (also when the scope is insufficient: 403) | `oauth` | `ok` |
+| `/mcp` 429 (concurrency), 403 (origin) or 403 (authentication disabled) | `none` | `not_required` |
+| `POST /oauth/authorize` or `POST /oauth/write`, wrong owner credentials | `none` | `rejected` |
+| Every other OAuth route, including consent with correct credentials | `none` | `not_required` |
+
+**Routine noise.** A request is not logged when its status is below 400 and it
+was not `rejected`, and it is one of: a static frontend asset (`GET`/`HEAD` on
+the SPA route `/` whose path is under `/assets/` or has an asset extension);
+a trivial CORS preflight (`OPTIONS` with `Access-Control-Request-Method`);
+`GET /health`; the polls `GET /api/auth/session` and `GET /api/sync-runs/{id}`.
+Every 4xx/5xx, every `rejected` request and every panic is logged, and SPA
+navigations (`/`, `/transactions`) are logged.
+
+### Security events
+
+Events are emitted when the action has completed, never when it is only
+requested. The attribute allowlist is `reason`, `limiter`, `scope`,
+`client_name`, `client_id_prefix`; client address and user agent stay on the
+request line. A name outside this set is dropped (`httplog.eventLevels`).
+
+| Event | Level | Emitted when | Attributes |
+|---|---|---|---|
+| `auth.login.success` | info | A session was created and its cookie set | none |
+| `auth.login.failure` | warn | `POST /api/auth/login` credentials were rejected (not for validation, 429 or storage failures) | `reason=invalid_credentials` |
+| `auth.logout` | info | The session was revoked in the store | none |
+| `oauth.client.registered` | info | The client row was inserted (201) | `client_name`, `client_id_prefix` |
+| `oauth.consent.granted` | info | Owner credentials checked and the authorization code stored | `scope`, `client_name`, `client_id_prefix` |
+| `oauth.consent.denied` | info | The owner explicitly denied the pending request and it was consumed | `client_name`, `client_id_prefix` |
+| `oauth.credentials.rejected` | warn | Wrong owner credentials on the consent page or the write approval page | `reason=invalid_credentials`, `client_name`, `client_id_prefix` |
+| `oauth.token.revoked` | info | An access token row was actually deleted (an idempotent no-op is silent) | `client_name`, `client_id_prefix` |
+| `security.rate_limited` | warn | A limiter refused the request (429) | `limiter`, `reason` |
+| `security.invalid_origin` | warn | A state-changing request has a wrong `Origin` or missing `X-Julius-Request` | `reason` |
+
+`limiter` is `auth_attempts` or `auth_hashing_busy` (REST login and password
+change), `oauth_requests`, `oauth_consent_attempts`, `oauth_hashing_busy` or
+`mcp_concurrency`; `reason` is `window_exceeded` or `busy`. For
+`security.invalid_origin`, `reason` is `origin_mismatch`, `origin_missing` or,
+for REST only, `request_header_missing`. A wrong current password on
+`PUT /api/auth/password` is a 401 on the request line (session `ok`) without an
+event. The denial of a write approval (`/oauth/write`) and the approval itself
+have no event.
+
+### Error catalog
+
+`error_code` is the public error where there is one; `error_reason` and
+`invalid_field` add what the response hides. A dash means the field is not set.
+Sections list the first check that fails, in code order.
+
+#### POST /oauth/register
+
+The public body is always `{"error":"invalid_client_metadata"}` (or
+`invalid_redirect_uri`). Checks run in this order and only the first failure is
+logged, so the log identifies the exact validation:
+
+| Status | `error_code` | `error_reason` | `invalid_field` | `invalid_values` | Cause |
+|---|---|---|---|---|---|
+| 400 | `invalid_client_metadata` | `empty_body` | - | - | Empty or blank body |
+| 400 | `invalid_client_metadata` | `body_too_large` | - | - | Body over 16 KiB |
+| 400 | `invalid_client_metadata` | `invalid_json` | - | - | Malformed or truncated JSON (also a client that disconnects mid-body) |
+| 400 | `invalid_client_metadata` | `invalid_field_type` | `client_name`, `redirect_uris`, `token_endpoint_auth_method`, `grant_types`, `response_types`, `client_id`, `other` (any other member) or `body` (top-level value is not an object) | - | A member has the wrong JSON type |
+| 400 | `invalid_client_metadata` | `body_read_error` | - | - | Any other read failure |
+| 400 | `invalid_client_metadata` | `multiple_json_values` | - | - | A second JSON value follows the first (garbage after it is `invalid_json`) |
+| 400 | `invalid_client_metadata` | `client_id_provided` | `client_id` | - | The client sent `client_id` |
+| 400 | `invalid_client_metadata` | `name_too_long` | `client_name` | - | `client_name` over 200 bytes |
+| 400 | `invalid_client_metadata` | `redirect_uris_missing` | `redirect_uris` | - | Missing or empty |
+| 400 | `invalid_client_metadata` | `too_many_redirect_uris` | `redirect_uris` | - | More than 10 |
+| 400 | `invalid_client_metadata` | `unsupported_auth_method` | `token_endpoint_auth_method` | the method: `client_secret_basic`, `client_secret_post`, `client_secret_jwt`, `private_key_jwt`, `tls_client_auth`, `self_signed_tls_client_auth` or `other` | Anything but `none` |
+| 400 | `invalid_client_metadata` | `unsupported_grant_types` | `grant_types` | each of the first 8: `authorization_code`, `refresh_token`, `implicit`, `client_credentials`, `password`, `urn:ietf:params:oauth:grant-type:device_code`, `urn:ietf:params:oauth:grant-type:jwt-bearer`, `urn:ietf:params:oauth:grant-type:token-exchange` or `other` | Not exactly `["authorization_code"]` |
+| 400 | `invalid_client_metadata` | `unsupported_response_types` | `response_types` | each of the first 8: `code`, `token`, `id_token`, `none`, `code.id_token`, `code.token`, `id_token.token`, `code.id_token.token` (space-separated combinations, dotted) or `other` | Not exactly `["code"]` |
+| 400 | `invalid_redirect_uri` | `unparseable` | `redirect_uris` | - | First invalid URI does not parse |
+| 400 | `invalid_redirect_uri` | `no_host` | `redirect_uris` | - | No host (relative, `mailto:`, opaque) |
+| 400 | `invalid_redirect_uri` | `userinfo` | `redirect_uris` | - | Contains `user@` or `user:pass@` |
+| 400 | `invalid_redirect_uri` | `fragment` | `redirect_uris` | - | Has a non-empty fragment |
+| 400 | `invalid_redirect_uri` | `too_long` | `redirect_uris` | - | Over 2048 bytes |
+| 400 | `invalid_redirect_uri` | `scheme_not_allowed` | `redirect_uris` | - | Neither `https` nor `http` |
+| 400 | `invalid_redirect_uri` | `http_non_loopback` | `redirect_uris` | - | `http` to a host other than `127.0.0.1`, `::1` or `localhost` |
+| 429 | `temporarily_unavailable` | `client_registry_full` | - | - | 1,000 clients already registered |
+| 503 | `temporarily_unavailable` | `db_error` | - | - | Insert failed |
+
+Success is 201 with `oauth.client.registered`, which exists only for that
+request and has its `request_id`. Reading the log for a failed registration:
+`error_reason` names the check, `invalid_field` the member and
+`invalid_values` the categories received; for example `unsupported_grant_types`
+with `["authorization_code","refresh_token"]` means the client asked for a
+refresh token.
+
+#### All `/oauth/*` and `/.well-known/*` routes (before the handler)
+
+| Status | `error_code` | `error_reason` | Cause |
+|---|---|---|---|
+| 429 | `temporarily_unavailable` | `rate_limited` | 120 requests per minute per process; also `security.rate_limited` (`oauth_requests`, `window_exceeded`) |
+| 503 | `temporarily_unavailable` | `settings_unavailable` | Authentication setting unreadable |
+| 403 | `access_denied` | `authentication_disabled` | Open mode |
+
+#### Form parsing (POST `/oauth/authorize`, `/oauth/token`, `/oauth/revoke`, `/oauth/write`)
+
+| Status | `error_code` | `error_reason` | `invalid_field` | `invalid_values` | Cause |
+|---|---|---|---|---|---|
+| 400 | `invalid_request` | `invalid_content_type` | `content_type` | - | Not `application/x-www-form-urlencoded` |
+| 400 | `invalid_request` | `form_unparseable` | - | - | Malformed form |
+| 400 | `invalid_request` | `body_too_large` | - | - | Over 16 KiB |
+| 400 | `invalid_request` | `duplicate_parameter` | the parameter, or `other` | - | A name sent more than once |
+
+Known parameter names (others are `other`): `client_id`, `redirect_uri`,
+`resource`, `scope`, `code_challenge`, `code_challenge_method`, `response_type`,
+`state`, `grant_type`, `code`, `code_verifier`, `client_secret`, `token`,
+`request`, `decision`, `email`, `password`.
+
+#### GET /oauth/authorize
+
+| Status | `error_code` | `error_reason` | `invalid_field` | `invalid_values` | Cause |
+|---|---|---|---|---|---|
+| 400 | `invalid_request` | `query_too_long` | - | - | Query over 8192 bytes |
+| 400 | `invalid_request` | `query_unparseable` | - | - | Malformed query |
+| 400 | `invalid_request` | `duplicate_parameter` | the parameter, or `other` | - | A name sent more than once |
+| 400 | `invalid_client` | `unknown_client` | `client_id` | - | Unregistered client |
+| 400 | `invalid_client` | `redirect_uri_mismatch` | `redirect_uri` | - | Not one of the client's URIs |
+| 503 | `temporarily_unavailable` | `db_error` | - | - | Storage failure |
+
+From here the client is validated (`client_name` / `client_id_prefix` are
+logged) and errors return to the client as a 303 redirect:
+
+| Status | `error_code` | `error_reason` | `invalid_field` | `invalid_values` | Cause |
+|---|---|---|---|---|---|
+| 303 | `unsupported_response_type` | `response_type_not_code` | `response_type` | - | Not `code` |
+| 303 | `invalid_target` | `resource_mismatch` | `resource` | - | Not the public `/mcp` URL |
+| 303 | `invalid_scope` | `scope_not_supported` | `scope` | requested scopes (first 8): `mcp:access`, `mcp:write`, `mcp:operations`, `openid`, `profile`, `email`, `offline_access`, `other` | A scope Julius does not offer |
+| 303 | `invalid_scope` | `scope_duplicate` | `scope` | same | A scope repeated |
+| 303 | `invalid_scope` | `scope_invalid_combination` | `scope` | same | `mcp:access` missing, or `mcp:operations` without `mcp:write` |
+| 303 | `invalid_request` | `code_challenge_method_not_s256` | `code_challenge_method` | - | Not `S256` |
+| 303 | `invalid_request` | `code_challenge_invalid` | `code_challenge` | - | Not 32 bytes of unpadded base64url |
+| 503 | `temporarily_unavailable` | `db_error` | - | - | Storage failure |
+
+Success is 200 (consent page) with no event.
+
+#### POST /oauth/authorize (consent)
+
+| Status | `error_code` | `error_reason` | `invalid_field` | Cause / event |
+|---|---|---|---|---|
+| 403 | `access_denied` | `origin_mismatch` or `origin_missing` | `origin` | `Origin` is not the public origin; `security.invalid_origin` |
+| 400 | `invalid_request` | form parsing rows | | See above |
+| 400 | `invalid_request` | `consent_request_not_found` | `request` | Unknown, expired or already used (also when consumed concurrently) |
+| 403 | `access_denied` | `csrf_cookie_missing` | - | Browser binding cookie absent |
+| 403 | `access_denied` | `csrf_mismatch` | - | Cookie does not match the request |
+| 400 | `invalid_request` | `invalid_decision` | `decision` | Neither `allow` nor `deny` |
+| 429 | `temporarily_unavailable` | `rate_limited` | - | 5 verifications per minute (`oauth_consent_attempts`, `window_exceeded`) or one in progress (`oauth_hashing_busy`, `busy`); `security.rate_limited` |
+| 401 | `invalid_credentials` | `invalid_credentials` | - | Wrong owner credentials (HTML page); auth `none`/`rejected`; `oauth.credentials.rejected` |
+| 200 | `access_denied` | `user_denied` | - | Explicit denial; callback page; `oauth.consent.denied` |
+| 200 | - | - | - | Granted; callback page; `oauth.consent.granted` |
+| 503 | `temporarily_unavailable` | `db_error` | - | Storage failure |
+
+`client_name` and `client_id_prefix` are logged from the `csrf_*` rows onwards,
+once the pending request is loaded.
+
+#### POST /oauth/token
+
+| Status | `error_code` | `error_reason` | `invalid_field` | `invalid_values` | Cause |
+|---|---|---|---|---|---|
+| 400 | `invalid_request` | form parsing rows | | | See above |
+| 400 | `unsupported_grant_type` | `unsupported_grant_type` | `grant_type` | the type: the grant types listed for registration, or `other` | Not `authorization_code` |
+| 401 | `invalid_client` | `client_authentication_not_supported` | `authorization` | - | `Authorization` header present |
+| 401 | `invalid_client` | `client_authentication_not_supported` | `client_secret` | - | `client_secret` sent |
+| 400 | `invalid_grant` | `code_not_found_or_expired` | `code` | - | Unknown, expired or used code |
+| 400 | `invalid_grant` | `verifier_invalid_format` | `code_verifier` | - | Not 43-128 unreserved characters |
+| 400 | `invalid_grant` | `pkce_mismatch` | `code_verifier` | - | Does not match the challenge |
+| 400 | `invalid_grant` | `client_id_mismatch` | `client_id` | - | Different from the code's client |
+| 400 | `invalid_grant` | `redirect_uri_mismatch` | `redirect_uri` | - | Different from the authorization request |
+| 400 | `invalid_target` | `resource_mismatch` | `resource` | - | Not the public `/mcp` URL |
+| 400 | `invalid_grant` | `owner_revision_changed` | - | - | Password changed or reset since consent |
+| 503 | `temporarily_unavailable` | `db_error` | - | - | Storage failure |
+
+The code is consumed before the verifier, client, redirect and resource
+checks, so those failures also spend it. After the `code_verifier`,
+`client_id` and `redirect_uri` checks pass, `client_id_prefix` (not the name)
+is logged. Success is 200, no event.
+
+#### POST /oauth/revoke
+
+| Status | `error_code` | `error_reason` | `invalid_field` | Cause |
+|---|---|---|---|---|
+| 400 | `invalid_request` | form parsing rows | | See above |
+| 401 | `invalid_client` | `client_authentication_not_supported` | `authorization` or `client_secret` | Client authentication attempted |
+| 401 | `invalid_client` | `unknown_client` | `client_id` | Unregistered client |
+| 503 | `temporarily_unavailable` | `db_error` | - | Storage failure |
+
+Success is 200 even if nothing was revoked (idempotent); only an actual
+deletion emits `oauth.token.revoked`.
+
+#### GET and POST /oauth/write
+
+| Status | `error_code` | `error_reason` | `invalid_field` | Cause / event |
+|---|---|---|---|---|
+| 403 | `access_denied` | `origin_mismatch` or `origin_missing` | `origin` | POST only; `security.invalid_origin` |
+| 400 | `invalid_request` | form parsing rows | | POST only |
+| 410 | `invalid_request` | `write_request_not_found` | `request` | Unknown or expired approval (HTML page) |
+| 403 | `access_denied` | `grant_inactive` | - | The token that prepared the write was revoked, expired or lost its write scope |
+| 403 | `access_denied` | `csrf_cookie_missing`, `csrf_mismatch` | - | POST only |
+| 400 | `invalid_request` | `invalid_decision` | `decision` | POST only |
+| 200 | `access_denied` | `user_denied` | - | Denied; no event |
+| 429 | `temporarily_unavailable` | `rate_limited` | - | As in consent; `security.rate_limited` |
+| 401 | `invalid_credentials` | `invalid_credentials` | - | Wrong owner credentials; `oauth.credentials.rejected` |
+| 503 | `temporarily_unavailable` | `db_error` | - | Storage failure |
+
+#### /mcp
+
+| Status | `error_code` | `error_reason` | `invalid_field` | Cause / event |
+|---|---|---|---|---|
+| 429 | `too_many_requests` | `busy` | - | 16 requests in flight; `security.rate_limited` (`mcp_concurrency`, `busy`) |
+| 403 | `access_denied` | `origin_mismatch` | `origin` | An `Origin` header that is not the public origin (an absent header is allowed for non-browser clients); `security.invalid_origin` |
+| 401 | `unauthorized` | `missing_bearer` | - | No `Authorization` header |
+| 401 | `unauthorized` | `malformed_authorization` | - | Header is not `Bearer <token>` |
+| 401 | `unauthorized` | `invalid_token` | - | Unknown, expired, revoked or wrong-resource token |
+| 503 | `temporarily_unavailable` | `auth_unavailable` | - | Settings or token lookup failed |
+| 403 | `access_denied` | `authentication_disabled` | - | Open mode |
+| 403 | `insufficient_scope` | `scope_invalid` | - | The stored scope lacks `mcp:access` |
+
+Protocol and JSON-RPC errors come from the MCP SDK and carry no `error_code`.
+
+#### REST API (`/api/*`)
+
+| Status | `error_code` | `error_reason` | Cause / event |
+|---|---|---|---|
+| 413 | `body-too-large` | - | Declared body over 1 MiB (before the gate) |
+| 503 | `auth-config-unavailable` | `auth_config_unavailable` | Authentication setting unreadable |
+| 403 | `invalid-origin` | `origin_mismatch` | Write whose `Origin` differs from the public origin; `security.invalid_origin` |
+| 403 | `invalid-origin` | `origin_missing` | Write without `Origin`; same event |
+| 403 | `invalid-origin` | `request_header_missing` | Right `Origin`, `X-Julius-Request` is not `1`; same event |
+| 403 | `demo-mode` | `demo_blocked` | Write blocked by demo mode |
+| 401 | `unauthorized` | `missing_session` | No session cookie |
+| 401 | `unauthorized` | `invalid_session` | Unknown, expired, revoked or malformed cookie |
+| 503 | `auth-unavailable` | `auth_unavailable` | Session store failure (also login, logout, password change) |
+| 401 | `unauthorized` | `invalid_credentials` | Wrong password on login (`auth.login.failure`) or wrong current password on `PUT /api/auth/password` (no event) |
+| 429 | `too-many-attempts` | `window_exceeded` | 5 attempts per minute per email or 30 per minute per process on login and password change; `security.rate_limited` (`auth_attempts`) |
+| 429 | `too-many-attempts` | `busy` | A password hash is already running; `security.rate_limited` (`auth_hashing_busy`) |
+
+Every other `writeProblem(w, status, kind, ...)` in `internal/httpapi` (over
+140 kinds, including `auth-disabled`, `invalid-login`, `invalid-password`,
+`invalid-auth-config`, `account-not-found` and `reporting-fx-unavailable`)
+sets only `error_code` to `kind`, the `type` slug of the response body; there
+is no reason. Unknown `/api` paths answer 404 JSON without an `error_code`.
+
+### Privacy rules
+
+- **Allowlist.** The line holds only the fields above. Never logged: bodies,
+  query strings, raw paths, cookies, any header except `User-Agent` and the
+  forwarding headers behind `forwarded_ip`, credentials, emails, tokens,
+  authorization codes, `state`, PKCE values, CSRF values, redirect URIs, the
+  `Origin` value, `err.Error()` text or request ids supplied by clients.
+- **Controlled values.** Codes, reasons, fields and event attributes are
+  literals in the code; anything that is not a literal token becomes
+  `invalid_value`. Handlers must never pass client text to `SetError`.
+- **Categories.** Client-controlled choices (auth method, grant and response
+  types, scopes, parameter names) pass through `httplog.Known`, which maps
+  anything outside a fixed list to `other`.
+- **Sanitization and limits.** Free text (user agent, client name, event
+  attributes) has invalid UTF-8, control characters (CR, LF, tab, DEL, C1),
+  format characters (bidi, zero-width), line separators and other whitespace
+  replaced by a space, runs collapsed and ends trimmed, then is cut to: user
+  agent 200 runes, client name 100, `client_id_prefix` 8, route 128, event
+  attributes 64. A hostile value therefore cannot add a line or a field.
+- **Addresses.** `peer_ip` is the TCP peer. Proxy headers feed only the
+  unverified `forwarded_ip` and have no effect on rate limits or responses.
+- **Request ids.** Generated by the server, absent from every request and
+  response header, so a client cannot choose or read one.
+
+### Known limitations
+
+- The `503 MCP request timed out` written by `http.TimeoutHandler` (30 s) has
+  no `error_code`: look for `route` `/mcp` with `duration_ms` close to 30000.
+  A client that disconnects before the answer on `/mcp` or `/oauth/*` is also
+  logged as 503, because `TimeoutHandler` answers 503 for any cancellation. The
+  handler it abandoned may set `error_code` after the line is written, so that
+  code can be missing.
+- Elsewhere a handler that returns without writing (for example after noticing
+  that its client is gone) is logged as `200` with `response_bytes` 0.
+- For `HEAD`, `response_bytes` counts what the handler wrote, although none of
+  it is sent.
+- Requests that `net/http` rejects while parsing (for example a header value with
+  a control character, or a malformed request line) are answered with 400 before
+  any handler runs, so they produce no `http_request` line.
+- A hijacked connection is logged as `101`; bytes sent over it are not counted.
+- A panic is logged as `500` with `error_code` `handler_panic` (or
+  `handler_aborted` for `http.ErrAbortHandler`) even on routes that are normally
+  skipped, then re-raised.
+- Behind a proxy or tunnel `peer_ip` is the proxy; `forwarded_ip` is what the
+  proxy claims and is not verified.
+- The standard `log` package writes plain-text startup and background lines to
+  the same stream, so consumers must tolerate non-JSON lines.
+- The concurrency tests have not been run under `-race` (it needs cgo); run
+  `go test -race ./internal/httplog/ ./cmd/julius/` where cgo is available.
+
+Tests: `internal/httplog` (fields, sanitization, noise, writer, concurrency),
+`internal/httpapi/logging_*_test.go` and `internal/mcp/logging_*_test.go`
+(per-endpoint catalog, events, secrets) and `cmd/julius/logging_test.go`
+(the assembled server over real connections: route coverage, registration
+diagnosis, request-id correlation, origin handling, secret sweep, unchanged
+responses, cancellation and graceful shutdown).

@@ -1,10 +1,29 @@
 # Documentation
 
-- [Getting started](../README.md#getting-started) — install and start Julius.
-- [MCP setup and authorization](guides/mcp.md) — expose the endpoint, connect a
+Start with [Getting started](getting-started.md) to build Julius, create the
+owner account, and sign in for the first time.
+
+## Self-hosting
+
+- [Installation](self-hosting/installation.md): published binaries, source builds,
+  persistent storage, and running the service.
+- [Configuration](self-hosting/configuration.md): required environment settings,
+  SQLite, PostgreSQL, and optional integration schedules.
+- [Security](self-hosting/security.md): HTTPS, public origin, secret storage,
+  authentication, and password recovery.
+- [Backups and upgrades](self-hosting/upgrading.md): database and key backups,
+  restoration, safe updates, rollback, and legacy cutover caveats.
+
+## Further reading
+
+- [MCP setup and authorization](guides/mcp.md): expose the endpoint, connect a
   compatible client, approve changes and revoke access.
-- [MCP interoperability checks](mcp.md) — repeatable smoke validation and client
+- [MCP interoperability checks](mcp.md): repeatable smoke validation and client
   compatibility evidence.
-- [Legacy README](legacy-readme.md) — temporary reference for sections still
-  being migrated, including authentication, database and deployment details.
-- [Development conventions](../AGENTS.md) and [domain documentation](../.specs/README.md).
+- [Feature reference](legacy-readme.md#features) in the temporary previous README.
+- [Contributor conventions](../AGENTS.md), [domain documentation](../.specs/README.md),
+  and [frontend testing](../frontend/TESTING.md).
+- [Changelog](../CHANGELOG.md) and
+  [published releases](https://github.com/greg0x46/julius/releases).
+
+Return to the [project README](../README.md).
