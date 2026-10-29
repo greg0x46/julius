@@ -1,0 +1,9 @@
+html, body, #root { min-width: 0; }
+.mcp-portfolio { padding: var(--page-gutter); }
+.mcp-portfolio h1 { font-size: 1.25rem; }
+.mcp-portfolio > p { color: var(--color-text-secondary); }
+.mcp-portfolio .section, .mcp-portfolio .summary-strip { margin-inline: 0; }
+@media (max-width: 47.99rem) {
+  .mcp-portfolio .list-toolbar-row { flex-wrap: wrap; }
+  .mcp-portfolio .list-toolbar-search { flex-basis: 100%; }
+}

@@ -87,10 +87,14 @@ func (r mcpRange) days() (time.Time, time.Time, error) {
 
 // RegisterMCPPlanningTools shares the REST presentation boundary and domain
 // engines. No HTTP dispatch, credentials, or write handlers are exposed.
-func RegisterMCPPlanningTools(server *sdk.Server, conn *sql.DB) {
+func RegisterMCPPlanningTools(server *sdk.Server, conn *sql.DB, portfolioUI ...string) {
+	var meta sdk.Meta
+	if len(portfolioUI) > 0 && portfolioUI[0] != "" {
+		meta = sdk.Meta{"ui": map[string]any{"resourceUri": portfolioUI[0]}}
+	}
 	addPlanningTool(server, "get_investment_portfolio", "Investment positions and returns as of to. Modified Dietz rates; costs counted once; unavailable positions excluded with reasons. Native figures and dated FX retained. No scenarios. Narrow account_id if output exceeds 256 KiB.", func(ctx context.Context, in mcpPortfolioInput) (investmentPeriodDTO, error) {
 		return mcpPortfolio(ctx, conn, in)
-	})
+	}, meta)
 	addPlanningTool(server, "list_goals", "Goals with current progress and required end-of-month contributions, in BRL. Derived on read; no scenarios. Projection assumes no new contributions, a trailing measured monthly return (zero when null); return_partial discloses incomplete history.", func(ctx context.Context, in mcpPage) (mcpItems[goalDTO], error) {
 		list, err := goals.List(ctx, conn)
 		if err != nil {
@@ -156,14 +160,18 @@ func RegisterMCPPlanningTools(server *sdk.Server, conn *sql.DB) {
 	})
 }
 
-func addPlanningTool[In, Out any](server *sdk.Server, name, description string, read func(context.Context, In) (Out, error)) {
+func addPlanningTool[In, Out any](server *sdk.Server, name, description string, read func(context.Context, In) (Out, error), metadata ...sdk.Meta) {
 	schema, err := jsonschema.For[Out](&jsonschema.ForOptions{TypeSchemas: map[reflect.Type]*jsonschema.Schema{
 		reflect.TypeFor[decimal.Decimal](): {Type: "string", Description: "Exact decimal string."},
 	}})
 	if err != nil {
 		panic(fmt.Sprintf("MCP %s schema: %v", name, err))
 	}
-	sdk.AddTool(server, &sdk.Tool{Name: name, Description: description, OutputSchema: schema, Annotations: &sdk.ToolAnnotations{ReadOnlyHint: true, IdempotentHint: true}}, func(ctx context.Context, _ *sdk.CallToolRequest, input In) (*sdk.CallToolResult, Out, error) {
+	var meta sdk.Meta
+	if len(metadata) > 0 {
+		meta = metadata[0]
+	}
+	sdk.AddTool(server, &sdk.Tool{Meta: meta, Name: name, Description: description, OutputSchema: schema, Annotations: &sdk.ToolAnnotations{ReadOnlyHint: true, IdempotentHint: true}}, func(ctx context.Context, _ *sdk.CallToolRequest, input In) (*sdk.CallToolResult, Out, error) {
 		out, err := read(ctx, input)
 		if err == nil {
 			var data []byte
