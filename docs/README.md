@@ -16,8 +16,8 @@ owner account, and sign in for the first time.
 
 ## Further reading
 
-- [Feature reference](legacy-readme.md#features) and
-  [MCP integration](legacy-readme.md#mcp) in the temporary previous README.
+- [MCP integration](mcp.md).
+- [Feature reference](legacy-readme.md#features) in the temporary previous README.
 - [Contributor conventions](../AGENTS.md), [domain documentation](../.specs/README.md),
   and [frontend testing](../frontend/TESTING.md).
 - [Changelog](../CHANGELOG.md) and

@@ -50,6 +50,7 @@ func NewHandler(enabled bool, config auth.Config, store *auth.Store, operations 
 		Capabilities: &sdk.ServerCapabilities{Tools: &sdk.ToolCapabilities{}},
 	})
 	server.AddReceivingMiddleware(oauth.permissions(nil))
+	registerReadTools(server, store.DB)
 	httpapi.RegisterMCPPlanningTools(server, store.DB)
 	oauth.registerWrites(server)
 	var ops Operations
