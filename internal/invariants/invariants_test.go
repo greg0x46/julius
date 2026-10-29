@@ -725,9 +725,9 @@ func TestIgnoredRowDivergesBetweenTimelineAndNetWorthSeries(t *testing.T) {
 }
 
 // TestMatrixReferencesExistingTests keeps the matrix honest: every test it
-// cites must exist somewhere under internal/.
+// cites must exist under internal/ or frontend/src/.
 func TestMatrixReferencesExistingTests(t *testing.T) {
-	doc, err := os.ReadFile(filepath.Join("..", "..", ".specs", "invariantes-financeiros.md"))
+	doc, err := os.ReadFile(filepath.Join("..", "..", "docs", "development", "financial-invariants.md"))
 	if err != nil {
 		t.Fatalf("read matrix: %v", err)
 	}
@@ -750,6 +750,24 @@ func TestMatrixReferencesExistingTests(t *testing.T) {
 	all := sources.String()
 	for _, match := range cited {
 		if !strings.Contains(all, "func "+match[1]+"(") {
+			t.Errorf("matrix cites %s, which does not exist", match[1])
+		}
+	}
+	frontendTests := make(map[string]bool)
+	err = filepath.WalkDir(filepath.Join("..", "..", "frontend", "src"), func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !d.IsDir() && (strings.HasSuffix(path, ".test.ts") || strings.HasSuffix(path, ".test.tsx")) {
+			frontendTests[d.Name()] = true
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("walk frontend/src/: %v", err)
+	}
+	for _, match := range regexp.MustCompile("`([A-Za-z0-9_]+\\.test\\.tsx?)`").FindAllStringSubmatch(string(doc), -1) {
+		if !frontendTests[match[1]] {
 			t.Errorf("matrix cites %s, which does not exist", match[1])
 		}
 	}
