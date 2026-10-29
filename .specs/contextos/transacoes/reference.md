@@ -452,3 +452,23 @@ cascades show all IDs (maximum 100) and revalidate atomically; no arbitrary batc
 
 Tool inputs, approval contract, limits and synthetic dev validation:
 [README financial writes](../../../docs/legacy-readme.md#financial-writes).
+
+MCP also exposes manual account creation/full updates, native balance adjustments,
+transfer creation/linking and unlinking. `transactions.WriteManualAccount` and
+`AdjustManualAccount` share the existing REST account writes; the caller owns the
+transaction. Account updates require explicit name/currency/opening balance/archive
+fields; synced accounts cannot be edited or adjusted, and movement history locks
+currency/opening balance. Adjustments require active manual accounts and change
+native cash without reporting income/expense.
+
+`transactions.ValidateTransfer` shares creation eligibility without writes.
+Existing movements can belong to synced or manual accounts; new transfer movements
+require active manual banks. `ledger.CreateManualTransferWithQuerier` creates all
+legs/fee and applies existing decisions atomically. Native principal stays outside
+reporting, fees remain ordinary expenses, and unlink preserves rows and decisions.
+`httpapi/mcp_accounts_writes.go` snapshots accounts, movements and links, then
+rechecks within the same serializable transaction as application. Tests:
+`TestMCPAccountsNativeBalancesAndOwnership`,
+`TestMCPTransfersPreserveCashAndReportOnlyFees`,
+`TestMCPAccountWritesRejectInvalidLinksAndRollback` (both dialects), and
+`TestMCPAccountsApprovalAndMutationShareTransaction`.

@@ -446,7 +446,7 @@ Selection and missing-FX tests run on both database dialects.
 
 ### Financial write approval
 
-`internal/mcp/writes.go` registers thirty-one preparation tools plus `get_write_result`;
+`internal/mcp/writes.go` registers forty-one preparation tools plus `get_write_result`;
 [README financial writes](../../../docs/legacy-readme.md#financial-writes) lists exact tool
 names, body fields, bounds and synthetic dev validation. `internal/httpapi/mcp_writes.go`
 validates allowlisted operations, captures before-state, installment identifiers
@@ -508,6 +508,23 @@ stale cascades, parent ownership, anonymous/read-only rejection and destructive
 denial/replay. The OAuth consent disclosure names planning writes; each operation
 still requires a separate owner approval before application.
 
+Account and obligation preparation tools extend the same scoped approval lifecycle:
+manual accounts/full updates/adjustments, transfers/link removal, payable CRUD and
+payable transaction links. Consent and approval pages identify these operations,
+exact native/BRL values and cleanup/reporting consequences; provider settings and
+secrets remain unavailable. `httpapi/mcp_accounts_writes.go` reuses transaction-aware
+ledger/transaction/payable operations and rechecks the captured accounts, movements,
+plans and links in one serializable transaction. Updates require explicit account
+fields to prevent omitted values from silently resetting balance/currency/archive.
+
+`internal/mcp/accounts_writes_test.go` covers all ten tools, SDK schemas, anonymous
+and read-only rejection, owner credentials/Origin/CSRF, denial and approval replay.
+`internal/httpapi/mcp_accounts_writes_test.go` covers native precision, ownership,
+reporting exclusion/fees, payable direction/BRL eligibility, stale approvals,
+scoped unlinks, cleanup and injected failure rollback on both database dialects.
+Account/adjustment/transfer/payable creation has no persistent creation key: a fresh
+preparation plus approval means a new operation. Inspect Julius before preparing
+another after a lost result; same approval POST retries still execute once.
 
 ### Guarded operations
 
