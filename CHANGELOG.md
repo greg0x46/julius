@@ -4,6 +4,12 @@ Notable changes per release. A section is added by `scripts/update-changelog.sh`
 only when a release is prepared, and the release job publishes that same text as
 the GitHub release notes. Newest release first.
 
+## v0.17.1 — 2026-10-29
+
+### Fixes
+
+- **mcp:** Accept refresh_token in OAuth client registration ([#208](https://github.com/greg0x46/julius/pull/208))
+
 ## v0.17.0 — 2026-10-29
 
 ### Features
