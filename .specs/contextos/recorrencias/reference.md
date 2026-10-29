@@ -134,3 +134,34 @@ category; it is editable and clearable. Reconciliation eligibility is unchanged.
 Commitment and occurrence amounts, including transaction reconciliation options,
 use exact decimal strings in HTTP responses. Fractional cents are preserved;
 the UI rounds only read-only BRL display ([policy](../../precisao-monetaria.md)).
+
+## MCP reads
+
+`list_recurring_commitments` exposes active/inactive schedules through
+`recurrences.List` and the REST formatter. `list_projection_events` reads dated
+occurrences through `projections.List`, including realization origin/state;
+`get_timeline` suppresses reconciled occurrences through the existing engine.
+Amounts stay BRL for schedules/events. Active non-standalone commitments are
+selected by default; hypotheticals need explicit IDs.
+
+Tool inputs, output bounds and dev validation: [README MCP](../../../docs/legacy-readme.md#mcp).
+
+## MCP writes
+
+`create_recurring_commitment`, `update_recurring_commitment` and
+`delete_recurring_commitment` share the REST schedule request conversion and
+`recurrences` store flows. Updates replace schedule fields, including activation;
+calendar, positive exact BRL amount, category/account IDs are validated at preview.
+Derived occurrences/reconciliation use the existing engine. Calendar edits remove
+manual links/detachments whose dates cease to be occurrences; real transactions
+remain intact. Deleting removes the schedule and its decisions, and fails with an
+actionable conflict while an automation reconcile action targets it.
+
+All require `mcp:write` and separate browser owner approval. Previews include the
+current schedule, manual decisions and targeting rules; changes invalidate the
+approval. Update/delete recheck the preview and mutate within one serializable
+transaction, including removal of occurrence decisions. Active schedules enter base MCP forecasts, with realized occurrences
+suppressed as before. Synthetic lifecycle, date/amount/ID validation, month-end
+clamping, orphan cleanup, stale previews, linked-rule conflicts and authorization
+are covered by `internal/httpapi/mcp_planning_writes_test.go` and
+`internal/mcp/planning_writes_test.go` on SQLite and Postgres.

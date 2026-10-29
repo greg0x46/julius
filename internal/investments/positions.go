@@ -342,6 +342,17 @@ func brl() *string {
 // initial_balance operation so the replay, not a stored column, owns the
 // resulting quantity and cost.
 func CreatePosition(ctx context.Context, conn *sql.DB, in PositionInput) (Position, error) {
+	var result Position
+	err := mutateLedgerTransaction(ctx, conn, func(q *sql.Tx) error {
+		var err error
+		result, err = CreatePositionWithQuerier(ctx, q, in)
+		return err
+	})
+	return result, err
+}
+
+// CreatePositionWithQuerier requires a caller-owned transaction.
+func CreatePositionWithQuerier(ctx context.Context, q Querier, in PositionInput) (Position, error) {
 	if in.InitialQuantity.IsNegative() || in.InitialUnitCost.IsNegative() ||
 		(in.InitialValue != nil && in.InitialValue.IsNegative()) {
 		return Position{}, ErrInvalidInput
@@ -351,18 +362,12 @@ func CreatePosition(ctx context.Context, conn *sql.DB, in PositionInput) (Positi
 		return Position{}, ErrInvalidInput
 	}
 
-	tx, err := conn.BeginTx(ctx, nil)
-	if err != nil {
-		return Position{}, err
-	}
-	defer tx.Rollback()
-
 	// Integrated custodies accept manual holdings too; the replay keeps them
 	// apart from the provider's balances.
-	if _, err := getRawAccount(ctx, tx, in.AccountID); err != nil {
+	if _, err := getRawAccount(ctx, q, in.AccountID); err != nil {
 		return Position{}, err
 	}
-	asset, err := resolveAsset(ctx, tx, in)
+	asset, err := resolveAsset(ctx, q, in)
 	if err != nil {
 		return Position{}, err
 	}
@@ -370,7 +375,7 @@ func CreatePosition(ctx context.Context, conn *sql.DB, in PositionInput) (Positi
 		return Position{}, err
 	}
 	var alreadyExists bool
-	if err := tx.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM investment_positions WHERE account_id = ? AND asset_id = ?)`, in.AccountID, asset.ID).Scan(dbtypes.Bool(&alreadyExists)); err != nil {
+	if err := q.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM investment_positions WHERE account_id = ? AND asset_id = ?)`, in.AccountID, asset.ID).Scan(dbtypes.Bool(&alreadyExists)); err != nil {
 		return Position{}, err
 	}
 	if alreadyExists {
@@ -378,7 +383,7 @@ func CreatePosition(ctx context.Context, conn *sql.DB, in PositionInput) (Positi
 	}
 	id := uuid.NewString()
 	now := db.FormatTime(time.Now())
-	if _, err := tx.ExecContext(ctx, `
+	if _, err := q.ExecContext(ctx, `
 		INSERT INTO investment_positions (id, account_id, asset_id, notes, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?)`,
 		id, in.AccountID, asset.ID, nullableString(trimOptional(in.Notes)), now, now); err != nil {
@@ -389,7 +394,7 @@ func CreatePosition(ctx context.Context, conn *sql.DB, in PositionInput) (Positi
 		if occurredOn.IsZero() {
 			occurredOn = time.Now()
 		}
-		if _, err := tx.ExecContext(ctx, `
+		if _, err := q.ExecContext(ctx, `
 			INSERT INTO investment_operations (
 				id, account_id, position_id, kind, occurred_on, amount, quantity, unit_price,
 				fees, taxes, source, created_at, updated_at
@@ -398,14 +403,11 @@ func CreatePosition(ctx context.Context, conn *sql.DB, in PositionInput) (Positi
 			money.CanonicalDecimal(quantity), money.CanonicalDecimal(unitPrice), now, now); err != nil {
 			return Position{}, err
 		}
-		if _, err := replayAccount(ctx, tx, in.AccountID); err != nil {
+		if _, err := replayAccount(ctx, q, in.AccountID); err != nil {
 			return Position{}, err
 		}
 	}
-	if err := tx.Commit(); err != nil {
-		return Position{}, err
-	}
-	return GetPosition(ctx, conn, id)
+	return GetPosition(ctx, q, id)
 }
 
 // openingHolding turns the opening fields into one quantity/cost pair. A
@@ -428,15 +430,19 @@ func openingHolding(in PositionInput) (quantity, total, unitPrice decimal.Decima
 
 // UpdatePosition never touches money: it edits the local description of a
 // manual holding. A provider holding has nothing local to edit.
-//
-// It reads the holding twice on purpose: once to learn the source and the
-// provider fields the caller may not change, and once after commit so the
-// caller sees exactly what a subsequent read would. The first read goes
-// through GetPosition rather than a lighter query because the provider name,
-// ticker and asset type are derived there, and a second derivation could
-// reject or accept an update the list would disagree with.
 func UpdatePosition(ctx context.Context, conn *sql.DB, id string, in PositionUpdate) (Position, error) {
-	current, err := GetPosition(ctx, conn, id)
+	var result Position
+	err := mutateLedgerTransaction(ctx, conn, func(q *sql.Tx) error {
+		var err error
+		result, err = UpdatePositionWithQuerier(ctx, q, id, in)
+		return err
+	})
+	return result, err
+}
+
+// UpdatePositionWithQuerier requires a caller-owned transaction.
+func UpdatePositionWithQuerier(ctx context.Context, q Querier, id string, in PositionUpdate) (Position, error) {
+	current, err := GetPosition(ctx, q, id)
 	if err != nil {
 		return Position{}, err
 	}
@@ -446,17 +452,12 @@ func UpdatePosition(ctx context.Context, conn *sql.DB, id string, in PositionUpd
 		}
 		return current, nil
 	}
-	tx, err := conn.BeginTx(ctx, nil)
-	if err != nil {
-		return Position{}, err
-	}
-	defer tx.Rollback()
 
 	name, assetType := strings.TrimSpace(in.Name), strings.TrimSpace(in.AssetType)
 	if name == "" || assetType == "" || current.AssetID == nil {
 		return Position{}, ErrInvalidInput
 	}
-	asset, err := GetAsset(ctx, tx, *current.AssetID)
+	asset, err := GetAsset(ctx, q, *current.AssetID)
 	if err != nil {
 		return Position{}, err
 	}
@@ -468,28 +469,25 @@ func UpdatePosition(ctx context.Context, conn *sql.DB, id string, in PositionUpd
 	// new identity must not collide with another catalog entry: the UNIQUE
 	// index would refuse it anyway, but as a storage error, not a conflict.
 	key := assetCanonicalKey(name, in.Ticker, assetType)
-	if exists, err := assetKeyExists(ctx, tx, key, *current.AssetID); err != nil {
+	if exists, err := assetKeyExists(ctx, q, key, *current.AssetID); err != nil {
 		return Position{}, err
 	} else if exists {
 		return Position{}, ErrAssetAlreadyExists
 	}
-	if _, err := tx.ExecContext(ctx, `
+	if _, err := q.ExecContext(ctx, `
 		UPDATE investment_assets SET canonical_key = ?, name = ?, ticker = ?, asset_type = ?, asset_class = ?, updated_at = ?
 		WHERE id = ?`,
 		key, name, nullableString(trimOptional(in.Ticker)), assetType, assetClass,
 		db.FormatTime(time.Now()), *current.AssetID); err != nil {
 		return Position{}, err
 	}
-	if _, err := tx.ExecContext(ctx, `
+	if _, err := q.ExecContext(ctx, `
 		UPDATE investment_positions SET notes = ?, updated_at = ?
 		WHERE id = ?`,
 		nullableString(trimOptional(in.Notes)), db.FormatTime(time.Now()), id); err != nil {
 		return Position{}, err
 	}
-	if err := tx.Commit(); err != nil {
-		return Position{}, err
-	}
-	return GetPosition(ctx, conn, id)
+	return GetPosition(ctx, q, id)
 }
 
 func changesProviderFields(current Position, in PositionUpdate) bool {
@@ -514,7 +512,12 @@ func derefOrEmpty(s *string) string {
 }
 
 func DeletePosition(ctx context.Context, conn *sql.DB, id string) error {
-	position, err := GetPosition(ctx, conn, id)
+	return mutateLedgerTransaction(ctx, conn, func(q *sql.Tx) error { return DeletePositionWithQuerier(ctx, q, id) })
+}
+
+// DeletePositionWithQuerier requires a caller-owned transaction.
+func DeletePositionWithQuerier(ctx context.Context, q Querier, id string) error {
+	position, err := GetPosition(ctx, q, id)
 	if err != nil {
 		return err
 	}
@@ -522,13 +525,13 @@ func DeletePosition(ctx context.Context, conn *sql.DB, id string) error {
 		return ErrIntegratedReadOnly
 	}
 	var operations int
-	if err := conn.QueryRowContext(ctx, `SELECT COUNT(*) FROM investment_operations WHERE position_id = ?`, id).
+	if err := q.QueryRowContext(ctx, `SELECT COUNT(*) FROM investment_operations WHERE position_id = ?`, id).
 		Scan(&operations); err != nil {
 		return err
 	}
 	if operations > 0 {
 		return ErrPositionHasOperations
 	}
-	_, err = conn.ExecContext(ctx, `DELETE FROM investment_positions WHERE id = ?`, id)
+	_, err = q.ExecContext(ctx, `DELETE FROM investment_positions WHERE id = ?`, id)
 	return err
 }

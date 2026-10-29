@@ -4,13 +4,11 @@ Julius exposes generic MCP in its existing binary. No AI provider, model API
 key, Pluggy account or external identity provider is needed. An MCP client may
 send data it receives to its own AI provider; review that client's data policy.
 
-**Current boundary:** this checkout implements OAuth and MCP transport only.
-`tools/list` returns `[]`; no financial read or write tool exists. The first
-financial milestone is intended to be read-only, but authenticated financial
-reads and their contracts cannot be validated until the dependent tools land.
-The smoke tests below establish transport/auth interoperability, not completion
-of that financial milestone. Do not use a successful connection as evidence
-that financial reads are available.
+**Scope of the checks:** the smoke tests below validate OAuth, MCP transport,
+tool discovery and an authenticated financial read (`list_goals`) with
+synthetic data. Financial writes and operations need the separate `mcp:write`
+and `mcp:operations` scopes and owner approval; see
+[the legacy README](legacy-readme.md#mcp) for the tool inventory.
 
 ## Deployment
 
@@ -43,8 +41,8 @@ The owner enters Julius credentials only on the consent page at the configured
 Julius origin. Check the displayed client name (self-reported), client ID,
 redirect URI, resource and scope. Choose **Negar acesso** to deny, or enter fresh
 owner credentials and choose **Autorizar acesso** to approve. Browser login does
-not imply consent. The only scope is `mcp:access`; it grants transport access,
-with no financial tools in this version. There are no settings secrets or bank
+not imply consent. The `mcp:access` scope grants transport access and read-only tools;
+writes and operations use separate scopes. There are no settings secrets or bank
 credentials in the token.
 
 Access tokens last one hour, with no refresh tokens. Reconnect and authorize
@@ -83,9 +81,9 @@ test data afterward. No running Julius instance or bank connection is needed.
 
 | Client/check | Expected result |
 | --- | --- |
-| Go SDK (`go.mod`), `TestProtocolLifecycle` | Initialize, empty discovery, unknown tool rejected, revocation denies further discovery on an existing connection; both dialects |
-| Independent [Python SDK](https://github.com/modelcontextprotocol/python-sdk/tree/v1.26.0), `TestPythonClientInterop` | HTTP discovery, registration, denial, unknown-scope rejection, approval, S256 exchange, code replay denied, SDK initialize/discovery, unknown call rejected, revoked token denied; both dialects |
-| [MCP Inspector CLI](https://github.com/modelcontextprotocol/inspector/tree/0.21.1), `TestInspectorClientInterop` | Authenticated Streamable HTTP initialize and empty tool discovery; both dialects |
+| Go SDK (`go.mod`), `TestProtocolLifecycle` | Initialize, tool discovery, a synthetic financial read, unknown tool rejected, revocation denies further discovery on an existing connection; both dialects |
+| Independent [Python SDK](https://github.com/modelcontextprotocol/python-sdk/tree/v1.26.0), `TestPythonClientInterop` | HTTP discovery, registration, denial, unknown-scope rejection, approval, S256 exchange, code replay denied, SDK initialize/discovery, financial read, unknown call rejected, revoked token denied; both dialects |
+| [MCP Inspector CLI](https://github.com/modelcontextprotocol/inspector/tree/0.21.1), `TestInspectorClientInterop` | Authenticated Streamable HTTP initialize and tool discovery; both dialects |
 | OAuth/access boundary tests | Missing/expired/wrong-resource/revoked tokens, insufficient scope, CSRF, owner reset, open mode and browser/REST separation rejected; both dialects |
 
 Validation record (2026-10-28): Go SDK 1.8.0, Python SDK 1.26.0 and Inspector
@@ -98,10 +96,9 @@ remote AI applications remain manual checks, unverified in this run.
 Inspector uses the TypeScript SDK; the Go and Python SDKs are independent
 implementations. The Inspector CLI test supplies a synthetic token issued by
 the real Julius consent/code flow; the Python test also exercises that flow
-over HTTP. None invokes a financial tool because none is registered. When the
-read tools land, extend these checks with synthetic financial fixtures and an
-actual read/result assertion in both independent clients, including denied
-scope and revoked access to that read.
+over HTTP. The Go and Python tests invoke `list_goals` against synthetic data; the Inspector
+test covers discovery only. Extending the external clients to more tools,
+denied scope and revoked access to a read remains a manual or future check.
 
 Python and Inspector are development/CI dependencies only. The release remains
 a single Go binary with embedded frontend; neither client is installed or
@@ -121,7 +118,7 @@ which loopback automated tests cannot validate.
    redirects, with exact matching and no wildcard ports.
 2. Authorize once with **Negar acesso**. Expect `access_denied` and no token.
    Repeat, review details and approve with the synthetic owner's credentials.
-   Expect initialize and **List Tools** to succeed with an empty list. If a
+   Expect initialize and **List Tools** to succeed with the tool list. If a
    particular Inspector version cannot send the required resource or DCR
    fields, record that as a client compatibility failure; do not weaken Julius
    checks. The CLI test above isolates transport from interactive OAuth.
@@ -137,8 +134,8 @@ ChatGPT is an example remote MCP client, not a required runtime or identity
 provider. Client account/plan/admin policies, network access to private hosts,
 and support for DCR/resource parameters may limit any remote application's
 ability to connect. Consult that client's current documentation separately;
-Julius does not require a ChatGPT account or OpenAI API key. An empty tool list
-may prevent some applications from exposing a connected server to their UI.
+Julius does not require a ChatGPT account or OpenAI API key. Some applications may limit which tools
+they expose in their UI.
 Do not report those clients as verified without completing their manual check.
 
 ## Errors and troubleshooting
@@ -157,7 +154,7 @@ Do not report those clients as verified without completing their manual check.
 | 429 | Respect Retry-After; there are 16 concurrent MCP slots, OAuth/credential rate limits and a registration cap. |
 | 413 / timeout | MCP bodies are limited to 1 MiB and requests to 30 seconds; OAuth bodies to 16 KiB. |
 | 503 | Check local server/database health and server logs without publishing secrets; errors intentionally omit storage internals. |
-| Connect succeeds, no tools | Expected in the transport/OAuth milestone. No financial reads, writes, imports, sync, prompts or resources are exposed. |
+| Connect succeeds, tool call fails with a scope error | Writes and operations need `mcp:write` / `mcp:operations`; reconnect and approve them. |
 
 Other unsupported flows: refresh tokens, implicit/password/device grants, OIDC,
 confidential client secrets, registration management and browser CORS. Turning

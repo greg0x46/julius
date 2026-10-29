@@ -160,8 +160,24 @@ func TestProtocolLifecycle(t *testing.T) {
 			t.Fatal(err)
 		}
 		result, err := session.ListTools(ctx, &sdk.ListToolsParams{})
-		if err != nil || len(result.Tools) != 0 {
+		if err != nil || len(result.Tools) != 46 {
 			t.Fatalf("tool discovery: %v %v", result, err)
+		}
+		readOnly := 0
+		for _, tool := range result.Tools {
+			if tool.Annotations != nil && tool.Annotations.ReadOnlyHint {
+				readOnly++
+			}
+			if tool.OutputSchema == nil || tool.Annotations == nil {
+				t.Fatalf("untyped tool: %s", tool.Name)
+			}
+		}
+		if readOnly != 13 {
+			t.Fatalf("read-only tool annotations: got %d, want 13", readOnly)
+		}
+		read, err := session.CallTool(ctx, &sdk.CallToolParams{Name: "list_goals", Arguments: map[string]any{}})
+		if err != nil || read.IsError || read.StructuredContent == nil {
+			t.Fatalf("financial read: %+v %v", read, err)
 		}
 		if _, err := session.CallTool(ctx, &sdk.CallToolParams{Name: "missing", Arguments: map[string]any{}}); err == nil {
 			t.Fatal("SDK accepted unknown tool")

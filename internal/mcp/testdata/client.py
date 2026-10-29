@@ -81,7 +81,9 @@ async def main():
                 assert initialized.serverInfo.name == "julius"
                 assert initialized.capabilities.tools is not None
                 tools = await session.list_tools()
-                assert tools.tools == []  # No financial tools in this milestone.
+                assert len(tools.tools) == 46
+                read = await session.call_tool("list_goals", {})
+                assert not read.isError and read.structuredContent is not None
                 try:
                     await session.call_tool("missing", {})
                 except McpError as error:
@@ -93,7 +95,7 @@ async def main():
                 response = await mcp_http.post(resource, json={"jsonrpc": "2.0", "id": 99, "method": "tools/list"})
                 assert response.status_code == 401
                 assert "resource_metadata" in response.headers["www-authenticate"]
-    print("Python SDK: OAuth discovery/denial/scope/PKCE, MCP discovery/error, revocation passed")
+    print("Python SDK: OAuth discovery/denial/scope/PKCE, MCP discovery/read/error, revocation passed")
 
 
 asyncio.run(main())

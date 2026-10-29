@@ -428,3 +428,15 @@ consolidated BRL figures already use each entry's reporting-day rate (see
 `internal/reporting`); the reference currency then applies one current
 BRL→reference rate on top, so a non-BRL reference is a presentation valuation
 of that BRL base, not a per-day reconstruction.
+
+## MCP writes
+
+Manual creation/update/deletion, inclusion decisions and categorization are
+available through separately scoped MCP preparation tools. Each requires a
+Julius browser approval before writing. The adapter reuses `ledger.Service`,
+`ledger.OnIgnored` and existing validation, preserving exact decimals, persistent
+creation idempotency, manual-only restrictions and cleanup. Installment category
+cascades show all IDs (maximum 100) and revalidate atomically; no arbitrary batch.
+
+Tool inputs, approval contract, limits and synthetic dev validation:
+[README financial writes](../../../docs/legacy-readme.md#financial-writes).

@@ -13,9 +13,9 @@ happened. Payables and cards keep their own screens and totals.
 
 ## State vs. ideal
 
-Not evaluated in depth as a domain-engine candidate — see "Not engines" in
-`.specs/motores-de-dominio.md`: it does not (for now) meet criterion 3 (reuse
-across multiple contexts).
+A composed read model over cash and investments, shared by the wealth page,
+Home, goals and MCP. Its formulas remain owned by the existing engines; no
+second financial calculation model is introduced for MCP.
 
 ## Backend
 
@@ -84,3 +84,13 @@ backend/frontend CI tests.
 The chart retains gaps for unavailable valuations, exact decimal strings in
 tooltips, UTC calendar-day labels and an accessible date selector. Numeric
 coordinates never feed financial calculations.
+
+## MCP reads
+
+`get_net_worth` reads `networth.Series`, filters an inclusive window of at most
+366 days and also returns today's `latest`. It uses the configured reference
+currency and each day's FX. Each point has a nullable `breakdown`; unavailable
+days carry no figures. Current valuation failure is a tool error. Liabilities,
+future bills and scenarios remain excluded.
+
+Tool inputs, output bounds and dev validation: [README MCP](../../../docs/legacy-readme.md#mcp).

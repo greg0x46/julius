@@ -123,3 +123,18 @@ only when nothing could start.
   not for income/expense totals or card debt — it ignores transaction
   inclusion/exclusion rules. See Transactions and section 1 of
   `.specs/motores-de-dominio.md`.
+
+
+## MCP operations
+
+`list_sync_runs` and `get_sync_run` expose bounded sync history, counters and
+canonical safe failure messages with `mcp:access`; file imports stay excluded.
+`request_sync` requires `mcp:access mcp:write mcp:operations`, validates the optional
+connection UUID and checks worker credential readiness before calling the same
+HTTP enqueue operation. It returns a receipt with 202 and durable queued run IDs,
+never synchronous completion. Active-connection filtering, per-source database
+uniqueness, partial enqueue outcomes, worker claims/leases and scheduling stay
+unchanged. Repeated keys return the original receipt within the process/token
+retention period; a new intentional request needs a new key. MCP exposes neither
+provider item IDs nor credentials. Setup, retry limits and validation:
+[README operational tools](../../../docs/legacy-readme.md#operational-tools).

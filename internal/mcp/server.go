@@ -2,6 +2,7 @@
 package mcp
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"github.com/greg0x46/julius/internal/auth"
+	"github.com/greg0x46/julius/internal/httpapi"
 	"github.com/greg0x46/julius/internal/settings"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -32,7 +34,7 @@ func ParseEnabled(value string) (bool, error) {
 
 // NewHandler never accepts cookies or inherits the REST API's open-access mode.
 // Bearer credentials are scoped OAuth tokens, isolated from owner sessions.
-func NewHandler(enabled bool, config auth.Config, store *auth.Store) (http.Handler, error) {
+func NewHandler(enabled bool, config auth.Config, store *auth.Store, operations ...Operations) (http.Handler, error) {
 	if !enabled {
 		return http.NotFoundHandler(), nil
 	}
@@ -46,6 +48,13 @@ func NewHandler(enabled bool, config auth.Config, store *auth.Store) (http.Handl
 	server := sdk.NewServer(&sdk.Implementation{Name: "julius", Version: "1"}, &sdk.ServerOptions{
 		Capabilities: &sdk.ServerCapabilities{Tools: &sdk.ToolCapabilities{}},
 	})
+	httpapi.RegisterMCPPlanningTools(server, store.DB)
+	oauth.registerWrites(server)
+	var ops Operations
+	if len(operations) > 0 {
+		ops = operations[0]
+	}
+	oauth.registerOperations(server, ops)
 	transport := sdk.NewStreamableHTTPHandler(func(*http.Request) *sdk.Server { return server }, &sdk.StreamableHTTPOptions{
 		Stateless: true, JSONResponse: true, MaxRequestBodyBytes: 1 << 20,
 		// Reverse proxies may forward a public Host to a loopback listener.
@@ -89,12 +98,13 @@ func NewHandler(enabled bool, config auth.Config, store *auth.Store) (http.Handl
 			}
 			return
 		}
-		if scope != mcpScope {
+		if !validScope(scope) {
 			w.Header().Set("WWW-Authenticate", `Bearer error="insufficient_scope", scope="`+mcpScope+`", resource_metadata="`+config.PublicURL+`/.well-known/oauth-protected-resource/mcp"`)
 			http.Error(w, "Insufficient scope", http.StatusForbidden)
 			return
 		}
-		transport.ServeHTTP(w, r)
+		ctx := context.WithValue(r.Context(), writeContextKey{}, writeIdentity{Hash: tokenHash(token), Scope: scope})
+		transport.ServeHTTP(w, r.WithContext(ctx))
 	})
 	bounded := http.TimeoutHandler(oauth.routes(guarded), requestTimeout, "MCP request timed out")
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

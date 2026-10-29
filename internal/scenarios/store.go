@@ -329,6 +329,22 @@ func SetActive(ctx context.Context, q Querier, id string, active bool) (Scenario
 	return GetScenario(ctx, q, id)
 }
 
+// RenameScenario changes the label without changing projection selection.
+func RenameScenario(ctx context.Context, q Querier, id, name string) (Scenario, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return Scenario{}, errors.New("scenario name is required")
+	}
+	result, err := q.ExecContext(ctx, `UPDATE scenarios SET name = ?, updated_at = ? WHERE id = ?`, name, db.FormatTime(time.Now().UTC()), id)
+	if err != nil {
+		return Scenario{}, err
+	}
+	if n, _ := result.RowsAffected(); n == 0 {
+		return Scenario{}, ErrScenarioNotFound
+	}
+	return GetScenario(ctx, q, id)
+}
+
 // ListScenarios returns the unified catalog. Nil filters mean no filter; the
 // explicit shape avoids overloading nil/empty IDs with active-selection
 // semantics in callers such as the projection reader.

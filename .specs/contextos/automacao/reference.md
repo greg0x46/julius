@@ -75,3 +75,14 @@ relax those checks.
 Amount references and percentage tolerances are parsed and compared as exact
 decimals, without floating-point conversion. Comparison is inclusive and does
 not round either side ([policy](../../precisao-monetaria.md)).
+
+## MCP writes
+
+MCP can prepare rule creation, replacement (including activation state) and
+deletion, with fresh owner approval in Julius. It shares REST rule validation
+and `automation` stores. Retroactive application is rejected; this avoids the
+REST rule-save/retroactive-apply split boundary. Prior decisions survive rule
+deletion, and future/changed sync entries keep the existing precedence.
+
+Tool inputs, approval contract, limits and synthetic dev validation:
+[README financial writes](../../../docs/legacy-readme.md#financial-writes).

@@ -22,6 +22,38 @@ import (
 )
 
 const mcpScope = "mcp:access"
+const writeScope = "mcp:write"
+
+const operationsScope = "mcp:operations"
+
+func normalizeScope(scope string) string {
+	seen := map[string]bool{}
+	for _, field := range strings.Fields(scope) {
+		if seen[field] || (field != mcpScope && field != writeScope && field != operationsScope) {
+			return ""
+		}
+		seen[field] = true
+	}
+	if !seen[mcpScope] || (seen[operationsScope] && !seen[writeScope]) {
+		return ""
+	}
+	result := mcpScope
+	if seen[writeScope] {
+		result += " " + writeScope
+	}
+	if seen[operationsScope] {
+		result += " " + operationsScope
+	}
+	return result
+}
+func validScope(scope string) bool { return scope != "" && normalizeScope(scope) == scope }
+func canWrite(scope string) bool {
+	return validScope(scope) && strings.Contains(" "+scope+" ", " "+writeScope+" ")
+}
+func canOperate(scope string) bool {
+	return canWrite(scope) && strings.HasSuffix(scope, " "+operationsScope)
+}
+
 const accessLifetime = time.Hour
 const codeLifetime = 5 * time.Minute
 
@@ -33,6 +65,7 @@ type oauthServer struct {
 	window           time.Time
 	requests, logins int
 	hashing          chan struct{}
+	writes           *writeManager
 }
 
 type grant struct {
@@ -91,6 +124,8 @@ func (o *oauthServer) routes(transport http.Handler) http.Handler {
 	mux.HandleFunc("GET /.well-known/oauth-protected-resource/mcp", o.resourceMetadata)
 	mux.HandleFunc("GET /.well-known/oauth-authorization-server", o.metadata)
 	mux.HandleFunc("POST /oauth/register", o.register)
+	mux.HandleFunc("GET /oauth/write", o.approveWrite)
+	mux.HandleFunc("POST /oauth/write", o.approveWrite)
 	mux.HandleFunc("GET /oauth/authorize", o.authorize)
 	mux.HandleFunc("POST /oauth/authorize", o.consent)
 	mux.HandleFunc("POST /oauth/token", o.token)
@@ -123,11 +158,11 @@ func (o *oauthServer) routes(transport http.Handler) http.Handler {
 	})
 }
 func (o *oauthServer) resourceMetadata(w http.ResponseWriter, r *http.Request) {
-	jsonResponse(w, 200, map[string]any{"resource": o.resource(), "authorization_servers": []string{o.config.PublicURL}, "scopes_supported": []string{mcpScope}, "bearer_methods_supported": []string{"header"}})
+	jsonResponse(w, 200, map[string]any{"resource": o.resource(), "authorization_servers": []string{o.config.PublicURL}, "scopes_supported": []string{mcpScope, writeScope, operationsScope}, "bearer_methods_supported": []string{"header"}})
 }
 func (o *oauthServer) metadata(w http.ResponseWriter, r *http.Request) {
 	base := o.config.PublicURL
-	jsonResponse(w, 200, map[string]any{"issuer": base, "authorization_endpoint": base + "/oauth/authorize", "token_endpoint": base + "/oauth/token", "registration_endpoint": base + "/oauth/register", "revocation_endpoint": base + "/oauth/revoke", "response_types_supported": []string{"code"}, "grant_types_supported": []string{"authorization_code"}, "code_challenge_methods_supported": []string{"S256"}, "token_endpoint_auth_methods_supported": []string{"none"}, "revocation_endpoint_auth_methods_supported": []string{"none"}, "scopes_supported": []string{mcpScope}, "authorization_response_iss_parameter_supported": true, "client_id_metadata_document_supported": false})
+	jsonResponse(w, 200, map[string]any{"issuer": base, "authorization_endpoint": base + "/oauth/authorize", "token_endpoint": base + "/oauth/token", "registration_endpoint": base + "/oauth/register", "revocation_endpoint": base + "/oauth/revoke", "response_types_supported": []string{"code"}, "grant_types_supported": []string{"authorization_code"}, "code_challenge_methods_supported": []string{"S256"}, "token_endpoint_auth_methods_supported": []string{"none"}, "revocation_endpoint_auth_methods_supported": []string{"none"}, "scopes_supported": []string{mcpScope, writeScope, operationsScope}, "authorization_response_iss_parameter_supported": true, "client_id_metadata_document_supported": false})
 }
 
 type clientMetadata struct {
