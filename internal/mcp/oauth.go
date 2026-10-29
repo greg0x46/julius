@@ -13,6 +13,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -310,6 +311,16 @@ func decodeFailure(err error) (reason, field string) {
 	return "body_read_error", ""
 }
 
+// grantTypesAccepted allows authorization_code alone or with refresh_token.
+// Clients routinely request refresh_token; it is not issued, so the response
+// registers only authorization_code (RFC 7591 section 3.2.1).
+func grantTypesAccepted(grants []string) bool {
+	if len(grants) > 2 || !slices.Contains(grants, "authorization_code") {
+		return false
+	}
+	return len(grants) == 1 || (grants[0] != grants[1] && slices.Contains(grants, "refresh_token"))
+}
+
 // invalidMetadata rejects a registration; values are already allowlisted.
 func invalidMetadata(w http.ResponseWriter, r *http.Request, reason, field string, values ...string) {
 	if len(values) > 0 {
@@ -349,7 +360,7 @@ func (o *oauthServer) register(w http.ResponseWriter, r *http.Request) {
 	case c.Method != "" && c.Method != "none":
 		invalidMetadata(w, r, "unsupported_auth_method", "token_endpoint_auth_method", httplog.Known(c.Method, knownAuthMethods...))
 		return
-	case len(c.Grants) > 0 && (len(c.Grants) != 1 || c.Grants[0] != "authorization_code"):
+	case len(c.Grants) > 0 && !grantTypesAccepted(c.Grants):
 		invalidMetadata(w, r, "unsupported_grant_types", "grant_types", knownValues(c.Grants, knownGrantTypes)...)
 		return
 	case len(c.Responses) > 0 && (len(c.Responses) != 1 || c.Responses[0] != "code"):
