@@ -78,7 +78,7 @@ repository root, install test-only clients outside the checkout:
 ```sh
 python3 -m venv /tmp/julius-mcp-client
 /tmp/julius-mcp-client/bin/pip install -r internal/mcp/testdata/requirements.txt
-npm install --prefix /tmp/julius-mcp-inspector --ignore-scripts --no-audit --no-fund @modelcontextprotocol/inspector@0.21.1
+npm install --prefix /tmp/julius-mcp-inspector --ignore-scripts --no-audit --no-fund @modelcontextprotocol/inspector@2.13.0
 export JULIUS_MCP_TEST_PYTHON=/tmp/julius-mcp-client/bin/python
 export JULIUS_MCP_TEST_INSPECTOR=/tmp/julius-mcp-inspector/node_modules/.bin/mcp-inspector
 go test -p 1 -count=1 -v ./internal/mcp ./cmd/julius
@@ -100,7 +100,7 @@ test data afterward. No running Julius instance or bank connection is needed.
 | --- | --- |
 | Go SDK (`go.mod`), `TestProtocolLifecycle` | Initialize, tool discovery, a synthetic financial read, unknown tool rejected, revocation denies further discovery on an existing connection; both dialects |
 | Independent [Python SDK](https://github.com/modelcontextprotocol/python-sdk/tree/v1.26.0), `TestPythonClientInterop` | HTTP discovery, registration, denial, unknown-scope rejection, approval, S256 exchange, code replay denied, SDK initialize/discovery, financial read, unknown call rejected, revoked token denied; both dialects |
-| [MCP Inspector CLI](https://github.com/modelcontextprotocol/inspector/tree/0.21.1), `TestInspectorClientInterop` | Authenticated Streamable HTTP initialize and tool discovery; both dialects |
+| [MCP Inspector CLI](https://github.com/modelcontextprotocol/inspector), `TestInspectorClientInterop` | Authenticated Streamable HTTP initialize and tool discovery; both dialects |
 | OAuth/access boundary tests | Missing/expired/wrong-resource/revoked tokens, insufficient scope, CSRF, owner reset, open mode and browser/REST separation rejected; both dialects |
 
 Validation evidence at PR head `a3856ec`: GitHub's Frontend (Node) check
@@ -128,7 +128,7 @@ Use a disposable deployment following the steps above and a synthetic owner.
 These checks cover browser consent and your actual proxy/TLS/network path,
 which loopback automated tests cannot validate.
 
-1. Start `npx @modelcontextprotocol/inspector@0.21.1` on your workstation. Keep
+1. Start `npx @modelcontextprotocol/inspector@2.13.0` on your workstation. Keep
    the Inspector proxy local and its own authentication enabled. Select
    Streamable HTTP and your public `/mcp` URL. Use its OAuth authorization
    controls with the discovered metadata; register the exact redirect URI it

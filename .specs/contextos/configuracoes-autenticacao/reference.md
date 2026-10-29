@@ -314,8 +314,9 @@ after revocation. No new binary/runtime dependency is introduced.
 
 [Self-hosted setup and validation](../../../docs/mcp.md) documents HTTPS,
 consent, revocation, repeatable tests and manual browser/remote-client checks.
-The external clients validate transport, OAuth and tool discovery; the Go SDK
-lifecycle test additionally invokes a financial read tool with synthetic data.
+The clients validate transport, OAuth and tool discovery. Both the Go SDK
+lifecycle test and Python client test seed a synthetic goal, invoke `list_goals`
+and assert the returned goal data.
 
 ### MCP financial tool inventory
 
