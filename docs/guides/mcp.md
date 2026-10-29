@@ -100,7 +100,9 @@ Julius pages at the configured public origin.
    Julius returns a generated `client_id`; do not supply one during registration.
    Redirects must use HTTPS, or HTTP on `localhost`, `127.0.0.1` or `::1`.
    They must have no userinfo or fragment and match registration exactly,
-   including the loopback port. There are no wildcard ports. Registration
+   including the loopback port. There are no wildcard ports. A client may also
+   list `refresh_token` in `grant_types`; Julius accepts it but registers only
+   `authorization_code` and issues no refresh tokens. Registration
    identifies an application, not a new Julius owner, and grants no data access.
 3. Open `/oauth/authorize` with `response_type=code`, the registered `client_id`
    and `redirect_uri`, `state`, `scope=mcp:access`,

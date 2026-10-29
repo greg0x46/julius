@@ -273,7 +273,9 @@ OAuth protocol errors use OAuth JSON or a validated redirect, not REST Problems.
 
 Supported registration is RFC 7591 DCR only. Client ID Metadata Documents are
 not supported and their discovery flag is false. Only public clients using
-`none` authentication are supported; no refresh token, implicit/password grant,
+`none` authentication are supported; no refresh token is issued (registration
+accepts `refresh_token` in `grant_types` but registers only `authorization_code`),
+no implicit/password grant,
 OIDC, device flow, registration-management API or browser CORS. Redirect URIs
 must match exactly, including loopback ports; HTTPS is required except HTTP
 loopback redirects. Deployment requires a valid HTTPS public origin outside
@@ -701,7 +703,7 @@ logged, so the log identifies the exact validation:
 | 400 | `invalid_client_metadata` | `redirect_uris_missing` | `redirect_uris` | - | Missing or empty |
 | 400 | `invalid_client_metadata` | `too_many_redirect_uris` | `redirect_uris` | - | More than 10 |
 | 400 | `invalid_client_metadata` | `unsupported_auth_method` | `token_endpoint_auth_method` | the method: `client_secret_basic`, `client_secret_post`, `client_secret_jwt`, `private_key_jwt`, `tls_client_auth`, `self_signed_tls_client_auth` or `other` | Anything but `none` |
-| 400 | `invalid_client_metadata` | `unsupported_grant_types` | `grant_types` | each of the first 8: `authorization_code`, `refresh_token`, `implicit`, `client_credentials`, `password`, `urn:ietf:params:oauth:grant-type:device_code`, `urn:ietf:params:oauth:grant-type:jwt-bearer`, `urn:ietf:params:oauth:grant-type:token-exchange` or `other` | Not exactly `["authorization_code"]` |
+| 400 | `invalid_client_metadata` | `unsupported_grant_types` | `grant_types` | each of the first 8: `authorization_code`, `refresh_token`, `implicit`, `client_credentials`, `password`, `urn:ietf:params:oauth:grant-type:device_code`, `urn:ietf:params:oauth:grant-type:jwt-bearer`, `urn:ietf:params:oauth:grant-type:token-exchange` or `other` | Not `["authorization_code"]` alone or with `refresh_token` (each at most once) |
 | 400 | `invalid_client_metadata` | `unsupported_response_types` | `response_types` | each of the first 8: `code`, `token`, `id_token`, `none`, `code.id_token`, `code.token`, `id_token.token`, `code.id_token.token` (space-separated combinations, dotted) or `other` | Not exactly `["code"]` |
 | 400 | `invalid_redirect_uri` | `unparseable` | `redirect_uris` | - | First invalid URI does not parse |
 | 400 | `invalid_redirect_uri` | `no_host` | `redirect_uris` | - | No host (relative, `mailto:`, opaque) |
@@ -717,8 +719,7 @@ Success is 201 with `oauth.client.registered`, which exists only for that
 request and has its `request_id`. Reading the log for a failed registration:
 `error_reason` names the check, `invalid_field` the member and
 `invalid_values` the categories received; for example `unsupported_grant_types`
-with `["authorization_code","refresh_token"]` means the client asked for a
-refresh token.
+with `["implicit"]` means the client asked for a grant Julius does not support.
 
 #### All `/oauth/*` and `/.well-known/*` routes (before the handler)
 
