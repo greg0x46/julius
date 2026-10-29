@@ -265,7 +265,10 @@ fresh owner credentials and a separate explicit approval even with a browser
 session. Denial needs no password. An HttpOnly/SameSite=Strict host cookie binds
 the pending request to the browser; consent POST requires exact Origin. CSP
 blocks framing/scripts and restricts the credential form to the same origin;
-responses are no-store and no-referrer. After approval or denial, a fresh HTML
+responses are no-store and `Referrer-Policy: same-origin`. The policy must not
+be `no-referrer`: browsers then submit the form with `Origin: null`, which the
+exact check rejects. `same-origin` still sends no `Referer` to the client's
+`redirect_uri` or any other site. After approval or denial, a fresh HTML
 document navigates to the validated callback with a meta refresh and an escaped
 fallback link, avoiding CSP restrictions on cross-origin form redirects. Failed
 credentials retain the details/email and clear the password.
@@ -672,8 +675,9 @@ request line. A name outside this set is dropped (`httplog.eventLevels`).
 `limiter` is `auth_attempts` or `auth_hashing_busy` (REST login and password
 change), `oauth_requests`, `oauth_consent_attempts`, `oauth_hashing_busy` or
 `mcp_concurrency`; `reason` is `window_exceeded` or `busy`. For
-`security.invalid_origin`, `reason` is `origin_mismatch`, `origin_missing` or,
-for REST only, `request_header_missing`. A wrong current password on
+`security.invalid_origin`, `reason` is `origin_mismatch`, `origin_missing`,
+`origin_null` (the header is exactly `null`; MCP and OAuth only) or, for REST
+only, `request_header_missing`. A wrong current password on
 `PUT /api/auth/password` is a 401 on the request line (session `ok`) without an
 event. The denial of a write approval (`/oauth/write`) and the approval itself
 have no event.
@@ -774,7 +778,7 @@ Success is 200 (consent page) with no event.
 
 | Status | `error_code` | `error_reason` | `invalid_field` | Cause / event |
 |---|---|---|---|---|
-| 403 | `access_denied` | `origin_mismatch` or `origin_missing` | `origin` | `Origin` is not the public origin; `security.invalid_origin` |
+| 403 | `access_denied` | `origin_mismatch`, `origin_missing` or `origin_null` | `origin` | `Origin` is not the public origin; `security.invalid_origin` |
 | 400 | `invalid_request` | form parsing rows | | See above |
 | 400 | `invalid_request` | `consent_request_not_found` | `request` | Unknown, expired or already used (also when consumed concurrently) |
 | 403 | `access_denied` | `csrf_cookie_missing` | - | Browser binding cookie absent |
@@ -827,7 +831,7 @@ deletion emits `oauth.token.revoked`.
 
 | Status | `error_code` | `error_reason` | `invalid_field` | Cause / event |
 |---|---|---|---|---|
-| 403 | `access_denied` | `origin_mismatch` or `origin_missing` | `origin` | POST only; `security.invalid_origin` |
+| 403 | `access_denied` | `origin_mismatch`, `origin_missing` or `origin_null` | `origin` | POST only; `security.invalid_origin` |
 | 400 | `invalid_request` | form parsing rows | | POST only |
 | 410 | `invalid_request` | `write_request_not_found` | `request` | Unknown or expired approval (HTML page) |
 | 403 | `access_denied` | `grant_inactive` | - | The token that prepared the write was revoked, expired or lost its write scope |
@@ -843,7 +847,7 @@ deletion emits `oauth.token.revoked`.
 | Status | `error_code` | `error_reason` | `invalid_field` | Cause / event |
 |---|---|---|---|---|
 | 429 | `too_many_requests` | `busy` | - | 16 requests in flight; `security.rate_limited` (`mcp_concurrency`, `busy`) |
-| 403 | `access_denied` | `origin_mismatch` | `origin` | An `Origin` header that is not the public origin (an absent header is allowed for non-browser clients); `security.invalid_origin` |
+| 403 | `access_denied` | `origin_mismatch` or `origin_null` | `origin` | An `Origin` header that is not the public origin (an absent header is allowed for non-browser clients); `security.invalid_origin` |
 | 401 | `unauthorized` | `missing_bearer` | - | No `Authorization` header |
 | 401 | `unauthorized` | `malformed_authorization` | - | Header is not `Bearer <token>` |
 | 401 | `unauthorized` | `invalid_token` | - | Unknown, expired, revoked or wrong-resource token |

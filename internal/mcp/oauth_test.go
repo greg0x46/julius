@@ -118,7 +118,7 @@ func consentCallback(t *testing.T, w *httptest.ResponseRecorder) *url.URL {
 			t.Fatalf("missing CSP directive %q", directive)
 		}
 	}
-	if w.Header().Get("Referrer-Policy") != "no-referrer" || w.Header().Get("Cache-Control") != "no-store" || w.Header().Get("X-Frame-Options") != "DENY" {
+	if w.Header().Get("Referrer-Policy") != oauthReferrerPolicy || w.Header().Get("Cache-Control") != "no-store" || w.Header().Get("X-Frame-Options") != "DENY" {
 		t.Fatal("missing callback protection headers")
 	}
 	u, err := url.Parse(html.UnescapeString(link[1]))
