@@ -24,8 +24,8 @@ func TestBaselineSchemaParity(t *testing.T) {
 	postgres := dbtest.OpenPostgres(t)
 	a := schemaSnapshot(t, sqlite, false)
 	b := schemaSnapshot(t, postgres, true)
-	if len(a) != 45 {
-		t.Fatalf("got %d tables, want 44 application tables and a generation marker", len(a))
+	if len(a) != 46 {
+		t.Fatalf("got %d tables, want 45 application tables and a generation marker", len(a))
 	}
 	for name, table := range a {
 		other, ok := b[name]
@@ -313,7 +313,7 @@ func TestBaselineNativeTypes(t *testing.T) {
 		t.Fatal(err)
 	}
 	var table string
-	expected := map[string]string{"oauth_grants.expires_at": "timestamp with time zone"}
+	expected := map[string]string{"oauth_grants.expires_at": "timestamp with time zone", "mcp_authorizations.created_at": "timestamp with time zone", "mcp_authorizations.last_used_at": "timestamp with time zone", "mcp_authorizations.expires_at": "timestamp with time zone", "mcp_authorizations.revoked_at": "timestamp with time zone"}
 	for _, line := range strings.Split(string(inventory), "\n") {
 		if m := regexp.MustCompile("^### `([^`]+)`").FindStringSubmatch(line); m != nil {
 			table = m[1]

@@ -12,8 +12,9 @@ import (
 // into an open showcase: no login, and nothing that changes access or reaches
 // an external integration (see httpapi's demo guard).
 type Config struct {
-	PublicURL string
-	Demo      bool
+	PublicURL  string
+	Demo       bool
+	MCPEnabled bool
 }
 
 func (c Config) Validate() error {

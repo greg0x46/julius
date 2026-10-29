@@ -225,7 +225,7 @@ and the authentication preference is checked before every OAuth request.
 | POST /oauth/authorize | Checks bound cookie and Origin; explicit denial or fresh owner credentials plus explicit approval; redirects code/error with state and issuer |
 | POST /oauth/token | Form-encoded code exchange; consumes code atomically and validates client, redirect, resource, PKCE and owner revision |
 | GET/POST /oauth/write | Immutable write preview and one-time owner approval/denial; fresh credentials, Origin and browser CSRF binding |
-| POST /oauth/revoke | Form-encoded client ID/token; idempotent revocation of that client's access token |
+| POST /oauth/revoke | Form-encoded client ID/token; idempotent revocation of the connection belonging to that client/token |
 
 Migration `0007_mcp_oauth` adds `oauth_clients` and `oauth_grants` on both
 dialects. These tables start empty when converting legacy databases. Client IDs
@@ -244,7 +244,12 @@ requires `mcp:access` too; scope order is accepted and normalized. Optional
 requests explicitly disclosed on consent, without a new financial approval. Read-only
 grants cannot prepare or inspect writes. Each write needs its own owner approval. Existing grants also permit these reads; consent now explicitly
 discloses financial access and explicit hypothetical selection. Unknown requested
-scopes are rejected. Consent requests and codes last
+scopes are rejected. Consent offers the requested tier and lower ones, defaulting
+to read-only (the owner can grant less than requested; the selection persists
+through credential errors). A receiving middleware rechecks, on every tool call,
+the MCP and browser-auth flags, token expiry/revision, connection revocation and
+the current scope narrowed to the token scope; tools enforce their own scope from
+that fresh identity. Consent requests and codes last
 five minutes; access tokens last one hour without idle refresh. Only hashes of
 random 32-byte credentials reach storage. Code and consent consumption are
 single-use under concurrent requests. Tokens are bound to the exact configured
@@ -291,6 +296,55 @@ connections and then the database. Tests: `internal/mcp/server_test.go` covers
 configuration, both-dialect access checks, generic SDK discovery, legacy
 initialize, malformed/unsupported requests, unknown tools, limits and
 cancellation; `cmd/julius/server_test.go` pins route isolation and shutdown.
+
+
+### MCP authorization management
+
+Paired migration `0008_mcp_authorizations` adds `mcp_authorizations`, with UUID
+connection ID, opaque OAuth client ID, current scope, approved scope ceiling,
+owner revision, creation/last-use/expiry/revocation timestamps. `oauth_grants`
+links codes/tokens to this connection; pending consent has no connection. Every
+fresh consent creates an independent connection, including for the same client.
+Existing pre-upgrade tokens and codes without a connection fail closed and need
+fresh authorization. Legacy conversion leaves these tables empty.
+
+`internal/mcpaccess` owns lifecycle persistence and `mcp.enabled` (unencrypted,
+default true under the server's disabled-by-default environment flag). A false
+runtime flag denies further MCP/OAuth requests with 403; re-enabling resumes
+unexpired, non-revoked connections. Environment disable removes routes until
+restart and cannot be overridden through settings. Both checks are independent
+of browser login. Management requires an authenticated owner even in open mode;
+demo blocks management. Clients never gain REST access through an OAuth token.
+
+| Method / route | Behavior |
+|---|---|
+| GET /api/settings/mcp | Returns server availability, runtime enabled flag and all authorized connections, including expired/revoked; no credentials/hashes |
+| PUT /api/settings/mcp | Saves the runtime enabled flag; requires normal CSRF headers |
+| PATCH /api/settings/mcp/connections/{id} | Sets a scope tier (read, read/write, read/write/operate) within the original consent ceiling; expired/revoked/escalating changes return 409 |
+| DELETE /api/settings/mcp/connections/{id} | Idempotently records revocation for that connection; unknown IDs return 409 |
+
+Security settings reuses Section, Switch, Select and Popconfirm, with loading,
+retry, empty, unavailable-server and per-action error states. Names are explicitly
+self-reported in consent; IDs distinguish identical names. Read-only consent has
+no tier selector. Active broader consent can be reduced and restored within its
+ceiling; broader access requires new consent. Revoked/expired rows retain dates
+and permission summaries without editing controls. Disabling MCP leaves the list
+and revocation controls usable; demo/open mode shows explanatory copy.
+
+A connection expires 65 minutes after consent (five-minute exchange window plus
+one-hour token lifetime); the token itself can expire earlier. Successful MCP
+credential checks update last use, including discovery; neither lifetime extends.
+Revocation blocks outstanding codes and later calls. Password change/reset marks
+all connections revoked in the same transaction that increments owner revision
+and clears browser sessions. Revision checks prevent racing issuance from gaining
+access. Logout affects only the browser. In-flight executions may finish.
+
+Tests: `internal/mcpaccess/store_test.go` covers persistence/lifecycle on both
+dialects. `internal/mcp/authorizations_test.go` tests management isolation, CSRF,
+revoked-code exchange, read/write execution, runtime disable, consent ceiling,
+demo/open access and safe errors on SQLite/Postgres. Frontend
+`MCPSettings.test.tsx` covers controls, confirmation, errors, states and independent
+connections; `api/mcpSettings.test.ts` validates response data and transport.
 
 ### Financial read inventory
 
@@ -345,9 +399,10 @@ not byte-array schemas. Unknown operations/fields are rejected.
 Every mutation returns an immutable preview and an unguessable approval URL,
 bound to the exact originating write-scoped token. Only the browser's same-origin,
 CSRF-bound POST with fresh owner credentials can execute it. Client-supplied
-approval flags or prompts cannot grant approval. Original grant scope, resource,
-expiry and owner revision are rechecked before application. Revocation and
-open mode block pending actions. The Portuguese server-rendered page reuses
+approval flags or prompts cannot grant approval. Original token and current
+connection scope, resource, expiry, revocation and owner revision are rechecked when viewing the preview and before application.
+Runtime disable and open mode also block pending actions, including after the
+owner credential check. The Portuguese server-rendered page reuses
 consent styles/accessibility, escapes client content, displays requested/current
 values and affected IDs/count, and discloses cleanup and reporting effects.
 
