@@ -26,6 +26,12 @@ translations of the Portuguese interface labels.
 - [Backups and upgrades](self-hosting/upgrading.md): database and key backups,
   restoration, safe updates, rollback, and legacy cutover caveats.
 
+## Development
+
+- [Development references](development/README.md): architecture, financial invariants,
+  monetary precision, API contracts and context decisions.
+- [Contributor conventions](../AGENTS.md) and [frontend testing](../frontend/TESTING.md).
+
 ## Further reading
 
 - [Read your own financial data with Meu Pluggy](guides/open-finance-pluggy.md): Open Finance setup.
@@ -34,8 +40,6 @@ translations of the Portuguese interface labels.
 - [MCP interoperability checks](mcp.md): repeatable smoke validation and client
   compatibility evidence.
 - [Feature reference](legacy-readme.md#features) in the temporary previous README.
-- [Contributor conventions](../AGENTS.md), [domain documentation](../.specs/README.md),
-  and [frontend testing](../frontend/TESTING.md).
 - [Changelog](../CHANGELOG.md) and
   [published releases](https://github.com/greg0x46/julius/releases).
 

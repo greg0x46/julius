@@ -63,7 +63,7 @@ authentication configuration that does not depend on the host:
   Historical balance minima use exact comparisons to select their value and date.
   The balance chart includes commitments due today in today's end-of-day point;
   **Saldo hoje** shows the current cash balance.
-  See the [monetary precision policy](../.specs/precisao-monetaria.md).
+  See the [monetary precision policy](development/monetary-precision.md).
 
 - **Build identifier** — every signed-in page has a small footer showing the
   release tag, `stage` or `dev`, with a link to the build commit when available.
@@ -450,7 +450,7 @@ select((.event // "") | startswith("security.") or startswith("auth.") or starts
 
 Retention belongs to the host (journald, the container runtime). The fields,
 events and error catalog are in the
-[reference](.specs/contextos/configuracoes-autenticacao/reference.md#http-access-log-and-security-events).
+[reference](../.specs/contextos/configuracoes-autenticacao/reference.md#http-access-log-and-security-events).
 
 ### MCP
 

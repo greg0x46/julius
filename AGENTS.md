@@ -10,10 +10,10 @@ Keep comments brief; don’t restate what the code already makes clear.
 
 ## Read before changing domain code
 
-1. [`.specs/README.md`](.specs/README.md) — doc map and doc conventions.
-2. [`.specs/motores-de-dominio.md`](.specs/motores-de-dominio.md) — domain
+1. [`docs/development/README.md`](docs/development/README.md) — doc map and doc conventions.
+2. [`docs/development/architecture.md`](docs/development/architecture.md) — domain
    engines and cross-cutting principles (the "why").
-3. [`.specs/invariantes-financeiros.md`](.specs/invariantes-financeiros.md) —
+3. [`docs/development/financial-invariants.md`](docs/development/financial-invariants.md) —
    money rules, owning module and pinning test. Touching a rule means updating
    its row; a test cited there must keep existing.
 4. `.specs/contextos/<context>/reference.md` — current behavior of the area you
@@ -43,7 +43,8 @@ internal/
   invariants/              cross-engine tests pinning the financial rules
   webui/                   embeds frontend/dist (build tag embedded_frontend)
 frontend/src/              api/ hooks/ pages/ components/ presentation/ theme/ test/
-.specs/                    domain docs (see above)
+docs/development/          architecture, financial rules and API contracts
+.specs/                    legacy context inventories and proposals
 ```
 
 ## Commands
@@ -108,7 +109,7 @@ workflow.
   `X-Julius-Request: 1`. Responses under `/api` are `no-store`. Retry-safe
   `POST /api/transactions` takes an `Idempotency-Key` header.
 - Totals eligibility lives in `money.Eligibility`; its check order is
-  load-bearing (see engines doc §1). Don't reorder it.
+  load-bearing (see architecture "Ledger, reporting and cash"). Don't reorder it.
 
 **Migrations** (`internal/db/migrations/`): one numbered goose sequence with
 a file per dialect. Both start at `0001_initial.sql`; use the same number and

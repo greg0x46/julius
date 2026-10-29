@@ -138,7 +138,7 @@ npx playwright show-trace test-results/<failed-test>/trace.zip
 frontend parsers must preserve every field, null and decimal string. Both run
 in CI through the ordinary Go/Vitest suites. Tests include pending/posted and
 nullable payloads, tiny/large decimals and money JSON round-trips. No DOM or
-running server is needed. See [the contract inventory](../.specs/contratos-api.md).
+running server is needed. See [the contract inventory](../docs/development/api-contracts.md).
 
 After deliberately changing a DTO, review compatibility and update the fixture
 from the repository root:
