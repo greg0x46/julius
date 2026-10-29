@@ -41,6 +41,16 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+      - name: Install independent MCP test clients
+        run: |
+          python3 -m venv "$RUNNER_TEMP/mcp-client"
+          "$RUNNER_TEMP/mcp-client/bin/pip" install -r internal/mcp/testdata/requirements.txt
+          echo "JULIUS_MCP_TEST_PYTHON=$RUNNER_TEMP/mcp-client/bin/python" >> "$GITHUB_ENV"
+          npm install --prefix "$RUNNER_TEMP/mcp-inspector" --ignore-scripts --no-audit --no-fund @modelcontextprotocol/inspector@2.13.0
+          echo "JULIUS_MCP_TEST_INSPECTOR=$RUNNER_TEMP/mcp-inspector/node_modules/.bin/mcp-inspector" >> "$GITHUB_ENV"
       - run: go build ./...
       - run: go vet ./...
       # -p 1: the Postgres tests reset the shared database's public schema, so

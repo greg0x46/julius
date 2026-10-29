@@ -16,7 +16,7 @@ its useful sections move into dedicated guides. The legacy
   categorization, and financial planning.
 - [Track investments by account](legacy-readme.md#investments-by-account).
 - [Track goals](legacy-readme.md#goals).
-- [Connect an AI client with MCP](legacy-readme.md#mcp).
+- [Connect an AI client with MCP](mcp.md).
 
 ## Self-Hosting
 

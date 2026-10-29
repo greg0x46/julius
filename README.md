@@ -49,6 +49,8 @@ Keep the key safe and back it up separately from the database; you need the same
 See the [documentation index](docs/README.md) for Getting Started, User Guides,
 Self-Hosting, and Development.
 
+See [MCP setup, client checks and troubleshooting](docs/mcp.md) for AI client access.
+
 ## Tech stack
 
 Go with `net/http`, React and TypeScript with Vite and TanStack Query, SQLite or PostgreSQL, and Pluggy for Open Finance connectivity.
