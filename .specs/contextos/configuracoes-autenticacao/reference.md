@@ -299,6 +299,25 @@ initialize, malformed/unsupported requests, unknown tools, limits and
 cancellation; `cmd/julius/server_test.go` pins route isolation and shutdown.
 
 
+### Cross-client validation
+
+`internal/mcp/interop_test.go` runs an independent Python SDK client through
+HTTP discovery, DCR, scope rejection, denial/approval, S256 exchange, replay
+rejection, MCP initialize/discovery, unknown-tool rejection and revocation.
+It also runs the pinned Inspector CLI (TypeScript SDK) against authenticated
+tool discovery. Both use `dbtest.Each`; CI installs the test-only clients and
+sets their executable paths before the ordinary Go test suite. Locally the
+external tests skip unless `JULIUS_MCP_TEST_PYTHON` and
+`JULIUS_MCP_TEST_INSPECTOR` are set, respectively. The Go SDK protocol lifecycle
+also runs on both dialects and rejects discovery on an already connected client
+after revocation. No new binary/runtime dependency is introduced.
+
+[Self-hosted setup and validation](../../../docs/mcp.md) documents HTTPS,
+consent, revocation, repeatable tests and manual browser/remote-client checks.
+The clients validate transport, OAuth and tool discovery. Both the Go SDK
+lifecycle test and Python client test seed a synthetic goal, invoke `list_goals`
+and assert the returned goal data.
+
 ### MCP financial tool inventory
 
 All five tools have `readOnlyHint=true` and `idempotentHint=true` and are
@@ -371,8 +390,9 @@ demo blocks management. Clients never gain REST access through an OAuth token.
 | PATCH /api/settings/mcp/connections/{id} | Sets a scope tier (read, read/write, read/write/operate) within the original consent ceiling; expired/revoked/escalating changes return 409 |
 | DELETE /api/settings/mcp/connections/{id} | Idempotently records revocation for that connection; unknown IDs return 409 |
 
-Security settings reuses Section, Switch, Select and Popconfirm, with loading,
-retry, empty, unavailable-server and per-action error states. Names are explicitly
+**Configurações → Segurança → Clientes MCP** reuses Section, Switch, Select
+and Popconfirm, with loading, retry, empty, unavailable-server and per-action
+error states. Names are explicitly
 self-reported in consent; IDs distinguish identical names. Read-only consent has
 no tier selector. Active broader consent can be reduced and restored within its
 ceiling; broader access requires new consent. Revoked/expired rows retain dates
