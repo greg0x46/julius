@@ -14,12 +14,16 @@ owner account, and sign in for the first time.
 - [Backups and upgrades](self-hosting/upgrading.md): database and key backups,
   restoration, safe updates, rollback, and legacy cutover caveats.
 
+## Development
+
+- [Development references](development/README.md): architecture, financial invariants,
+  monetary precision, API contracts and context decisions.
+- [Contributor conventions](../AGENTS.md) and [frontend testing](../frontend/TESTING.md).
+
 ## Further reading
 
 - [MCP integration](mcp.md).
 - [Feature reference](legacy-readme.md#features) in the temporary previous README.
-- [Contributor conventions](../AGENTS.md), [domain documentation](../.specs/README.md),
-  and [frontend testing](../frontend/TESTING.md).
 - [Changelog](../CHANGELOG.md) and
   [published releases](https://github.com/greg0x46/julius/releases).
 

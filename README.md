@@ -35,7 +35,7 @@ For a hosted instance or prebuilt Linux binary, see [installation](docs/self-hos
 - **User Guides** — [feature details in the temporary migration reference](docs/legacy-readme.md#features).
 - **Self-Hosting** — [installation](docs/self-hosting/installation.md), [configuration and PostgreSQL](docs/self-hosting/configuration.md), [security and authentication](docs/self-hosting/security.md), and [backups, restore, and upgrades](docs/self-hosting/upgrading.md).
 - **MCP** — [self-hosted setup, client checks and troubleshooting](docs/mcp.md).
-- **Development** — [commands and conventions](AGENTS.md), [domain documentation](.specs/README.md), and [frontend testing](frontend/TESTING.md).
+- **Development** — [commands and conventions](AGENTS.md), [architecture and financial references](docs/development/README.md), and [frontend testing](frontend/TESTING.md).
 
 See the [documentation index](docs/README.md) for all guides. The [previous README](docs/legacy-readme.md) remains a temporary reference for feature details, MCP, legacy database conversion, and contributor release procedures until those sections have durable guides.
 
