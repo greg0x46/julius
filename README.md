@@ -35,7 +35,7 @@ For a hosted instance or prebuilt Linux binary, see [installation](docs/self-hos
 - **User Guides** — [accounts and cards](docs/guides/accounts.md), [transactions and recurring payments](docs/guides/transactions.md), [investments and market prices](docs/guides/investments.md), [financial planning](docs/guides/financial-planning.md), and [connecting banks with Meu Pluggy](docs/guides/open-finance-pluggy.md).
 - **Self-Hosting** — [installation](docs/self-hosting/installation.md), [configuration and PostgreSQL](docs/self-hosting/configuration.md), [security and authentication](docs/self-hosting/security.md), and [backups, restore, and upgrades](docs/self-hosting/upgrading.md).
 - **MCP** — [setup and authorization](docs/guides/mcp.md), and [interoperability checks](docs/mcp.md).
-- **Development** — [commands and conventions](AGENTS.md), [domain documentation](.specs/README.md), and [frontend testing](frontend/TESTING.md).
+- **Development** — [commands and conventions](AGENTS.md), [architecture and financial references](docs/development/README.md), and [frontend testing](frontend/TESTING.md).
 
 See the [documentation index](docs/README.md) for all guides. The [previous README](docs/legacy-readme.md) remains a temporary reference for MCP, legacy database conversion, and contributor release procedures until those sections have durable guides.
 
