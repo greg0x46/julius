@@ -146,6 +146,7 @@ func (b bearerTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 func TestProtocolLifecycle(t *testing.T) {
 	dbtest.Each(t, func(t *testing.T, conn *sql.DB) {
 		store, token := setup(t, conn)
+		goalID := seedInteropGoal(t, conn)
 		handler, err := NewHandler(true, testConfig, store)
 		if err != nil {
 			t.Fatal(err)
@@ -178,6 +179,31 @@ func TestProtocolLifecycle(t *testing.T) {
 		read, err := session.CallTool(ctx, &sdk.CallToolParams{Name: "list_goals", Arguments: map[string]any{}})
 		if err != nil || read.IsError || read.StructuredContent == nil {
 			t.Fatalf("financial read: %+v %v", read, err)
+		}
+		payload, err := json.Marshal(read.StructuredContent)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var resultGoals struct {
+			CurrencyCode string `json:"currency_code"`
+			Items        []struct {
+				ID           string `json:"id"`
+				Name         string `json:"name"`
+				Metric       string `json:"metric"`
+				TargetAmount string `json:"target_amount"`
+				CurrentValue string `json:"current_value"`
+				Progress     string `json:"progress"`
+			} `json:"items"`
+		}
+		if err := json.Unmarshal(payload, &resultGoals); err != nil {
+			t.Fatal(err)
+		}
+		if resultGoals.CurrencyCode != "BRL" || len(resultGoals.Items) != 1 {
+			t.Fatalf("financial read: %s", payload)
+		}
+		goal := resultGoals.Items[0]
+		if goal.ID != goalID || goal.Name != "Synthetic interoperability goal" || goal.Metric != "invested_value" || goal.TargetAmount != "12345.67" || goal.CurrentValue != "0" || goal.Progress != "0.0000000000000000" {
+			t.Fatalf("financial fixture: %s", payload)
 		}
 		if _, err := session.CallTool(ctx, &sdk.CallToolParams{Name: "missing", Arguments: map[string]any{}}); err == nil {
 			t.Fatal("SDK accepted unknown tool")

@@ -81,9 +81,18 @@ async def main():
                 assert initialized.serverInfo.name == "julius"
                 assert initialized.capabilities.tools is not None
                 tools = await session.list_tools()
-                assert len(tools.tools) == 46
+                assert len(tools.tools) == 51
                 read = await session.call_tool("list_goals", {})
                 assert not read.isError and read.structuredContent is not None
+                payload = read.structuredContent
+                assert payload["currency_code"] == "BRL"
+                assert len(payload["items"]) == 1
+                goal = payload["items"][0]
+                assert goal["id"] == os.environ["JULIUS_MCP_TEST_GOAL_ID"]
+                assert goal["name"] == "Synthetic interoperability goal"
+                assert goal["metric"] == "invested_value"
+                assert goal["target_amount"] == "12345.67"
+                assert goal["current_value"] == "0" and goal["progress"] == "0.0000000000000000"
                 try:
                     await session.call_tool("missing", {})
                 except McpError as error:

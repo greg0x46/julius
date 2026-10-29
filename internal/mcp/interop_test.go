@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -12,6 +13,8 @@ import (
 
 	"github.com/greg0x46/julius/internal/auth"
 	"github.com/greg0x46/julius/internal/db/dbtest"
+	"github.com/greg0x46/julius/internal/goals"
+	"github.com/shopspring/decimal"
 )
 
 func TestPythonClientInterop(t *testing.T) {
@@ -21,6 +24,7 @@ func TestPythonClientInterop(t *testing.T) {
 	}
 	dbtest.Each(t, func(t *testing.T, conn *sql.DB) {
 		store, _ := setup(t, conn)
+		goalID := seedInteropGoal(t, conn)
 		srv := httptest.NewUnstartedServer(nil)
 		defer srv.Close()
 		base := "http://" + srv.Listener.Addr().String()
@@ -33,7 +37,7 @@ func TestPythonClientInterop(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 		defer cancel()
 		cmd := exec.CommandContext(ctx, python, "testdata/client.py")
-		cmd.Env = append(os.Environ(), "JULIUS_MCP_TEST_URL="+base, "PYTHONDONTWRITEBYTECODE=1")
+		cmd.Env = append(os.Environ(), "JULIUS_MCP_TEST_URL="+base, "PYTHONDONTWRITEBYTECODE=1", "JULIUS_MCP_TEST_GOAL_ID="+goalID)
 		output, err := cmd.CombinedOutput()
 		if err != nil {
 			t.Fatalf("Python MCP client: %v\n%s", err, output)
@@ -58,9 +62,11 @@ func TestInspectorClientInterop(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		cmd := exec.CommandContext(ctx, inspector, "--cli", srv.URL+"/mcp", "--transport", "http", "--method", "tools/list", "--header", "Authorization: Bearer "+token)
+		var stderr bytes.Buffer
+		cmd.Stderr = &stderr
 		output, err := cmd.Output()
 		if err != nil {
-			t.Fatalf("Inspector discovery: %v", err)
+			t.Fatalf("Inspector discovery: %v\n%s", err, stderr.String())
 		}
 		var result struct {
 			Tools []json.RawMessage `json:"tools"`
@@ -69,4 +75,16 @@ func TestInspectorClientInterop(t *testing.T) {
 			t.Fatalf("Inspector discovery: %s (%v)", output, err)
 		}
 	})
+}
+
+func seedInteropGoal(t *testing.T, conn *sql.DB) string {
+	t.Helper()
+	goal, err := goals.Create(context.Background(), conn, goals.Input{
+		Name: "Synthetic interoperability goal", Metric: goals.MetricInvestedValue,
+		TargetAmount: decimal.RequireFromString("12345.67"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return goal.ID
 }
