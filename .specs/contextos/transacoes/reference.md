@@ -439,7 +439,7 @@ creation idempotency, manual-only restrictions and cleanup. Installment category
 cascades show all IDs (maximum 100) and revalidate atomically; no arbitrary batch.
 
 Tool inputs, approval contract, limits and synthetic dev validation:
-[README financial writes](../../../README.md#financial-writes).
+[README financial writes](../../../docs/legacy-readme.md#financial-writes).
 
 MCP also exposes manual account creation/full updates, native balance adjustments,
 transfer creation/linking and unlinking. `transactions.WriteManualAccount` and

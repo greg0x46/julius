@@ -81,7 +81,7 @@ data, including when a standalone scenario is marked active. Unknown IDs are
 rejected; selections allow at most 20 additional IDs. Realized wealth/goals/
 payable balances never consume this selection.
 
-Tool inputs, output bounds and dev validation: [README MCP](../../../README.md#mcp).
+Tool inputs, output bounds and dev validation: [README MCP](../../../docs/legacy-readme.md#mcp).
 
 ## MCP writes
 

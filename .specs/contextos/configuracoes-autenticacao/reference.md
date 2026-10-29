@@ -239,7 +239,9 @@ password-reset races; reads also require the current revision. Browser logout
 has no effect on OAuth tokens; password changes/resets revoke all of them.
 
 `mcp:access` covers the transport and read-only tools. Optional `mcp:write`
-requires `mcp:access` too; either scope order is accepted and normalized. Read-only
+requires `mcp:access` too; scope order is accepted and normalized. Optional
+`mcp:operations` additionally requires `mcp:write`, authorizing guarded network
+requests explicitly disclosed on consent, without a new financial approval. Read-only
 grants cannot prepare or inspect writes. Each write needs its own owner approval. Existing grants also permit these reads; consent now explicitly
 discloses financial access and explicit hypothetical selection. Unknown requested
 scopes are rejected. Consent requests and codes last
@@ -292,7 +294,7 @@ cancellation; `cmd/julius/server_test.go` pins route isolation and shutdown.
 
 ### Financial read inventory
 
-See [README MCP](../../../README.md#mcp) for the tool/input inventory and synthetic
+See [README MCP](../../../docs/legacy-readme.md#mcp) for the tool/input inventory and synthetic
 validation steps. `get_investment_portfolio`, `get_net_worth`, `list_goals`,
 `list_payables`, `list_recurring_commitments`, `list_scenarios`,
 `list_projection_events` and `get_timeline` advertise typed input/output schemas
@@ -322,8 +324,8 @@ Selection and missing-FX tests run on both database dialects.
 
 ### Financial write approval
 
-`internal/mcp/writes.go` registers thirty-two preparation tools plus `get_write_result`;
-[README financial writes](../../../README.md#financial-writes) lists exact tool
+`internal/mcp/writes.go` registers forty-one preparation tools plus `get_write_result`;
+[README financial writes](../../../docs/legacy-readme.md#financial-writes) lists exact tool
 names, body fields, bounds and synthetic dev validation. `internal/httpapi/mcp_writes.go`
 validates allowlisted operations, captures before-state, installment identifiers
 and financial links/amounts, and calls existing ledger/automation/category paths.
@@ -400,3 +402,41 @@ scoped unlinks, cleanup and injected failure rollback on both database dialects.
 Account/adjustment/transfer/payable creation has no persistent creation key: a fresh
 preparation plus approval means a new operation. Inspect Julius before preparing
 another after a lost result; same approval POST retries still execute once.
+
+### Guarded operations
+
+`internal/mcp/operations.go` registers six tools: `get_operations_status`,
+`list_sync_runs`, `get_sync_run`, `request_sync`, `request_quote_refresh` and
+`get_operation_result`. The first three require access scope; request and receipt
+polling require access, write and operations scopes. All stay behind the same
+authentication, demo/open-mode restrictions, 16-request concurrency gate and
+30-second transport timeout. Unknown inputs, malformed UUIDs, invalid pagination
+and client-supplied overrides are rejected. Reads are bounded to 100 items and
+256 KiB; failure details are paginated and use `syncsvc.SafeMessage`, never raw
+stored messages, external account/transaction IDs or payloads. Source names are
+blanked because REST names can fall back to private provider item IDs.
+
+`httpapi.MCPRequestSync` wraps only the existing enqueue handler. `worker.Ready`
+checks the same decrypted credentials as the worker and returns only a boolean.
+`cmd/julius` injects the same secrets, market service, sync schedule and shutdown
+context used by the existing server. No settings write or arbitrary route is
+exposed. Automatic quote disabling preserves manual refresh eligibility.
+
+Request receipts use validated idempotency keys and exact token ownership;
+matching retries return the original result even after completion, while changed
+arguments fail. A mutex serializes receipt creation, with at most 100 retained
+for one hour, excluding running work from expiry. Like write approvals, receipts
+are process-local; restart/another instance requires inspecting durable history
+before retrying. Sync execution remains in the existing worker and returns
+queued IDs. Quote execution calls `quotes.RefreshNow` asynchronously with a
+five-minute deadline and server cancellation, retaining shared scheduler/REST
+guards, provider cache/retry policy and persistent last-refresh outcomes.
+Receipt `finished` is distinct from quote `success`; failures/deferrals retain
+counts and do not expose upstream errors. History backfill remains separate.
+
+Setup, troubleshooting and synthetic dev steps: [README operational tools](../../../docs/legacy-readme.md#operational-tools).
+`internal/mcp/operations_test.go` covers real OAuth grants, consent disclosure,
+read/write/operations scope separation, strict inputs, sanitized bounded history,
+ineligible/unavailable services, concurrent queue requests, token isolation,
+terminal retries, shared quote guards, upstream failure/deferral and shutdown.
+Sync integration coverage runs on SQLite and disposable Postgres.

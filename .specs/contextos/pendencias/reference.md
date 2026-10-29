@@ -75,7 +75,7 @@ half away from zero ([policy](../../precisao-monetaria.md)).
 amounts and status are actual BRL state, never simulated repayments. Credit-card
 bills are outside this list.
 
-Tool inputs, output bounds and dev validation: [README MCP](../../../README.md#mcp).
+Tool inputs, output bounds and dev validation: [README MCP](../../../docs/legacy-readme.md#mcp).
 
 ## MCP writes
 
@@ -95,4 +95,4 @@ cascades plans/links. Both retain real transactions, and summaries remain derive
 Tests `TestMCPPayablesLinksAndPlanCleanup`,
 `TestMCPAccountWritesRejectInvalidLinksAndRollback` and
 `TestMCPAccountsToolsLifecycleAndApprovalReplay` run on both dialects. Tool fields,
-limits, approval and synthetic dev validation: [README](../../../README.md#financial-writes).
+limits, approval and synthetic dev validation: [README](../../../docs/legacy-readme.md#financial-writes).

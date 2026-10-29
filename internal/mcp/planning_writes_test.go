@@ -186,7 +186,7 @@ func TestMCPPlanningWriteConsentDisclosure(t *testing.T) {
 	flow := newFlow(t, store)
 	flow.params.Set("scope", mcpScope+" "+writeScope)
 	body := flow.begin(t).Body.String()
-	for _, text := range []string{"metas, cenários e compromissos recorrentes", "Cada alteração exige sua aprovação no Julius."} {
+	for _, text := range []string{"metas, cenários e compromissos recorrentes", "Cada alteração financeira exige sua aprovação no Julius."} {
 		if !strings.Contains(body, text) {
 			t.Fatalf("missing write disclosure %q", text)
 		}

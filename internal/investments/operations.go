@@ -147,7 +147,14 @@ func mutateLedger(ctx context.Context, conn *sql.DB, mutate func(tx *sql.Tx) ([]
 		return err
 	}
 	defer tx.Rollback()
-	accountIDs, err := mutate(tx)
+	if err := mutateLedgerWithQuerier(ctx, tx, func() ([]string, error) { return mutate(tx) }); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func mutateLedgerWithQuerier(ctx context.Context, q Querier, mutate func() ([]string, error)) error {
+	accountIDs, err := mutate()
 	if err != nil {
 		return err
 	}
@@ -157,11 +164,11 @@ func mutateLedger(ctx context.Context, conn *sql.DB, mutate func(tx *sql.Tx) ([]
 			continue
 		}
 		replayed[accountID] = true
-		if _, err := replayAccount(ctx, tx, accountID); err != nil {
+		if _, err := replayAccount(ctx, q, accountID); err != nil {
 			return err
 		}
 	}
-	return tx.Commit()
+	return nil
 }
 
 func CreateOperation(ctx context.Context, conn *sql.DB, in OperationInput) (Operation, error) {
@@ -256,22 +263,33 @@ func CreateTransfer(ctx context.Context, conn *sql.DB, in TransferInput) ([]Oper
 // CreateOperations commits a compound action and its optional bank link as one
 // transaction. A failed purchase or reconciliation leaves no orphan deposit.
 func CreateOperations(ctx context.Context, conn *sql.DB, inputs []OperationInput, link *ReconciliationInput) ([]Operation, error) {
+	var result []Operation
+	err := mutateLedgerTransaction(ctx, conn, func(q *sql.Tx) error {
+		var err error
+		result, err = CreateOperationsWithQuerier(ctx, q, inputs, link)
+		return err
+	})
+	return result, err
+}
+
+// CreateOperationsWithQuerier requires a caller-owned transaction.
+func CreateOperationsWithQuerier(ctx context.Context, q *sql.Tx, inputs []OperationInput, link *ReconciliationInput) ([]Operation, error) {
 	if len(inputs) == 0 || len(inputs) > 100 {
 		return nil, ErrInvalidInput
 	}
 	ids := make([]string, 0, len(inputs))
-	err := mutateLedger(ctx, conn, func(tx *sql.Tx) ([]string, error) {
+	err := mutateLedgerWithQuerier(ctx, q, func() ([]string, error) {
 		accounts := []string{}
 		for _, in := range inputs {
-			if err := validateOperationAccount(ctx, tx, in); err != nil {
+			if err := validateOperationAccount(ctx, q, in); err != nil {
 				return nil, err
 			}
-			if err := requirePositionOfAccount(ctx, tx, in.AccountID, in.PositionID); err != nil {
+			if err := requirePositionOfAccount(ctx, q, in.AccountID, in.PositionID); err != nil {
 				return nil, err
 			}
 			id := uuid.NewString()
 			now := db.FormatTime(time.Now())
-			if _, err := tx.ExecContext(ctx, `INSERT INTO investment_operations (
+			if _, err := q.ExecContext(ctx, `INSERT INTO investment_operations (
     id, account_id, position_id, kind, occurred_on, amount, quantity, unit_price,
     fees, taxes, notes, source, created_at, updated_at
    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'manual', ?, ?)`,
@@ -286,7 +304,7 @@ func CreateOperations(ctx context.Context, conn *sql.DB, inputs []OperationInput
 		if link != nil {
 			input := *link
 			input.OperationID = ids[0]
-			if _, err := createReconciliation(ctx, tx, input); err != nil {
+			if _, err := createReconciliation(ctx, q, input); err != nil {
 				return nil, err
 			}
 		}
@@ -297,7 +315,7 @@ func CreateOperations(ctx context.Context, conn *sql.DB, inputs []OperationInput
 	}
 	result := make([]Operation, 0, len(ids))
 	for _, id := range ids {
-		op, err := GetOperation(ctx, conn, id)
+		op, err := GetOperation(ctx, q, id)
 		if err != nil {
 			return nil, err
 		}
@@ -337,11 +355,22 @@ func validateOperationAccount(ctx context.Context, q Querier, in OperationInput)
 // UpdateOperation rewrites a manual operation in place, keeping created_at so
 // the correction stays where it was in the replay order.
 func UpdateOperation(ctx context.Context, conn *sql.DB, id string, in OperationInput) (Operation, error) {
+	var result Operation
+	err := mutateLedgerTransaction(ctx, conn, func(q *sql.Tx) error {
+		var err error
+		result, err = UpdateOperationWithQuerier(ctx, q, id, in)
+		return err
+	})
+	return result, err
+}
+
+// UpdateOperationWithQuerier requires a caller-owned transaction.
+func UpdateOperationWithQuerier(ctx context.Context, q Querier, id string, in OperationInput) (Operation, error) {
 	if !in.Kind.Valid() {
 		return Operation{}, ErrInvalidInput
 	}
-	err := mutateLedger(ctx, conn, func(tx *sql.Tx) ([]string, error) {
-		current, err := GetOperation(ctx, tx, id)
+	err := mutateLedgerWithQuerier(ctx, q, func() ([]string, error) {
+		current, err := GetOperation(ctx, q, id)
 		if err != nil {
 			return nil, err
 		}
@@ -351,10 +380,10 @@ func UpdateOperation(ctx context.Context, conn *sql.DB, id string, in OperationI
 		if current.Source != "manual" {
 			return nil, ErrNotManual
 		}
-		if err := validateOperationAccount(ctx, tx, in); err != nil {
+		if err := validateOperationAccount(ctx, q, in); err != nil {
 			return nil, err
 		}
-		if err := requirePositionOfAccount(ctx, tx, in.AccountID, in.PositionID); err != nil {
+		if err := requirePositionOfAccount(ctx, q, in.AccountID, in.PositionID); err != nil {
 			return nil, err
 		}
 		updated := current
@@ -365,10 +394,10 @@ func UpdateOperation(ctx context.Context, conn *sql.DB, id string, in OperationI
 		updated.Amount = in.Amount
 		updated.Fees = in.Fees
 		updated.Taxes = in.Taxes
-		if err := validateOperationLinks(ctx, tx, updated); err != nil {
+		if err := validateOperationLinks(ctx, q, updated); err != nil {
 			return nil, err
 		}
-		if _, err := tx.ExecContext(ctx, `
+		if _, err := q.ExecContext(ctx, `
 			UPDATE investment_operations
 			SET account_id = ?, position_id = ?, kind = ?, occurred_on = ?, amount = ?,
 			    quantity = ?, unit_price = ?, fees = ?, taxes = ?, notes = ?, updated_at = ?
@@ -384,12 +413,17 @@ func UpdateOperation(ctx context.Context, conn *sql.DB, id string, in OperationI
 	if err != nil {
 		return Operation{}, err
 	}
-	return GetOperation(ctx, conn, id)
+	return GetOperation(ctx, q, id)
 }
 
 func DeleteOperation(ctx context.Context, conn *sql.DB, id string) error {
-	return mutateLedger(ctx, conn, func(tx *sql.Tx) ([]string, error) {
-		current, err := GetOperation(ctx, tx, id)
+	return mutateLedgerTransaction(ctx, conn, func(q *sql.Tx) error { return DeleteOperationWithQuerier(ctx, q, id) })
+}
+
+// DeleteOperationWithQuerier requires a caller-owned transaction.
+func DeleteOperationWithQuerier(ctx context.Context, q Querier, id string) error {
+	return mutateLedgerWithQuerier(ctx, q, func() ([]string, error) {
+		current, err := GetOperation(ctx, q, id)
 		if err != nil {
 			return nil, err
 		}
@@ -400,14 +434,14 @@ func DeleteOperation(ctx context.Context, conn *sql.DB, id string) error {
 			return nil, ErrNotManual
 		}
 		var linked bool
-		if err := tx.QueryRowContext(ctx,
+		if err := q.QueryRowContext(ctx,
 			`SELECT EXISTS (SELECT 1 FROM investment_reconciliations WHERE operation_id = ?)`, id).Scan(dbtypes.Bool(&linked)); err != nil {
 			return nil, err
 		}
 		if linked {
 			return nil, ErrOperationHasReconciliations
 		}
-		if _, err := tx.ExecContext(ctx, `DELETE FROM investment_operations WHERE id = ?`, id); err != nil {
+		if _, err := q.ExecContext(ctx, `DELETE FROM investment_operations WHERE id = ?`, id); err != nil {
 			return nil, err
 		}
 		return []string{current.AccountID}, nil
@@ -443,4 +477,16 @@ func DeleteTransfer(ctx context.Context, conn *sql.DB, transferID string) error 
 		}
 		return accounts, nil
 	})
+}
+
+func mutateLedgerTransaction(ctx context.Context, conn *sql.DB, mutate func(*sql.Tx) error) error {
+	tx, err := conn.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if err := mutate(tx); err != nil {
+		return err
+	}
+	return tx.Commit()
 }

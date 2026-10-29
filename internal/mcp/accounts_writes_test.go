@@ -151,7 +151,7 @@ func TestMCPAccountsToolsRequireWriteScopeAndOwnerConsent(t *testing.T) {
 	flow := newFlow(t, f.store)
 	flow.params.Set("scope", mcpScope+" "+writeScope)
 	body := flow.begin(t).Body.String()
-	for _, text := range []string{"contas manuais", "ajustes de saldo", "transferências entre contas próprias", "valores a receber e seus vínculos", "Cada alteração exige sua aprovação no Julius."} {
+	for _, text := range []string{"contas manuais", "ajustes de saldo", "transferências entre contas próprias", "valores a receber e seus vínculos", "Cada alteração financeira exige sua aprovação no Julius."} {
 		if !strings.Contains(body, text) {
 			t.Fatalf("missing disclosure: %q", text)
 		}
