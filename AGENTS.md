@@ -30,6 +30,7 @@ cmd/migrate-legacy/        one-shot legacy SQLite → SQLite/Postgres converter
 internal/
   db/                      connections/pool, goose migrations (sqlite/ and postgres/), dbtest/
   httpapi/                 handlers, routing (server.go), DTOs, Problem errors
+  httplog/                 HTTP access log, request ids, security events; one middleware, controlled values only
   money/ dates/            pure rules: classification/eligibility; calendar day
   transactions/ ledger/    ledger queries/mutations; multi-engine flows in one DB tx
   categories/ rules/ automation/   categorization, matching core, rule engine
@@ -96,6 +97,10 @@ workflow.
   a nested one. Reuse `internal/ledger`.
 - Errors to clients go through `writeProblem` (`internal/httpapi/problem.go`).
   DB failures → 503 without internals; unauthenticated → 401.
+- Every request is logged by the one `internal/httplog` middleware; new routes
+  appear on their own. A handler that rejects something calls
+  `httplog.SetError` (`writeProblem` does it for REST) with literals (never request text, `err.Error()`, bodies,
+  queries or secrets); new events need an entry in `httplog.eventLevels`.
 - Routes use Go 1.22+ `ServeMux` patterns (`internal/httpapi/server.go`).
   Conflicting literal/wildcard segments **panic at startup**, not at request
   time — run the `internal/httpapi` tests after adding routes.
