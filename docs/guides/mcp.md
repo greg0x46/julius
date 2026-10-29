@@ -154,7 +154,7 @@ change, the write tool returns a preview, `request_id` and `approval_url`:
 
 Optional maintenance requests use the additional `mcp:operations` scope, which
 requires both access and write scopes. They have separate authorization
-semantics; see the [operations reference](../legacy-readme.md#operational-tools).
+semantics; see the [operations reference](../development/mcp-tools.md#operational-tools).
 
 ## Reduce access or revoke a connection
 

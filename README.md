@@ -37,7 +37,7 @@ For a hosted instance or prebuilt Linux binary, see [installation](docs/self-hos
 - **MCP** — [setup and authorization](docs/guides/mcp.md), and [interoperability checks](docs/mcp.md).
 - **Development** — [commands and conventions](AGENTS.md), [architecture and financial references](docs/development/README.md), and [frontend testing](frontend/TESTING.md).
 
-See the [documentation index](docs/README.md) for all guides. The [previous README](docs/legacy-readme.md) remains a temporary reference for MCP, legacy database conversion, and contributor release procedures until those sections have durable guides.
+See the [documentation index](docs/README.md) for all guides.
 
 ## Tech stack
 

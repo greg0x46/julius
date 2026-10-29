@@ -26,6 +26,9 @@ translations of the Portuguese interface labels.
 - [Backups and upgrades](self-hosting/upgrading.md): database and key backups,
   restoration, safe updates, rollback, and legacy cutover caveats.
 
+- [Legacy conversion](self-hosting/legacy-conversion.md), [diagnostics](self-hosting/diagnostics.md),
+  [integration schedules](self-hosting/integrations.md), and [public demo](self-hosting/demo.md).
+
 ## Development
 
 - [Development references](development/README.md): architecture, financial invariants,
@@ -39,7 +42,6 @@ translations of the Portuguese interface labels.
   compatible client, approve changes and revoke access.
 - [MCP interoperability checks](mcp.md): repeatable smoke validation and client
   compatibility evidence.
-- [Feature reference](legacy-readme.md#features) in the temporary previous README.
 - [Changelog](../CHANGELOG.md) and
   [published releases](https://github.com/greg0x46/julius/releases).
 

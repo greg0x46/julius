@@ -33,7 +33,7 @@ type LinkSummary struct {
 // status they imply, and the links they were derived from. None of it is
 // ever stored — it is recomputed from the payable's links on every read,
 // which is the invariant this package exists to protect (see
-// .specs/motores-de-dominio.md, princípio 1).
+// docs/development/architecture.md, Cross-cutting principles).
 //
 // Summarize is the one place that recomputation lives. Callers that need
 // the numbers — the HTTP layer's payable DTO, the scenario handlers'

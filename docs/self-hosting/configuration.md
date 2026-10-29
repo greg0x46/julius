@@ -80,7 +80,7 @@ in the database. They are optional for manual accounts and CSV imports.
   `yahoo,brapi,coingecko`. Omitted providers are disabled; unknown names prevent
   startup.
 - `JULIUS_MCP_ENABLED`: optional MCP integration, disabled by default. See the
-  [MCP reference](../legacy-readme.md#mcp) before enabling it.
+  [MCP reference](../development/mcp-tools.md) before enabling it.
 
 Leave `JULIUS_DEMO` unset for a personal installation: demo mode opens access
 and disables external integrations. `VITE_*` values are build-time frontend

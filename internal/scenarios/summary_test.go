@@ -30,7 +30,7 @@ func TestSignedAmountFollowsPlanDirection(t *testing.T) {
 // TestSignedAmountNegatesRatherThanForcingSign documents preserved behaviour,
 // not desired behaviour: a debt-plan installment authored with a negative
 // amount reads back as an inflow. Recorded as open note 5 in
-// .specs/motores-de-dominio.md — deciding it either way moves real totals, so
+// docs/development/architecture.md — deciding it either way moves real totals, so
 // this test exists to make the change visible if anyone does decide.
 func TestSignedAmountNegatesRatherThanForcingSign(t *testing.T) {
 	got := scenarios.SignedAmount(scenarios.KindDebtPlan, dec(t, "-100.00"))

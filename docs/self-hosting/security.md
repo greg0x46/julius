@@ -61,3 +61,25 @@ There is no email-based password recovery.
 **Configurações > Acesso** can disable authentication. This lets anyone who
 can reach the instance read and change all data. Keep it enabled on a hosted
 installation; origin checks alone do not restrict who can read your data.
+
+## Legacy authentication migration
+
+When upgrading from Contadinho, replace its `CONTADINHO_*` environment
+variables with the corresponding `JULIUS_*` names. Julius does not read the old
+configuration names. If `julius.db` does not exist but `contadinho.db` does,
+Julius keeps using the existing database automatically; if both files exist,
+it uses `julius.db`. Existing browser sessions need a new login.
+
+To migrate your existing database:
+
+1. Stop the old version and take a consistent backup of the database.
+2. Configure and keep the new key.
+3. Run `./julius auth migrate`.
+4. Enter the old unlock password, your email and the new login password.
+5. Start the application with the same key configured.
+
+The migration re-encrypts every secret and creates the account in a single
+transaction; failures never leave a partial conversion. The old verifier is
+removed and a second migration is refused. Keep the earlier backup to roll back
+to the old version: after the migration, the old binary cannot read the new
+secrets. Do not run the migration while the application is running.

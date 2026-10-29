@@ -36,7 +36,7 @@ retain an external backup and grant the application role schema creation rights.
 Incomplete legacy Postgres and legacy SQLite are rejected without mutation.
 Empty databases initialize normally and generation 1 databases reopen normally.
 Use `cmd/migrate-legacy` with a read-only final legacy SQLite backup and a
-separate fresh SQLite/Postgres target; see README "Database schema generations".
+separate fresh SQLite/Postgres target; see the [legacy conversion guide](../../../docs/self-hosting/legacy-conversion.md).
 Keep the old binary, database and master key until cutover is validated. Never
 delete the old database or rewrite its Goose version to bypass the guard. The
 generic SQLite-to-Postgres copier has been replaced by this temporary tool.
@@ -51,7 +51,9 @@ are refused; a failed real copy requires a fresh target for retry.
 `archive/sqlite` and `archive/postgres` retain the original migrations unchanged.
 They are embedded only in tests that pin historical data migrations and rollbacks,
 not in the application binary. Their independent numbering is historical and
-must never be reused by the active runner.
+must never be reused by the active runner. Historical `.specs/` paths in their
+SQL comments intentionally retain the original context; they are not live links.
+Maintained references are in [development docs](../../../docs/development/README.md).
 
 ## Validation
 

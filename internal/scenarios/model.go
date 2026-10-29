@@ -1,6 +1,6 @@
 // Package scenarios implements hypothetical, user-authored projections
 // layered on top of real data — see
-// .specs/contextos/cenarios/reference.md. A Scenario groups a set of
+// docs/development/contexts/scenarios.md. A Scenario groups a set of
 // ScenarioTransaction "planned installments" attached to a
 // payables.Payable. Nothing here changes how internal/payables computes
 // settled/remaining amounts — a scenario is a read-layer projection, never
@@ -118,7 +118,7 @@ func (s ScenarioTransaction) Status(today time.Time, realizedTotal decimal.Decim
 // this rule had while it lived in internal/timeline. A plan installment
 // stored with a negative Amount (nothing rejects one today) therefore reads
 // as an inflow on a debt plan — recorded as open note 5 in
-// .specs/motores-de-dominio.md rather than "fixed" here, since deciding it
+// docs/development/architecture.md rather than "fixed" here, since deciding it
 // either way changes real totals.
 func SignedAmount(kind Kind, amount decimal.Decimal) decimal.Decimal {
 	switch kind {

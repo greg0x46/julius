@@ -31,7 +31,7 @@ type PlanInstallment struct {
 // It exists so a caller building a cash-flow view does not have to reach
 // into internal/payables to learn a plan's direction: the link to a Payable
 // stays encapsulated here, in Scenario.PayableID/Kind, which is what
-// .specs/motores-de-dominio.md section 6 describes.
+// docs/development/architecture.md (Domain engines) describes.
 //
 // from/to are compared as calendar days; a caller passing a timestamp gets
 // its day.
