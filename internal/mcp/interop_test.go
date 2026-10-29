@@ -71,7 +71,7 @@ func TestInspectorClientInterop(t *testing.T) {
 		var result struct {
 			Tools []json.RawMessage `json:"tools"`
 		}
-		if err := json.Unmarshal(output, &result); err != nil || len(result.Tools) != 51 {
+		if err := json.Unmarshal(output, &result); err != nil || len(result.Tools) != 61 {
 			t.Fatalf("Inspector discovery: %s (%v)", output, err)
 		}
 	})
