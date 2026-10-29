@@ -31,8 +31,8 @@ type Summary struct {
 
 // Summarize derives a scenario's installment statuses and accumulated
 // deviation. It is the one place that recomputation lives, so the HTTP
-// layer only formats what it returns (see .specs/motores-de-dominio.md,
-// princípio 1).
+// layer only formats what it returns (see docs/development/architecture.md,
+// Cross-cutting principles).
 func Summarize(ctx context.Context, q Querier, scenarioID string, today time.Time) (Summary, error) {
 	list, err := ListScenarioTransactions(ctx, q, scenarioID)
 	if err != nil {

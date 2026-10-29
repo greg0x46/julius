@@ -59,7 +59,7 @@ function categoryOptions(categories: Category[], direction: Direction) {
 /**
  * The fields of a manual transaction — one the person authors by hand
  * instead of it arriving through a sync, on an account that already exists
- * (see .specs/lancamentos-manuais.md). Controlled and container-less: the
+ * (see docs/development/contexts/transactions.md). Controlled and container-less: the
  * new-transaction drawer and the panel's edit screen both put them inside
  * their own `<form>`, so the two flows cannot drift apart.
  */

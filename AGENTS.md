@@ -16,7 +16,7 @@ Keep comments brief; don’t restate what the code already makes clear.
 3. [`docs/development/financial-invariants.md`](docs/development/financial-invariants.md) —
    money rules, owning module and pinning test. Touching a rule means updating
    its row; a test cited there must keep existing.
-4. `.specs/contextos/<context>/reference.md` — current behavior of the area you
+4. `docs/development/contexts/<context>.md` — current behavior of the area you
    touch: packages, routes, pages. Source of truth for "is this implemented?".
 
 If a reference disagrees with the code, the code wins: fix the doc in the same
@@ -44,7 +44,8 @@ internal/
   webui/                   embeds frontend/dist (build tag embedded_frontend)
 frontend/src/              api/ hooks/ pages/ components/ presentation/ theme/ test/
 docs/development/          architecture, financial rules and API contracts
-.specs/                    legacy context inventories and proposals
+docs/guides/               user guides
+docs/self-hosting/         installation and operations
 ```
 
 ## Commands
@@ -74,7 +75,7 @@ workflow.
   credentials or existing dev instance are needed.
 - The server refuses to start without `JULIUS_PUBLIC_URL` and exactly one of
   `JULIUS_MASTER_KEY` / `JULIUS_MASTER_KEY_FILE`, and without an account
-  (`go run ./cmd/julius auth init`). See README "Authentication".
+  (`go run ./cmd/julius auth init`). See `docs/self-hosting/security.md`.
 - In dev, open exactly the `Frontend:` URL `dev.sh` prints
   (`http://127.0.0.1:5173`). Another host gives 403 `invalid-origin` on login
   and every write. Local overrides go in `.env.local` (git-ignored).
@@ -219,11 +220,9 @@ promotion automation.
 - Keep [`docs/README.md`](docs/README.md) and its links accurate as pages are
   added or moved. Create directories only when they contain useful pages;
   don't add placeholder pages.
-- Preserve `.specs/` until the dedicated migration and cleanup issues are
-  complete; these editorial rules do not require renaming or translating
-  legacy files in bulk.
+- Keep unfinished proposals in `docs/development/proposals/`, explicitly labeled.
 - Finishing a feature or behavior change: update the matching
-  `.specs/contextos/<context>/reference.md` in the same PR (and README
+  `docs/development/contexts/<context>.md` in the same PR (and README
   "Features" if user-visible). Delete a design spec once it is implemented.
 - Never commit: `*.db*`, built binaries in the repo root, `.env.local`,
   `deploy.sh`, keys, real financial data, or host-specific details (domains,
@@ -231,9 +230,6 @@ promotion automation.
 
 ## Gotchas
 
-- `.specs/` folder and file names are Portuguese (`contextos`, `pendencias`…)
-  and are referenced from Go comments and a test; don't rename without updating
-  them. The glossary is in `.specs/README.md`.
 - `internal/payables` replaced `internal/debts`/`receivables` (gone).
   Recurring commitments are stored as `Scenario{Kind: recurring}` plus
   `scenario_recurring_schedules`; `internal/recurrences` owns occurrences and

@@ -58,7 +58,7 @@ that origin: opening `127.0.0.1` instead of `localhost` makes writes fail with
 
 Create a manual account or import a CSV to begin. To connect a bank, configure
 Pluggy credentials under **Configurações**; see the
-[Pluggy reference](legacy-readme.md#open-finance--pluggy).
+[Pluggy reference](guides/open-finance-pluggy.md).
 
 After stopping with Ctrl+C, restart with the same database, key, and public
 origin. In a new terminal, export the two variables again; do not generate a

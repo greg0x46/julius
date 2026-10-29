@@ -1,6 +1,6 @@
 // Package timeline builds the single financial timeline series every
 // presentation layer (the Home's projection and period totals) consumes —
-// see .specs/motores-de-dominio.md section 6. Nothing downstream recomputes
+// see docs/development/architecture.md (Domain engines). Nothing downstream recomputes
 // totals locally: BuildSeries is the one place that merges sources into
 // Entries, so reconciliation across presentation layers is guaranteed by
 // construction rather than by convention.

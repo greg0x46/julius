@@ -101,7 +101,7 @@ Old schema generations require a separate cutover:
   `julius_legacy_<id>` schema. Older schemas must first reach version 46 with
   the legacy binary.
 
-Follow the full [schema conversion procedure](../legacy-readme.md#database-schema-generations)
+Follow the full [schema conversion procedure](legacy-conversion.md)
 for these exceptional upgrades; do not bypass the schema guard or manually
 change migration versions.
 
@@ -109,5 +109,5 @@ When moving from Contadinho, replace `CONTADINHO_*` variables with `JULIUS_*`;
 the old names are not read. A database still using the old unlock password
 also needs the one-time interactive `./julius auth migrate -db ./julius.db`
 with its old unlock password and a new owner email/password. Follow the
-[authentication migration procedure](../legacy-readme.md#authentication-and-encryption-key)
+[authentication migration procedure](security.md#legacy-authentication-migration)
 after schema conversion, keeping the old backup for rollback.

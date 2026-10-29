@@ -826,7 +826,7 @@ func writeManualTransactionError(w http.ResponseWriter, err error, explicitCateg
 }
 
 // handleCreateManualTransaction creates a lançamento the user authors by hand,
-// on an account that already exists (see .specs/lancamentos-manuais.md). The
+// on an account that already exists (see docs/development/contexts/transactions.md). The
 // category and automation ordering lives in ledger.Service.
 func handleCreateManualTransaction(svc *ledger.Service) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {

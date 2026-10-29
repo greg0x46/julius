@@ -8,11 +8,11 @@ send data it receives to its own AI provider; review that client's data policy.
 tool discovery and an authenticated financial read (`list_goals`) with
 synthetic data. Financial writes and operations need the separate `mcp:write`
 and `mcp:operations` scopes and owner approval; see
-[the legacy README](legacy-readme.md#mcp) for the tool inventory.
+[the legacy README](development/mcp-tools.md) for the tool inventory.
 
 ## Deployment
 
-1. Follow [installation and authentication](legacy-readme.md#authentication-and-encryption-key) to
+1. Follow [installation and authentication](self-hosting/security.md#legacy-authentication-migration) to
    build/install Julius, configure its database and master key, and initialize
    the owner. Enable authentication in settings. Use a separate disposable
    database and synthetic owner when testing; do not use demo mode, which
@@ -179,4 +179,4 @@ Other unsupported flows: refresh tokens, implicit/password/device grants, OIDC,
 confidential client secrets, registration management and browser CORS. Turning
 authentication off rejects existing MCP tokens with 403. MCP cannot be enabled
 in demo mode. Security defaults and precise limits also appear in
-[MCP reference](legacy-readme.md#mcp).
+[MCP reference](development/mcp-tools.md).

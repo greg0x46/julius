@@ -2,7 +2,7 @@
 // (salary, rent, subscriptions) — a compromisso the user knows about ahead
 // of time that Pluggy has no way to report before it happens. It feeds the
 // "Projetado" tier of internal/timeline's projection (see
-// .specs/contextos/recorrencias/reference.md), and only for occurrences no
+// docs/development/contexts/recurrences.md), and only for occurrences no
 // real transaction has reconciled — a reconciled one is already in the
 // series as that transaction. Occurrences are computed purely from the
 // commitment's own scheduling fields, and reconciled against real

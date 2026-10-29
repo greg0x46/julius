@@ -308,7 +308,7 @@ func normalizeSchemaSQL(s string, index bool) string {
 
 func TestBaselineNativeTypes(t *testing.T) {
 	// Inventory classifications pin every column, including misleading names like captured_at.
-	inventory, err := os.ReadFile("../../.specs/reorganizacao-schema/inventario.md")
+	inventory, err := os.ReadFile("../../docs/development/schema/inventory.md")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -29,7 +29,31 @@ disposable database because they reset its schema.
 
 See [frontend testing](../../frontend/TESTING.md) and the
 [database migration reference](../../internal/db/migrations/README.md) for
-focused validation. Legacy [context inventories and proposals](../../.specs/README.md)
-remain during migration; proposals describe unimplemented work only.
+focused validation.
+
+## Feature inventories
+
+- [Automation](contexts/automation.md)
+- [Categories](contexts/categories.md)
+- [Goals](contexts/goals.md)
+- [Home](contexts/home.md)
+- [Investments](contexts/investments.md)
+- [Open finance sync](contexts/open-finance-sync.md)
+- [Payables](contexts/payables.md)
+- [Recurrences](contexts/recurrences.md)
+- [Scenarios](contexts/scenarios.md)
+- [Settings authentication](contexts/settings-authentication.md)
+- [Statement import](contexts/statement-import.md)
+- [Transactions](contexts/transactions.md)
+- [Wealth](contexts/wealth.md)
+
+## Supporting references
+
+- [MCP tool inventory and validation](mcp-tools.md).
+- [Local development](local-development.md) and [frontend building blocks](frontend.md).
+- [Schema documentation](schema/README.md) and [legacy conversion inventory](schema/inventory.md).
+- Unimplemented proposals: [statement import extensions](proposals/statement-import.md)
+  and [daily spending cap](proposals/daily-spending-cap.md).
+- [Release and contribution workflow](../../AGENTS.md#git-releases-docs).
 
 Return to the [documentation index](../README.md).

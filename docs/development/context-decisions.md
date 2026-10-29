@@ -4,7 +4,7 @@ Shared decisions consolidated from the legacy context references and financial
 audit. Read [architecture](architecture.md), [financial invariants](financial-invariants.md)
 and [API contracts](api-contracts.md) first. These sections preserve technical
 boundaries; the linked context inventories retain route, screen and tool details
-until their separate migration. Unimplemented proposals are not current contracts.
+as maintained development references. Unimplemented proposals are not current contracts.
 
 ## Transactions and categorization
 
@@ -31,9 +31,9 @@ until their separate migration. Unimplemented proposals are not current contract
   timing separately uses bill/cycle forecasts. Card debt is cycle-specific,
   not the provider account balance.
 
-Inventory: [transactions](../../.specs/contextos/transacoes/reference.md),
-[categories](../../.specs/contextos/categorias/reference.md),
-[automation](../../.specs/contextos/automacao/reference.md).
+Inventory: [transactions](contexts/transactions.md),
+[categories](contexts/categories.md),
+[automation](contexts/automation.md).
 
 ## Planning and reconciliation
 
@@ -62,9 +62,9 @@ Inventory: [transactions](../../.specs/contextos/transacoes/reference.md),
   Fixed-amount generation/readjustment uses exact quotient/remainder and rejects
   more than 10,000 installments before replacing a plan.
 
-Inventory: [payables](../../.specs/contextos/pendencias/reference.md),
-[scenarios](../../.specs/contextos/cenarios/reference.md),
-[recurrences](../../.specs/contextos/recorrencias/reference.md).
+Inventory: [payables](contexts/payables.md),
+[scenarios](contexts/scenarios.md),
+[recurrences](contexts/recurrences.md).
 
 ## Investments, wealth and goals
 
@@ -105,9 +105,9 @@ Inventory: [payables](../../.specs/contextos/pendencias/reference.md),
   days of capital/no measurable history/total loss leaves return unknown and
   assumes zero appreciation explicitly; projections are estimates.
 
-Inventory: [investments](../../.specs/contextos/investimentos/reference.md),
-[wealth](../../.specs/contextos/patrimonio-liquido/reference.md),
-[goals](../../.specs/contextos/metas/reference.md).
+Inventory: [investments](contexts/investments.md),
+[wealth](contexts/wealth.md),
+[goals](contexts/goals.md).
 
 ## Ingestion and operational boundaries
 
@@ -142,10 +142,10 @@ Inventory: [investments](../../.specs/contextos/investimentos/reference.md),
   display metric, not a persisted budget. Chart minima and labels use exact
   comparisons; numeric conversion is confined to geometry.
 
-Inventory: [sync](../../.specs/contextos/sincronizacao-open-banking/reference.md),
-[statement import](../../.specs/contextos/importacao-extratos/reference.md),
-[Home](../../.specs/contextos/home/reference.md),
-[settings/authentication](../../.specs/contextos/configuracoes-autenticacao/reference.md).
+Inventory: [sync](contexts/open-finance-sync.md),
+[statement import](contexts/statement-import.md),
+[Home](contexts/home.md),
+[settings/authentication](contexts/settings-authentication.md).
 See [self-hosting security](../self-hosting/security.md) and [MCP](../mcp.md)
 for maintained operational guides.
 
@@ -158,9 +158,8 @@ implemented context reference above is authoritative. The daily spending-cap
 backlog is a proposal, distinct from today's Home allowance. Neither proposal
 is promoted to an implemented reference.
 
-The [schema inventory](../../.specs/reorganizacao-schema/inventario.md) and its
+The [schema inventory](schema/inventory.md) and its
 DDL snapshots retain historical conversion evidence; the
 [migration reference](../../internal/db/migrations/README.md) owns the current
 storage/conversion contract. Do not copy obsolete snapshot tables (such as
-stored wealth observations) into new architecture rules. `.specs/` remains for
-the separate cleanup and feature-documentation migration.
+stored wealth observations) into new architecture rules.

@@ -25,7 +25,7 @@ func legacyFixture(t *testing.T) (*sql.DB, string) {
 	}
 	conn.SetMaxOpenConns(1)
 	t.Cleanup(func() { conn.Close() })
-	schema, err := os.ReadFile("../../.specs/reorganizacao-schema/legado-sqlite.sql")
+	schema, err := os.ReadFile("../../docs/development/schema/legacy-sqlite.sql")
 	if err != nil {
 		t.Fatal(err)
 	}

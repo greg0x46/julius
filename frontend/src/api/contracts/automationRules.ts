@@ -2,7 +2,7 @@ import { isCount, isRecord, isUuid, isValidDate, requiredRecord } from "./shared
 
 // RuleCondition is the shared field/operator/value shape both automation
 // rules and recurring commitments compose — see internal/rules (backend)
-// and .specs/motores-de-dominio.md (motor de regras). "amount"/
+// and docs/development/architecture.md (motor de regras). "amount"/
 // "day_of_month" only make sense where there's an occurrence to compare
 // against — on an AutomationRule that means a "reconcile" action is present
 // (see ruleConditionFieldOperators and AutomationAction below); the backend
