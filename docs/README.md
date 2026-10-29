@@ -16,6 +16,7 @@ owner account, and sign in for the first time.
 
 ## Further reading
 
+- [Read your own financial data with Meu Pluggy](guides/open-finance-pluggy.md): Open Finance setup.
 - [MCP setup and authorization](guides/mcp.md): expose the endpoint, connect a
   compatible client, approve changes and revoke access.
 - [MCP interoperability checks](mcp.md): repeatable smoke validation and client
