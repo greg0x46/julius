@@ -194,16 +194,18 @@ non-negative and every position is valued.
 mounted at `/mcp` by `cmd/julius`, outside the REST cookie/open-mode gate.
 `JULIUS_MCP_ENABLED` defaults to false (404); invalid boolean values and enabling
 it with demo mode refuse startup. `/mcp/` and descendants are reserved (404),
-including in the SPA fallback. No financial tools are registered yet; tools
-capability and an empty discovery result establish the extension point without
-duplicating domain behavior. Protocol versions, initialize/discovery, transport
+including in the SPA fallback. Eight read-only planning tools are registered by
+`internal/httpapi.RegisterMCPPlanningTools`, sharing domain engines and REST DTO
+formatters without HTTP dispatch. Separately scoped writes use a fixed operation allowlist
+and the existing REST validators/handlers or domain category transaction. Protocol versions,
+initialize/discovery, transport
 errors and JSON-RPC errors are handled by the SDK.
 
 Every MCP request requires a scoped OAuth Bearer token from `internal/mcp`;
 owner sessions and cookies never grant access. Authentication must remain
 enabled (403 when off); storage failures return 503. Invalid, expired, revoked
 or wrong-resource tokens return 401 with a protected-resource metadata challenge;
-missing `mcp:read` returns 403/`insufficient_scope`. Origin is optional for
+missing `mcp:access` returns 403/`insufficient_scope`. Origin is optional for
 non-browser clients, but when present must equal the configured public origin.
 There is no CORS. `/api` retains its existing cookie/CSRF gate and ignores
 OAuth tokens.
@@ -222,6 +224,7 @@ and the authentication preference is checked before every OAuth request.
 | GET /oauth/authorize | Validates client, exact redirect, resource, scope and S256 challenge; renders owner consent |
 | POST /oauth/authorize | Checks bound cookie and Origin; explicit denial or fresh owner credentials plus explicit approval; redirects code/error with state and issuer |
 | POST /oauth/token | Form-encoded code exchange; consumes code atomically and validates client, redirect, resource, PKCE and owner revision |
+| GET/POST /oauth/write | Immutable write preview and one-time owner approval/denial; fresh credentials, Origin and browser CSRF binding |
 | POST /oauth/revoke | Form-encoded client ID/token; idempotent revocation of the connection belonging to that client/token |
 
 Migration `0007_mcp_oauth` adds `oauth_clients` and `oauth_grants` on both
@@ -235,15 +238,18 @@ session. Code/token insertion compares the verified owner revision to prevent
 password-reset races; reads also require the current revision. Browser logout
 has no effect on OAuth tokens; password changes/resets revoke all of them.
 
-The default scope is `mcp:read`; `mcp:read mcp:write` requests writes too.
-Omitted scope and legacy `mcp:access` requests map to read-only. Consent defaults
-to read-only and offers writing only when requested; the selection persists
-through credential errors. Unknown requested scopes are rejected. There are
-still zero financial tools. A receiving middleware classifies tools through a
-server-owned name/scope map and rejects unclassified tools. Before execution it
-rechecks the MCP and browser-auth flags, token expiry/revision, connection
-revocation and current scope intersected with the token scope. Prompts and
-client-supplied annotations never grant permissions. Consent requests and codes last
+`mcp:access` covers the transport and read-only tools. Optional `mcp:write`
+requires `mcp:access` too; scope order is accepted and normalized. Optional
+`mcp:operations` additionally requires `mcp:write`, authorizing guarded network
+requests explicitly disclosed on consent, without a new financial approval. Read-only
+grants cannot prepare or inspect writes. Each write needs its own owner approval. Existing grants also permit these reads; consent now explicitly
+discloses financial access and explicit hypothetical selection. Unknown requested
+scopes are rejected. Consent offers the requested tier and lower ones, defaulting
+to read-only (the owner can grant less than requested; the selection persists
+through credential errors). A receiving middleware rechecks, on every tool call,
+the MCP and browser-auth flags, token expiry/revision, connection revocation and
+the current scope narrowed to the token scope; tools enforce their own scope from
+that fresh identity. Consent requests and codes last
 five minutes; access tokens last one hour without idle refresh. Only hashes of
 random 32-byte credentials reach storage. Code and consent consumption are
 single-use under concurrent requests. Tokens are bound to the exact configured
@@ -255,8 +261,11 @@ unverified client name, client ID, redirect, resource and scope. It requires
 fresh owner credentials and a separate explicit approval even with a browser
 session. Denial needs no password. An HttpOnly/SameSite=Strict host cookie binds
 the pending request to the browser; consent POST requires exact Origin. CSP
-blocks framing/scripts and limits form submission; responses are no-store and
-no-referrer. Failed credentials retain the details/email and clear the password.
+blocks framing/scripts and restricts the credential form to the same origin;
+responses are no-store and no-referrer. After approval or denial, a fresh HTML
+document navigates to the validated callback with a meta refresh and an escaped
+fallback link, avoiding CSP restrictions on cross-origin form redirects. Failed
+credentials retain the details/email and clear the password.
 OAuth protocol errors use OAuth JSON or a validated redirect, not REST Problems.
 
 Supported registration is RFC 7591 DCR only. Client ID Metadata Documents are
@@ -311,13 +320,13 @@ demo blocks management. Clients never gain REST access through an OAuth token.
 |---|---|
 | GET /api/settings/mcp | Returns server availability, runtime enabled flag and all authorized connections, including expired/revoked; no credentials/hashes |
 | PUT /api/settings/mcp | Saves the runtime enabled flag; requires normal CSRF headers |
-| PATCH /api/settings/mcp/connections/{id} | Sets read-only or read/write within original consent ceiling; expired/revoked/escalating changes return 409 |
+| PATCH /api/settings/mcp/connections/{id} | Sets a scope tier (read, read/write, read/write/operate) within the original consent ceiling; expired/revoked/escalating changes return 409 |
 | DELETE /api/settings/mcp/connections/{id} | Idempotently records revocation for that connection; unknown IDs return 409 |
 
 Security settings reuses Section, Switch, Select and Popconfirm, with loading,
 retry, empty, unavailable-server and per-action error states. Names are explicitly
 self-reported in consent; IDs distinguish identical names. Read-only consent has
-no write selector. Active write consent can be reduced and restored within its
+no tier selector. Active broader consent can be reduced and restored within its
 ceiling; broader access requires new consent. Revoked/expired rows retain dates
 and permission summaries without editing controls. Disabling MCP leaves the list
 and revocation controls usable; demo/open mode shows explanatory copy.
@@ -336,3 +345,135 @@ revoked-code exchange, read/write execution, runtime disable, consent ceiling,
 demo/open access and safe errors on SQLite/Postgres. Frontend
 `MCPSettings.test.tsx` covers controls, confirmation, errors, states and independent
 connections; `api/mcpSettings.test.ts` validates response data and transport.
+
+### Financial read inventory
+
+See [README MCP](../../../README.md#mcp) for the tool/input inventory and synthetic
+validation steps. `get_investment_portfolio`, `get_net_worth`, `list_goals`,
+`list_payables`, `list_recurring_commitments`, `list_scenarios`,
+`list_projection_events` and `get_timeline` advertise typed input/output schemas
+and read-only annotations. Decimal types in FX metadata are explicitly described
+as strings. Lists use limit/offset (50 default, 100 maximum); timeline/events/
+wealth ranges are inclusive and at most 366 days; each result is limited to
+256 KiB. Oversized results fail with narrowing instructions rather than dropping
+financial records or altering totals. At most 20 explicit scenario IDs are
+accepted and unknown IDs fail validation.
+
+MCP timeline/event reads explicitly select active non-standalone commitments
+plus requested IDs, excluding even active standalone hypotheticals unless named.
+Actual wealth, goal progress and payable settlements never read scenarios.
+Portfolio and wealth use reference-currency FX; goals/payables/commitments/events
+remain BRL. Assumptions, partial history, unavailable figures and FX provenance
+survive presentation. Domain failures become sanitized tool errors; incomplete
+reporting carries structured coverage JSON in the error text. No financial
+payload accompanies an error.
+
+`internal/httpapi/mcp_planning_test.go` verifies generic SDK calls and output
+schema validation, application parity, exact decimals, mixed/reference currencies,
+unavailable historical FX and portfolio figures, date validation/clamping,
+explicit/empty scenario selection (including an active hypothetical), recurring
+reconciliation, pagination, output bounds and sanitized storage failures.
+Selection and missing-FX tests run on both database dialects.
+
+
+### Financial write approval
+
+`internal/mcp/writes.go` registers thirty-one preparation tools plus `get_write_result`;
+[README financial writes](../../../README.md#financial-writes) lists exact tool
+names, body fields, bounds and synthetic dev validation. `internal/httpapi/mcp_writes.go`
+validates allowlisted operations, captures before-state, installment identifiers
+and financial links/amounts, and calls existing ledger/automation/category paths.
+`internal/httpapi/mcp_planning_writes.go` adds goal, standalone scenario/planned
+transaction and recurring commitment validation/snapshots, reusing their existing
+request conversions and domain flows. Scenario updates rename only. Planned
+transactions carry an explicit parent `scenario_id`; parent kind and child
+ownership are checked on preview/application. Goal progress and realized totals
+remain derived; standalone selection stays explicit.
+Ignore/delete previews include all own-account transfer participants and their
+native amounts and before-state: removing a transfer relationship preserves the
+counterpart entries but changes which reporting decisions apply.
+Tool input schemas reuse the corresponding REST DTO fields; decimal amounts
+are strings. Raw JSON result fields have explicit unconstrained JSON schemas,
+not byte-array schemas. Unknown operations/fields are rejected.
+
+Every mutation returns an immutable preview and an unguessable approval URL,
+bound to the exact originating write-scoped token. Only the browser's same-origin,
+CSRF-bound POST with fresh owner credentials can execute it. Client-supplied
+approval flags or prompts cannot grant approval. Original grant scope, resource,
+expiry and owner revision are rechecked before application. Revocation and
+open mode block pending actions. The Portuguese server-rendered page reuses
+consent styles/accessibility, escapes client content, displays requested/current
+values and affected IDs/count, and discloses cleanup and reporting effects.
+
+Approval executes once while holding the per-instance action mutex; duplicate
+POSTs/polls return the retained result. Terminal states are applied/denied/failed;
+503 results can be indeterminate after a committed write/read-back failure, so
+inspect data and reuse the persistent manual-creation key. At most 100 actions
+are retained. Pending actions expire in five minutes; execution outcomes in ten.
+Restart loses pending approvals/results, so request another preview; persistent
+creation idempotency survives. Multiple replicas need request affinity.
+
+Before-state changes invalidate approval. Installment categorization rechecks
+membership and every before-state inside the same serializable transaction as
+all decisions/events (100 identifiers maximum). No arbitrary batch or
+retroactive rule application is exposed. Scenario/planned-transaction deletion
+also rechecks its planning cascade and
+realization snapshots inside the deletion transaction, preserving real entries.
+Recurrence preview includes schedules, manual decisions and targeting rules; edits
+retain orphan cleanup and deletion refuses targeting reconcile actions.
+One-record manual/category/rule/goal/recurrence paths revalidate the preview before invoking their existing domain service boundaries.
+Read clients can discover schemas but cannot prepare, commit or read write results.
+
+Tests `internal/mcp/writes_test.go` and `internal/httpapi/mcp_writes_test.go`
+exercise real SDK/OAuth HTTP flows, both dialects, read-only/anonymous rejection,
+CSRF/Origin/credentials, denial/replay/concurrency, token binding/revocation,
+expiry, exact money, persistent creation retries/conflicts, soft deletion,
+manual/provider restrictions, categorization cascades, stale previews, rule
+and catalog management, and injected partial failures with full rollback.
+
+Planning write contracts/authorization are covered by
+`internal/mcp/planning_writes_test.go` and
+`internal/httpapi/mcp_planning_writes_test.go`: all twelve tools, exact BRL money,
+goal/recurrence parity, explicit hypothetical timeline effects, invalid dates/IDs,
+stale cascades, parent ownership, anonymous/read-only rejection and destructive
+denial/replay. The OAuth consent disclosure names planning writes; each operation
+still requires a separate owner approval before application.
+
+
+### Guarded operations
+
+`internal/mcp/operations.go` registers six tools: `get_operations_status`,
+`list_sync_runs`, `get_sync_run`, `request_sync`, `request_quote_refresh` and
+`get_operation_result`. The first three require access scope; request and receipt
+polling require access, write and operations scopes. All stay behind the same
+authentication, demo/open-mode restrictions, 16-request concurrency gate and
+30-second transport timeout. Unknown inputs, malformed UUIDs, invalid pagination
+and client-supplied overrides are rejected. Reads are bounded to 100 items and
+256 KiB; failure details are paginated and use `syncsvc.SafeMessage`, never raw
+stored messages, external account/transaction IDs or payloads. Source names are
+blanked because REST names can fall back to private provider item IDs.
+
+`httpapi.MCPRequestSync` wraps only the existing enqueue handler. `worker.Ready`
+checks the same decrypted credentials as the worker and returns only a boolean.
+`cmd/julius` injects the same secrets, market service, sync schedule and shutdown
+context used by the existing server. No settings write or arbitrary route is
+exposed. Automatic quote disabling preserves manual refresh eligibility.
+
+Request receipts use validated idempotency keys and exact token ownership;
+matching retries return the original result even after completion, while changed
+arguments fail. A mutex serializes receipt creation, with at most 100 retained
+for one hour, excluding running work from expiry. Like write approvals, receipts
+are process-local; restart/another instance requires inspecting durable history
+before retrying. Sync execution remains in the existing worker and returns
+queued IDs. Quote execution calls `quotes.RefreshNow` asynchronously with a
+five-minute deadline and server cancellation, retaining shared scheduler/REST
+guards, provider cache/retry policy and persistent last-refresh outcomes.
+Receipt `finished` is distinct from quote `success`; failures/deferrals retain
+counts and do not expose upstream errors. History backfill remains separate.
+
+Setup, troubleshooting and synthetic dev steps: [README operational tools](../../../README.md#operational-tools).
+`internal/mcp/operations_test.go` covers real OAuth grants, consent disclosure,
+read/write/operations scope separation, strict inputs, sanitized bounded history,
+ineligible/unavailable services, concurrent queue requests, token isolation,
+terminal retries, shared quote guards, upstream failure/deferral and shutdown.
+Sync integration coverage runs on SQLite and disposable Postgres.

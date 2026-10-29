@@ -13,13 +13,38 @@ import (
 	"github.com/greg0x46/julius/internal/settings"
 )
 
-const Read = "mcp:read"
-const ReadWrite = "mcp:read mcp:write"
+const Read = "mcp:access"
+const ReadWrite = "mcp:access mcp:write"
+const Operate = "mcp:access mcp:write mcp:operations"
 const EnabledKey = "mcp.enabled"
 
 var ErrScope = errors.New("invalid MCP scope")
 
-func ValidScope(scope string) bool { return scope == Read || scope == ReadWrite }
+func ValidScope(scope string) bool { return scope == Read || scope == ReadWrite || scope == Operate }
+
+// Rank orders the nested scopes; invalid scopes rank -1.
+func Rank(scope string) int {
+	switch scope {
+	case Read:
+		return 0
+	case ReadWrite:
+		return 1
+	case Operate:
+		return 2
+	}
+	return -1
+}
+
+// Narrowest returns the lower of two valid scopes, or "" if either is invalid.
+func Narrowest(a, b string) string {
+	if Rank(a) < 0 || Rank(b) < 0 {
+		return ""
+	}
+	if Rank(a) <= Rank(b) {
+		return a
+	}
+	return b
+}
 func Enabled(ctx context.Context, q settings.Querier) (bool, error) {
 	value, found, err := settings.Get(ctx, q, EnabledKey, nil)
 	if err != nil {
@@ -99,7 +124,7 @@ func (s *Store) SetScope(ctx context.Context, id, scope string) error {
 	if !ValidScope(scope) {
 		return ErrScope
 	}
-	result, err := s.DB.ExecContext(ctx, `UPDATE mcp_authorizations SET scope=? WHERE id=? AND revoked_at IS NULL AND expires_at>? AND revision=(SELECT revision FROM auth_owner WHERE id=1) AND (approved_scope=? OR ?=?)`, scope, id, db.FormatTime(s.Now()), scope, scope, Read)
+	result, err := s.DB.ExecContext(ctx, `UPDATE mcp_authorizations SET scope=? WHERE id=? AND revoked_at IS NULL AND expires_at>? AND revision=(SELECT revision FROM auth_owner WHERE id=1) AND (approved_scope=? OR ?=? OR (?=? AND approved_scope=?))`, scope, id, db.FormatTime(s.Now()), scope, scope, Read, scope, ReadWrite, Operate)
 	return changed(result, err)
 }
 func (s *Store) Revoke(ctx context.Context, id string) error {

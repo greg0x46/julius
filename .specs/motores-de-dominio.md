@@ -197,7 +197,8 @@ below still holds as a domain yardstick; what is missing is its UI expression.
   Widely referenced but a passive catalog with no matching/computation/merging
   logic of its own — fails criterion 2.
 - **Wealth** (`internal/networth`): cash plus investments today and the
-  derived daily history; nothing stored. Not investigated in depth; fails criterion 3 (not reused across contexts today).
+  derived daily history; nothing stored. A composed read model over Ledger and
+  Investments, shared by Home, the wealth page, goals and MCP.
 - **Sync/Pluggy** (`internal/pluggy`, `internal/syncsvc`, `internal/worker`):
   an ingestion provider, not a domain engine — violates criterion 3 directly.
   It feeds the Ledger together with manual entries
@@ -208,9 +209,9 @@ below still holds as a domain yardstick; what is missing is its UI expression.
 - **Goals** (`internal/goals`): a target amount and date over one global metric
   (today `invested_value`, from `networth.InvestmentValue`). It stores only the target;
   current value and progress are recomputed on read from the engine that owns
-  the figure, and a goal never adds to any total. Used by a single feature
-  (Metas) — fails criterion 1; new metrics are read from their owning engines,
-  not recomputed here.
+  the figure, and a goal never adds to any total. Metas, Home and MCP share its
+  computed read model; new metrics are read from their owning engines, not
+  recomputed here.
 
 ## Cross-cutting principles (apply to every new engine)
 

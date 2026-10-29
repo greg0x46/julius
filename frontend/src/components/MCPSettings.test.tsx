@@ -10,7 +10,7 @@ import { MCPSettings } from "./MCPSettings";
 vi.mock("../api/auth");
 vi.mock("../api/mcpSettings");
 const connection = (overrides: Partial<MCPConnection> = {}): MCPConnection => ({
-  id: "a", client_id: "synthetic-client", client_name: "Assistente", scope: "mcp:read mcp:write", approved_scope: "mcp:read mcp:write",
+  id: "a", client_id: "synthetic-client", client_name: "Assistente", scope: "mcp:access mcp:write", approved_scope: "mcp:access mcp:write",
   created_at: "2026-10-27T10:00:00Z", last_used_at: null, expires_at: "2026-10-27T11:05:00Z", revoked_at: null, expired: false, ...overrides,
 });
 let state: Settings;
@@ -37,12 +37,12 @@ it("shows client identity and dates and limits permissions before saving", async
   await userEvent.click(screen.getByRole("combobox", { name: "Permissões de Assistente" }));
   await userEvent.click(screen.getByRole("option", { name: "Somente leitura" }));
   await userEvent.click(screen.getByRole("button", { name: "Salvar permissões" }));
-  await waitFor(() => expect(api.setMCPScope).toHaveBeenCalledWith("a", "mcp:read"));
+  await waitFor(() => expect(api.setMCPScope).toHaveBeenCalledWith("a", "mcp:access"));
   expect(await screen.findByText("Permissões atualizadas.")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Salvar permissões" })).toBeDisabled();
 });
 it("confirms revocation for one client and retains the other", async () => {
-  state.connections.push(connection({ id: "b", client_id: "other-client", client_name: "Outro cliente", scope: "mcp:read", approved_scope: "mcp:read" }));
+  state.connections.push(connection({ id: "b", client_id: "other-client", client_name: "Outro cliente", scope: "mcp:access", approved_scope: "mcp:access" }));
   show();
   await userEvent.click(await screen.findByRole("button", { name: "Revogar acesso de Assistente" }));
   const dialog = screen.getByRole("dialog");
@@ -79,7 +79,7 @@ it("shows empty and server-disabled states", async () => {
   expect(screen.queryByRole("switch")).not.toBeInTheDocument();
 });
 it("does not offer editing for expired, revoked or read-only consent", async () => {
-  state.connections = [connection({ expired: true }), connection({ id: "b", revoked_at: "2026-10-27T10:30:00Z" }), connection({ id: "c", scope: "mcp:read", approved_scope: "mcp:read" })];
+  state.connections = [connection({ expired: true }), connection({ id: "b", revoked_at: "2026-10-27T10:30:00Z" }), connection({ id: "c", scope: "mcp:access", approved_scope: "mcp:access" })];
   show();
   expect(await screen.findByText("Expirado")).toBeInTheDocument();
   expect(screen.getByText(/Revogado em/)).toBeInTheDocument();

@@ -47,7 +47,7 @@ func TestAuthorizationLifecycle(t *testing.T) {
 				t.Fatal(err)
 			}
 		}
-		if err := store.SetScope(ctx, first, "mcp:access"); !errors.Is(err, ErrScope) {
+		if err := store.SetScope(ctx, first, "mcp:read"); !errors.Is(err, ErrScope) {
 			t.Fatalf("invalid scope: %v", err)
 		}
 		for range 2 {

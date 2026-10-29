@@ -1,7 +1,8 @@
 import { apiFetch } from "./transport";
 import { isValidDate, requiredRecord } from "./contracts/shared";
 
-export type MCPScope = "mcp:read" | "mcp:read mcp:write";
+export type MCPScope = "mcp:access" | "mcp:access mcp:write" | "mcp:access mcp:write mcp:operations";
+const scopeRank: Record<MCPScope, number> = { "mcp:access": 0, "mcp:access mcp:write": 1, "mcp:access mcp:write mcp:operations": 2 };
 export interface MCPConnection {
   id: string;
   client_id: string;
@@ -21,7 +22,7 @@ export interface MCPSettings {
 }
 const invalid = "Resposta de acesso MCP inválida.";
 function isScope(value: unknown): value is MCPScope {
-  return value === "mcp:read" || value === "mcp:read mcp:write";
+  return typeof value === "string" && Object.hasOwn(scopeRank, value);
 }
 export function parseMCPSettings(value: unknown): MCPSettings {
   const record = requiredRecord(value, ["available", "enabled", "connections"], invalid);
@@ -32,7 +33,7 @@ export function parseMCPSettings(value: unknown): MCPSettings {
     const item = requiredRecord(value, ["id", "client_id", "client_name", "scope", "approved_scope", "created_at", "last_used_at", "expires_at", "revoked_at", "expired"], invalid);
     const { id, client_id, client_name, scope, approved_scope, created_at, last_used_at, expires_at, revoked_at, expired } = item;
     if (typeof id !== "string" || typeof client_id !== "string" || typeof client_name !== "string" ||
-      !isScope(scope) || !isScope(approved_scope) || (scope === "mcp:read mcp:write" && approved_scope !== scope) ||
+      !isScope(scope) || !isScope(approved_scope) || (scope !== "mcp:access" && approved_scope !== scope && !(scope === "mcp:access mcp:write" && approved_scope === "mcp:access mcp:write mcp:operations")) ||
       !isValidDate(created_at) || !isValidDate(expires_at) ||
       (last_used_at !== null && !isValidDate(last_used_at)) || (revoked_at !== null && !isValidDate(revoked_at)) || typeof expired !== "boolean") {
       throw new TypeError(invalid);

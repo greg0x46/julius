@@ -10,10 +10,13 @@ import { Section } from "./layout";
 import { Alert, Button, Popconfirm, Select, Skeleton, Switch } from "./ui";
 
 const settingsKey = ["mcp-settings"];
-const permissions = [
-  { value: "mcp:read", label: "Somente leitura" },
-  { value: "mcp:read mcp:write", label: "Leitura e escrita" },
+const permissions: { value: MCPScope; label: string }[] = [
+  { value: "mcp:access", label: "Somente leitura" },
+  { value: "mcp:access mcp:write", label: "Leitura e escrita" },
+  { value: "mcp:access mcp:write mcp:operations", label: "Leitura, escrita e operações" },
 ];
+const rank = (scope: MCPScope) => permissions.findIndex((item) => item.value === scope);
+const label = (scope: MCPScope) => permissions.find((item) => item.value === scope)?.label ?? scope;
 
 export function MCPSettings() {
   const client = useQueryClient();
@@ -51,7 +54,7 @@ export function MCPSettings() {
           ) : <Alert type="info" showIcon message="MCP desativado nesta instância" description="O acesso por clientes MCP depende da configuração do servidor." />}
           {error && <Alert type="error" showIcon message={error} />}
           <div role="status" aria-live="polite">{notice}</div>
-          <p className="settings-radio-hint">Somente leitura permite consultar dados. Leitura e escrita também permite alterá-los.</p>
+          <p className="settings-radio-hint">Somente leitura permite consultar dados. Leitura e escrita também permite solicitar alterações, e operações inclui sincronizações e atualização de cotações.</p>
           {settings.data.connections.length === 0 ? <p>Nenhum cliente MCP autorizado.</p> : (
             <ul className="mcp-connections" aria-label="Clientes MCP autorizados">
               {settings.data.connections.map((connection) => <Connection key={`${connection.id}:${connection.scope}:${connection.revoked_at}`} connection={connection} onSaved={async (message) => { await reload(); setNotice(message); }} />)}
@@ -70,6 +73,7 @@ function Connection({ connection, onSaved }: { connection: MCPConnection; onSave
   const [error, setError] = useState<string | null>(null);
   const name = connection.client_name || "Aplicativo sem nome";
   const active = !connection.revoked_at && !connection.expired;
+  const editable = rank(connection.approved_scope) > 0;
   const run = async (action: () => Promise<void>, message: string) => {
     setBusy(true); setError(null);
     try { await action(); await onSaved(message); }
@@ -84,14 +88,14 @@ function Connection({ connection, onSaved }: { connection: MCPConnection; onSave
       <span className="settings-radio-hint">Último uso: {connection.last_used_at ? formatOptionalDateTime(connection.last_used_at) : "Ainda não utilizado"}</span>
       <span className="settings-radio-hint">Expira em: {formatOptionalDateTime(connection.expires_at)}</span>
       {connection.revoked_at ? <span>Revogado em {formatOptionalDateTime(connection.revoked_at)}</span> : connection.expired ? <span>Expirado</span> : null}
-      {active && connection.approved_scope === "mcp:read mcp:write" ? (
+      {active && editable ? (
         <FormField label={`Permissões de ${name}`} htmlFor={`mcp-scope-${connection.id}`}>
-          <Select id={`mcp-scope-${connection.id}`} value={scope} options={permissions} disabled={busy} onChange={(value: MCPScope) => setScope(value)} />
+          <Select id={`mcp-scope-${connection.id}`} value={scope} options={permissions.filter((item) => rank(item.value) <= rank(connection.approved_scope))} disabled={busy} onChange={(value: MCPScope) => setScope(value)} />
         </FormField>
-      ) : <span>Permissões: {connection.scope === "mcp:read" ? "Somente leitura" : "Leitura e escrita"}</span>}
+      ) : <span>Permissões: {label(connection.scope)}</span>}
       {error && <Alert type="error" showIcon message={error} />}
       {active && <div className="settings-account-actions">
-        {connection.approved_scope === "mcp:read mcp:write" && <Button disabled={busy || scope === connection.scope} loading={busy} onClick={() => void run(() => setMCPScope(connection.id, scope), "Permissões atualizadas.")}>Salvar permissões</Button>}
+        {editable && <Button disabled={busy || scope === connection.scope} loading={busy} onClick={() => void run(() => setMCPScope(connection.id, scope), "Permissões atualizadas.")}>Salvar permissões</Button>}
         <Popconfirm title={`Revogar o acesso de ${name}?`} description="Este cliente deixará de acessar seus dados imediatamente." okText="Revogar acesso" cancelText="Cancelar" onConfirm={() => run(() => revokeMCP(connection.id), "Acesso revogado.")}>
           <Button danger disabled={busy} aria-label={`Revogar acesso de ${name}`}>Revogar acesso</Button>
         </Popconfirm>

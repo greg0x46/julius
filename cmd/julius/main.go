@@ -97,11 +97,6 @@ func main() {
 		log.Fatal(err)
 	}
 
-	mcpHandler, err := mcp.NewHandler(mcpEnabled, config, auth.NewStore(conn))
-	if err != nil {
-		log.Fatal(err)
-	}
-
 	quotesConfig, err := quotes.InitializeSchedule(context.Background(), conn, os.Getenv("JULIUS_QUOTES_SCHEDULE"))
 	if err != nil {
 		log.Fatal(err)
@@ -158,6 +153,15 @@ func main() {
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
+	var syncSchedule *worker.Schedule
+	if scheduled {
+		syncSchedule = &schedule
+	}
+	mcpHandler, err := mcp.NewHandler(mcpEnabled, config, auth.NewStore(conn), mcp.Operations{Context: ctx, Market: marketService, Secrets: secrets, SyncSchedule: syncSchedule})
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	if demo {
 		// No provider traffic at all: the demo's data is synthetic and its
 		// integrations are read-only (httpapi's demo guard).

@@ -81,8 +81,8 @@ func TestManagedAuthorizations(t *testing.T) {
 			status             int
 		}{
 			{"PATCH", "/api/settings/mcp/connections/" + first, `{"scope":"unknown"}`, 422},
-			{"PATCH", "/api/settings/mcp/connections/" + first, `{"scope":"mcp:read mcp:write"}`, 409},
-			{"PATCH", "/api/settings/mcp/connections/invalid", `{"scope":"mcp:read"}`, 422},
+			{"PATCH", "/api/settings/mcp/connections/" + first, `{"scope":"mcp:access mcp:write"}`, 409},
+			{"PATCH", "/api/settings/mcp/connections/invalid", `{"scope":"mcp:access"}`, 422},
 			{"PUT", "/api/settings/mcp", `{}`, 422},
 			{"PUT", "/api/settings/mcp", `{"enabled":false}`, 200},
 		} {
@@ -207,15 +207,15 @@ func TestRevocationBeforeCodeExchange(t *testing.T) {
 func TestConsentLimitsRequestedScopes(t *testing.T) {
 	dbtest.Each(t, func(t *testing.T, conn *sql.DB) {
 		store, _ := setup(t, conn)
-		for _, requested := range []string{"mcp:access", mcpaccess.Read, mcpaccess.ReadWrite} {
+		for _, requested := range []string{mcpaccess.Read, mcpaccess.ReadWrite, mcpaccess.Operate} {
 			f := newFlow(t, store)
 			f.params.Set("scope", requested)
 			page := f.begin(t)
-			if strings.Contains(page.Body.String(), `value="mcp:read mcp:write"`) != (requested == mcpaccess.ReadWrite) {
+			if strings.Contains(page.Body.String(), `value="`+mcpaccess.ReadWrite+`"`) != (requested != mcpaccess.Read) {
 				t.Fatal("incorrect consent options")
 			}
-			p := url.Values{"request": {f.pending}, "decision": {"allow"}, "email": {"owner@example.com"}, "password": {"synthetic-password"}, "scope": {mcpaccess.ReadWrite}}
-			if requested != mcpaccess.ReadWrite {
+			p := url.Values{"request": {f.pending}, "decision": {"allow"}, "email": {"owner@example.com"}, "password": {"synthetic-password"}, "scope": {mcpaccess.Operate}}
+			if requested != mcpaccess.Operate {
 				w := oauthRequest(f.handler, "POST", "/oauth/authorize", p.Encode(), f.cookie, testConfig.PublicURL)
 				if w.Code != 400 {
 					t.Fatalf("consent escalation: %d", w.Code)
@@ -223,8 +223,8 @@ func TestConsentLimitsRequestedScopes(t *testing.T) {
 			}
 			p.Del("scope")
 			w := oauthRequest(f.handler, "POST", "/oauth/authorize", p.Encode(), f.cookie, testConfig.PublicURL)
-			u, _ := url.Parse(w.Header().Get("Location"))
-			if w.Code != 303 || u.Query().Get("code") == "" {
+			u := consentCallback(t, w)
+			if u.Query().Get("code") == "" {
 				t.Fatalf("consent: %d %s", w.Code, w.Body)
 			}
 			w = oauthRequest(f.handler, "POST", "/oauth/token", f.exchange(u.Query().Get("code")).Encode(), nil, "")

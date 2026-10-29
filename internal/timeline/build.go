@@ -35,6 +35,8 @@ type BuildParams struct {
 	CategoryIDs   []string
 	CardNumbers   []string
 	ScenarioIDs   []string
+	// ScenarioSelection defaults to active (or active_plus when IDs are supplied).
+	ScenarioSelection projections.SelectionMode
 }
 
 func contains(list []string, value string) bool {
@@ -329,9 +331,12 @@ func BuildSeries(ctx context.Context, q Querier, params BuildParams) (Series, er
 			entries = append(entries, entry)
 		}
 	}
-	selection := projections.SelectionActive
-	if len(params.ScenarioIDs) > 0 {
-		selection = projections.SelectionActivePlus
+	selection := params.ScenarioSelection
+	if selection == "" {
+		selection = projections.SelectionActive
+		if len(params.ScenarioIDs) > 0 {
+			selection = projections.SelectionActivePlus
+		}
 	}
 	planned, err := projections.List(ctx, q, projections.ProjectionQuery{
 		From: from, To: to, Selection: selection, IDs: params.ScenarioIDs,
