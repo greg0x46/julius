@@ -49,6 +49,7 @@ Keep the key safe and back it up separately from the database; you need the same
 - **Getting Started** — [quick start](#getting-started).
 - **User Guides** — [feature details in the temporary migration reference](docs/legacy-readme.md#features).
 - **Self-Hosting** — [authentication and encryption](docs/legacy-readme.md#authentication-and-encryption-key), [PostgreSQL](docs/legacy-readme.md#running-with-postgres), and [releases and installation](docs/legacy-readme.md#publish-and-install-a-version).
+- **MCP** — [self-hosted setup, client checks and troubleshooting](docs/mcp.md).
 - **Development** — [commands and conventions](AGENTS.md), [domain documentation](.specs/README.md), and [frontend testing](frontend/TESTING.md).
 
 The [previous README](docs/legacy-readme.md) is preserved in full as a temporary migration reference, including authentication, MCP, database, release, and deployment instructions. Subsequent documentation issues must migrate useful sections into durable guides and add or update their own README links. Remove the temporary reference once that migration is complete.
