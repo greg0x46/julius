@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./frontend/src/assets/julius.png" alt="Julius" width="160" />
+  <img src="./docs/assets/readme-hero.webp" alt="Julius" width="160" />
 </p>
 
 # Julius
