@@ -40,7 +40,7 @@ export JULIUS_PUBLIC_URL="http://localhost:4200"
 ./julius -db ./julius.db
 ```
 
-The initialization command prompts for the owner's email and password. Open <http://localhost:4200> and sign in. Pluggy is optional: start with manual accounts, or configure Pluggy credentials in **Configurações** to connect your banks.
+The initialization command prompts for the owner's email and password. Open <http://localhost:4200> and sign in. Pluggy is optional: start with manual accounts, or follow the [Meu Pluggy setup guide](docs/guides/open-finance-pluggy.md) to connect your banks and configure Julius under **Configurações → Open Banking**.
 
 Keep the key safe and back it up separately from the database; you need the same key on every restart. Set exactly one of `JULIUS_MASTER_KEY_FILE` or `JULIUS_MASTER_KEY` (a Base64-encoded 32-byte key). For remote access, set `JULIUS_PUBLIC_URL` to the browser-facing HTTPS origin and serve Julius through HTTPS; local HTTP is for development only.
 
