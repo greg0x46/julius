@@ -54,7 +54,8 @@ authentication configuration that does not depend on the host:
 - **Optional MCP endpoint** — provider-neutral Streamable HTTP in the same
   binary, disabled by default, with OAuth, PKCE and explicit owner consent for
   financial planning reads and separately scoped writes for goals, scenarios,
-  recurring commitments, transactions and editable investments. Financial writes require owner approval in Julius; separately authorized clients can inspect and request guarded maintenance. See [MCP](#mcp).
+  recurring commitments, transactions, editable investments, manual accounts,
+  own-account transfers and debts/receivables. Financial writes require owner approval in Julius; separately authorized clients can inspect and request guarded maintenance. See [MCP](#mcp).
 
 - **Exact money boundaries** — amounts stay decimal strings through entry,
   editing, calculation and HTTP. BRL display rounds to cents with ties away
@@ -488,7 +489,8 @@ using its own single owner account, independent of any AI provider:
    tokens cannot authorize `/api`. REST keeps its cookie, Origin and
    `X-Julius-Request: 1` requirements.
 
-The `mcp:access` scope permits the read-only planning and operational tools below.
+The `mcp:access` scope permits the read-only financial, planning and operational tools below.
+Financial read pages contain at most 200 items (default 50); results carry the HTTP status and the API payload in `data`.
 Request `scope=mcp:access mcp:write` for financial writes; the owner may grant
 less than requested on the consent page, and existing read-only grants gain no
 write permission. Write consent permits preparing changes,
@@ -501,6 +503,11 @@ tool discovery, JSON-RPC errors and the legacy initialize handshake.
 
 | Tool | Inputs and result |
 |---|---|
+| `list_accounts` | Optional `page`, `page_size`; accounts and cards with native balances, credit limits and closing-day metadata |
+| `list_card_bills` | Required `account_id`, optional `page`, `page_size`; recorded card bills (the open bill is the account balance, never fabricated) |
+| `search_transactions` | Required `timezone`; REST query filters, inclusive `YYYY-MM-DD` ranges, `group_by` (`none`, `day`, `week`, `month`, `year`); page totals cover all matches, with explicit eligibility, native totals and reporting coverage/FX |
+| `list_categories` | Optional `page`, `page_size`; catalog including inactive categories |
+| `spending_by_category` | Required `timezone`; the REST category-breakdown contract (period, classification) with reporting coverage and FX |
 | `get_investment_portfolio` | Required `to`, optional `from`, `group_by` (`none`, `account`, `class`), `source` (`manual`, `synced`), `account_id`; positions, period returns, portfolio/group totals, native figures and FX |
 | `get_net_worth` | Required `from`, `to`; realized cash plus investments, daily history within the range and today's `latest` |
 | `list_goals` | Optional `limit`, `offset`; current progress, target-date projection and required monthly contribution in BRL |
@@ -635,6 +642,16 @@ Discovery publishes the body fields and exact string amount schema.
 | `delete_investment_position` | `{}`; manual position without operations only |
 | `create_investment_operation`, `update_investment_operation` | `account_id`, `kind` (`initial_balance`, `deposit`, `withdrawal`, `buy`, `sell`, `income`, `fee`, `tax`, `valuation`), `occurred_on` (`YYYY-MM-DD`); optional `position_id`, `amount`, `quantity`, `unit_price`, `fees`, `taxes`, `notes`, as allowed by the investment ledger. Updates replace operation fields. Without `amount`, quantity × unit price supplies the gross amount. |
 | `delete_investment_operation` | `{}`; manual operation without reconciliations or a custody-transfer pair only |
+| `create_manual_account` | `name`; optional ISO `currency_code` (default `BRL`), decimal-string `opening_balance` (default `0`), `archived` (default false); manual bank accounts only |
+| `update_manual_account` | All of `name`, `currency_code`, `opening_balance`, `archived`; replaces account fields. Currency/opening balance cannot change after any movement or adjustment |
+| `adjust_manual_account` | Signed nonzero native `amount` and `description` (maximum 200 characters); top-level `id` is an active manual account; adjusts balance without income/expense |
+| `create_transfer` | Either `source_transaction_id`, `destination_transaction_id`, optional `fee_transaction_id` for existing real movements, or `source`, `destination`, optional `fee` containing manual transaction fields without categories. New movements require active manual accounts; amounts are in each account's currency |
+| `delete_transfer` | `{}`; top-level `id` is the transfer ID; unlinks without deleting movements |
+| `create_payable` | `kind` (`debt`/`receivable`), `name`, positive BRL `total_amount`; optional `initial_remaining_amount` between zero and total |
+| `update_payable` | `name`, positive BRL `total_amount`; kind and initial settled amount remain unchanged |
+| `delete_payable` | `{}`; deletes payable, plans and links, preserving real transactions |
+| `create_payable_link` | `payable_id`, `transaction_id`; one payable per transaction, eligible BRL outflow for debt or inflow for receivable |
+| `delete_payable_link` | `payable_id`; top-level `id` is the link ID; removes dependent settlements/allocations, preserving real transactions |
 | `get_write_result` | Top-level `request_id`; returns approval state and the final REST status/body |
 
 Investment monetary fields, quantities and prices are plain decimal strings (at
@@ -663,7 +680,8 @@ For example, `create_manual_transaction` accepts:
    requested fields and effects on reporting, balances and financial links.
    Transfer-unlink previews include the other participants and exact native amounts;
    those entries survive and resume their category/inclusion reporting decisions.
-   New records have count 1 and no identifier until commit.
+   New records have no identifier until commit; account/obligation previews also
+   list existing accounts, linked transactions and dependent plans that are affected.
 2. Open `approval_url` in the owner's browser. The Julius page identifies the
    requesting client, shows the exact request and effects, and requires fresh
    owner credentials plus **Aprovar e aplicar alteração**. Never give the owner
@@ -694,7 +712,9 @@ with the UI; updates/deletes retain the same service restrictions.
 
 Bodies are limited to 16 KiB; previews to 256 KiB; names to 200 characters,
 descriptions/condition values to 1,000, rule conditions to 20 and actions to 10.
-Amounts are nonzero plain decimal strings of at most 64 characters (no exponent).
+Amounts are plain decimal strings of at most 64 characters (no exponent).
+Transaction and adjustment amounts must be nonzero; opening balances and initial
+remaining amounts may be zero.
 Goal notes are limited to 4,000 characters. Approvals are instance-local, capped at 100, expire after five minutes and are
 lost on restart; final execution results remain for ten minutes. Use the same
 instance for tool calls and browser approval. Token revocation, expiry, password
@@ -710,6 +730,38 @@ delete it with separate approvals. A read-only client must fail every write;
 editing/deleting a synced entry must fail. Deny a request and verify it remains
 unchanged. These steps need no live provider credentials; synced restrictions
 and rollback faults are also covered by the integration tests.
+
+Account, transfer and payable writes recheck the entire preview inside the same
+serializable transaction as every mutation. Linking existing movements preserves
+provider balances and user decisions. Transfers exclude native principal from
+income/expense, retain both cash effects and keep explicit fees separate; no FX
+spread is inferred. Unlinking restores ordinary category/inclusion reporting.
+Payable totals remain derived and BRL-only. No provider settings or secrets are
+writable through these tools. Approval POST retries execute once. A new preparation
+and approval is a new operation: after a lost result or restart, inspect Julius
+before preparing another account, adjustment, manual transfer or payable creation.
+
+To validate account and obligation writes in dev, use a synthetic owner and a
+client with both scopes; no provider connection is required:
+
+1. Prepare/approve `create_manual_account` twice with distinct synthetic names,
+   `currency_code: "BRL"` and `opening_balance: "1000"`; retain the returned IDs.
+   Rename one through `update_manual_account`, explicitly supplying all four fields.
+2. Prepare/approve `adjust_manual_account` with `amount: "0.001"` and a reason.
+   Check the native balance increases exactly once, with no income/expense entry.
+3. Prepare `create_transfer` with `source` amount `"-50.001"`, `destination`
+   amount `"50.001"`, and `fee` amount `"-1"` on the source account; each includes
+   account ID, description and `occurred_at: "2026-10-01"`. Before approval nothing
+   changes. After approval, both balances move, principal is excluded from reports
+   and only the fee is an expense. Unlink using `delete_transfer`; all entries remain.
+4. Create a `debt` payable for `"100"`, link the BRL debit using
+   `create_payable_link`, and compare remaining amounts with Pendências. Unlink it
+   with its returned link ID and `payable_id`; remaining returns to `"100"`.
+   Edit and delete the payable through separate approvals; real entries remain.
+5. A read-only client must fail these writes. Deny an adjustment and verify its
+   balance is unchanged. Wrong directions, unknown accounts, unequal same-currency
+   transfer amounts and foreign-currency payable links must fail without mutation.
+   Test foreign-account cash separately: USD movements retain USD; no inferred FX.
 
 Planning writes use the same goal and recurrence validation/derived states as the
 application. Active recurring commitments enter base forecasts and reconciled

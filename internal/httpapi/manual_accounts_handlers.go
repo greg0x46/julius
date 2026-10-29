@@ -4,16 +4,13 @@ import (
 	"database/sql"
 	"net/http"
 	"strings"
-	"time"
 
-	"github.com/google/uuid"
+	"errors"
 	"github.com/shopspring/decimal"
 	"golang.org/x/text/currency"
 
-	"github.com/greg0x46/julius/internal/db"
-	dbtypes "github.com/greg0x46/julius/internal/db/types"
 	"github.com/greg0x46/julius/internal/exchange"
-	"github.com/greg0x46/julius/internal/money"
+
 	"github.com/greg0x46/julius/internal/transactions"
 )
 
@@ -72,57 +69,9 @@ func handleWriteManualAccount(conn *sql.DB, create bool) http.HandlerFunc {
 			return
 		}
 		defer tx.Rollback()
-		id := r.PathValue("id")
-		now := db.FormatTime(time.Now())
-		openingRaw := money.CanonicalDecimal(opening)
-		var archived any
-		if req.Archived {
-			archived = now
-		}
-		if create {
-			id = uuid.NewString()
-			_, err = tx.ExecContext(r.Context(), `INSERT INTO financial_accounts
-   (id, origin, name, account_type, currency_code, opening_balance, archived_at, created_at, updated_at)
-   VALUES (?, 'manual', ?, 'BANK', ?, ?, ?, ?, ?)`, id, req.Name, req.CurrencyCode, openingRaw, archived, now, now)
-		} else {
-			// Take the same row lock as manual transaction creation before checking currency.
-			result, lockErr := tx.ExecContext(r.Context(), `UPDATE financial_accounts SET updated_at = updated_at WHERE id = ?`, id)
-			if lockErr != nil {
-				accountsUnavailableProblem(w)
-				return
-			}
-			n, lockErr := result.RowsAffected()
-			if lockErr != nil {
-				accountsUnavailableProblem(w)
-				return
-			}
-			if n == 0 {
-				accountNotFoundProblem(w)
-				return
-			}
-			var origin, oldCurrency string
-			var oldOpening decimal.Decimal
-			var hasMovements bool
-			err = tx.QueryRowContext(r.Context(), `SELECT origin, COALESCE(currency_code, ''), COALESCE(opening_balance, '0'),
-    EXISTS(SELECT 1 FROM financial_transactions WHERE account_id = ?) OR
-    EXISTS(SELECT 1 FROM account_balance_adjustments WHERE account_id = ?)
-    FROM financial_accounts WHERE id = ?`, id, id, id).Scan(&origin, &oldCurrency, dbtypes.Decimal(&oldOpening), dbtypes.Bool(&hasMovements))
-			if err != nil {
-				accountsUnavailableProblem(w)
-				return
-			}
-			if origin != "manual" {
-				writeProblem(w, 409, "account-not-manual", "Conta sincronizada", "Os dados desta conta são definidos pela fonte de dados.")
-				return
-			}
-			if hasMovements && (oldCurrency != req.CurrencyCode || !oldOpening.Equal(opening)) {
-				writeProblem(w, 409, "account-has-movements", "Conta com movimentações", "A moeda e o saldo inicial não podem ser alterados após movimentações. Use um ajuste para corrigir o saldo.")
-				return
-			}
-			_, err = tx.ExecContext(r.Context(), `UPDATE financial_accounts SET name = ?, currency_code = ?, opening_balance = ?, archived_at = ?, updated_at = ? WHERE id = ?`, req.Name, req.CurrencyCode, openingRaw, archived, now, id)
-		}
+		id, err := transactions.WriteManualAccount(r.Context(), tx, r.PathValue("id"), transactions.ManualAccountInput{Name: req.Name, CurrencyCode: req.CurrencyCode, OpeningBalance: opening, Archived: req.Archived}, create)
 		if err != nil {
-			accountsUnavailableProblem(w)
+			manualAccountWriteProblem(w, err)
 			return
 		}
 		if err := tx.Commit(); err != nil {
@@ -173,34 +122,8 @@ func handleAdjustManualAccount(conn *sql.DB) http.HandlerFunc {
 			return
 		}
 		defer tx.Rollback()
-		id := r.PathValue("id")
-		result, err := tx.ExecContext(r.Context(), `UPDATE financial_accounts SET updated_at = ? WHERE id = ? AND origin = 'manual' AND archived_at IS NULL`, db.FormatTime(time.Now()), id)
-		if err != nil {
-			accountsUnavailableProblem(w)
-			return
-		}
-		n, err := result.RowsAffected()
-		if err != nil {
-			accountsUnavailableProblem(w)
-			return
-		}
-		if n == 0 {
-			var exists bool
-			err := tx.QueryRowContext(r.Context(), `SELECT EXISTS(SELECT 1 FROM financial_accounts WHERE id = ?)`, id).Scan(dbtypes.Bool(&exists))
-			if err != nil {
-				accountsUnavailableProblem(w)
-				return
-			}
-			if !exists {
-				accountNotFoundProblem(w)
-				return
-			}
-			writeProblem(w, 409, "account-not-active-manual", "Ajuste indisponível", "Ajustes exigem uma conta manual ativa.")
-			return
-		}
-		_, err = tx.ExecContext(r.Context(), `INSERT INTO account_balance_adjustments (id, account_id, amount, description, created_at) VALUES (?, ?, ?, ?, ?)`, uuid.NewString(), id, money.CanonicalDecimal(amount), req.Description, db.FormatTime(time.Now()))
-		if err != nil {
-			accountsUnavailableProblem(w)
+		if err := transactions.AdjustManualAccount(r.Context(), tx, r.PathValue("id"), amount, req.Description); err != nil {
+			manualAccountWriteProblem(w, err)
 			return
 		}
 		if err := tx.Commit(); err != nil {
@@ -208,5 +131,20 @@ func handleAdjustManualAccount(conn *sql.DB) http.HandlerFunc {
 			return
 		}
 		handleGetAccount(conn)(w, r)
+	}
+}
+
+func manualAccountWriteProblem(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, transactions.ErrAccountNotFound):
+		accountNotFoundProblem(w)
+	case errors.Is(err, transactions.ErrAccountNotManual):
+		writeProblem(w, 409, "account-not-manual", "Conta sincronizada", "Os dados desta conta são definidos pela fonte de dados.")
+	case errors.Is(err, transactions.ErrAccountHasMovements):
+		writeProblem(w, 409, "account-has-movements", "Conta com movimentações", "A moeda e o saldo inicial não podem ser alterados após movimentações. Use um ajuste para corrigir o saldo.")
+	case errors.Is(err, transactions.ErrAccountNotActiveManual):
+		writeProblem(w, 409, "account-not-active-manual", "Ajuste indisponível", "Ajustes exigem uma conta manual ativa.")
+	default:
+		accountsUnavailableProblem(w)
 	}
 }

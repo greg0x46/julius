@@ -429,6 +429,18 @@ consolidated BRL figures already use each entry's reporting-day rate (see
 BRL→reference rate on top, so a non-BRL reference is a presentation valuation
 of that BRL base, not a per-day reconstruction.
 
+## MCP reads
+
+`list_accounts`, `list_card_bills`, `search_transactions` and
+`spending_by_category` share the existing REST read handlers through
+`httpapi.FinancialReadHandlers`. There is no second eligibility, balance or
+reporting implementation. Pending entries, ignored/transfer exclusions,
+native amounts, reporting coverage and reference valuation keep the same
+semantics. See the [tool inventory](../configuracoes-autenticacao/reference.md#mcp-financial-tool-inventory)
+for pagination, date representation, authentication and explicit limits.
+Parity tests: `TestMCPFinancialReadsMatchHTTPFixtures`,
+`TestMCPReportingRetainsMissingFXAndNativeMoney`, `TestMCPEmptyAndInvalidReads`.
+
 ## MCP writes
 
 Manual creation/update/deletion, inclusion decisions and categorization are
@@ -440,3 +452,23 @@ cascades show all IDs (maximum 100) and revalidate atomically; no arbitrary batc
 
 Tool inputs, approval contract, limits and synthetic dev validation:
 [README financial writes](../../../docs/legacy-readme.md#financial-writes).
+
+MCP also exposes manual account creation/full updates, native balance adjustments,
+transfer creation/linking and unlinking. `transactions.WriteManualAccount` and
+`AdjustManualAccount` share the existing REST account writes; the caller owns the
+transaction. Account updates require explicit name/currency/opening balance/archive
+fields; synced accounts cannot be edited or adjusted, and movement history locks
+currency/opening balance. Adjustments require active manual accounts and change
+native cash without reporting income/expense.
+
+`transactions.ValidateTransfer` shares creation eligibility without writes.
+Existing movements can belong to synced or manual accounts; new transfer movements
+require active manual banks. `ledger.CreateManualTransferWithQuerier` creates all
+legs/fee and applies existing decisions atomically. Native principal stays outside
+reporting, fees remain ordinary expenses, and unlink preserves rows and decisions.
+`httpapi/mcp_accounts_writes.go` snapshots accounts, movements and links, then
+rechecks within the same serializable transaction as application. Tests:
+`TestMCPAccountsNativeBalancesAndOwnership`,
+`TestMCPTransfersPreserveCashAndReportOnlyFees`,
+`TestMCPAccountWritesRejectInvalidLinksAndRollback` (both dialects), and
+`TestMCPAccountsApprovalAndMutationShareTransaction`.
