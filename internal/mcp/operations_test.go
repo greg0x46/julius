@@ -143,7 +143,7 @@ func TestMCPOperationsScopesAndConsent(t *testing.T) {
 	// Real consent rendering retains both financial approval and operation permissions.
 	o := &oauthServer{config: testConfig}
 	w := httptest.NewRecorder()
-	o.renderConsent(w, 200, grant{Scope: all}, "synthetic", "request", "", "")
+	o.renderConsent(w, 200, grant{Scope: all}, "synthetic", "request", "", "", all)
 	for _, text := range []string{"Cada alteração financeira exige sua aprovação no Julius.", "sem uma nova aprovação por operação"} {
 		if !strings.Contains(w.Body.String(), text) {
 			t.Fatalf("missing consent: %s", text)

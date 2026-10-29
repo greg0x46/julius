@@ -18,6 +18,7 @@ import (
 
 	"github.com/greg0x46/julius/internal/auth"
 	"github.com/greg0x46/julius/internal/db"
+	"github.com/greg0x46/julius/internal/mcpaccess"
 	"github.com/greg0x46/julius/internal/settings"
 )
 
@@ -71,9 +72,10 @@ type oauthServer struct {
 type grant struct {
 	Client, Redirect, Resource, Scope, Challenge, State, CSRF string
 	Revision                                                  int
+	Authorization                                             *string
 }
 
-const grantColumns = `client_id,redirect_uri,resource,scope,challenge,state,csrf_hash,revision`
+const grantColumns = `client_id,redirect_uri,resource,scope,challenge,state,csrf_hash,revision,authorization_id`
 
 func randomToken() string {
 	raw := make([]byte, 32)
@@ -148,7 +150,12 @@ func (o *oauthServer) routes(transport http.Handler) http.Handler {
 				o.unavailable(w)
 				return
 			}
-			if !enabled {
+			mcpEnabled, err := mcpaccess.Enabled(r.Context(), o.store.DB)
+			if err != nil {
+				o.unavailable(w)
+				return
+			}
+			if !enabled || !mcpEnabled {
 				oauthError(w, 403, "access_denied")
 				return
 			}
@@ -254,7 +261,7 @@ func parseForm(w http.ResponseWriter, r *http.Request) bool {
 	return true
 }
 func (o *oauthServer) save(r *http.Request, kind, raw string, g grant, lifetime time.Duration) error {
-	result, err := o.store.DB.ExecContext(r.Context(), `INSERT INTO oauth_grants(token_hash,kind,`+grantColumns+`,expires_at) SELECT ?,?,?,?,?,?,?,?,?,?,? WHERE ?='consent' OR EXISTS (SELECT 1 FROM auth_owner WHERE id=1 AND revision=?)`, tokenHash(raw), kind, g.Client, g.Redirect, g.Resource, g.Scope, g.Challenge, g.State, g.CSRF, g.Revision, db.FormatTime(o.store.Now().Add(lifetime)), kind, g.Revision)
+	result, err := o.store.DB.ExecContext(r.Context(), `INSERT INTO oauth_grants(token_hash,kind,`+grantColumns+`,expires_at) SELECT ?,?,?,?,?,?,?,?,?,?,?,? WHERE ?='consent' OR EXISTS (SELECT 1 FROM mcp_authorizations a JOIN auth_owner o ON o.id=1 AND o.revision=a.revision WHERE a.id=? AND a.revision=? AND a.revoked_at IS NULL AND a.expires_at>?)`, tokenHash(raw), kind, g.Client, g.Redirect, g.Resource, g.Scope, g.Challenge, g.State, g.CSRF, g.Revision, g.Authorization, db.FormatTime(o.store.Now().Add(lifetime)), kind, g.Authorization, g.Revision, db.FormatTime(o.store.Now()))
 	if err != nil {
 		return err
 	}
@@ -273,7 +280,7 @@ func (o *oauthServer) load(r *http.Request, kind, raw string, consume bool) (gra
 		query = `DELETE FROM oauth_grants WHERE token_hash=? AND kind=? AND expires_at>? RETURNING ` + grantColumns
 	}
 	var g grant
-	err := o.store.DB.QueryRowContext(r.Context(), query, tokenHash(raw), kind, db.FormatTime(o.store.Now())).Scan(&g.Client, &g.Redirect, &g.Resource, &g.Scope, &g.Challenge, &g.State, &g.CSRF, &g.Revision)
+	err := o.store.DB.QueryRowContext(r.Context(), query, tokenHash(raw), kind, db.FormatTime(o.store.Now())).Scan(&g.Client, &g.Redirect, &g.Resource, &g.Scope, &g.Challenge, &g.State, &g.CSRF, &g.Revision, &g.Authorization)
 	return g, err
 }
 func (o *oauthServer) token(w http.ResponseWriter, r *http.Request) {
@@ -312,12 +319,16 @@ func (o *oauthServer) token(w http.ResponseWriter, r *http.Request) {
 		o.unavailable(w)
 		return
 	}
-	if revision != g.Revision {
+	if revision != g.Revision || g.Authorization == nil {
 		oauthError(w, 400, "invalid_grant")
 		return
 	}
 	token := randomToken()
 	if err = o.save(r, "access", token, g, accessLifetime); err != nil {
+		if errors.Is(err, auth.ErrCredentials) {
+			oauthError(w, 400, "invalid_grant")
+			return
+		}
 		o.unavailable(w)
 		return
 	}
@@ -350,16 +361,25 @@ func (o *oauthServer) revoke(w http.ResponseWriter, r *http.Request) {
 		o.unavailable(w)
 		return
 	}
-	if _, err := o.store.DB.ExecContext(r.Context(), `DELETE FROM oauth_grants WHERE token_hash=? AND client_id=? AND kind='access'`, tokenHash(r.PostForm.Get("token")), id); err != nil {
+	if _, err := o.store.DB.ExecContext(r.Context(), `UPDATE mcp_authorizations SET revoked_at=COALESCE(revoked_at,?) WHERE id=(SELECT authorization_id FROM oauth_grants WHERE token_hash=? AND client_id=? AND kind='access')`, db.FormatTime(o.store.Now()), tokenHash(r.PostForm.Get("token")), id); err != nil {
 		o.unavailable(w)
 		return
 	}
 	w.WriteHeader(200)
 }
+
+// authenticate returns the narrower of the token's scope and the owner's current
+// limit on its authorization, so a downgrade applies to tokens already issued.
 func (o *oauthServer) authenticate(r *http.Request, token string) (string, error) {
-	var scope string
-	err := o.store.DB.QueryRowContext(r.Context(), `SELECT scope FROM oauth_grants WHERE token_hash=? AND kind='access' AND resource=? AND expires_at>? AND revision=(SELECT revision FROM auth_owner WHERE id=1)`, tokenHash(token), o.resource(), db.FormatTime(o.store.Now())).Scan(&scope)
-	return scope, err
+	var scope, tokenScope string
+	err := o.store.DB.QueryRowContext(r.Context(), `UPDATE mcp_authorizations SET last_used_at=? WHERE id=(SELECT authorization_id FROM oauth_grants WHERE token_hash=? AND kind='access' AND resource=? AND expires_at>? AND revision=(SELECT revision FROM auth_owner WHERE id=1)) AND revoked_at IS NULL AND expires_at>? AND revision=(SELECT revision FROM auth_owner WHERE id=1) RETURNING scope`, db.FormatTime(o.store.Now()), tokenHash(token), o.resource(), db.FormatTime(o.store.Now()), db.FormatTime(o.store.Now())).Scan(&scope)
+	if err != nil {
+		return "", err
+	}
+	if err = o.store.DB.QueryRowContext(r.Context(), `SELECT scope FROM oauth_grants WHERE token_hash=?`, tokenHash(token)).Scan(&tokenScope); err != nil {
+		return "", err
+	}
+	return mcpaccess.Narrowest(scope, tokenScope), nil
 }
 func (o *oauthServer) unauthorized(w http.ResponseWriter) {
 	w.Header().Set("WWW-Authenticate", `Bearer resource_metadata="`+o.config.PublicURL+`/.well-known/oauth-protected-resource/mcp", scope="`+mcpScope+`"`)
