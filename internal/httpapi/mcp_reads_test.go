@@ -34,7 +34,11 @@ func financialMCPSession(t *testing.T, conn *sql.DB) *sdk.ClientSession {
 	if _, err := conn.Exec(`INSERT INTO oauth_clients(id,name,redirect_uris) VALUES('reads-client','Synthetic','[]')`); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := conn.Exec(`INSERT INTO oauth_grants(token_hash,kind,client_id,redirect_uri,resource,scope,challenge,state,csrf_hash,revision,expires_at) SELECT ?,'access','reads-client','https://client.example/cb',?,'mcp:access','','','',revision,? FROM auth_owner WHERE id=1`,
+	if _, err := conn.Exec(`INSERT INTO mcp_authorizations(id,client_id,scope,approved_scope,revision,created_at,expires_at) SELECT 'reads-connection','reads-client','mcp:access','mcp:access',revision,?,? FROM auth_owner WHERE id=1`,
+		db.FormatTime(time.Now()), db.FormatTime(time.Now().Add(time.Hour))); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := conn.Exec(`INSERT INTO oauth_grants(token_hash,kind,client_id,redirect_uri,resource,scope,challenge,state,csrf_hash,revision,expires_at,authorization_id) SELECT ?,'access','reads-client','https://client.example/cb',?,'mcp:access','','','',revision,?,'reads-connection' FROM auth_owner WHERE id=1`,
 		hex.EncodeToString(sum[:]), testOrigin+"/mcp", db.FormatTime(time.Now().Add(time.Hour))); err != nil {
 		t.Fatal(err)
 	}

@@ -18,6 +18,7 @@ import (
 	"github.com/greg0x46/julius/internal/categories"
 	"github.com/greg0x46/julius/internal/db"
 	"github.com/greg0x46/julius/internal/db/dbtest"
+	"github.com/greg0x46/julius/internal/mcpaccess"
 	"github.com/greg0x46/julius/internal/money"
 	"github.com/greg0x46/julius/internal/transactions"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -213,6 +214,9 @@ func TestMCPWriteApprovalBoundaries(t *testing.T) {
 		if _, err := conn.Exec(`UPDATE oauth_grants SET scope=? WHERE token_hash=?`, mcpScope+" "+writeScope, tokenHash(f.readToken)); err != nil {
 			t.Fatal(err)
 		}
+		if _, err := conn.Exec(`UPDATE mcp_authorizations SET scope=?, approved_scope=? WHERE id=(SELECT authorization_id FROM oauth_grants WHERE token_hash=?)`, mcpScope+" "+writeScope, mcpScope+" "+writeScope, tokenHash(f.readToken)); err != nil {
+			t.Fatal(err)
+		}
 		raw, _ = json.Marshal(map[string]any{"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": map[string]any{"name": "get_write_result", "arguments": map[string]any{"request_id": out.RequestID}}})
 		w = request(t, f.handler, f.readToken, "", string(raw))
 		if !strings.Contains(w.Body.String(), "unavailable or expired") {
@@ -233,6 +237,74 @@ func TestMCPWriteApprovalBoundaries(t *testing.T) {
 		}
 	})
 }
+func TestMCPWritePendingAuthorizationChanges(t *testing.T) {
+	for _, tc := range []struct {
+		name, query string
+		global      bool
+	}{
+		{"revoked", `UPDATE mcp_authorizations SET revoked_at=created_at WHERE id=?`, false},
+		{"read-only connection", `UPDATE mcp_authorizations SET scope='mcp:access' WHERE id=?`, false},
+		{"expired connection", `UPDATE mcp_authorizations SET expires_at=created_at WHERE id=?`, false},
+		{"stale connection revision", `UPDATE mcp_authorizations SET revision=revision+1 WHERE id=?`, false},
+		{"read-only token", `UPDATE oauth_grants SET scope='mcp:access' WHERE authorization_id=?`, false},
+		{"expired token", `UPDATE oauth_grants SET expires_at='2000-01-01T00:00:00Z' WHERE authorization_id=?`, false},
+		{"owner revision", `UPDATE auth_owner SET revision=revision+1 WHERE id=1 AND CAST(? AS TEXT) IS NOT NULL`, true},
+		{"MCP disabled", "", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dbtest.Each(t, func(t *testing.T, conn *sql.DB) {
+				f := newWriteFixture(t, conn)
+				out := f.call(t, "create_manual_transaction", map[string]any{"data": f.manual(), "idempotency_key": "synthetic-revoked"})
+				u, _ := url.Parse(out.ApprovalURL)
+				w := oauthRequest(f.handler, "GET", u.RequestURI(), "", nil, "")
+				if w.Code != 200 {
+					t.Fatalf("initial preview: %d", w.Code)
+				}
+				cookie := w.Result().Cookies()[0]
+				id := authorizationID(t, conn, f.token)
+				if tc.name == "MCP disabled" {
+					if err := mcpaccess.SetEnabled(context.Background(), conn, false); err != nil {
+						t.Fatal(err)
+					}
+				} else if _, err := conn.Exec(tc.query, id); err != nil {
+					t.Fatal(err)
+				}
+				if w = oauthRequest(f.handler, "GET", u.RequestURI(), "", nil, ""); w.Code != 403 {
+					t.Fatalf("changed authorization preview: %d", w.Code)
+				}
+				form := url.Values{"request": {out.RequestID}, "decision": {"allow"}, "email": {"owner@example.com"}, "password": {"synthetic-password"}}
+				if w = oauthRequest(f.handler, "POST", "/oauth/write", form.Encode(), cookie, testConfig.PublicURL); w.Code != 403 {
+					t.Fatalf("changed authorization approval: %d", w.Code)
+				}
+				var count int
+				if err := conn.QueryRow(`SELECT COUNT(*) FROM financial_transactions`).Scan(&count); err != nil || count != 0 {
+					t.Fatalf("unauthorized mutation: count=%d err=%v", count, err)
+				}
+				if !tc.global {
+					flow := newFlow(t, f.store)
+					flow.params.Set("scope", mcpaccess.ReadWrite)
+					token := flow.token(t, flow.approve(t))
+					srv := httptest.NewServer(f.handler)
+					defer srv.Close()
+					client := sdk.NewClient(&sdk.Implementation{Name: "other-writer", Version: "1"}, nil)
+					session, err := client.Connect(context.Background(), &sdk.StreamableClientTransport{Endpoint: srv.URL + "/mcp", HTTPClient: &http.Client{Transport: bearerTransport{token}}}, nil)
+					if err != nil {
+						t.Fatal(err)
+					}
+					defer session.Close()
+					other := *f
+					other.session = session
+					otherOut := other.call(t, "create_manual_transaction", map[string]any{"data": f.manual(), "idempotency_key": "synthetic-other"})
+					other.approve(t, otherOut)
+					if other.result(t, otherOut.RequestID).State != "applied" {
+						t.Fatal("independent authorization could not apply write")
+					}
+				}
+			})
+		})
+	}
+}
+
 func TestMCPWriteConflictFailureAndConcurrency(t *testing.T) {
 	dbtest.Each(t, func(t *testing.T, conn *sql.DB) {
 		f := newWriteFixture(t, conn)

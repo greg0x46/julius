@@ -91,7 +91,7 @@ func (f *oauthFlow) begin(t *testing.T) *httptest.ResponseRecorder {
 func (f *oauthFlow) approve(t *testing.T) string {
 	t.Helper()
 	f.begin(t)
-	p := url.Values{"request": {f.pending}, "decision": {"allow"}, "email": {"owner@example.com"}, "password": {"synthetic-password"}}
+	p := url.Values{"request": {f.pending}, "decision": {"allow"}, "email": {"owner@example.com"}, "password": {"synthetic-password"}, "scope": {normalizeScope(f.params.Get("scope"))}}
 	w := oauthRequest(f.handler, "POST", "/oauth/authorize", p.Encode(), f.cookie, testConfig.PublicURL)
 	u := consentCallback(t, w)
 	if u.Query().Get("state") != "opaque-state" || u.Query().Get("iss") != testConfig.PublicURL || u.Query().Get("code") == "" {
@@ -138,7 +138,7 @@ func (f *oauthFlow) token(t *testing.T, code string) string {
 		Scope   string `json:"scope"`
 		Expires int    `json:"expires_in"`
 	}
-	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &result) != nil || result.Token == "" || result.Scope != mcpScope || result.Expires != 3600 {
+	if w.Code != 200 || json.Unmarshal(w.Body.Bytes(), &result) != nil || result.Token == "" || result.Scope != normalizeScope(f.params.Get("scope")) || result.Expires != 3600 {
 		t.Fatalf("token: %d %s", w.Code, w.Body)
 	}
 	return result.Token

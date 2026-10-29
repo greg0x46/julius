@@ -439,8 +439,9 @@ using its own single owner account, independent of any AI provider:
 
 The `mcp:access` scope permits the read-only financial, planning and operational tools below.
 Financial read pages contain at most 200 items (default 50); results carry the HTTP status and the API payload in `data`.
-Request `scope=mcp:access mcp:write` for financial writes; existing read-only
-grants gain no write permission. Write consent permits preparing changes,
+Request `scope=mcp:access mcp:write` for financial writes; the owner may grant
+less than requested on the consent page, and existing read-only grants gain no
+write permission. Write consent permits preparing changes,
 while each change still requires fresh owner approval in Julius.
 Consent explicitly discloses financial reads. Existing grants with this scope
 also permit these reads; revoke them if that access is no longer wanted.
@@ -492,14 +493,45 @@ calculation assumptions, including Modified Dietz, historical FX, zero assumed
 goal appreciation when history is too short, and current FX across projections.
 Financial writes require the separate approval flow below. No chats or inference calls are exposed.
 
+In **Configurações → Segurança → Clientes MCP**, inspect each connection's
+self-reported name, client ID, granted capabilities, authorization time, last
+use (if any), expiry and revocation. Multiple connections are independent,
+including separate authorizations of the same registered client. Consent
+offers only the tiers the client requested (read-only, plus writing, plus
+operations) and defaults to read-only. Reduce a connection to a narrower tier
+or restore it within the original consent ceiling; widening beyond what was
+consented requires a new authorization. A downgrade also applies to tokens
+already issued. **Revogar acesso** invalidates only that connection, including
+outstanding codes. Neither tokens nor their hashes are shown in settings.
+
+The **Permitir acesso MCP** switch blocks further MCP calls and OAuth requests
+without restarting or disabling browser login. Disabling the server environment
+flag still removes all MCP/OAuth routes (404) and requires a restart; settings
+cannot override it. Switching MCP off pauses access rather than revoking grants:
+unexpired authorizations resume if enabled again. Every tool call rechecks the
+persisted authorization, so revocation, disabling and downgrades affect further
+calls; calls already executing may finish. Open-browser mode and demo mode
+cannot manage authorizations or bypass access.
+
 Consent requests and authorization codes expire after five minutes; access
-tokens expire after one hour, without idle extension. Only SHA-256 hashes of
-random credentials are stored. Grants survive restarts. Clients revoke a token
-with form-encoded `POST /oauth/revoke` (`client_id` and `token`); repeating this
-is harmless. Password change or `julius auth reset-password` invalidates all
-OAuth codes and tokens. Browser logout only revokes that browser session.
-Expired, revoked or wrong-audience tokens return 401; storage failures return
-503 without database details.
+tokens expire after one hour, without idle extension. A connection's maximum
+lifetime is 65 minutes from consent, bounding code exchange plus token lifetime;
+its token may expire earlier. Last use records successful credential validation
+on MCP requests, including discovery, and never extends expiry. Only SHA-256
+hashes of random credentials are stored. Grants and lifecycle history survive
+restarts; existing pre-upgrade tokens/codes without a connection must reauthorize.
+Clients revoke their connection with form-encoded `POST /oauth/revoke`
+(`client_id` and `token`); repeating this is harmless and a different client's
+token cannot be revoked through that request.
+
+Password change or `julius auth reset-password` revokes every MCP connection and
+invalidates all OAuth codes/tokens atomically with the password change. Revision
+checks also reject issuance racing a reset. Browser logout only revokes that
+browser session; it does not revoke MCP access. Expired, revoked or wrong-audience
+tokens return 401; storage failures return 503 without database details. Back up
+the database and encryption master key using the same guidance as other
+credentials, and authorize only clients whose identity and requested
+capabilities you recognize.
 
 Supported methods are public-client registration and authorization code with
 S256 PKCE. Client ID Metadata Documents are **not supported or advertised**;
@@ -677,7 +709,7 @@ To validate in dev with a synthetic owner and no bank connection:
 2. Connect a client supporting Dynamic Client Registration, follow the consent
    page, and choose **Negar acesso**: no access token should be issued.
 3. Connect again, review the details, enter the synthetic owner's credentials
-   and choose **Autorizar acesso**. Discovery should list the eight financial read tools, operational tools and guarded financial write tools.
+   and choose **Autorizar acesso** (read-only is preselected). Discovery should list the eight financial read tools, operational tools and guarded financial write tools.
    Call `list_goals` with `{}` and `get_timeline` with today's `from`, `to` and
    `reference_date`; empty synthetic data should return empty lists/zero BRL
    figures. With a synthetic investment and dated goal, compare portfolio and
@@ -766,6 +798,19 @@ To validate in dev with synthetic data and no live credentials:
 4. With synthetic quoted holdings, automated fake-provider tests exercise
    concurrency, upstream outage, rate limits and shutdown. Demo mode must refuse
    MCP startup. No credential is returned by any read or error.
+
+Access management, with a synthetic owner:
+
+1. Open **Configurações → Segurança → Clientes MCP**. Confirm the client ID,
+   permissions and dates; authorize a second client and verify both appear.
+   Request writing on a new consent and select it explicitly; reduce that
+   connection to read-only in settings: its write tools must now fail.
+2. Revoke one connection: its token must get 401 while the other still works.
+   Turn **Permitir acesso MCP** off: further calls and OAuth requests must get
+   403 while browser settings remain usable.
+3. Enable MCP again and reset the synthetic owner's password: all connections
+   must show as revoked and their tokens must get 401. Open mode must reject
+   authorization and connection management.
 
 For troubleshooting, reauthorize when operations scopes are missing; configure
 Pluggy only in Julius when `sync_ready` is false. For busy requests, inspect the

@@ -13,6 +13,7 @@ import (
 
 	"github.com/greg0x46/julius/internal/auth"
 	"github.com/greg0x46/julius/internal/httpapi"
+	"github.com/greg0x46/julius/internal/mcpaccess"
 	"github.com/greg0x46/julius/internal/settings"
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -48,6 +49,7 @@ func NewHandler(enabled bool, config auth.Config, store *auth.Store, operations 
 	server := sdk.NewServer(&sdk.Implementation{Name: "julius", Version: "1"}, &sdk.ServerOptions{
 		Capabilities: &sdk.ServerCapabilities{Tools: &sdk.ToolCapabilities{}},
 	})
+	server.AddReceivingMiddleware(oauth.permissions(nil))
 	registerReadTools(server, store.DB)
 	httpapi.RegisterMCPPlanningTools(server, store.DB)
 	oauth.registerWrites(server)
@@ -86,7 +88,12 @@ func NewHandler(enabled bool, config auth.Config, store *auth.Store, operations 
 			http.Error(w, "Authentication unavailable", http.StatusServiceUnavailable)
 			return
 		}
-		if !enabled {
+		mcpEnabled, err := mcpaccess.Enabled(r.Context(), store.DB)
+		if err != nil {
+			http.Error(w, "Configuration unavailable", 503)
+			return
+		}
+		if !enabled || !mcpEnabled {
 			http.Error(w, "MCP requires authentication enabled", http.StatusForbidden)
 			return
 		}
