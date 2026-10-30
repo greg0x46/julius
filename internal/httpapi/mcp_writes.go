@@ -622,7 +622,12 @@ func MCPWriteInputSchema(operation string) any {
 	}
 	defs := schema.Defs
 	schema.Defs = nil
-	return map[string]any{"type": "object", "properties": properties, "required": required, "additionalProperties": false, "$defs": defs}
+	root := map[string]any{"type": "object", "properties": properties, "required": required, "additionalProperties": false}
+	// A null $defs is invalid JSON Schema and clients such as ChatGPT reject the tool.
+	if len(defs) > 0 {
+		root["$defs"] = defs
+	}
+	return root
 }
 
 func mcpTransactionLinks(ctx context.Context, q transactions.Querier, id string) ([]map[string]string, error) {
