@@ -4,6 +4,12 @@ Notable changes per release. A section is added by `scripts/update-changelog.sh`
 only when a release is prepared, and the release job publishes that same text as
 the GitHub release notes. Newest release first.
 
+## v0.17.3 — 2026-10-30
+
+### Fixes
+
+- **mcp:** Omit empty $defs from write tool input schemas ([#213](https://github.com/greg0x46/julius/pull/213))
+
 ## v0.17.2 — 2026-10-29
 
 ### Fixes

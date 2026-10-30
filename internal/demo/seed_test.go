@@ -65,7 +65,8 @@ func count(t *testing.T, h http.Handler, path string) int {
 
 func TestSeedBuildsAnOpenDemo(t *testing.T) {
 	dbtest.Each(t, func(t *testing.T, conn *sql.DB) {
-		summary := seed(t, conn, time.Date(2026, 10, 19, 9, 0, 0, 0, time.UTC))
+		// Seed relative to now: the portfolio is valued as of today and treats old quotes as stale.
+		summary := seed(t, conn, time.Now().UTC())
 		if summary.Transactions < 100 || summary.Transfers != 6 || summary.Positions != 4 {
 			t.Fatalf("summary = %+v", summary)
 		}
