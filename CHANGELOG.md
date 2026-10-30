@@ -4,6 +4,12 @@ Notable changes per release. A section is added by `scripts/update-changelog.sh`
 only when a release is prepared, and the release job publishes that same text as
 the GitHub release notes. Newest release first.
 
+## v0.17.2 — 2026-10-29
+
+### Fixes
+
+- **mcp:** Send the public origin on the OAuth consent form
+
 ## v0.17.1 — 2026-10-29
 
 ### Fixes
