@@ -63,6 +63,10 @@ func handleWriteManualAccount(conn *sql.DB, create bool) http.HandlerFunc {
 			invalidManualAccount(w, "Informe um nome, uma moeda ISO 4217 e um saldo inicial decimal válido.")
 			return
 		}
+		if !validMoneyAmount(opening) {
+			invalidManualAccount(w, "Saldo inicial inválido. "+invalidAmountDetail)
+			return
+		}
 		tx, err := conn.BeginTx(r.Context(), nil)
 		if err != nil {
 			accountsUnavailableProblem(w)
@@ -114,6 +118,10 @@ func handleAdjustManualAccount(conn *sql.DB) http.HandlerFunc {
 		req.Description = strings.TrimSpace(req.Description)
 		if err != nil || amount.IsZero() || req.Description == "" || len(req.Description) > 200 {
 			invalidManualAccount(w, "Informe um valor decimal diferente de zero e o motivo do ajuste.")
+			return
+		}
+		if !validMoneyAmount(amount) {
+			invalidManualAccount(w, "Valor do ajuste inválido. "+invalidAmountDetail)
 			return
 		}
 		tx, err := conn.BeginTx(r.Context(), nil)

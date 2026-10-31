@@ -10,7 +10,7 @@ import (
 func TestScenarioGenerationLimitsReturnValidationErrors(t *testing.T) {
 	srv, _ := newTestServer(t)
 	resp := doJSON(t, http.MethodPost, srv.URL+"/api/payables", map[string]any{
-		"kind": "debt", "name": "Synthetic payable", "total_amount": "18446744073709551616",
+		"kind": "debt", "name": "Synthetic payable", "total_amount": "9999999999999",
 	})
 	var payable map[string]any
 	decodeJSON(t, resp, &payable)

@@ -70,7 +70,7 @@ func mcpManualAccountInput(data json.RawMessage) (transactions.ManualAccountInpu
 		req.OpeningBalance = "0"
 	}
 	opening, err := decimal.NewFromString(req.OpeningBalance)
-	if err != nil || len(req.OpeningBalance) > 64 || !plainWriteDecimal.MatchString(req.OpeningBalance) || strings.TrimSpace(req.Name) == "" || len(req.Name) > 200 || !validManualAccountCurrency(req.CurrencyCode) {
+	if err != nil || len(req.OpeningBalance) > 64 || !plainWriteDecimal.MatchString(req.OpeningBalance) || !validMoneyAmount(opening) || strings.TrimSpace(req.Name) == "" || len(req.Name) > 200 || !validManualAccountCurrency(req.CurrencyCode) {
 		return transactions.ManualAccountInput{}, errMCPWriteInput
 	}
 	return transactions.ManualAccountInput{Name: strings.TrimSpace(req.Name), CurrencyCode: req.CurrencyCode, OpeningBalance: opening, Archived: req.Archived}, nil
@@ -223,7 +223,7 @@ func previewMCPAccountsWrite(ctx context.Context, q transactions.Querier, p MCPW
 			return p, err
 		}
 		amount, err := decimal.NewFromString(req.Amount)
-		if err != nil || !planningWriteAmount(in.Data, "amount") || amount.IsZero() || strings.TrimSpace(req.Description) == "" || len(req.Description) > 200 {
+		if err != nil || !planningWriteAmount(in.Data, "amount") || amount.IsZero() || !validMoneyAmount(amount) || strings.TrimSpace(req.Description) == "" || len(req.Description) > 200 {
 			return p, errMCPWriteInput
 		}
 		if _, err = account(in.ID, true, true); err != nil {
@@ -329,7 +329,7 @@ func previewMCPAccountsWrite(ctx context.Context, q transactions.Querier, p MCPW
 				}
 				req.Name, req.TotalAmount = update.Name, update.TotalAmount
 			}
-			if !planningWriteAmount(in.Data, "total_amount") || !req.TotalAmount.IsPositive() || strings.TrimSpace(req.Name) == "" || len(req.Name) > 200 {
+			if !planningWriteAmount(in.Data, "total_amount") || !req.TotalAmount.IsPositive() || !req.validAmounts() || strings.TrimSpace(req.Name) == "" || len(req.Name) > 200 {
 				return p, errMCPWriteInput
 			}
 			if req.InitialRemainingAmount != nil && (!planningWriteAmount(in.Data, "initial_remaining_amount") || req.InitialRemainingAmount.IsNegative() || req.InitialRemainingAmount.GreaterThan(req.TotalAmount)) {

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/greg0x46/julius/internal/dates"
 	"github.com/greg0x46/julius/internal/money"
 	"github.com/greg0x46/julius/internal/reporting"
 	"github.com/greg0x46/julius/internal/timeline"
@@ -194,6 +195,10 @@ func handleGetTimeline(conn *sql.DB) http.HandlerFunc {
 		to, err := time.Parse(dateOnlyLayout, toRaw)
 		if err != nil {
 			invalidTimelineProblem(w, "to inválida.")
+			return
+		}
+		if dates.ExceedsMaxSpan(from, to) {
+			invalidTimelineProblem(w, rangeTooLongDetail)
 			return
 		}
 		if to.Before(from) {
