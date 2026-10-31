@@ -82,7 +82,7 @@ func seedInteropGoal(t *testing.T, conn *sql.DB) string {
 	goal, err := goals.Create(context.Background(), conn, goals.Input{
 		Name: "Synthetic interoperability goal", Metric: goals.MetricInvestedValue,
 		TargetAmount: decimal.RequireFromString("12345.67"),
-	})
+	}, time.UTC)
 	if err != nil {
 		t.Fatal(err)
 	}

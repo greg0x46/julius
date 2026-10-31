@@ -64,6 +64,14 @@ Optional pool settings apply per instance; SQLite ignores them:
 
 Invalid values fail database opening rather than silently using defaults.
 
+## Timezone
+
+Calendar days (what "today" is, when a credit-card cycle closes, which month a
+report covers) follow the timezone chosen under **Configurações**, which
+defaults to `America/Sao_Paulo`. The server's `TZ` does not affect them, so a
+container running in UTC behaves the same as a host in São Paulo. Only the sync
+schedule below uses the process zone when you give it no zone.
+
 ## Optional integrations and schedules
 
 Pluggy credentials are configured under **Configurações** and stored encrypted

@@ -1,5 +1,6 @@
 import { useTranslation } from "../i18n/context";
 import type { SyncRunDetail } from "../api/contracts";
+import { useTimezone } from "../hooks/useTimezone";
 import { formatDate, formatOptionalDate } from "../presentation/dates";
 import { Section } from "./layout";
 import { SyncRunMetrics } from "./SyncRunMetrics";
@@ -13,6 +14,7 @@ import { SyncStatusBadge } from "./SyncStatusBadge";
  */
 export function SyncRunOverview({ run }: { run: SyncRunDetail }) {
   const { t, language } = useTranslation();
+  const timezone = useTimezone();
   return (
     <Section title={t("syncOverview")} trailing={<SyncStatusBadge status={run.status} />}>
       <div className="sync-run-overview-body">
@@ -20,16 +22,16 @@ export function SyncRunOverview({ run }: { run: SyncRunDetail }) {
           <div>
             <dt>{t("start")}</dt>
             <dd>
-              <time dateTime={run.started_at}>{formatDate(run.started_at, language)}</time>
+              <time dateTime={run.started_at}>{formatDate(run.started_at, timezone, language)}</time>
             </dd>
           </div>
           <div>
             <dt>{t("completion")}</dt>
             <dd>
               {run.finished_at === null ? (
-                formatOptionalDate(null, language)
+                formatOptionalDate(null, timezone, language)
               ) : (
-                <time dateTime={run.finished_at}>{formatOptionalDate(run.finished_at, language)}</time>
+                <time dateTime={run.finished_at}>{formatOptionalDate(run.finished_at, timezone, language)}</time>
               )}
             </dd>
           </div>

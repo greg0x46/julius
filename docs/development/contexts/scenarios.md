@@ -43,8 +43,20 @@ that the installment belongs to the scenario named in the URL. A missing scenari
 or a mismatched/missing installment returns 404 before changing any data; deleting
 a realization also checks that it belongs to the named installment.
 
+Monthly installments keep the start day of the month and clamp to the last day
+of a shorter month (`dates.AddMonths`): a plan starting on Jan 31 falls on Jan 31,
+Feb 28 (29 in a leap year), Mar 31, Apr 30. Each date is computed from the start,
+so the day never drifts. Weekly and biweekly plans step a fixed number of days.
+Dates are stored at generation time: plans created before this rule are not
+migrated and keep their old dates (Jan 31 start: Jan 31, Mar 3, Mar 31).
+
 Readjusting with `abater_do_final` keeps the plan's cadence, inferred from the
 most common gap between its installments (weekly, biweekly, otherwise monthly).
+It restarts at the earliest affected installment's date. When that date is the
+last day of its month it may be a clamped one, so a monthly plan keeps the
+largest day of month found among the plan's installments as its anchor (a
+readjustment from a Feb 28 installment still produces Mar 31); any other start
+day is the anchor itself. `redistribute` keeps the existing dates.
 
 Linking a real transaction to a standalone event (`PUT /api/scenarios/{id}/planned-transactions/{eventKey}/realization`)
 requires a considered BRL transaction flowing in the direction of the event's

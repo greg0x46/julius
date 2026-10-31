@@ -1,4 +1,3 @@
-import { apiMessage } from "../i18n/apiMessage";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
@@ -10,7 +9,8 @@ import {
 import { queryTransactions } from "../api/transactions";
 import { ApiError } from "../api/problems";
 import type { Account, TransactionItem, TransactionQuery } from "../api/contracts";
-import { browserTimezone, transactionQueryKey } from "./useTransactions";
+import { transactionQueryKey } from "./useTransactions";
+import { useTimezone } from "./useTimezone";
 import { invalidateAfterAccountClosingDayChange, queryKeys } from "../api/queryKeys";
 
 const RECENT_TRANSACTIONS_LIMIT = 10;
@@ -94,19 +94,15 @@ export function useAccountDetail(accountId: string) {
     },
   });
 
-  const timezone = browserTimezone();
+  const timezone = useTimezone();
   // Keyed like every other transactions query (transactionQueryKey), not
   // nested under queryKeys.accounts: useTransactionInclusion/useTransactionCategory/
   // useManualTransaction all invalidate the ["transactions", ...] prefix, and
   // this list needs to pick up those edits too — the panel this page opens
   // writes through the same hooks.
   const transactionsQuery = useQuery({
-    queryKey:
-      timezone === null
-        ? queryKeys.transactionsInvalidTimezoneFor(accountId)
-        : transactionQueryKey(recentTransactionsQuery(accountId, timezone)),
-    queryFn: ({ signal }) => queryTransactions(recentTransactionsQuery(accountId, timezone!), signal),
-    enabled: timezone !== null,
+    queryKey: transactionQueryKey(recentTransactionsQuery(accountId, timezone)),
+    queryFn: ({ signal }) => queryTransactions(recentTransactionsQuery(accountId, timezone), signal),
   });
 
   return {
@@ -121,8 +117,7 @@ export function useAccountDetail(accountId: string) {
     billsLoading: billsQuery.isLoading,
     billsError: billsQuery.error,
     transactions: transactionsQuery.data?.items ?? noTransactions,
-    transactionsLoading: timezone !== null && transactionsQuery.isLoading,
-    transactionsError:
-      timezone === null ? new Error(apiMessage("apiTimezoneUnavailable")) : transactionsQuery.error,
+    transactionsLoading: transactionsQuery.isLoading,
+    transactionsError: transactionsQuery.error,
   };
 }

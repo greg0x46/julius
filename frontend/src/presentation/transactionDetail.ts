@@ -1,11 +1,13 @@
-import { dateFormatter, formatTime } from "../i18n/dateFormats";
+import { intlLocale } from "../i18n/dateFormats";
 import { translate, type Language } from "../i18n/messages";
+import { calendarParts } from "./dates";
 import { isPositiveDecimal } from "./decimal";
 import type { Category, TransactionItem } from "../api/contracts";
 import type { RecurringCommitmentDraft } from "../components/recurringCommitments/RecurringCommitmentForm";
 import { isZeroDecimal } from "./decimal";
 import { categoryKindName } from "./categoryLabels";
 import { formatBRL, formatSignedMoney } from "./money";
+import { zonedFormatter } from "./timezone";
 
 /** Pure derivations the transaction panel's screens share. */
 
@@ -52,21 +54,21 @@ export function allowsInvestmentLink(item: TransactionItem): boolean {
   );
 }
 
-export function dateTime(value: string | null, language: Language = "pt-BR"): string {
+export function dateTime(value: string | null, timezone: string, language: Language = "pt-BR"): string {
   if (!value) return translate(language, "dateNotProvided");
-  return dateFormatter(language, { dateStyle: "long", timeStyle: "short" }).format(new Date(value));
+  return zonedFormatter(timezone, { dateStyle: "long", timeStyle: "short" }, intlLocale(language)).format(new Date(value));
 }
 
 /** "13 set. 2026 · 11:42" — the compact form the identity header uses. */
-export function shortDateTime(value: string | null, language: Language = "pt-BR"): string {
+export function shortDateTime(value: string | null, timezone: string, language: Language = "pt-BR"): string {
   if (!value) return translate(language, "dateNotProvided");
   const date = new Date(value);
-  const day = dateFormatter(language, { day: "numeric", month: "short", year: "numeric" }).format(date);
-  const time = formatTime(language, date);
+  const day = zonedFormatter(timezone, { day: "numeric", month: "short", year: "numeric" }, intlLocale(language)).format(date);
+  const time = zonedFormatter(timezone, { hour: "2-digit", minute: "2-digit" }, intlLocale(language)).format(date);
   return `${day} · ${time}`;
 }
 
-export function recurringCommitmentPrefill(item: TransactionItem): Partial<RecurringCommitmentDraft> | null {
+export function recurringCommitmentPrefill(item: TransactionItem, timezone: string): Partial<RecurringCommitmentDraft> | null {
   if (!item.effective_money || item.effective_money.currency_code !== "BRL" || !item.occurred_at) {
     return null;
   }
@@ -77,7 +79,7 @@ export function recurringCommitmentPrefill(item: TransactionItem): Partial<Recur
     kind: item.classification === "inflow" ? "income" : "expense",
     amount,
     categoryId: item.internal_category?.id ?? null,
-    dayOfMonth: new Date(item.occurred_at).getDate(),
+    dayOfMonth: calendarParts(item.occurred_at, timezone)?.day ?? null,
   };
 }
 

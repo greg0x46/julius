@@ -31,7 +31,8 @@ type DataRange struct {
 // unbounded by construction. What does end is a planned installment — a
 // debt's or a plan's — so To is the last of those, and the current month's
 // end when there is none, which is also the floor: a plan that finished last
-// year must not shrink the window to the past.
+// year must not shrink the window to the past. From is clamped so the window
+// never exceeds dates.MaxSpanDays (100 years).
 func LoadDataRange(ctx context.Context, q Querier, today time.Time, timezone string) (DataRange, error) {
 	if timezone == "" {
 		timezone = "UTC"
@@ -78,5 +79,8 @@ func LoadDataRange(ctx context.Context, q Querier, today time.Time, timezone str
 	if from.After(to) {
 		from = to
 	}
+	// A stray date (a mistyped year) must not stretch the window: it never
+	// spans more than dates.MaxSpanDays. Stored rows are left untouched.
+	from = dates.ClampSpanStart(from, to)
 	return DataRange{From: from, To: to}, nil
 }

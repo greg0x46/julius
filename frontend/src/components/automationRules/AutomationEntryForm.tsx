@@ -1,9 +1,11 @@
 import { longMonthName } from "../../i18n/dateFormats";
+import { useTimezone } from "../../hooks/useTimezone";
 import { useTranslation } from "../../i18n/context";
 import type { Language } from "../../i18n/messages";
 import { isPositiveDecimal, sumDecimals } from "../../presentation/decimal";
 import { Button, Checkbox, DatePicker, Divider, Input, InputNumber, Popconfirm, Segmented, Select, Switch } from "../ui";
 import { calendar, type CalendarDate } from "../../presentation/calendar";
+import { todayIn } from "../../presentation/timezone";
 import { useEffect, useState } from "react";
 
 import type {
@@ -117,8 +119,8 @@ type CommitmentDraft = {
   isActive: boolean;
 };
 
-// A function: a module-level `calendar()` would freeze the start date at page load.
-const blankCommitmentDraft = (): CommitmentDraft => ({
+// A function: a module-level "today" would freeze the start date at page load.
+const blankCommitmentDraft = (timezone: string): CommitmentDraft => ({
   name: "",
   kind: "expense",
   amount: null,
@@ -127,13 +129,13 @@ const blankCommitmentDraft = (): CommitmentDraft => ({
   cadence: "monthly",
   dayOfMonth: null,
   monthOfYear: null,
-  startDate: calendar(),
+  startDate: todayIn(timezone),
   endDate: null,
   isActive: true,
 });
 
-function commitmentDraftFrom(commitment: RecurringCommitment | null): CommitmentDraft {
-  if (!commitment) return blankCommitmentDraft();
+function commitmentDraftFrom(commitment: RecurringCommitment | null, timezone: string): CommitmentDraft {
+  if (!commitment) return blankCommitmentDraft(timezone);
   return {
     name: commitment.name,
     kind: commitment.kind,
@@ -178,6 +180,7 @@ export function AutomationEntryForm({
   onDelete?: (rule: AutomationRule) => void;
 }) {
   const { t, language } = useTranslation();
+  const timezone = useTimezone();
   const actionOptions: { value: AutomationActionType; label: string }[] = [
     { value: "ignore", label: t("ignoreTransaction") },
     { value: "reconcile", label: t("reconcileRecurrenceAction") },
@@ -217,7 +220,7 @@ export function AutomationEntryForm({
   );
   const [ruleDraft, setRuleDraft] = useState<RuleDraft>(() => ruleDraftFrom(entry?.rule ?? null, initialActionTypes));
   const [commitmentDraft, setCommitmentDraft] = useState<CommitmentDraft>(() =>
-    commitmentDraftFrom(entry?.linkedCommitment ?? null),
+    commitmentDraftFrom(entry?.linkedCommitment ?? null, timezone),
   );
   const [applyRetroactively, setApplyRetroactively] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -230,7 +233,7 @@ export function AutomationEntryForm({
       setCommitmentMode(entry?.linkedCommitment ? "existing" : "new");
       setSelectedCommitmentId(entry?.linkedCommitment?.id ?? null);
       setRuleDraft(ruleDraftFrom(entry?.rule ?? null, initialActionTypes));
-      setCommitmentDraft(commitmentDraftFrom(entry?.linkedCommitment ?? null));
+      setCommitmentDraft(commitmentDraftFrom(entry?.linkedCommitment ?? null, timezone));
       setApplyRetroactively(false);
       setError(null);
     }
@@ -246,14 +249,14 @@ export function AutomationEntryForm({
   const selectExistingCommitment = (commitmentId: string | null) => {
     const selected = commitmentId ? commitments.find((item) => item.id === commitmentId) ?? null : null;
     setSelectedCommitmentId(selected?.id ?? null);
-    setCommitmentDraft(commitmentDraftFrom(selected));
+    setCommitmentDraft(commitmentDraftFrom(selected, timezone));
   };
 
   const setCommitmentModeAndReset = (mode: "new" | "existing") => {
     setCommitmentMode(mode);
     if (mode === "new") {
       setSelectedCommitmentId(null);
-      setCommitmentDraft(blankCommitmentDraft());
+      setCommitmentDraft(blankCommitmentDraft(timezone));
     }
   };
 
@@ -265,7 +268,7 @@ export function AutomationEntryForm({
     if (!nextActionTypes.includes("reconcile")) {
       setCommitmentMode("new");
       setSelectedCommitmentId(null);
-      setCommitmentDraft(blankCommitmentDraft());
+      setCommitmentDraft(blankCommitmentDraft(timezone));
     }
     if (!nextActionTypes.includes("set_category") && !nextActionTypes.includes("reconcile")) {
       setCategoryEdited(false);

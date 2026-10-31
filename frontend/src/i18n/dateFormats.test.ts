@@ -12,8 +12,8 @@ describe("date formats by language", () => {
     expect(formatDateOnly("2026-09-13")).toBe("13/09/2026");
     expect(formatDateOnly("2026-09-13", "en")).toBe("09/13/2026");
     expect(formatDayMonth("2026-09-13", "pt-BR")).toBe("13/09");
-    expect(formatCompactDay("2020-09-13")).toBe("13 set. 2020");
-    expect(formatCompactDay("2020-09-13", "en")).toContain("Sep");
+    expect(formatCompactDay("2020-09-13", "UTC")).toBe("13 set. 2020");
+    expect(formatCompactDay("2020-09-13", "UTC", "en")).toContain("Sep");
   });
   it("names months", () => {
     expect(shortMonthName("pt-BR", 8)).toBe("set");

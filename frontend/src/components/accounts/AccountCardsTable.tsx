@@ -2,6 +2,7 @@ import { useTranslation } from "../../i18n/context";
 import { Alert, Skeleton } from "../ui";
 
 import type { AccountCard } from "../../api/contracts";
+import { useTimezone } from "../../hooks/useTimezone";
 import { formatOptionalLocalDay } from "../../presentation/dates";
 import { maskedCardNumber } from "../../presentation/accountLabels";
 import { EmptyState, ListRow, Section } from "../layout";
@@ -22,11 +23,12 @@ export function AccountCardsTable({
   error: unknown;
 }) {
   const { t, language } = useTranslation();
+  const timezone = useTimezone();
   const cardMeta = (card: AccountCard) =>
     t("cardTransactionsLastUse", {
       count: card.transaction_count,
       unit: card.transaction_count === 1 ? t("transactionSingularLower") : t("transactionPluralLower"),
-      date: formatOptionalLocalDay(card.last_transaction_at, language),
+      date: formatOptionalLocalDay(card.last_transaction_at, timezone, language),
     });
   // One physical card is a fact about the account, not a list: a titled
   // section for a single row is more frame than content, so it is one quiet row.

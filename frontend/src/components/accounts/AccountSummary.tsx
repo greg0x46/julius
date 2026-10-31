@@ -2,6 +2,7 @@ import { useTranslation } from "../../i18n/context";
 import { Tooltip } from "../ui";
 
 import type { Account } from "../../api/contracts";
+import { useTimezone } from "../../hooks/useTimezone";
 import { formatOptionalDateTime, formatOptionalDay } from "../../presentation/dates";
 import {
   accountMetaLine,
@@ -34,6 +35,7 @@ export function AccountSummary({
   savingClosingDay: boolean;
 }) {
   const { t, language } = useTranslation();
+  const timezone = useTimezone();
   const isCredit = account.account_type === "CREDIT";
   // The heading is the account's own name, so the institution lives on this line.
   const legalName =
@@ -84,7 +86,7 @@ export function AccountSummary({
             </Tooltip>
           )}
           <span className="account-summary-meta">
-            {t("updatedAt").replace("{date}", formatOptionalDateTime(account.provider_updated_at ?? account.updated_at, language))}
+            {t("updatedAt").replace("{date}", formatOptionalDateTime(account.provider_updated_at ?? account.updated_at, timezone, language))}
           </span>
         </>
       }

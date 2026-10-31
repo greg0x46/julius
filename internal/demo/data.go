@@ -6,6 +6,7 @@ import (
 
 	"github.com/shopspring/decimal"
 
+	"github.com/greg0x46/julius/internal/dates"
 	"github.com/greg0x46/julius/internal/investments"
 )
 
@@ -130,7 +131,7 @@ func (s *seeder) planning(cats map[string]string, checking string) {
 	}
 	s.call("POST", "/api/recurring-scenarios", map[string]any{
 		"name": "Seguro do carro", "kind": "expense", "amount": "1850.00", "category_id": cats["Seguros"], "account_id": checking,
-		"cadence": "annual", "day_of_month": 20, "month_of_year": int(s.today.AddDate(0, 3, 0).Month()), "start_date": start, "is_active": true,
+		"cadence": "annual", "day_of_month": 20, "month_of_year": int(dates.AddMonths(s.today, 3).Month()), "start_date": start, "is_active": true,
 	})
 	s.summary.Recurring++
 
@@ -152,11 +153,11 @@ func (s *seeder) rules(cats map[string]string) {
 func (s *seeder) goals() {
 	s.call("POST", "/api/goals", map[string]any{
 		"name": "Reserva de emergência", "metric": "invested_value", "target_amount": "80000.00",
-		"target_date": date(s.today.AddDate(1, 6, 0)), "notes": "Seis meses de despesas.",
+		"target_date": date(dates.AddMonths(s.today, 18)), "notes": "Seis meses de despesas.",
 	})
 	s.call("POST", "/api/goals", map[string]any{
 		"name": "Viagem para o Japão", "metric": "invested_value", "target_amount": "62000.00",
-		"target_date": date(s.today.AddDate(0, 11, 0)),
+		"target_date": date(dates.AddMonths(s.today, 11)),
 	})
 	s.summary.Goals = 2
 }
@@ -164,7 +165,7 @@ func (s *seeder) goals() {
 // portfolio opens a broker account with a few holdings and later purchases.
 func (s *seeder) portfolio() {
 	account := id(s.call("POST", "/api/investment-accounts", map[string]any{"name": "Corretora Exemplo", "kind": "manual", "currency_code": "BRL"}))
-	opened := date(s.today.AddDate(0, -monthsBack, 0))
+	opened := date(dates.AddMonths(s.today, -monthsBack))
 	// Purchases draw on the account's cash, so fund it first.
 	s.call("POST", "/api/investment-operations", map[string]any{"account_id": account, "kind": "deposit", "occurred_on": opened, "amount": "9000.00"})
 	s.summary.Operations++
@@ -206,7 +207,7 @@ func (s *seeder) portfolio() {
 				}
 				s.call("POST", "/api/investment-operations", map[string]any{
 					"account_id": account, "position_id": position, "kind": "buy",
-					"occurred_on": date(s.today.AddDate(0, -i*2+1, 0)), "quantity": lot, "unit_price": s.rng.between(lo, hi), "fees": "0",
+					"occurred_on": date(dates.AddMonths(s.today, -i*2+1)), "quantity": lot, "unit_price": s.rng.between(lo, hi), "fees": "0",
 				})
 				s.summary.Operations++
 			}
@@ -216,7 +217,7 @@ func (s *seeder) portfolio() {
 			for i := 1; i < monthsBack; i++ {
 				s.call("POST", "/api/investment-operations", map[string]any{
 					"account_id": account, "kind": "income", "notes": "Rendimentos do fundo imobiliário",
-					"occurred_on": date(s.today.AddDate(0, -i, 0)), "amount": s.rng.between(38, 52),
+					"occurred_on": date(dates.AddMonths(s.today, -i)), "amount": s.rng.between(38, 52),
 				})
 				s.summary.Operations++
 			}
@@ -227,7 +228,7 @@ func (s *seeder) portfolio() {
 				cents := h.baseCents + k*h.monthlyGain
 				s.call("POST", "/api/investment-operations", map[string]any{
 					"account_id": account, "position_id": position, "kind": "valuation",
-					"occurred_on": date(s.today.AddDate(0, k-monthsBack, 0)), "amount": fmt.Sprintf("%d.%02d", cents/100, cents%100),
+					"occurred_on": date(dates.AddMonths(s.today, k-monthsBack)), "amount": fmt.Sprintf("%d.%02d", cents/100, cents%100),
 				})
 				s.summary.Operations++
 			}
@@ -242,7 +243,7 @@ func (s *seeder) quotes(assetID, symbol string, startCents, endCents int) {
 	if s.err != nil || assetID == "" {
 		return
 	}
-	from := s.today.AddDate(0, -monthsBack, 0)
+	from := dates.AddMonths(s.today, -monthsBack)
 	days := int(s.today.Sub(from).Hours() / 24)
 	for i := 0; i <= days; i++ {
 		cents := startCents + (endCents-startCents)*i/days

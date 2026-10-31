@@ -126,3 +126,96 @@ func TestDaysInMonthClampsAMonthlyCadence(t *testing.T) {
 		}
 	}
 }
+
+func ymd(year int, month time.Month, day int) time.Time {
+	return time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
+}
+
+// TestAddMonthsClampsToTheLastDayOfAShorterMonth pins the rule that replaced
+// time.AddDate's overflow (Jan 31 + 1 month → Mar 3), for days 29-31 across a
+// leap and a non-leap February.
+func TestAddMonthsClampsToTheLastDayOfAShorterMonth(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		day  time.Time
+		n    int
+		want time.Time
+	}{
+		{"31 into non-leap February", ymd(2026, 1, 31), 1, ymd(2026, 2, 28)},
+		{"30 into non-leap February", ymd(2026, 1, 30), 1, ymd(2026, 2, 28)},
+		{"29 into non-leap February", ymd(2026, 1, 29), 1, ymd(2026, 2, 28)},
+		{"31 into leap February", ymd(2028, 1, 31), 1, ymd(2028, 2, 29)},
+		{"30 into leap February", ymd(2028, 1, 30), 1, ymd(2028, 2, 29)},
+		{"29 into leap February", ymd(2028, 1, 29), 1, ymd(2028, 2, 29)},
+		{"31 into a 30-day month", ymd(2026, 3, 31), 1, ymd(2026, 4, 30)},
+		{"31 over a short month lands on 31 again", ymd(2026, 1, 31), 2, ymd(2026, 3, 31)},
+		{"leap day to the next non-leap year", ymd(2028, 2, 29), 12, ymd(2029, 2, 28)},
+		{"leap day to the next leap year", ymd(2028, 2, 29), 48, ymd(2032, 2, 29)},
+		{"zero is the same day", ymd(2026, 1, 31), 0, ymd(2026, 1, 31)},
+		{"a short month is not clamped further", ymd(2026, 1, 15), 1, ymd(2026, 2, 15)},
+		{"December rolls into January", ymd(2026, 12, 31), 1, ymd(2027, 1, 31)},
+		{"November rolls over December into January", ymd(2026, 11, 30), 2, ymd(2027, 1, 30)},
+		{"negative into non-leap February", ymd(2026, 3, 31), -1, ymd(2026, 2, 28)},
+		{"negative into leap February", ymd(2028, 3, 30), -1, ymd(2028, 2, 29)},
+		{"negative across a year", ymd(2026, 1, 31), -2, ymd(2025, 11, 30)},
+		{"large n", ymd(2026, 1, 31), 1200, ymd(2126, 1, 31)},
+		{"large n into February", ymd(2026, 1, 31), 1201, ymd(2126, 2, 28)},
+		{"large negative n", ymd(2026, 5, 31), -1200, ymd(1926, 5, 31)},
+	} {
+		if got := dates.AddMonths(tc.day, tc.n); !got.Equal(tc.want) {
+			t.Errorf("%s: AddMonths(%s, %d) = %s, want %s", tc.name,
+				tc.day.Format("2006-01-02"), tc.n, got.Format("2006-01-02"), tc.want.Format("2006-01-02"))
+		}
+	}
+}
+
+// TestAddMonthsDoesNotDriftWhenSteppedFromTheAnchor pins that every result
+// comes from the original day: a series anchored on the 31st comes back to
+// the 31st after each short month.
+func TestAddMonthsDoesNotDriftWhenSteppedFromTheAnchor(t *testing.T) {
+	anchor := ymd(2026, 1, 31)
+	want := []string{
+		"2026-01-31", "2026-02-28", "2026-03-31", "2026-04-30", "2026-05-31", "2026-06-30",
+		"2026-07-31", "2026-08-31", "2026-09-30", "2026-10-31", "2026-11-30", "2026-12-31",
+		"2027-01-31", "2027-02-28",
+	}
+	for n, w := range want {
+		if got := dates.AddMonths(anchor, n).Format("2006-01-02"); got != w {
+			t.Errorf("AddMonths(anchor, %d) = %s, want %s", n, got, w)
+		}
+	}
+}
+
+// TestAddMonthsReadsTheWallClockDayAndStampsMidnightUTC mirrors Day: the date
+// is the one the caller's zone sees, and the result drops the time of day.
+func TestAddMonthsReadsTheWallClockDayAndStampsMidnightUTC(t *testing.T) {
+	east := time.Date(2026, 1, 31, 23, 30, 0, 0, time.FixedZone("UTC+9", 9*3600))
+	if got, want := dates.AddMonths(east, 1), ymd(2026, 2, 28); got != want {
+		t.Errorf("AddMonths = %v, want %v", got, want)
+	}
+}
+
+// TestAddMonthsOnDayKeepsTheAnchorOfAClampedDate pins the re-anchoring a
+// caller needs when it only holds a clamped date: Feb 28 anchored on the 31st
+// steps to Mar 31, where AddMonths would stay on the 28th.
+func TestAddMonthsOnDayKeepsTheAnchorOfAClampedDate(t *testing.T) {
+	clamped := ymd(2026, 2, 28)
+	for _, tc := range []struct {
+		n    int
+		want time.Time
+	}{
+		{0, ymd(2026, 2, 28)},
+		{1, ymd(2026, 3, 31)},
+		{2, ymd(2026, 4, 30)},
+		{3, ymd(2026, 5, 31)},
+		{12, ymd(2027, 2, 28)},
+		{-1, ymd(2026, 1, 31)},
+	} {
+		if got := dates.AddMonthsOnDay(clamped, 31, tc.n); !got.Equal(tc.want) {
+			t.Errorf("AddMonthsOnDay(Feb 28, 31, %d) = %s, want %s", tc.n, got.Format("2006-01-02"), tc.want.Format("2006-01-02"))
+		}
+	}
+	if got := dates.AddMonths(clamped, 1); !got.Equal(ymd(2026, 3, 28)) {
+		t.Errorf("AddMonths(Feb 28, 1) = %s, want 2026-03-28 (own day)", got.Format("2006-01-02"))
+	}
+}

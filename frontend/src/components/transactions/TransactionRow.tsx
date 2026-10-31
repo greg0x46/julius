@@ -1,23 +1,25 @@
-import { formatTime } from "../../i18n/dateFormats";
+import { intlLocale } from "../../i18n/dateFormats";
 import { useTranslation } from "../../i18n/context";
 import { translate, type Language } from "../../i18n/messages";
 import type { TransactionInclusionState, TransactionItem } from "../../api/contracts";
+import { useTimezone } from "../../hooks/useTimezone";
 import { formatCompactDay } from "../../presentation/dates";
+import { zonedFormatter } from "../../presentation/timezone";
 import { inclusionOriginLabel } from "../../presentation/transactionStatus";
 import { TransactionActions } from "./TransactionActions";
 import { TransactionAmount } from "./TransactionAmount";
 import { TransactionCategory } from "./TransactionCategory";
 import type { RowLayout } from "./rowLayout";
 
-function rowTime(value: string | null, language: Language): string | undefined {
+function rowTime(value: string | null, timezone: string, language: Language): string | undefined {
   if (!value) return undefined;
   const instant = new Date(value);
   if (Number.isNaN(instant.getTime())) return undefined;
-  return formatTime(language, instant);
+  return zonedFormatter(timezone, { hour: "2-digit", minute: "2-digit" }, intlLocale(language)).format(instant);
 }
 
-function rowDay(value: string | null, language: Language): string {
-  return value ? formatCompactDay(value, language) : translate(language, "undated");
+function rowDay(value: string | null, timezone: string, language: Language): string {
+  return value ? formatCompactDay(value, timezone, language) : translate(language, "undated");
 }
 
 /**
@@ -44,6 +46,7 @@ function TransactionMeta({
   layout?: RowLayout;
 }) {
   const { t, language } = useTranslation();
+  const timezone = useTimezone();
   const ignored = item.inclusion.state === "ignored";
   const account = item.account.name ?? item.account.institution ?? t("accountNotProvided");
   // A phone line has room for one place name: the category wins, and the
@@ -51,7 +54,7 @@ function TransactionMeta({
   const accountShown = showAccount && !(layout === "phone" && item.internal_category !== null);
   return (
     <span className="transaction-meta">
-      {layout === "phone" && <span className="transaction-meta-date">{rowDay(item.occurred_at, language)}</span>}
+      {layout === "phone" && <span className="transaction-meta-date">{rowDay(item.occurred_at, timezone, language)}</span>}
       {layout !== "wide" && <TransactionCategory item={item} />}
       {accountShown && <span className="transaction-meta-where">{account}</span>}
       {item.origin === "manual" && <span className="transaction-meta-flag">Manual</span>}
@@ -101,6 +104,7 @@ export function TransactionRow({
   onInclusion?: (id: string, state: TransactionInclusionState) => void;
   inclusionPending?: boolean;
 }) {
+  const timezone = useTimezone();
   const compact = layout === "phone";
   const { t, language } = useTranslation();
   const ignored = item.inclusion.state === "ignored";
@@ -114,8 +118,8 @@ export function TransactionRow({
 
   return (
     <div className={`transaction-row ${states}`} aria-current={selected || undefined} aria-busy={inclusionPending || undefined}>
-      <span className="transaction-row-date" title={rowTime(item.occurred_at, language)}>
-        {rowDay(item.occurred_at, language)}
+      <span className="transaction-row-date" title={rowTime(item.occurred_at, timezone, language)}>
+        {rowDay(item.occurred_at, timezone, language)}
       </span>
       <span className="transaction-row-identity">
         <button

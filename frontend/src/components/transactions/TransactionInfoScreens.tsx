@@ -2,6 +2,7 @@ import { useTranslation } from "../../i18n/context";
 import { Descriptions, Tag } from "../ui";
 
 import type { TransactionItem } from "../../api/contracts";
+import { useTimezone } from "../../hooks/useTimezone";
 import { internalCategoryOriginLabel } from "../../presentation/categoryLabels";
 import { formatBRL, formatMoney, moneySourceLabel } from "../../presentation/money";
 import { dateTime, installmentLabel, investmentSplit, remainderLabel } from "../../presentation/transactionDetail";
@@ -12,12 +13,13 @@ import { PanelSection } from "../shared/PanelStack";
 /** Where and when, plus the history behind the current decisions — read-only. */
 export function TransactionDetailsScreen({ item }: { item: TransactionItem }) {
   const { t, language } = useTranslation();
+  const timezone = useTimezone();
   const split = investmentSplit(item);
   return (
     <>
       <PanelSection title={t("whenWhere")}>
         <Descriptions column={1} size="small" colon={false}>
-          <Descriptions.Item label={t("dateAndTime")}>{dateTime(item.occurred_at, language)}</Descriptions.Item>
+          <Descriptions.Item label={t("dateAndTime")}>{dateTime(item.occurred_at, timezone, language)}</Descriptions.Item>
           <Descriptions.Item label={t("account")}>{item.account.name ?? t("accountNotProvided")}</Descriptions.Item>
           <Descriptions.Item label={t("institution")}>
             {item.account.institution ?? t("institutionNotProvided")}
@@ -46,7 +48,7 @@ export function TransactionDetailsScreen({ item }: { item: TransactionItem }) {
           <Descriptions.Item label={t("inTotals")}>
             {item.inclusion.state === "ignored" ? t("no") : t("yes")}
             {item.inclusion.changed_at &&
-              ` · ${inclusionOriginLabel(item.inclusion, language)} ${t("atDate")} ${dateTime(item.inclusion.changed_at, language)}`}
+              ` · ${inclusionOriginLabel(item.inclusion, language)} ${t("atDate")} ${dateTime(item.inclusion.changed_at, timezone, language)}`}
           </Descriptions.Item>
           {split && (
             <Descriptions.Item label={t("investment")}>

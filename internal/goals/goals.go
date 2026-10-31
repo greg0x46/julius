@@ -142,13 +142,14 @@ func nullableDay(t *time.Time) any {
 	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC).Format("2006-01-02")
 }
 
-// now is the clock of the projections; tests replace it.
+// now is the clock of the projections; tests replace it. "Today" is its
+// calendar day in the caller's zone, never the process zone.
 var now = time.Now
 
 // withComputed fills the computed fields from figures read once for all
 // the goals of a request, so they agree with each other. The return the
 // projections compound is measured once too, and only when a goal has a date.
-func withComputed(ctx context.Context, q Querier, list []Goal) ([]Goal, error) {
+func withComputed(ctx context.Context, q Querier, list []Goal, loc *time.Location) ([]Goal, error) {
 	f, err := readFigures(ctx, q)
 	if err != nil {
 		return nil, err
@@ -160,7 +161,7 @@ func withComputed(ctx context.Context, q Querier, list []Goal) ([]Goal, error) {
 	if !needsProjection(list) {
 		return list, nil
 	}
-	today := dates.Day(now())
+	today := dates.Day(now().In(loc))
 	est, err := estimateReturn(ctx, q, today)
 	if err != nil {
 		return nil, err
@@ -179,19 +180,19 @@ func rawGet(ctx context.Context, q Querier, id string) (Goal, error) {
 	return g, err
 }
 
-func Get(ctx context.Context, q Querier, id string) (Goal, error) {
+func Get(ctx context.Context, q Querier, id string, loc *time.Location) (Goal, error) {
 	g, err := rawGet(ctx, q, id)
 	if err != nil {
 		return Goal{}, err
 	}
-	list, err := withComputed(ctx, q, []Goal{g})
+	list, err := withComputed(ctx, q, []Goal{g}, loc)
 	if err != nil {
 		return Goal{}, err
 	}
 	return list[0], nil
 }
 
-func List(ctx context.Context, q Querier) ([]Goal, error) {
+func List(ctx context.Context, q Querier, loc *time.Location) ([]Goal, error) {
 	rows, err := q.QueryContext(ctx, `SELECT `+columns+` FROM goals ORDER BY created_at, id`)
 	if err != nil {
 		return nil, err
@@ -211,10 +212,10 @@ func List(ctx context.Context, q Querier) ([]Goal, error) {
 	if len(goals) == 0 {
 		return goals, nil
 	}
-	return withComputed(ctx, q, goals)
+	return withComputed(ctx, q, goals, loc)
 }
 
-func Create(ctx context.Context, conn *sql.DB, in Input) (Goal, error) {
+func Create(ctx context.Context, conn *sql.DB, in Input, loc *time.Location) (Goal, error) {
 	name, err := in.validate()
 	if err != nil {
 		return Goal{}, err
@@ -232,7 +233,7 @@ func Create(ctx context.Context, conn *sql.DB, in Input) (Goal, error) {
 		id, name, string(in.Metric), money.CanonicalDecimal(in.TargetAmount), nullableDay(in.TargetDate), nullable(in.Notes), now, now); err != nil {
 		return Goal{}, err
 	}
-	goal, err := Get(ctx, tx, id)
+	goal, err := Get(ctx, tx, id, loc)
 	if err != nil {
 		return Goal{}, err
 	}
@@ -242,7 +243,7 @@ func Create(ctx context.Context, conn *sql.DB, in Input) (Goal, error) {
 	return goal, nil
 }
 
-func Update(ctx context.Context, conn *sql.DB, id string, in Input) (Goal, error) {
+func Update(ctx context.Context, conn *sql.DB, id string, in Input, loc *time.Location) (Goal, error) {
 	name, err := in.validate()
 	if err != nil {
 		return Goal{}, err
@@ -262,7 +263,7 @@ func Update(ctx context.Context, conn *sql.DB, id string, in Input) (Goal, error
 		db.FormatTime(time.Now()), id); err != nil {
 		return Goal{}, err
 	}
-	goal, err := Get(ctx, tx, id)
+	goal, err := Get(ctx, tx, id, loc)
 	if err != nil {
 		return Goal{}, err
 	}

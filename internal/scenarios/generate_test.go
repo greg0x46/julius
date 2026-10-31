@@ -45,15 +45,76 @@ func TestGenerateInstallmentsEvenDivisionHasNoRemainder(t *testing.T) {
 	}
 }
 
-func TestGenerateInstallmentsMonthlyDates(t *testing.T) {
-	got, err := scenarios.GenerateInstallments(dec(t, "300.00"), 3, date(t, "2026-01-31"), scenarios.CadenceMonthly)
-	if err != nil {
-		t.Fatalf("GenerateInstallments: %v", err)
+// TestGenerateInstallmentsMonthlyClampsToMonthEndKeepingTheAnchorDay pins the
+// monthly rule for starts on the 29th-31st across a non-leap and a leap
+// February: a short month takes its last day (never spills into the next
+// month) and the next month returns to the anchor day (no drift).
+func TestGenerateInstallmentsMonthlyClampsToMonthEndKeepingTheAnchorDay(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		start string
+		want  []string
+	}{
+		{"31st, non-leap", "2026-01-31", []string{"2026-01-31", "2026-02-28", "2026-03-31", "2026-04-30", "2026-05-31", "2026-06-30"}},
+		{"30th, non-leap", "2026-01-30", []string{"2026-01-30", "2026-02-28", "2026-03-30", "2026-04-30", "2026-05-30", "2026-06-30"}},
+		{"29th, non-leap", "2026-01-29", []string{"2026-01-29", "2026-02-28", "2026-03-29", "2026-04-29", "2026-05-29", "2026-06-29"}},
+		{"31st, leap", "2028-01-31", []string{"2028-01-31", "2028-02-29", "2028-03-31", "2028-04-30", "2028-05-31", "2028-06-30"}},
+		{"30th, leap", "2028-01-30", []string{"2028-01-30", "2028-02-29", "2028-03-30", "2028-04-30", "2028-05-30", "2028-06-30"}},
+		{"29th, leap", "2028-01-29", []string{"2028-01-29", "2028-02-29", "2028-03-29", "2028-04-29", "2028-05-29", "2028-06-29"}},
+		{"31st across the year end", "2026-10-31", []string{"2026-10-31", "2026-11-30", "2026-12-31", "2027-01-31", "2027-02-28", "2027-03-31"}},
+		{"start already clamped", "2026-02-28", []string{"2026-02-28", "2026-03-28", "2026-04-28", "2026-05-28", "2026-06-28", "2026-07-28"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := scenarios.GenerateInstallments(dec(t, "600.00"), len(tc.want), date(t, tc.start), scenarios.CadenceMonthly)
+			if err != nil {
+				t.Fatalf("GenerateInstallments: %v", err)
+			}
+			for i, ins := range got {
+				if got := ins.ProjectedAt.Format("2006-01-02"); got != tc.want[i] {
+					t.Errorf("installment[%d].ProjectedAt = %s, want %s", i, got, tc.want[i])
+				}
+			}
+		})
 	}
-	wantDates := []string{"2026-01-31", "2026-03-03", "2026-03-31"} // AddDate normalizes Feb 31 -> Mar 3
+}
+
+// TestGenerateInstallmentsForAmountMonthlyClampsToMonthEnd checks the
+// fixed-amount generator, which derives the count, shares the clamping rule.
+func TestGenerateInstallmentsForAmountMonthlyClampsToMonthEnd(t *testing.T) {
+	got, err := scenarios.GenerateInstallmentsForAmount(dec(t, "900.00"), dec(t, "300.00"), date(t, "2026-01-31"), scenarios.CadenceMonthly)
+	if err != nil {
+		t.Fatalf("GenerateInstallmentsForAmount: %v", err)
+	}
+	wantDates := []string{"2026-01-31", "2026-02-28", "2026-03-31"}
+	if len(got) != len(wantDates) {
+		t.Fatalf("len(got) = %d, want %d", len(got), len(wantDates))
+	}
 	for i, ins := range got {
 		if got := ins.ProjectedAt.Format("2006-01-02"); got != wantDates[i] {
 			t.Errorf("installment[%d].ProjectedAt = %s, want %s", i, got, wantDates[i])
+		}
+	}
+}
+
+// TestGenerateInstallmentsWeeklyAndBiweeklyIgnoreMonthEnd pins that only the
+// monthly cadence clamps: weekly and biweekly keep stepping a fixed number of
+// days across a month end.
+func TestGenerateInstallmentsWeeklyAndBiweeklyIgnoreMonthEnd(t *testing.T) {
+	for _, tc := range []struct {
+		cadence scenarios.Cadence
+		want    []string
+	}{
+		{scenarios.CadenceWeekly, []string{"2026-01-31", "2026-02-07", "2026-02-14"}},
+		{scenarios.CadenceBiweekly, []string{"2026-01-31", "2026-02-14", "2026-02-28"}},
+	} {
+		got, err := scenarios.GenerateInstallments(dec(t, "300.00"), 3, date(t, "2026-01-31"), tc.cadence)
+		if err != nil {
+			t.Fatalf("%s: GenerateInstallments: %v", tc.cadence, err)
+		}
+		for i, ins := range got {
+			if got := ins.ProjectedAt.Format("2006-01-02"); got != tc.want[i] {
+				t.Errorf("%s: installment[%d].ProjectedAt = %s, want %s", tc.cadence, i, got, tc.want[i])
+			}
 		}
 	}
 }

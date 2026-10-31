@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import type { TransactionItem } from "../../api/contracts";
 import { invalidateAfterTransactionChange, queryKeys } from "../../api/queryKeys";
 import { createTransfer, deleteTransfer, getTransactionTransfer, type AccountTransfer, type TransferMovement } from "../../api/transfers";
+import { useTimezone } from "../../hooks/useTimezone";
 import { currentMonthFilters, useTransactions } from "../../hooks/useTransactions";
 import { formatMoney } from "../../presentation/money";
 import { transferRate } from "../../presentation/transferRate";
@@ -46,6 +47,7 @@ export function TransactionTransferScreen({ item }: { item: TransactionItem }) {
   const { t, language } = useTranslation();
   const client = useQueryClient();
   const confirm = useConfirm();
+  const timezone = useTimezone();
   const relation = useQuery({
     queryKey: queryKeys.transactionTransfer(item.id),
     queryFn: ({ signal }) => getTransactionTransfer(item.id, signal),
@@ -63,11 +65,11 @@ export function TransactionTransferScreen({ item }: { item: TransactionItem }) {
   const source = isOutflow ? item : counterpart;
   const destination = isOutflow ? counterpart : item;
   const candidates = useTransactions({
-    ...currentMonthFilters(), date_from: null, date_to: null,
+    ...currentMonthFilters(timezone), date_from: null, date_to: null,
     classification: isOutflow ? "inflow" : "outflow", description: search || null,
   }, "none", page);
   const fees = useTransactions({
-    ...currentMonthFilters(), date_from: null, date_to: null,
+    ...currentMonthFilters(timezone), date_from: null, date_to: null,
     classification: "outflow", description: feeSearch || null,
     account_ids: [source?.account.id, destination?.account.id].filter((id): id is string => !!id),
   }, "none", feePage);

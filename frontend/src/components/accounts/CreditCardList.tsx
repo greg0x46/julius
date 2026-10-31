@@ -3,7 +3,9 @@ import { useTranslation } from "../../i18n/context";
 import { Skeleton } from "../ui";
 
 import type { Account } from "../../api/contracts";
+import { useTimezone } from "../../hooks/useTimezone";
 import { formatOptionalDay } from "../../presentation/dates";
+import { zonedToday } from "../../presentation/timezone";
 import {
   accountDisplayName,
   closingDaySourceHint,
@@ -26,11 +28,11 @@ function totalLimit(accounts: Account[]): string {
 
 // Due dates are near-future calendar days, so "10/10" is enough — the year is
 // only spelled out when it is not the current one.
-function dueDayLabel(value: string | null, language: "pt-BR" | "en"): string | null {
+function dueDayLabel(value: string | null, currentYear: string, language: "pt-BR" | "en"): string | null {
   if (value === null) return null;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return formatOptionalDay(value, language);
-  const year = date.getUTCFullYear() === new Date().getFullYear() ? {} : { year: "numeric" as const };
+  const year = String(date.getUTCFullYear()) === currentYear ? {} : { year: "numeric" as const };
   return dateFormatter(language, { day: "2-digit", month: "2-digit", ...year, timeZone: "UTC" }).format(date);
 }
 
@@ -55,7 +57,9 @@ export function CreditCardList({
   onOpen: (account: Account) => void;
 }) {
   const { t, language } = useTranslation();
+  const timezone = useTimezone();
   if (failed) return null;
+  const currentYear = zonedToday(timezone).slice(0, 4);
   const hasForeignCards = accounts.some((account) => !isBRL(account));
   const hasBRLCards = accounts.some(isBRL);
   return (
@@ -82,7 +86,7 @@ export function CreditCardList({
       ) : (
         <ul className="list-rows" aria-label={t("creditCards")}>
           {accounts.map((account) => {
-            const due = dueDayLabel(account.balance_due_date, language);
+            const due = dueDayLabel(account.balance_due_date, currentYear, language);
             const dates = [
               due !== null ? t("cardDue").replace("{date}", due) : null,
               account.closing_day !== null ? t("cardCloses").replace("{day}", String(account.closing_day)) : null,

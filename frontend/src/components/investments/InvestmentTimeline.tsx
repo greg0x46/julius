@@ -2,6 +2,7 @@ import { useTranslation } from "../../i18n/context";
 import { Skeleton } from "../ui";
 
 import type { InvestmentTransaction } from "../../api/contracts";
+import { useTimezone } from "../../hooks/useTimezone";
 import { formatCompactDay } from "../../presentation/dates";
 import { movementTypeLabel, quotaCount } from "../../presentation/investmentLabels";
 import { UnavailableState } from "../AsyncState";
@@ -26,6 +27,7 @@ export function InvestmentTimeline({
   onRetry: () => void;
 }) {
   const { t, language } = useTranslation();
+  const timezone = useTimezone();
   const failed = error !== null && error !== undefined;
   return (
     <Section title={t("movementsTitle")}>
@@ -48,7 +50,7 @@ export function InvestmentTimeline({
                 key={transaction.id}
                 title={movementTypeLabel(transaction.movement_type, language)}
                 meta={[
-                  date !== null ? formatCompactDay(date, language) : t("noDate"),
+                  date !== null ? formatCompactDay(date, timezone, language) : t("noDate"),
                   transaction.quantity !== null ? quotaCount(transaction.quantity, language) : null,
                 ]
                   .filter(Boolean)

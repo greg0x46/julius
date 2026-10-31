@@ -88,7 +88,7 @@ type goalRequest struct {
 
 func (req goalRequest) toInput() (goals.Input, bool) {
 	target := req.TargetAmount.pointer()
-	if target == nil {
+	if target == nil || !validMoneyAmount(*target) {
 		return goals.Input{}, false
 	}
 	input := goals.Input{
@@ -99,7 +99,7 @@ func (req goalRequest) toInput() (goals.Input, bool) {
 	}
 	if req.TargetDate != nil && strings.TrimSpace(*req.TargetDate) != "" {
 		day, ok := investmentBodyDate(req.TargetDate)
-		if !ok {
+		if !ok || !validInputDate(day) {
 			return goals.Input{}, false
 		}
 		input.TargetDate = &day
@@ -109,7 +109,7 @@ func (req goalRequest) toInput() (goals.Input, bool) {
 
 func writeGoalInvalid(w http.ResponseWriter) {
 	writeProblem(w, http.StatusBadRequest, "invalid-goal-input", "Dados da meta inválidos",
-		"Informe um nome, a métrica, um valor alvo maior que zero e, se houver, a data no formato AAAA-MM-DD.")
+		"Informe um nome, a métrica, um valor alvo maior que zero e, se houver, a data no formato AAAA-MM-DD. "+invalidAmountDetail+" "+invalidDateDetail)
 }
 
 func writeGoalProblem(w http.ResponseWriter, err error) {
@@ -141,7 +141,11 @@ func decodeGoalRequest(w http.ResponseWriter, r *http.Request) (goals.Input, boo
 
 func handleListGoals(conn *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		list, err := goals.List(r.Context(), conn)
+		loc, ok := configuredZone(w, r, conn)
+		if !ok {
+			return
+		}
+		list, err := goals.List(r.Context(), conn, loc)
 		if err != nil {
 			writeGoalProblem(w, err)
 			return
@@ -160,7 +164,11 @@ func handleCreateGoal(conn *sql.DB) http.HandlerFunc {
 		if !ok {
 			return
 		}
-		goal, err := goals.Create(r.Context(), conn, input)
+		loc, ok := configuredZone(w, r, conn)
+		if !ok {
+			return
+		}
+		goal, err := goals.Create(r.Context(), conn, input, loc)
 		if err != nil {
 			writeGoalProblem(w, err)
 			return
@@ -175,7 +183,11 @@ func handleUpdateGoal(conn *sql.DB) http.HandlerFunc {
 		if !ok {
 			return
 		}
-		goal, err := goals.Update(r.Context(), conn, r.PathValue("id"), input)
+		loc, ok := configuredZone(w, r, conn)
+		if !ok {
+			return
+		}
+		goal, err := goals.Update(r.Context(), conn, r.PathValue("id"), input, loc)
 		if err != nil {
 			writeGoalProblem(w, err)
 			return

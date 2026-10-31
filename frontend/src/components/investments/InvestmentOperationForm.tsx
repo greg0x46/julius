@@ -2,6 +2,8 @@ import { useTranslation } from "../../i18n/context";
 import { compareDecimals, isPositiveDecimal } from "../../presentation/decimal";
 import { Alert, Checkbox, DatePicker, Flex, Input, InputNumber, Select } from "../ui";
 import { calendar, type CalendarDate } from "../../presentation/calendar";
+import { todayIn } from "../../presentation/timezone";
+import { useTimezone } from "../../hooks/useTimezone";
 import { useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
 
 import type {
@@ -31,12 +33,12 @@ type Draft = {
   notes: string;
 };
 
-function blankDraft(accounts: InvestmentAccount[], initial?: Partial<InvestmentOperationWrite>): Draft {
+function blankDraft(accounts: InvestmentAccount[], timezone: string, initial?: Partial<InvestmentOperationWrite>): Draft {
   return {
     accountId: initial?.account_id ?? accounts.find((account) => account.active)?.id ?? "",
     positionId: initial?.position_id ?? null,
     kind: initial?.kind ?? "deposit",
-    occurredOn: initial?.occurred_on ? calendar(initial.occurred_on) : calendar(),
+    occurredOn: initial?.occurred_on ? calendar(initial.occurred_on) : todayIn(timezone),
     amount: initial?.amount ?? null,
     quantity: initial?.quantity ?? null,
     unitPrice: initial?.unit_price ?? null,
@@ -49,9 +51,10 @@ function blankDraft(accounts: InvestmentAccount[], initial?: Partial<InvestmentO
 function draftFrom(
   operation: InvestmentOperation | null,
   accounts: InvestmentAccount[],
+  timezone: string,
   initial?: Partial<InvestmentOperationWrite>,
 ): Draft {
-  if (!operation) return blankDraft(accounts, initial);
+  if (!operation) return blankDraft(accounts, timezone, initial);
   return {
     accountId: operation.account_id,
     positionId: operation.position_id,
@@ -138,8 +141,9 @@ export function InvestmentOperationFields({
   allowedKinds,
 }: FieldsProps) {
   const { t, language } = useTranslation();
+  const timezone = useTimezone();
   const kindOptions = selectableKinds.map((value) => ({ value, label: investmentOperationKindName(value, language) }));
-  const [draft, setDraft] = useState<Draft>(() => draftFrom(operation, accounts, initial ?? undefined));
+  const [draft, setDraft] = useState<Draft>(() => draftFrom(operation, accounts, timezone, initial ?? undefined));
   const [error, setError] = useState<string | null>(null);
   const [funding, setFunding] = useState<"deposit" | "income" | null>(null);
   // Whether the person typed into "Valor bruto" since mount. Until then a

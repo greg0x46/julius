@@ -3,7 +3,8 @@ import { useTranslation } from "../../i18n/context";
 import { isPositiveDecimal, isZeroDecimal } from "../../presentation/decimal";
 import { PlusOutlined } from "../ui/icons";
 import { Alert, Button, DatePicker, Flex, InputNumber, Radio, Skeleton, Typography } from "../ui";
-import { calendar, type CalendarDate } from "../../presentation/calendar";
+import type { CalendarDate } from "../../presentation/calendar";
+import { todayIn } from "../../presentation/timezone";
 import { useState } from "react";
 
 import type {
@@ -16,6 +17,7 @@ import type {
   ScenarioTransaction,
 } from "../../api/contracts";
 import { usePayablePlan } from "../../hooks/usePayablePlan";
+import { useTimezone } from "../../hooks/useTimezone";
 import { calendarParts } from "../../presentation/dates";
 import { errorMessage } from "../../presentation/errors";
 import { formatBRL, subtractBRL, sumBRL } from "../../presentation/money";
@@ -33,11 +35,11 @@ import { useConfirm } from "../shared/useConfirm";
 import { useFeedback } from "../shared/useFeedback";
 
 /** "20/02", with the year only when it is not the current one — a plan can span years. */
-function formatShortDate(value: string, language: Language): string {
-  const parts = calendarParts(value);
+function formatShortDate(value: string, timezone: string, language: Language): string {
+  const parts = calendarParts(value, timezone);
   if (parts === null) return translate(language, "invalidDate");
   const day = language === "en" ? `${String(parts.month).padStart(2, "0")}/${String(parts.day).padStart(2, "0")}` : `${String(parts.day).padStart(2, "0")}/${String(parts.month).padStart(2, "0")}`;
-  return parts.year === calendar().year() ? day : `${day}/${parts.year}`;
+  return parts.year === todayIn(timezone).year() ? day : `${day}/${parts.year}`;
 }
 
 /**
@@ -89,10 +91,10 @@ const installmentStatusTone: Partial<Record<ScenarioTransaction["status"], Statu
   paga_a_mais: "info",
 };
 
-function realizationLabel(realization: Realization, links: PayableLinkedTransaction[], language: Language): string {
+function realizationLabel(realization: Realization, links: PayableLinkedTransaction[], timezone: string, language: Language): string {
   const link = links.find((candidate) => candidate.id === realization.payable_link_id);
   const description = link?.description ?? translate(language, "linkedTransaction");
-  return link?.occurred_at ? `${formatShortDate(link.occurred_at, language)} · ${description}` : description;
+  return link?.occurred_at ? `${formatShortDate(link.occurred_at, timezone, language)} · ${description}` : description;
 }
 
 /** The plan's overall standing as one quiet line, coloured only when it matters. */
@@ -225,7 +227,8 @@ export function PayableTimeline({
   const [generateBy, setGenerateBy] = useState<"months" | "amount">("months");
   const [months, setMonths] = useState<number | null>(6);
   const [installmentAmount, setInstallmentAmount] = useState<string | null>(null);
-  const [startDate, setStartDate] = useState<CalendarDate>(() => calendar());
+  const timezone = useTimezone();
+  const [startDate, setStartDate] = useState<CalendarDate>(() => todayIn(timezone));
   const [actionError, setActionError] = useState<string | null>(null);
   const confirm = useConfirm();
   const feedback = useFeedback();
@@ -531,7 +534,7 @@ export function PayableTimeline({
                     label:
                       installment.realizations.length === 1
                         ? t("deallocateTransaction")
-                        : t("deallocateNamed", { name: realizationLabel(realization, links, language) }),
+                        : t("deallocateNamed", { name: realizationLabel(realization, links, timezone, language) }),
                     danger: true,
                     onClick: () =>
                       confirm({
@@ -561,7 +564,7 @@ export function PayableTimeline({
                     <div className="payable-entry-line">
                       <span className="payable-entry-text">
                         <span className="payable-entry-title">
-                          <span className="payable-nowrap">{formatShortDate(installment.projected_at, language)}</span> ·{" "}
+                          <span className="payable-nowrap">{formatShortDate(installment.projected_at, timezone, language)}</span> ·{" "}
                           {/* Non-breaking: "Parcela 4/6" must not wrap between word and number. */}
                           {label.replace(/^([^ ]+) /, "$1\u00a0")}
                         </span>
@@ -591,7 +594,7 @@ export function PayableTimeline({
                       <div key={realization.id} className="payable-entry-line payable-entry-realization">
                         <span className="payable-entry-text">
                           <span className="payable-entry-realization-text">
-                            ↳ {realizationLabel(realization, links, language)}
+                            ↳ {realizationLabel(realization, links, timezone, language)}
                           </span>
                         </span>
                         {/* A lone realization that matches the installment would only repeat its figure. */}
@@ -613,7 +616,7 @@ export function PayableTimeline({
                   <div className="payable-entry-line">
                     <span className="payable-entry-text">
                       <span className="payable-entry-title">
-                        {formatShortDate(link.occurred_at ?? link.linked_at, language)} · {link.description ?? t("noDescription")}
+                        {formatShortDate(link.occurred_at ?? link.linked_at, timezone, language)} · {link.description ?? t("noDescription")}
                       </span>
                       <span className="payable-entry-meta">{t("standaloneLink")}</span>
                     </span>

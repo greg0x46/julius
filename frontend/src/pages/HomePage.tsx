@@ -10,13 +10,12 @@ import { SpendingByCategoryCard } from "../components/home/SpendingByCategoryCar
 import { PeriodBalanceCard } from "../components/home/PeriodBalanceCard";
 
 import { PeriodNavigator } from "../components/filters/PeriodNavigator";
-import { periodPresets } from "../components/filters/periodPresets";
 import { Page } from "../components/layout";
 import { usePeriod } from "../hooks/usePeriod";
 
 export function HomePage() {
-  const { t, language } = useTranslation();
-  const { period, setPeriod } = usePeriod();
+  const { t } = useTranslation();
+  const { period, setPeriod, presets } = usePeriod();
   return (
     <Page
       title={t("home")}
@@ -25,7 +24,7 @@ export function HomePage() {
         <PeriodNavigator
           id="home-period"
           value={[period.from, period.to]}
-          presets={periodPresets(language)}
+          presets={presets}
           onChange={setPeriod}
           reset={{ preset: "this-month", label: t("thisMonth") }}
           bare

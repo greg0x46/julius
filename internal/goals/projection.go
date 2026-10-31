@@ -69,7 +69,7 @@ type ReturnEstimate struct {
 // estimateReturn measures the investments over the trailing window ending
 // today with the period view, the authority on what a position earned.
 func estimateReturn(ctx context.Context, q Querier, today time.Time) (ReturnEstimate, error) {
-	from := today.AddDate(0, -returnWindowMonths, 0)
+	from := dates.AddMonths(today, -returnWindowMonths)
 	portfolio, err := investments.BuildPortfolio(ctx, q, investments.PortfolioQuery{From: &from, To: today})
 	if err != nil {
 		return ReturnEstimate{}, err
@@ -123,24 +123,13 @@ func monthlyRate(period decimal.Decimal, days int) (decimal.Decimal, bool) {
 // is not after today.
 func monthsUntil(today, target time.Time) int {
 	n := 0
-	for addMonths(today, n).Before(target) {
+	for dates.AddMonths(today, n).Before(target) {
 		n++
 		if n > maxProjectionMonths {
 			return n
 		}
 	}
 	return n
-}
-
-// addMonths clamps to the last day of a shorter month (Jan 31 + 1 → Feb 28).
-func addMonths(day time.Time, n int) time.Time {
-	total := int(day.Month()) - 1 + n
-	year, month := day.Year()+total/12, time.Month(total%12+1)
-	d := day.Day()
-	if last := dates.DaysInMonth(year, month); d > last {
-		d = last
-	}
-	return time.Date(year, month, d, 0, 0, 0, 0, time.UTC)
 }
 
 // project compounds current at the monthly rate (nil is no appreciation) for

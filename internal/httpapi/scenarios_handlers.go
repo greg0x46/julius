@@ -10,10 +10,10 @@ import (
 
 	"github.com/shopspring/decimal"
 
-	"github.com/greg0x46/julius/internal/dates"
 	"github.com/greg0x46/julius/internal/money"
 	"github.com/greg0x46/julius/internal/payables"
 	"github.com/greg0x46/julius/internal/scenarios"
+	"github.com/greg0x46/julius/internal/settings"
 )
 
 func scenariosUnavailableProblem(w http.ResponseWriter) {
@@ -92,11 +92,16 @@ func realizationsToDTOs(list []scenarios.ScenarioTransactionRealization) []reali
 	return dtos
 }
 
-// todayUTC is "today" for ScenarioTransaction.Status purposes: midnight UTC,
-// so an installment projected for today itself doesn't read as late just
-// because the wall-clock time of day is already past midnight.
-func todayUTC() time.Time {
-	return dates.Day(time.Now().UTC())
+// scenarioToday is "today" for ScenarioTransaction.Status purposes: the
+// configured zone's calendar day stamped midnight UTC, so an installment
+// projected for today itself doesn't read as late just because the wall-clock
+// time of day is already past midnight.
+func scenarioToday(ctx context.Context, q settings.Querier) (time.Time, error) {
+	loc, err := settings.Location(ctx, q)
+	if err != nil {
+		return time.Time{}, err
+	}
+	return dayIn(time.Now(), loc), nil
 }
 
 // scenarioTransactionToDTO formats one installment's derived state. The
@@ -118,7 +123,11 @@ func scenarioTransactionToDTO(summary scenarios.TransactionSummary) scenarioTran
 // scenario_transaction goes through, so Status always reflects real
 // allocations.
 func scenarioTransactionDTOFor(ctx context.Context, conn *sql.DB, st scenarios.ScenarioTransaction) (scenarioTransactionDTO, error) {
-	summary, err := scenarios.SummarizeTransaction(ctx, conn, st, todayUTC())
+	today, err := scenarioToday(ctx, conn)
+	if err != nil {
+		return scenarioTransactionDTO{}, err
+	}
+	summary, err := scenarios.SummarizeTransaction(ctx, conn, st, today)
 	if err != nil {
 		return scenarioTransactionDTO{}, err
 	}
@@ -143,7 +152,12 @@ func loadScenarioDetail(w http.ResponseWriter, r *http.Request, conn *sql.DB, id
 		scenariosUnavailableProblem(w)
 		return scenarioDetailDTO{}, false
 	}
-	summary, err := scenarios.Summarize(r.Context(), conn, s.ID, todayUTC())
+	today, err := scenarioToday(r.Context(), conn)
+	if err != nil {
+		scenariosUnavailableProblem(w)
+		return scenarioDetailDTO{}, false
+	}
+	summary, err := scenarios.Summarize(r.Context(), conn, s.ID, today)
 	if err != nil {
 		scenariosUnavailableProblem(w)
 		return scenarioDetailDTO{}, false
@@ -330,7 +344,7 @@ func (req scenarioTransactionWriteRequest) validate() (time.Time, bool) {
 		return time.Time{}, false
 	}
 	projectedAt, err := time.Parse(dateOnlyLayout, req.ProjectedAt)
-	return projectedAt, err == nil
+	return projectedAt, err == nil && validInputDate(projectedAt) && validMoneyAmount(req.Amount)
 }
 
 func handleCreateScenarioTransaction(conn *sql.DB) http.HandlerFunc {
@@ -351,7 +365,7 @@ func handleCreateScenarioTransaction(conn *sql.DB) http.HandlerFunc {
 		}
 		projectedAt, ok := req.validate()
 		if !ok {
-			invalidScenarioTransactionProblem(w, "Revise os campos enviados.")
+			invalidScenarioTransactionProblem(w, "Revise os campos enviados. "+invalidAmountDetail+" "+invalidDateDetail)
 			return
 		}
 
@@ -403,7 +417,7 @@ func handleUpdateScenarioTransaction(conn *sql.DB) http.HandlerFunc {
 		}
 		projectedAt, ok := req.validate()
 		if !ok {
-			invalidScenarioTransactionProblem(w, "Revise os campos enviados.")
+			invalidScenarioTransactionProblem(w, "Revise os campos enviados. "+invalidAmountDetail+" "+invalidDateDetail)
 			return
 		}
 
@@ -485,11 +499,20 @@ func handleGenerateInstallments(conn *sql.DB) http.HandlerFunc {
 			invalidScenarioTransactionProblem(w, "Informe o número de parcelas OU o valor de cada parcela — não os dois, nem nenhum.")
 			return
 		}
-		startDate := time.Now().UTC()
+		if hasAmount && !validMoneyAmount(*req.InstallmentAmount) {
+			invalidScenarioTransactionProblem(w, "Valor da parcela inválido. "+invalidAmountDetail)
+			return
+		}
+		today, err := scenarioToday(r.Context(), conn)
+		if err != nil {
+			scenariosUnavailableProblem(w)
+			return
+		}
+		startDate := today
 		if req.StartDate != nil {
 			parsed, err := time.Parse(dateOnlyLayout, *req.StartDate)
-			if err != nil {
-				invalidScenarioTransactionProblem(w, "Data inicial inválida.")
+			if err != nil || !validInputDate(parsed) {
+				invalidScenarioTransactionProblem(w, "Data inicial inválida. "+invalidDateDetail)
 				return
 			}
 			startDate = parsed
@@ -514,13 +537,16 @@ func handleGenerateInstallments(conn *sql.DB) http.HandlerFunc {
 			invalidScenarioTransactionProblem(w, "A dívida/conta a receber não possui valor restante para gerar parcelas.")
 			return
 		}
+		if len(drafts) > 0 && !validInputDate(drafts[len(drafts)-1].ProjectedAt) {
+			invalidScenarioTransactionProblem(w, "As parcelas geradas passariam de 2100. Reduza o número de parcelas ou antecipe a data inicial.")
+			return
+		}
 		created, err := scenarios.CreateGeneratedInstallments(r.Context(), conn, scenarioID, drafts)
 		if err != nil {
 			scenariosUnavailableProblem(w)
 			return
 		}
 		dtos := make([]scenarioTransactionDTO, len(created))
-		today := todayUTC()
 		for i, st := range created {
 			dtos[i] = scenarioTransactionToDTO(scenarios.SummarizeFresh(st, today))
 		}
@@ -615,7 +641,11 @@ func handleReadjustInstallments(conn *sql.DB) http.HandlerFunc {
 			return
 		}
 
-		today := todayUTC()
+		today, err := scenarioToday(r.Context(), conn)
+		if err != nil {
+			scenariosUnavailableProblem(w)
+			return
+		}
 		dtos := make([]scenarioTransactionDTO, len(created))
 		for i, st := range created {
 			dtos[i] = scenarioTransactionToDTO(scenarios.SummarizeFresh(st, today))
@@ -686,6 +716,10 @@ func handleCreateRealization(conn *sql.DB) http.HandlerFunc {
 		var req realizationCreateRequest
 		if err := decodeStrict(r, &req); err != nil || req.PayableLinkID == "" || !req.AllocatedAmount.IsPositive() {
 			invalidScenarioTransactionProblem(w, "Informe um vínculo e um valor alocado válido (> 0).")
+			return
+		}
+		if !validMoneyAmount(req.AllocatedAmount) {
+			invalidScenarioTransactionProblem(w, "Valor alocado inválido. "+invalidAmountDetail)
 			return
 		}
 		if s.PayableID == nil {

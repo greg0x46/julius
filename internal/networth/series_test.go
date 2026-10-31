@@ -8,6 +8,7 @@ import (
 
 	"github.com/shopspring/decimal"
 
+	"github.com/greg0x46/julius/internal/dates"
 	"github.com/greg0x46/julius/internal/db"
 	"github.com/greg0x46/julius/internal/exchange"
 	"github.com/greg0x46/julius/internal/investments"
@@ -415,4 +416,30 @@ func TestSeriesLeavesADayWithAnUnpricedHoldingUnavailable(t *testing.T) {
 	}
 	last := points[len(points)-1]
 	assertDecimalEqual(t, "today is the provider balance", last.Breakdown.InvestmentBalance, "500")
+}
+
+// TestSeriesReachesBackAtMostTheSpanCap: one mistyped year in an old
+// transaction must not make the series cover centuries of days.
+func TestSeriesReachesBackAtMostTheSpanCap(t *testing.T) {
+	f := newFixture(t)
+	account := f.addAccount("", "1000.00")
+	f.addTransaction(account, time.Date(202, 3, 16, 12, 0, 0, 0, time.UTC), "-100.00", "DEBIT")
+	f.addTransaction(account, daysAgo(5), "50.00", "CREDIT")
+
+	points := f.series(today, nil)
+	if got, want := len(points), dates.MaxSpanDays+1; got != want {
+		t.Fatalf("points = %d, want %d (the cap plus today)", got, want)
+	}
+	if want := today.AddDate(0, 0, -dates.MaxSpanDays); !points[0].Day.Equal(want) {
+		t.Fatalf("series starts on %s, want %s", points[0].Day, want)
+	}
+	if !points[len(points)-1].Day.Equal(today) {
+		t.Fatalf("series ends on %s, want today", points[len(points)-1].Day)
+	}
+	// The newer movement is still reversed on the days before it.
+	before, ok := pointOn(t, points, daysAgo(6))
+	if !ok {
+		t.Fatal("no point six days ago")
+	}
+	assertDecimalEqual(t, "cash before the credit", before.Breakdown.CashBalance, "950")
 }

@@ -16,6 +16,8 @@ import type {
   TransactionItem,
 } from "../../api/contracts";
 import { useInvestmentWorkspace } from "../../hooks/useInvestmentWorkspace";
+import { useTimezone } from "../../hooks/useTimezone";
+import { calendarIn, todayIn } from "../../presentation/timezone";
 import { formatDateOnly } from "../../presentation/dates";
 import { isPositiveDecimal,isZeroDecimal, subtractDecimals, sumDecimals } from "../../presentation/decimal";
 import { investmentOperationKindName } from "../../presentation/investmentWorkspaceLabels";
@@ -32,8 +34,8 @@ function absolute(value: string): string {
 }
 const positive = isPositiveDecimal;
 
-function operationDate(transaction: TransactionItem): string {
-  return transaction.occurred_at ? calendar(transaction.occurred_at).format("YYYY-MM-DD") : calendar().format("YYYY-MM-DD");
+function operationDate(transaction: TransactionItem, timezone: string): string {
+  return (transaction.occurred_at ? calendarIn(transaction.occurred_at, timezone) : todayIn(timezone)).format("YYYY-MM-DD");
 }
 
 function joinLabel(parts: Array<string | null | undefined>): string {
@@ -104,6 +106,7 @@ export function InvestmentLinkScreen({
 }) {
   const { t, language } = useTranslation();
   const workspace = useInvestmentWorkspace();
+  const timezone = useTimezone();
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [amount, setAmount] = useState<string | null | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
@@ -197,7 +200,7 @@ export function InvestmentLinkScreen({
         (candidate.movementId !== null && link.financial_investment_transaction_id === candidate.movementId),
     );
   const dateDistance = (candidate: Candidate) =>
-    candidate.date ? Math.abs(calendar(candidate.date).diff(calendar(operationDate(transaction)), "day")) : Number.MAX_SAFE_INTEGER;
+    candidate.date ? Math.abs(calendar(candidate.date).diff(calendar(operationDate(transaction, timezone)), "day")) : Number.MAX_SAFE_INTEGER;
   const suggested = (candidate: Candidate) =>
     dateDistance(candidate) <= 5 && isZeroDecimal(subtractDecimals(candidate.available, available));
   const candidates = [...importedCandidates, ...operationCandidates]
@@ -386,6 +389,7 @@ export function InvestmentLinkNewOperationScreen({
 }) {
   const { t } = useTranslation();
   const workspace = useInvestmentWorkspace();
+  const timezone = useTimezone();
   const [error, setError] = useState<string | null>(null);
   const links = workspace.reconciliations.filter((link) => link.financial_transaction_id === transaction.id);
   const { available, direction, compatibleKinds } = linkFigures(transaction, sumDecimals(links.map((link) => link.amount)));
@@ -420,7 +424,7 @@ export function InvestmentLinkNewOperationScreen({
           operation={null}
           initial={{
             kind: direction ?? "deposit",
-            occurred_on: operationDate(transaction),
+            occurred_on: operationDate(transaction, timezone),
             amount: amount ?? undefined,
           }}
           allowedKinds={compatibleKinds}

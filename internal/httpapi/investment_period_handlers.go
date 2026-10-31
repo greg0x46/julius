@@ -7,6 +7,7 @@ import (
 
 	"github.com/shopspring/decimal"
 
+	"github.com/greg0x46/julius/internal/dates"
 	"github.com/greg0x46/julius/internal/investments"
 	"github.com/greg0x46/julius/internal/money"
 	"github.com/greg0x46/julius/internal/valuation"
@@ -156,6 +157,10 @@ func handleGetInvestmentPeriod(conn *sql.DB) http.HandlerFunc {
 		}
 		if from != nil && from.After(to) {
 			writeInvestmentInvalid(w, "from não pode ser posterior a to.")
+			return
+		}
+		if from != nil && dates.ExceedsMaxSpan(*from, to) {
+			writeInvestmentRangeTooLong(w)
 			return
 		}
 		query := investments.PortfolioQuery{From: from, To: to, GroupBy: investments.PortfolioGroupNone, AccountID: investmentQueryFilter(r, "account_id")}

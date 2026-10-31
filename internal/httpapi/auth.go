@@ -2,13 +2,14 @@ package httpapi
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"path"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/greg0x46/julius/internal/auth"
@@ -26,37 +27,16 @@ type identity struct {
 	Token string
 }
 type authAPI struct {
-	store    *auth.Store
-	config   auth.Config
-	mu       sync.Mutex
-	window   time.Time
-	total    int
-	attempts map[string]int
-	hashing  chan struct{}
+	store  *auth.Store
+	config auth.Config
+	// Budgets of failed credential checks only; successes never spend them.
+	logins    *auth.Limiter // per normalized e-mail, plus a global backstop
+	passwords *auth.Limiter // per session, so only its holder can exhaust it
+	hashing   chan struct{}
 }
 
 func newAuthAPI(store *auth.Store, config auth.Config) *authAPI {
-	return &authAPI{store: store, config: config, attempts: make(map[string]int), hashing: make(chan struct{}, 1)}
-}
-func (a *authAPI) limited(email string) bool {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	now := time.Now()
-	if now.Sub(a.window) >= time.Minute {
-		a.window = now
-		a.total = 0
-		clear(a.attempts)
-	}
-	if a.total >= 30 {
-		return true
-	}
-	a.total++
-	email = auth.NormalizeEmail(email)
-	if a.attempts[email] >= 5 {
-		return true
-	}
-	a.attempts[email]++
-	return false
+	return &authAPI{store: store, config: config, logins: auth.NewLimiter(5, 30), passwords: auth.NewLimiter(5, 30), hashing: make(chan struct{}, 1)}
 }
 func (a *authAPI) cookieName() string {
 	if a.config.Secure() {
@@ -187,17 +167,21 @@ func (a *authAPI) session(w http.ResponseWriter, r *http.Request) {
 	httplog.SetAuth(r.Context(), httplog.AuthSession, httplog.AuthOK)
 	writeJSON(w, 200, map[string]any{"authenticated": true, "authentication_enabled": true, "email": who.Email})
 }
-func (a *authAPI) acquire(w http.ResponseWriter, r *http.Request, email string) bool {
-	limiter, reason := "auth_attempts", "window_exceeded"
-	if !a.limited(email) {
+
+// acquire refuses the request while the failure budget for key is spent, then
+// takes the single hashing slot. The caller records a failed credential check
+// with limiter.Record(key) before releasing the slot.
+func (a *authAPI) acquire(w http.ResponseWriter, r *http.Request, limiter *auth.Limiter, key, name string) bool {
+	reason := "window_exceeded"
+	if !limiter.Blocked(key) {
 		select {
 		case a.hashing <- struct{}{}:
 			return true
 		default:
-			limiter, reason = "auth_hashing_busy", "busy"
+			name, reason = "auth_hashing_busy", "busy"
 		}
 	}
-	httplog.Event(r.Context(), "security.rate_limited", slog.String("reason", reason), slog.String("limiter", limiter))
+	httplog.Event(r.Context(), "security.rate_limited", slog.String("reason", reason), slog.String("limiter", name))
 	httplog.SetError(r.Context(), "too-many-attempts", reason, "")
 	w.Header().Set("Retry-After", "60")
 	writeProblem(w, 429, "too-many-attempts", "Muitas tentativas", "Tente novamente em um minuto.")
@@ -217,7 +201,8 @@ func (a *authAPI) login(w http.ResponseWriter, r *http.Request) {
 		writeProblem(w, 422, "invalid-login", "Solicitação inválida", "")
 		return
 	}
-	if !a.acquire(w, r, req.Email) {
+	email := auth.NormalizeEmail(req.Email)
+	if !a.acquire(w, r, a.logins, email, "auth_attempts") {
 		return
 	}
 	defer func() { <-a.hashing }()
@@ -226,6 +211,7 @@ func (a *authAPI) login(w http.ResponseWriter, r *http.Request) {
 		// Only rejected credentials count as a failed login; an unavailable
 		// store is an outage, reported as such by authError.
 		if errors.Is(err, auth.ErrCredentials) {
+			a.logins.Record(email)
 			httplog.SetAuth(r.Context(), httplog.AuthNone, httplog.AuthRejected)
 			httplog.Event(r.Context(), "auth.login.failure", slog.String("reason", "invalid_credentials"))
 		}
@@ -234,7 +220,7 @@ func (a *authAPI) login(w http.ResponseWriter, r *http.Request) {
 	}
 	a.setCookie(w, token)
 	httplog.Event(r.Context(), "auth.login.success")
-	writeJSON(w, 200, map[string]any{"authenticated": true, "authentication_enabled": true, "email": auth.NormalizeEmail(req.Email)})
+	writeJSON(w, 200, map[string]any{"authenticated": true, "authentication_enabled": true, "email": email})
 }
 func (a *authAPI) logout(w http.ResponseWriter, r *http.Request) {
 	if !r.Context().Value(authenticationEnabledKey{}).(bool) {
@@ -265,11 +251,18 @@ func (a *authAPI) password(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	who := r.Context().Value(identityKey{}).(identity)
-	if !a.acquire(w, r, who.Email) {
+	// Keyed by the session, not the login e-mail: someone who can only guess
+	// at the login form cannot spend this budget.
+	digest := sha256.Sum256([]byte(who.Token))
+	key := hex.EncodeToString(digest[:])
+	if !a.acquire(w, r, a.passwords, key, "auth_password_attempts") {
 		return
 	}
 	defer func() { <-a.hashing }()
 	if err := a.store.ChangePassword(r.Context(), req.CurrentPassword, req.Password); err != nil {
+		if errors.Is(err, auth.ErrCredentials) {
+			a.passwords.Record(key)
+		}
 		a.authError(w, r, err)
 		return
 	}

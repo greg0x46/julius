@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { periodPresets } from "../components/filters/periodPresets";
 import { periodNavigation } from "../components/filters/periodNavigation";
+import { useTranslation } from "../i18n/context";
+import { useTimezone } from "./useTimezone";
 
 /** A window, in the same shape the transactions filter uses: nulls mean "all of it". */
 export type Period = { from: string; to: string } | { from: null; to: null };
@@ -12,15 +14,15 @@ export function toPeriod(from: string | null, to: string | null): Period {
   return from !== null && to !== null ? { from, to } : { from: null, to: null };
 }
 
-function presetPeriod(value: string): Period | null {
-  const preset = periodPresets().find((candidate) => candidate.value === value);
+function presetPeriod(value: string, timezone: string): Period | null {
+  const preset = periodPresets(timezone).find((candidate) => candidate.value === value);
   if (!preset) return null;
   const [from, to] = preset.range();
   return toPeriod(from, to);
 }
 
-export function defaultPeriod(): Period {
-  return presetPeriod(defaultPreset) ?? { from: null, to: null };
+export function defaultPeriod(timezone: string): Period {
+  return presetPeriod(defaultPreset, timezone) ?? { from: null, to: null };
 }
 
 /** A window is well-formed when it is either unbounded or a navigable from/to pair. */
@@ -41,19 +43,19 @@ export function isValidPeriod(period: Period): boolean {
  * again on the way back in: "este ano" saved in December must still mean this
  * year in January, not the year it was picked.
  */
-export function storedPeriod(): Period {
+export function storedPeriod(timezone: string): Period {
   let raw: string | null;
   try {
     raw = window.localStorage.getItem(storageKey);
   } catch {
-    return defaultPeriod();
+    return defaultPeriod(timezone);
   }
-  if (raw === null) return defaultPeriod();
+  if (raw === null) return defaultPeriod(timezone);
   try {
     const parsed: unknown = JSON.parse(raw);
-    if (typeof parsed !== "object" || parsed === null) return defaultPeriod();
+    if (typeof parsed !== "object" || parsed === null) return defaultPeriod(timezone);
     const { preset, from, to } = parsed as Record<string, unknown>;
-    if (typeof preset === "string") return presetPeriod(preset) ?? defaultPeriod();
+    if (typeof preset === "string") return presetPeriod(preset, timezone) ?? defaultPeriod(timezone);
     if (typeof from === "string" && typeof to === "string") {
       const period = { from, to };
       if (isValidPeriod(period)) return period;
@@ -61,11 +63,11 @@ export function storedPeriod(): Period {
   } catch {
     // Ignore malformed browser preferences.
   }
-  return defaultPeriod();
+  return defaultPeriod(timezone);
 }
 
-export function storePeriod(period: Period): void {
-  const preset = periodPresets().find((candidate) => {
+export function storePeriod(period: Period, timezone: string): void {
+  const preset = periodPresets(timezone).find((candidate) => {
     const [from, to] = candidate.range();
     return period.from === from && period.to === to;
   });
@@ -85,18 +87,20 @@ export function storePeriod(period: Period): void {
  * link and, from then on, make it the shared window too.
  */
 export function usePeriod(initial?: () => Period | null) {
+  const timezone = useTimezone();
+  const { language } = useTranslation();
   const [period, setPeriodState] = useState<Period>(() => {
     const fromCaller = initial?.() ?? null;
     if (fromCaller) {
-      storePeriod(fromCaller);
+      storePeriod(fromCaller, timezone);
       return fromCaller;
     }
-    return storedPeriod();
+    return storedPeriod(timezone);
   });
   const setPeriod = (from: string | null, to: string | null) => {
     const next = toPeriod(from, to);
     setPeriodState(next);
-    storePeriod(next);
+    storePeriod(next, timezone);
   };
-  return { period, setPeriod };
+  return { period, setPeriod, presets: periodPresets(timezone, language) };
 }

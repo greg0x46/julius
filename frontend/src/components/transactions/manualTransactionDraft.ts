@@ -1,6 +1,7 @@
 import { translate, type Language } from "../../i18n/messages";
 import { isPositiveDecimal, sumDecimals } from "../../presentation/decimal";
-import { calendar, type CalendarDate } from "../../presentation/calendar";
+import type { CalendarDate } from "../../presentation/calendar";
+import { calendarIn, todayIn } from "../../presentation/timezone";
 
 import type { Category, ManualTransactionWrite, TransactionItem } from "../../api/contracts";
 
@@ -18,19 +19,20 @@ export type ManualDraft = {
   categoryId: string | null;
 };
 
-export function blankManualDraft(accountId: string): ManualDraft {
-  return { accountId, description: "", direction: "outflow", amount: null, date: calendar(), categoryId: null };
+/** A new draft is dated today as it is in `timezone`. */
+export function blankManualDraft(accountId: string, timezone: string): ManualDraft {
+  return { accountId, description: "", direction: "outflow", amount: null, date: todayIn(timezone), categoryId: null };
 }
 
 /** `transaction === null` is "create"; otherwise the draft starts from that line's own fields. */
-export function manualDraftFrom(transaction: TransactionItem | null, defaultAccountId: string): ManualDraft {
-  if (!transaction) return blankManualDraft(defaultAccountId);
+export function manualDraftFrom(transaction: TransactionItem | null, defaultAccountId: string, timezone: string): ManualDraft {
+  if (!transaction) return blankManualDraft(defaultAccountId, timezone);
   return {
     accountId: transaction.account.id,
     description: transaction.description ?? "",
     direction: transaction.classification === "inflow" ? "inflow" : "outflow",
     amount: transaction.amount === null ? null : transaction.amount.replace(/^-/, ""),
-    date: transaction.occurred_at ? calendar(transaction.occurred_at) : calendar(),
+    date: transaction.occurred_at ? calendarIn(transaction.occurred_at, timezone) : todayIn(timezone),
     categoryId: transaction.internal_category?.id ?? null,
   };
 }

@@ -4,6 +4,7 @@ import { DownOutlined, SearchOutlined } from "../ui/icons";
 import { Button, Drawer, Input, Select, Spin, Tag, Typography } from "../ui";
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 
+import { useTimezone } from "../../hooks/useTimezone";
 import { calendarParts, formatCompactDay } from "../../presentation/dates";
 import { formatMoney, formatSignedBRL } from "../../presentation/money";
 import { readableName } from "../../presentation/readableName";
@@ -66,7 +67,7 @@ function normalize(text: string): string {
 }
 
 /** Every spelling of the amount and the date a person might type. */
-function haystack(transaction: PickerTransaction, language: Language): string {
+function haystack(transaction: PickerTransaction, timezone: string, language: Language): string {
   const parts: string[] = [
     transaction.description,
     readableName(transaction.description),
@@ -79,8 +80,8 @@ function haystack(transaction: PickerTransaction, language: Language): string {
   const formatted = formatMoney(transaction.amount, transaction.currency_code ?? "BRL").replace(/^-?R\$\s/, "");
   parts.push(formatted, formatted.replace(/\./g, ""), formatted.replace(/\./g, "").replace(",", "."), transaction.amount);
   if (transaction.date) {
-    parts.push(formatCompactDay(transaction.date, language));
-    const date = calendarParts(transaction.date);
+    parts.push(formatCompactDay(transaction.date, timezone, language));
+    const date = calendarParts(transaction.date, timezone);
     if (date) {
       const dd = String(date.day).padStart(2, "0");
       const mm = String(date.month).padStart(2, "0");
@@ -126,8 +127,9 @@ function Description({ transaction }: { transaction: PickerTransaction }) {
  */
 function Row({ transaction }: { transaction: PickerTransaction }) {
   const { language } = useTranslation();
+  const timezone = useTimezone();
   const meta = [
-    transaction.date ? formatCompactDay(transaction.date, language) : null,
+    transaction.date ? formatCompactDay(transaction.date, timezone, language) : null,
     transaction.account,
     transaction.institution,
     transaction.category,
@@ -149,10 +151,11 @@ function Row({ transaction }: { transaction: PickerTransaction }) {
 /** The chosen row inside the closed control: one line, the amount never clipped. */
 function Value({ transaction }: { transaction: PickerTransaction }) {
   const { language } = useTranslation();
+  const timezone = useTimezone();
   return (
     <span className="txn-picker-value">
       <Description transaction={transaction} />
-      {transaction.date && <span className="txn-picker-value-date">{formatCompactDay(transaction.date, language)}</span>}
+      {transaction.date && <span className="txn-picker-value-date">{formatCompactDay(transaction.date, timezone, language)}</span>}
       <Amount transaction={transaction} />
     </span>
   );
@@ -208,6 +211,7 @@ export function TransactionPicker({
   const { t, language } = useTranslation();
   const placeholderText = placeholder ?? t("selectTransaction");
   const compact = useCompactScreen();
+  const timezone = useTimezone();
   const [localSearch, setLocalSearch] = useState("");
   const [sheetOpen, setSheetOpen] = useState(false);
   // The chosen row is kept even after a server search narrows it out of the
@@ -215,7 +219,7 @@ export function TransactionPicker({
   const [remembered, setRemembered] = useState<PickerTransaction | null>(null);
 
   const eligible = useMemo(() => (filter ? transactions.filter(filter) : transactions), [transactions, filter]);
-  const indexed = useMemo(() => eligible.map((transaction) => ({ transaction, text: haystack(transaction, language) })), [eligible, language]);
+  const indexed = useMemo(() => eligible.map((transaction) => ({ transaction, text: haystack(transaction, timezone, language) })), [eligible, timezone, language]);
   const query = search ? search.value : localSearch;
   const setQuery = search ? search.onChange : setLocalSearch;
   const visible = useMemo(

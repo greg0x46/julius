@@ -1,11 +1,12 @@
 import { useTranslation } from "../../i18n/context";
 import { useQueryClient } from "@tanstack/react-query";
 import { Alert, DatePicker, Input, Select, Spin } from "../ui";
-import { calendar } from "../../presentation/calendar";
+import { todayIn } from "../../presentation/timezone";
 import { useState } from "react";
 import { createTransfer, type TransferMovement } from "../../api/transfers";
 import { invalidateAfterTransactionChange } from "../../api/queryKeys";
 import { useAccounts } from "../../hooks/useAccounts";
+import { useTimezone } from "../../hooks/useTimezone";
 import { transferRate } from "../../presentation/transferRate";
 import { FormDrawer } from "../forms/FormDrawer";
 import { FormField } from "../forms/FormField";
@@ -17,6 +18,7 @@ const positive = (value: string) => /^(0|[1-9]\d*)(\.\d+)?$/.test(value) && /[1-
 export function ManualTransferForm({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
   const { t } = useTranslation();
   const accounts = useAccounts();
+  const timezone = useTimezone();
   const client = useQueryClient();
   const active = accounts.accounts.filter((account) => account.origin === "manual" && !account.archived_at);
   const [sourceId, setSourceId] = useState<string>();
@@ -24,7 +26,7 @@ export function ManualTransferForm({ onClose, onCreated }: { onClose: () => void
   const [sent, setSent] = useState("");
   const [received, setReceived] = useState("");
   const [fee, setFee] = useState("");
-  const [date, setDate] = useState(calendar());
+  const [date, setDate] = useState(() => todayIn(timezone));
   const [description, setDescription] = useState(() => t("transferBetweenAccounts"));
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);

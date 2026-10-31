@@ -20,9 +20,15 @@ Not tied to a single context:
   category breakdown uses SVG rings. Exact decimal strings remain the source
   for tooltips and financial labels; numeric conversion is only for geometry.
 - `presentation/calendar.ts` owns the frontend's small local calendar helper.
-  Forms use native date inputs; date-only strings stay local calendar days,
-  while timestamps follow the browser timezone. React Router, TanStack Query
-  and the existing API transport retain routing, caching and session handling.
+  Forms use native date inputs; date-only strings stay calendar days, while
+  timestamps, "today" and month boundaries follow the timezone from the
+  preferences, never the browser's own. `presentation/timezone.ts` holds the
+  zone-aware helpers, `useTimezone()` returns the configured zone, and
+  `TimezoneProvider` holds the first paint until the preferences arrive (a
+  failed request falls back to the browser zone). Changing the zone drops every
+  cached query that depends on it (`discardAfterTimezoneChange`). React Router,
+  TanStack Query and the existing API transport retain routing, caching and
+  session handling.
 
 Tests: Vitest + Testing Library, colocated `*.test.ts(x)`. Vitest runs two
 projects with 2 workers: `dom` (jsdom + `src/test/setup.dom.ts`) for

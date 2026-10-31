@@ -219,6 +219,15 @@ the previous amount, and replay adds no expense
   returns 409. The key is reserved together with the entry in the database
   transaction and belongs to the installation's owner. Without the header the
   legacy behavior remains: each POST creates a new entry.
+- Input limits on user-authored money and dates (`internal/httpapi/limits.go`),
+  shared by the REST handlers and the MCP write previews: a calendar day is
+  between 1900-01-01 and 2100-12-31, and an amount is below 10^13 in absolute
+  value with at most 4 decimal places. They cover manual transactions and
+  transfers, manual-account opening balances and adjustments, payables,
+  recurring commitments, planned transactions and installment generation, and
+  goals. Anything outside is a 422 from that endpoint's usual problem type.
+  Investment quantities and unit prices and provider-synced rows are not
+  limited.
 - Accounts/cards: `GET /api/accounts[/{id}][/cards|/bills]`,
   `PUT /api/accounts/{id}/closing-day`.
 - Manual bank accounts: `POST /api/accounts`, `PUT /api/accounts/{id}`.
