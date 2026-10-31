@@ -6,6 +6,7 @@ import { NotFoundPage } from "../pages/NotFoundPage";
 import { App } from "./App";
 import { LegacySettingsRedirect } from "./LegacySettingsRedirect";
 import { AuthGate } from "./AuthGate";
+import { TimezoneProvider } from "./TimezoneProvider";
 import { AppLoadingScreen } from "./AppLoadingScreen";
 
 const SyncRunListPage = lazy(() =>
@@ -106,7 +107,9 @@ export function AppRouter() {
           <Route
             element={
               <AuthGate>
-                <App />
+                <TimezoneProvider>
+                  <App />
+                </TimezoneProvider>
               </AuthGate>
             }
           >

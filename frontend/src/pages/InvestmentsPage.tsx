@@ -27,7 +27,6 @@ import {
 import { InvestmentPeriodView } from "../components/investments/InvestmentPeriodView";
 import { useInvestmentMenus } from "../components/investments/useInvestmentMenus";
 import { PeriodNavigator } from "../components/filters/PeriodNavigator";
-import { periodPresets } from "../components/filters/periodPresets";
 import { CreateActionMenu, Page, PageAction, PageTabs } from "../components/layout";
 import { useFeedback } from "../components/shared/useFeedback";
 import { useAccounts } from "../hooks/useAccounts";
@@ -46,7 +45,7 @@ export function InvestmentsPage() {
   const workspace = useInvestmentWorkspace();
   const financialAccounts = useAccounts();
   const feedback = useFeedback();
-  const { period, setPeriod } = usePeriod();
+  const { period, setPeriod, presets } = usePeriod();
   const today = useToday().format("YYYY-MM-DD");
 
   const [groupBy, setGroupBy] = useState<InvestmentPeriodGrouping>("class");
@@ -224,7 +223,7 @@ export function InvestmentsPage() {
         <PeriodNavigator
           id="investments-period"
           value={[period.from, period.to]}
-          presets={periodPresets()}
+          presets={presets}
           onChange={setPeriod}
           reset={{ preset: "this-month", label: "Este mês" }}
           bare

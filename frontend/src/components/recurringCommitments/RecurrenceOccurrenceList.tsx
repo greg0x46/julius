@@ -3,6 +3,7 @@ import type { ColumnsType } from "../ui/Table";
 import { useState } from "react";
 
 import type { RecurrenceOccurrence, RecurringCommitment, RecurringCommitmentKind } from "../../api/contracts";
+import { useTimezone } from "../../hooks/useTimezone";
 import { errorMessage } from "../../presentation/errors";
 import { formatDay, formatOptionalLocalDay } from "../../presentation/dates";
 import { formatBRL } from "../../presentation/money";
@@ -133,6 +134,7 @@ export function RecurrenceOccurrenceList({ commitment }: { commitment: Recurring
   const [picking, setPicking] = useState<RecurrenceOccurrence | null>(null);
   const confirm = useConfirm();
   const feedback = useFeedback();
+  const timezone = useTimezone();
   const [actionError, setActionError] = useState<string | null>(null);
   const [pendingDate, setPendingDate] = useState<string | null>(null);
 
@@ -158,7 +160,7 @@ export function RecurrenceOccurrenceList({ commitment }: { commitment: Recurring
   const transactionText = (occurrence: RecurrenceOccurrence): string | null => {
     if (occurrence.transaction === null) return null;
     const { occurred_at, description, effective_money } = occurrence.transaction;
-    return `${formatOptionalLocalDay(occurred_at)} · ${description ?? "Sem descrição"} · ${formatBRL(effective_money.value)}`;
+    return `${formatOptionalLocalDay(occurred_at, timezone)} · ${description ?? "Sem descrição"} · ${formatBRL(effective_money.value)}`;
   };
 
   const actions = (occurrence: RecurrenceOccurrence) => {

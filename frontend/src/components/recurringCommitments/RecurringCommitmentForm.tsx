@@ -14,6 +14,8 @@ import {
   recurringCommitmentCadenceLabel,
   recurringCommitmentKindLabel,
 } from "../../presentation/recurringCommitmentLabels";
+import { useTimezone } from "../../hooks/useTimezone";
+import { todayIn } from "../../presentation/timezone";
 import { AccountSelect } from "../forms/AccountSelect";
 import { FormDrawer } from "../forms/FormDrawer";
 import { FormField } from "../forms/FormField";
@@ -46,7 +48,7 @@ export type RecurringCommitmentDraft = {
   isActive: boolean;
 };
 
-function blankDraft(): RecurringCommitmentDraft {
+function blankDraft(timezone: string): RecurringCommitmentDraft {
   return {
     name: "",
     kind: "expense",
@@ -56,7 +58,7 @@ function blankDraft(): RecurringCommitmentDraft {
     cadence: "monthly",
     dayOfMonth: null,
     monthOfYear: null,
-    startDate: calendar(),
+    startDate: todayIn(timezone),
     endDate: null,
     isActive: true,
   };
@@ -64,9 +66,10 @@ function blankDraft(): RecurringCommitmentDraft {
 
 function draftFrom(
   commitment: RecurringCommitment | null,
-  initialDraft?: Partial<RecurringCommitmentDraft> | null,
+  initialDraft: Partial<RecurringCommitmentDraft> | null | undefined,
+  timezone: string,
 ): RecurringCommitmentDraft {
-  if (!commitment) return { ...blankDraft(), ...initialDraft };
+  if (!commitment) return { ...blankDraft(timezone), ...initialDraft };
   return {
     name: commitment.name,
     kind: commitment.kind,
@@ -279,7 +282,8 @@ export function RecurringCommitmentFields({
   submitting = false,
   onSubmit,
 }: FieldsProps & { submitting?: boolean }) {
-  const [draft, setDraft] = useState<RecurringCommitmentDraft>(() => draftFrom(commitment, initialDraft));
+  const timezone = useTimezone();
+  const [draft, setDraft] = useState<RecurringCommitmentDraft>(() => draftFrom(commitment, initialDraft, timezone));
   const [error, setError] = useState<string | null>(null);
 
   return (
@@ -327,12 +331,13 @@ export function RecurringCommitmentForm({
   onCancel: () => void;
   extra?: ReactNode;
 }) {
-  const [draft, setDraft] = useState<RecurringCommitmentDraft>(() => draftFrom(commitment, initialDraft));
+  const timezone = useTimezone();
+  const [draft, setDraft] = useState<RecurringCommitmentDraft>(() => draftFrom(commitment, initialDraft, timezone));
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
-      setDraft(draftFrom(commitment, initialDraft));
+      setDraft(draftFrom(commitment, initialDraft, timezone));
       setError(null);
     }
     // The draft is seeded when the drawer opens; later prop changes must not reset what is being typed.

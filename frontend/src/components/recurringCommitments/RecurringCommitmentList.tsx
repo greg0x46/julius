@@ -5,13 +5,14 @@ import type { ReactNode } from "react";
 import type { Category, RecurringCommitment } from "../../api/contracts";
 import {
   formatNextDay,
-  localToday,
   nextOccurrenceDate,
   recurrenceScheduleLabel,
   recurrenceScheduleSentence,
   recurrenceStanding,
   recurringCommitmentKindLabel,
 } from "../../presentation/recurringCommitmentLabels";
+import { useTimezone } from "../../hooks/useTimezone";
+import { zonedToday } from "../../presentation/timezone";
 import { ResponsiveList } from "../layout";
 import { Money } from "../shared/Money";
 import { RecordMenu } from "../shared/RecordMenu";
@@ -54,7 +55,8 @@ export function RecurringCommitmentList({
   onDelete: (commitment: RecurringCommitment) => void;
 }) {
   const confirm = useConfirm();
-  const today = localToday();
+  const timezone = useTimezone();
+  const today = zonedToday(timezone);
 
   const categoryName = (categoryId: string) =>
     categories.find((category) => category.id === categoryId)?.name ?? "Categoria removida";

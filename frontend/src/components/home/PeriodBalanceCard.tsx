@@ -1,5 +1,5 @@
 import { ReportValuation } from "../shared/ReportValuation";
-import { calendar } from "../../presentation/calendar";
+import { zonedToday } from "../../presentation/timezone";
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
 
@@ -8,14 +8,13 @@ import { problemMessage, reportingError } from "../../presentation/reporting";
 import type { Period } from "../../hooks/usePeriod";
 import { useHomePeriodBounds } from "../../hooks/useHomePeriodBounds";
 import { useTimeline } from "../../hooks/useTimeline";
+import { useTimezone } from "../../hooks/useTimezone";
 import { formatReportMoney } from "../../presentation/money";
 import { Skeleton } from "../ui";
 
 import { UnavailableState } from "../AsyncState";
 import { Section } from "../layout";
 import { Money } from "../shared/Money";
-
-const dateFormat = "YYYY-MM-DD";
 
 // Entradas and saídas arrive as unsigned magnitudes, so the direction is
 // stated; a zero total stays unsigned and untinted ("+R$ 0,00" would claim
@@ -37,7 +36,8 @@ export function PeriodBalanceCard({ period }: { period: Period }) {
   const { bounds, isLoading: rangeLoading, error: rangeError, refetch: refetchRange } = useHomePeriodBounds(period);
   // Only the day span matters here, not the exact instant, so this needs
   // none of ProjectionSummaryCard's midnight-rollover handling.
-  const referenceDate = useMemo(() => calendar().format(dateFormat), []);
+  const timezone = useTimezone();
+  const referenceDate = useMemo(() => zonedToday(timezone), [timezone]);
   const params = useMemo(
     () => ({
       referenceDate,

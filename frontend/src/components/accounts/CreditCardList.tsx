@@ -1,7 +1,9 @@
 import { Skeleton } from "../ui";
 
 import type { Account } from "../../api/contracts";
+import { useTimezone } from "../../hooks/useTimezone";
 import { formatOptionalDay } from "../../presentation/dates";
+import { zonedToday } from "../../presentation/timezone";
 import {
   accountDisplayName,
   closingDaySourceHint,
@@ -24,10 +26,10 @@ function totalLimit(accounts: Account[]): string {
 
 // Due dates are near-future calendar days, so "10/10" is enough — the year is
 // only spelled out when it is not the current one.
-function dueDayLabel(value: string | null): string | null {
+function dueDayLabel(value: string | null, currentYear: string): string | null {
   if (value === null) return null;
   const full = formatOptionalDay(value);
-  return full.endsWith(`/${new Date().getFullYear()}`) ? full.slice(0, 5) : full;
+  return full.endsWith(`/${currentYear}`) ? full.slice(0, 5) : full;
 }
 
 /**
@@ -50,7 +52,9 @@ export function CreditCardList({
   failed?: boolean;
   onOpen: (account: Account) => void;
 }) {
+  const timezone = useTimezone();
   if (failed) return null;
+  const currentYear = zonedToday(timezone).slice(0, 4);
   const hasForeignCards = accounts.some((account) => !isBRL(account));
   const hasBRLCards = accounts.some(isBRL);
   return (
@@ -77,7 +81,7 @@ export function CreditCardList({
       ) : (
         <ul className="list-rows" aria-label="Cartões de crédito">
           {accounts.map((account) => {
-            const due = dueDayLabel(account.balance_due_date);
+            const due = dueDayLabel(account.balance_due_date, currentYear);
             const dates = [
               due !== null ? `Vence ${due}` : null,
               account.closing_day !== null ? `Fecha dia ${account.closing_day}` : null,

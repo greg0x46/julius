@@ -7,22 +7,17 @@ import type {
   TransactionQuery,
 } from "../api/contracts";
 import { queryKeys } from "../api/queryKeys";
+import { monthRange, zonedToday } from "../presentation/timezone";
+import { useTimezone } from "./useTimezone";
 
 export const DEFAULT_PAGE_SIZE = 50;
 
-function dateText(date: Date): string {
-  const year = String(date.getFullYear()).padStart(4, "0");
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-export function currentMonthFilters(now = new Date()): TransactionFilters {
-  const start = new Date(now.getFullYear(), now.getMonth(), 1);
-  const end = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+/** The filters for the whole current month, "current" being as the day is in `timezone`. */
+export function currentMonthFilters(timezone: string, now = new Date()): TransactionFilters {
+  const [start, end] = monthRange(zonedToday(timezone, now));
   return {
-    date_from: dateText(start),
-    date_to: dateText(end),
+    date_from: start,
+    date_to: end,
     description: null,
     account_ids: [],
     credit_card: null,
@@ -35,11 +30,6 @@ export function currentMonthFilters(now = new Date()): TransactionFilters {
   };
 }
 
-export function browserTimezone(): string | null {
-  const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  return timezone?.trim() ? timezone : null;
-}
-
 export function transactionQueryKey(query: TransactionQuery) {
   return queryKeys.transactionsFor(query);
 }
@@ -50,16 +40,12 @@ export function useTransactions(
   page: number,
   pageSize = DEFAULT_PAGE_SIZE,
 ) {
-  const timezone = browserTimezone();
-  const query: TransactionQuery | null =
-    timezone === null
-      ? null
-      : { timezone, group_by: groupBy, page, page_size: pageSize, filters };
+  const timezone = useTimezone();
+  const query: TransactionQuery = { timezone, group_by: groupBy, page, page_size: pageSize, filters };
   const result = useQuery({
-    queryKey: query === null ? queryKeys.transactionsInvalidTimezone : transactionQueryKey(query),
-    queryFn: ({ signal }) => queryTransactions(query!, signal),
-    enabled: query !== null,
+    queryKey: transactionQueryKey(query),
+    queryFn: ({ signal }) => queryTransactions(query, signal),
     retry: false,
   });
-  return { ...result, query, timezoneValid: timezone !== null };
+  return { ...result, query };
 }

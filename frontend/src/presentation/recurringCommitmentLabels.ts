@@ -50,11 +50,6 @@ function isoDay(year: number, month: number, day: number): string {
   return `${year}-${pad(month)}-${pad(day)}`;
 }
 
-/** The calendar day of today in the reader's zone, as "YYYY-MM-DD". */
-export function localToday(now: Date = new Date()): string {
-  return isoDay(now.getFullYear(), now.getMonth() + 1, now.getDate());
-}
-
 /**
  * The next date the schedule expects, from `today` on ("YYYY-MM-DD"), or null
  * once it has ended. Mirrors the backend's calendar (internal/recurrences/

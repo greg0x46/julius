@@ -1,20 +1,22 @@
 import type { TransactionInclusionState, TransactionItem } from "../../api/contracts";
+import { useTimezone } from "../../hooks/useTimezone";
 import { formatCompactDay } from "../../presentation/dates";
+import { zonedFormatter } from "../../presentation/timezone";
 import { inclusionOriginLabel } from "../../presentation/transactionStatus";
 import { TransactionActions } from "./TransactionActions";
 import { TransactionAmount } from "./TransactionAmount";
 import { TransactionCategory } from "./TransactionCategory";
 import type { RowLayout } from "./rowLayout";
 
-function rowTime(value: string | null): string | undefined {
+function rowTime(value: string | null, timezone: string): string | undefined {
   if (!value) return undefined;
   const instant = new Date(value);
   if (Number.isNaN(instant.getTime())) return undefined;
-  return new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit" }).format(instant);
+  return zonedFormatter(timezone, { hour: "2-digit", minute: "2-digit" }).format(instant);
 }
 
-function rowDay(value: string | null): string {
-  return value ? formatCompactDay(value) : "Sem data";
+function rowDay(value: string | null, timezone: string): string {
+  return value ? formatCompactDay(value, timezone) : "Sem data";
 }
 
 /**
@@ -40,6 +42,7 @@ function TransactionMeta({
   /** Which columns the row has; what has no column folds into this line. */
   layout?: RowLayout;
 }) {
+  const timezone = useTimezone();
   const ignored = item.inclusion.state === "ignored";
   const account = item.account.name ?? item.account.institution ?? "Conta não informada";
   // A phone line has room for one place name: the category wins, and the
@@ -47,7 +50,7 @@ function TransactionMeta({
   const accountShown = showAccount && !(layout === "phone" && item.internal_category !== null);
   return (
     <span className="transaction-meta">
-      {layout === "phone" && <span className="transaction-meta-date">{rowDay(item.occurred_at)}</span>}
+      {layout === "phone" && <span className="transaction-meta-date">{rowDay(item.occurred_at, timezone)}</span>}
       {layout !== "wide" && <TransactionCategory item={item} />}
       {accountShown && <span className="transaction-meta-where">{account}</span>}
       {item.origin === "manual" && <span className="transaction-meta-flag">Manual</span>}
@@ -97,6 +100,7 @@ export function TransactionRow({
   onInclusion?: (id: string, state: TransactionInclusionState) => void;
   inclusionPending?: boolean;
 }) {
+  const timezone = useTimezone();
   const compact = layout === "phone";
   const ignored = item.inclusion.state === "ignored";
   const name = item.description ?? "transação sem descrição";
@@ -109,8 +113,8 @@ export function TransactionRow({
 
   return (
     <div className={`transaction-row ${states}`} aria-current={selected || undefined} aria-busy={inclusionPending || undefined}>
-      <span className="transaction-row-date" title={rowTime(item.occurred_at)}>
-        {rowDay(item.occurred_at)}
+      <span className="transaction-row-date" title={rowTime(item.occurred_at, timezone)}>
+        {rowDay(item.occurred_at, timezone)}
       </span>
       <span className="transaction-row-identity">
         <button

@@ -4,6 +4,7 @@ import type { QuoteLastRefresh, QuoteSchedule } from "../api/contracts";
 import { ApiError, isAbortError } from "../api/problems";
 import { getQuoteSettings, refreshQuotesNow, updateQuoteSchedule } from "../api/quoteSettings";
 import { apiFetch } from "../api/transport";
+import { useTimezone } from "../hooks/useTimezone";
 import { formatOptionalDateTime } from "../presentation/dates";
 import { UnavailableState } from "./AsyncState";
 import { FormField } from "./forms/FormField";
@@ -38,6 +39,7 @@ function refreshSummary(last: QuoteLastRefresh): string {
 }
 
 function LastRefresh({ last }: { last: QuoteLastRefresh | null }) {
+  const timezone = useTimezone();
   if (last === null) return <span>Nenhuma atualização ainda.</span>;
   const tone =
     last.status === "failed"
@@ -48,7 +50,7 @@ function LastRefresh({ last }: { last: QuoteLastRefresh | null }) {
   return (
     <>
       <span>
-        {formatOptionalDateTime(last.finished_at)} · {last.trigger === "manual" ? "Manual" : "Agendada"}
+        {formatOptionalDateTime(last.finished_at, timezone)} · {last.trigger === "manual" ? "Manual" : "Agendada"}
       </span>
       <Typography.Text type={tone}>{refreshSummary(last)}</Typography.Text>
     </>
