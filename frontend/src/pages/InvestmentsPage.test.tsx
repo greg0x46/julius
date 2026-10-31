@@ -456,3 +456,23 @@ describe("InvestmentsPage period view on a phone", () => {
     expect(within(row).queryByText(/R\$/)).toBeNull();
   });
 });
+
+it("updates the portfolio summary and grouping controls in English", async () => {
+  const { I18nProvider } = await import("../i18n/I18nProvider");
+  const { useTranslation } = await import("../i18n/context");
+  function LanguageSwitch() {
+    const { setLanguage } = useTranslation();
+    return <button onClick={() => setLanguage("en")}>English</button>;
+  }
+  render(<I18nProvider><MemoryRouter><QueryTestProvider><LanguageSwitch /><InvestmentsPage /></QueryTestProvider></MemoryRouter></I18nProvider>);
+  await screen.findByRole("region", { name: /Carteira em/ });
+  await userEvent.click(screen.getByRole("button", { name: "English" }));
+  expect(screen.getByRole("heading", { name: "Investments" })).toBeVisible();
+  expect(screen.getByRole("region", { name: /Portfolio on/ })).toBeVisible();
+  expect(screen.getByRole("radio", { name: "Asset class" })).toBeVisible();
+  expect(screen.getByText("Contributions")).toBeVisible();
+  expect(screen.getByText("Fixed income", { selector: ".investment-group-name" })).toBeVisible();
+  await userEvent.click(screen.getByRole("button", { name: "Accounts" }));
+  expect(screen.getByRole("dialog", { name: "Investment accounts" })).toBeVisible();
+  expect(screen.getAllByText("Available today").length).toBeGreaterThan(0);
+});

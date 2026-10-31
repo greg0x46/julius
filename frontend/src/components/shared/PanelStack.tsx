@@ -1,3 +1,4 @@
+import { useTranslation } from "../../i18n/context";
 import { CloseOutlined, LeftOutlined, RightOutlined } from "../ui/icons";
 import { Button, Collapse, Drawer, Typography } from "../ui";
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
@@ -27,6 +28,7 @@ export function PanelStack({
   width?: number;
   children: ReactNode;
 }) {
+  const { t } = useTranslation();
   const compact = useCompactScreen();
   const headingRef = useRef<HTMLHeadingElement>(null);
   const [footerSlot, setFooterSlot] = useState<HTMLElement | null>(null);
@@ -59,7 +61,7 @@ export function PanelStack({
             type="text"
             className="panel-stack-back"
             icon={isRoot ? dismissIcon : <LeftOutlined aria-hidden="true" />}
-            aria-label={isRoot ? "Fechar" : "Voltar"}
+            aria-label={isRoot ? t("close") : t("back")}
             onClick={isRoot ? onClose : onBack}
           />
           <h2 ref={headingRef} tabIndex={-1} className="panel-stack-title">
@@ -149,12 +151,13 @@ export function PanelNavRow({
 export function PanelDisclosure({
   summary,
   children,
-  label = "Saiba mais",
+  label,
 }: {
   summary: ReactNode;
   children: ReactNode;
   label?: string;
 }) {
+  const { t } = useTranslation();
   return (
     <div className="panel-disclosure">
       <Typography.Text type="secondary">{summary}</Typography.Text>
@@ -165,7 +168,7 @@ export function PanelDisclosure({
         items={[
           {
             key: "more",
-            label,
+            label: label ?? t("learnMore"),
             children: <Typography.Paragraph type="secondary">{children}</Typography.Paragraph>,
           },
         ]}

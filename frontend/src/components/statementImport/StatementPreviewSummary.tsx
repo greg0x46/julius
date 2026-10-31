@@ -1,10 +1,12 @@
+import { useTranslation } from "../../i18n/context";
+import type { Language } from "../../i18n/messages";
 import type { ImportPreview } from "../../api/statementImports";
 import { formatDateOnly } from "../../presentation/dates";
 import { formatMoney } from "../../presentation/money";
 import { DataCardSummary } from "../layout/DataCard";
 
-function period(value: string | null): string {
-  return value ? formatDateOnly(value) : "—";
+function period(value: string | null, language: Language): string {
+  return value ? formatDateOnly(value, language) : "—";
 }
 
 /** The balance of the file's newest movement, or null when the file does not settle on one. */
@@ -21,37 +23,38 @@ function latestBalance(preview: ImportPreview): string | null {
  * imported and invalid.
  */
 export function StatementPreviewSummary({ preview }: { preview: ImportPreview }) {
+  const { t, language } = useTranslation();
   const balance = latestBalance(preview);
 
   return (
-    <DataCardSummary label="Resumo da prévia" note={`Formato do arquivo: ${preview.format}`}>
+    <DataCardSummary label={t("previewSummary")} note={t("fileFormat", { format: preview.format })}>
       <div className="statement-import-summary">
         <dl className="statement-import-counts">
           <div>
-            <dt>Novas</dt>
+            <dt>{t("countNew")}</dt>
             <dd>{preview.counts.new}</dd>
           </div>
           <div>
-            <dt>Já importadas</dt>
+            <dt>{t("countAlreadyImported")}</dt>
             <dd>{preview.counts.duplicate}</dd>
           </div>
           {(preview.counts.ambiguous ?? 0) > 0 && <div>
-            <dt>Para decidir</dt>
+            <dt>{t("countToDecide")}</dt>
             <dd>{preview.counts.ambiguous}</dd>
           </div>}
           <div className={preview.counts.invalid > 0 ? "is-invalid" : undefined}>
-            <dt>Inválidas</dt>
+            <dt>{t("countInvalid")}</dt>
             <dd>{preview.counts.invalid}</dd>
           </div>
         </dl>
         <dl className="statement-import-facts">
           <div>
-            <dt>Período das movimentações</dt>
-            <dd>{period(preview.period_start)} a {period(preview.period_end)}</dd>
+            <dt>{t("movementsPeriod")}</dt>
+            <dd>{t("dateRange", { start: period(preview.period_start, language), end: period(preview.period_end, language) })}</dd>
           </div>
           {balance && (
             <div>
-              <dt>Saldo mais recente no arquivo</dt>
+              <dt>{t("latestBalanceInFile")}</dt>
               <dd>{formatMoney(balance, preview.currency)}</dd>
             </div>
           )}

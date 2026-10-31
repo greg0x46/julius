@@ -1,15 +1,14 @@
+import { useTranslation } from "../../i18n/context";
 import { DatePicker, Input, Select } from "../ui";
 import { useEffect, useState } from "react";
 
 import { goalMetrics, type Goal, type GoalWrite } from "../../api/contracts";
-import { goalMetricLabel } from "../../presentation/goals";
 import { FormDrawer } from "../forms/FormDrawer";
 import { FormField } from "../forms/FormField";
 import { MoneyInput } from "../forms/MoneyInput";
 import { fromMoneyInput, toMoneyInput } from "../investments/moneyDraft";
 import { draftFromGoal, goalWriteFrom, type GoalDraft } from "./goalDraft";
 
-const metricOptions = goalMetrics.map((metric) => ({ value: metric, label: goalMetricLabel[metric] }));
 
 export function GoalForm({
   open,
@@ -26,6 +25,8 @@ export function GoalForm({
   onSubmit: (write: GoalWrite) => void;
   onCancel: () => void;
 }) {
+  const { t, language } = useTranslation();
+  const metricOptions = goalMetrics.map((metric) => ({ value: metric, label: t("investedValue") }));
   const [draft, setDraft] = useState<GoalDraft>(() => draftFromGoal(goal));
   const [error, setError] = useState<string | null>(null);
 
@@ -37,7 +38,7 @@ export function GoalForm({
   }, [open, goal]);
 
   const submit = () => {
-    const result = goalWriteFrom(draft);
+    const result = goalWriteFrom(draft, language);
     if ("error" in result) {
       setError(result.error);
       return;
@@ -48,23 +49,23 @@ export function GoalForm({
 
   return (
     <FormDrawer
-      title={goal ? "Editar meta" : "Nova meta"}
+      title={goal ? t("editGoal") : t("newGoal")}
       open={open}
       onClose={onCancel}
       onSubmit={submit}
       submitting={submitting}
       error={error ?? submitError}
     >
-      <FormField label="Nome da meta" htmlFor="goal-name">
+      <FormField label={t("goalName")} htmlFor="goal-name">
         <Input
           id="goal-name"
           value={draft.name}
           onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))}
-          placeholder="Ex.: Chegar a R$ 100 mil investidos"
+          placeholder={t("goalNamePlaceholder")}
           autoFocus
         />
       </FormField>
-      <FormField label="O que acompanhar" htmlFor="goal-metric">
+      <FormField label={t("goalMetric")} htmlFor="goal-metric">
         <Select
           id="goal-metric"
           value={draft.metric}
@@ -72,7 +73,7 @@ export function GoalForm({
           onChange={(metric) => setDraft((current) => ({ ...current, metric }))}
         />
       </FormField>
-      <FormField label="Valor da meta" htmlFor="goal-target">
+      <FormField label={t("goalTarget")} htmlFor="goal-target">
         <MoneyInput
           id="goal-target"
           min="0"
@@ -80,22 +81,21 @@ export function GoalForm({
           onChange={(value) => setDraft((current) => ({ ...current, targetAmount: fromMoneyInput(value) }))}
         />
       </FormField>
-      <FormField label="Data-alvo (opcional)" htmlFor="goal-date">
+      <FormField label={t("goalDate")} htmlFor="goal-date">
         <DatePicker
           id="goal-date"
           style={{ width: "100%" }}
-          format="DD/MM/YYYY"
           value={draft.targetDate}
           onChange={(value) => setDraft((current) => ({ ...current, targetDate: value }))}
         />
       </FormField>
-      <FormField label="Observações (opcional)" htmlFor="goal-notes">
+      <FormField label={t("goalNotes")} htmlFor="goal-notes">
         <Input.TextArea
           id="goal-notes"
           value={draft.notes}
           rows={4}
           onChange={(event) => setDraft((current) => ({ ...current, notes: event.target.value }))}
-          placeholder="Para que serve esta meta?"
+          placeholder={t("goalNotesPlaceholder")}
         />
       </FormField>
     </FormDrawer>

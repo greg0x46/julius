@@ -1,3 +1,4 @@
+import { useTranslation } from "../../i18n/context";
 import { Button, Checkbox, Tag } from "../ui";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
@@ -152,6 +153,7 @@ export function ConfigurableFilters<Values extends object>({
   shortcuts,
   renderAdvanced,
 }: Props<Values>) {
+  const { t } = useTranslation();
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [quickValues, setQuickValues] = useState(values);
   const [draft, setDraft] = useState(values);
@@ -249,7 +251,7 @@ export function ConfigurableFilters<Values extends object>({
         second !== "" &&
         compareDecimalStrings(first, second) > 0
       ) {
-        return "O valor mínimo não pode ser maior que o valor máximo.";
+        return t("minGreaterThanMax");
       }
     }
     return null;
@@ -417,7 +419,7 @@ export function ConfigurableFilters<Values extends object>({
   };
 
   const chipList = chips.length > 0 && (
-    <div className="list-toolbar-chips" aria-label="Filtros ativos">
+    <div className="list-toolbar-chips" aria-label={t("activeFilters")}>
       {chips.map((field) => {
         const value = read(values, field.key);
         const wanted = Array.isArray(value) ? (value as unknown[]) : [value];
@@ -437,14 +439,14 @@ export function ConfigurableFilters<Values extends object>({
               }
               onApply(replaceField(values, field, emptyValues));
             }}
-            closeIcon={<span aria-label={`Remover ${shown}`}>×</span>}
+            closeIcon={<span aria-label={t("removeNamed", { name: shown })}>×</span>}
           >
             {shown}
           </Tag>
         );
       })}
       <Button type="link" size="small" onClick={clearAll}>
-        Limpar filtros
+        {t("clearFilters")}
       </Button>
     </div>
   );

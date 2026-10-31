@@ -1,14 +1,16 @@
+import { useTranslation } from "../i18n/context";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Alert, Button, Input, Skeleton } from "./ui";
 import { useState } from "react";
 
-import { changePassword, getSession, logout, setAuthenticationEnabled } from "../api/auth";
+import { authErrorMessage, changePassword, getSession, logout, setAuthenticationEnabled } from "../api/auth";
 import { UnavailableState } from "./AsyncState";
 import { FormField } from "./forms/FormField";
 import { Section } from "./layout";
 import { queryKeys } from "../api/queryKeys";
 
 export function AuthenticationSettings() {
+  const { t, language } = useTranslation();
   const client = useQueryClient();
   const { data: session, isLoading, isError, refetch } = useQuery({
     queryKey: queryKeys.authSession,
@@ -25,7 +27,7 @@ export function AuthenticationSettings() {
     try {
       await action();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Não foi possível concluir.");
+      setError(authErrorMessage(err, language, t("unableToComplete")));
     } finally {
       setBusy(false);
     }
@@ -37,67 +39,67 @@ export function AuthenticationSettings() {
       const next = await setAuthenticationEnabled(enabled);
       client.setQueryData(queryKeys.authSession, next);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Não foi possível alterar a autenticação.");
+      setError(authErrorMessage(err, language, t("authenticationChangeError")));
     } finally {
       setBusy(false);
     }
   };
   if (isError && !session)
     return (
-      <Section title="Acesso">
-        <UnavailableState onRetry={() => void refetch()}>Não foi possível consultar o acesso agora.</UnavailableState>
+      <Section title={t("access")}>
+        <UnavailableState onRetry={() => void refetch()}>{t("accessLoadError")}</UnavailableState>
       </Section>
     );
   if (isLoading || !session)
     return (
-      <Section title="Acesso">
+      <Section title={t("access")}>
         <Skeleton active />
       </Section>
     );
   if (session.demo)
     return (
-      <Section title="Acesso">
+      <Section title={t("access")}>
         <Alert
           type="info"
           showIcon
-          message="Ambiente de demonstração"
-          description="O acesso é aberto e não pode ser alterado aqui. Os dados são fictícios e redefinidos todos os dias."
+          message={t("demoEnvironment")}
+          description={t("demoAccessHint")}
         />
       </Section>
     );
   if (!session.authentication_enabled)
     return (
-      <Section title="Acesso">
+      <Section title={t("access")}>
         <div className="settings-form">
           {error && <Alert type="error" message={error} showIcon />}
           <Alert
             type="warning"
             showIcon
-            message="Autenticação desativada"
-            description="Qualquer pessoa com acesso a esta instância pode consultar e alterar os dados."
+            message={t("authenticationDisabled")}
+            description={t("authenticationDisabledHint")}
           />
           <Button type="primary" onClick={() => void toggleAuthentication(true)} loading={busy}>
-            Ativar autenticação
+            {t("enableAuthentication")}
           </Button>
         </div>
       </Section>
     );
   return (
-    <Section title="Acesso">
+    <Section title={t("access")}>
       <form
         className="settings-form"
         onSubmit={(event) => {
           event.preventDefault();
           if (password !== confirmation) {
-            setError("As senhas não coincidem.");
+            setError(t("passwordMismatch"));
             return;
           }
           void run(() => changePassword(current, password));
         }}
       >
         {error && <Alert type="error" message={error} showIcon />}
-        <p className="settings-radio-hint">A autenticação está ativada. Somente sessões válidas acessam os dados.</p>
-        <FormField label="Senha atual" htmlFor="current-password">
+        <p className="settings-radio-hint">{t("authenticationEnabledHint")}</p>
+        <FormField label={t("currentPassword")} htmlFor="current-password">
           <Input.Password
             id="current-password"
             autoComplete="current-password"
@@ -106,7 +108,7 @@ export function AuthenticationSettings() {
             onChange={(e) => setCurrent(e.target.value)}
           />
         </FormField>
-        <FormField label="Nova senha" htmlFor="new-password">
+        <FormField label={t("newPassword")} htmlFor="new-password">
           <Input.Password
             id="new-password"
             autoComplete="new-password"
@@ -115,7 +117,7 @@ export function AuthenticationSettings() {
             onChange={(e) => setPassword(e.target.value)}
           />
         </FormField>
-        <FormField label="Repita a nova senha" htmlFor="confirm-password">
+        <FormField label={t("repeatNewPassword")} htmlFor="confirm-password">
           <Input.Password
             id="confirm-password"
             autoComplete="new-password"
@@ -125,14 +127,14 @@ export function AuthenticationSettings() {
           />
         </FormField>
         <Button type="primary" htmlType="submit" loading={busy}>
-          Alterar senha e encerrar sessões
+          {t("changePassword")}
         </Button>
         <div className="settings-account-actions">
           <Button onClick={() => void run(logout)} loading={busy}>
-            Sair
+            {t("signOut")}
           </Button>
           <Button danger onClick={() => void toggleAuthentication(false)} loading={busy}>
-            Desativar autenticação
+            {t("disableAuthentication")}
           </Button>
         </div>
       </form>

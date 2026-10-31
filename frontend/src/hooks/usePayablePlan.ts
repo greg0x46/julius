@@ -1,3 +1,4 @@
+import { apiMessage } from "../i18n/apiMessage";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
@@ -53,7 +54,7 @@ export function usePayablePlan(payableId: string) {
 
   const generateMutation = useMutation({
     mutationFn: (write: GenerateInstallmentsWrite) => {
-      if (planSummary === null) throw new Error("Nenhum plano para gerar parcelas.");
+      if (planSummary === null) throw new Error(apiMessage("apiNoPlanForInstallments"));
       return generateInstallments(planSummary.id, write);
     },
     onSuccess: invalidate,
@@ -61,7 +62,7 @@ export function usePayablePlan(payableId: string) {
 
   const deleteTransactionMutation = useMutation({
     mutationFn: (transactionId: string) => {
-      if (planSummary === null) throw new Error("Nenhum plano ativo.");
+      if (planSummary === null) throw new Error(apiMessage("apiNoActivePlan"));
       return deleteScenarioTransaction(planSummary.id, transactionId);
     },
     onSuccess: invalidate,
@@ -69,7 +70,7 @@ export function usePayablePlan(payableId: string) {
 
   const allocateMutation = useMutation({
     mutationFn: ({ transactionId, write }: { transactionId: string; write: RealizationWrite }) => {
-      if (planSummary === null) throw new Error("Nenhum plano ativo.");
+      if (planSummary === null) throw new Error(apiMessage("apiNoActivePlan"));
       return createRealization(planSummary.id, transactionId, write);
     },
     onSuccess: invalidate,
@@ -77,7 +78,7 @@ export function usePayablePlan(payableId: string) {
 
   const deallocateMutation = useMutation({
     mutationFn: ({ transactionId, realizationId }: { transactionId: string; realizationId: string }) => {
-      if (planSummary === null) throw new Error("Nenhum plano ativo.");
+      if (planSummary === null) throw new Error(apiMessage("apiNoActivePlan"));
       return deleteRealization(planSummary.id, transactionId, realizationId);
     },
     onSuccess: invalidate,
@@ -85,7 +86,7 @@ export function usePayablePlan(payableId: string) {
 
   const readjustMutation = useMutation({
     mutationFn: (write: ReadjustWrite) => {
-      if (planSummary === null) throw new Error("Nenhum plano ativo.");
+      if (planSummary === null) throw new Error(apiMessage("apiNoActivePlan"));
       return readjustInstallments(planSummary.id, write);
     },
     onSuccess: invalidate,

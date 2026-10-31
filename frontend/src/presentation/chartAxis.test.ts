@@ -34,3 +34,11 @@ describe("formatAxisMoney", () => {
     expect(formatAxisMoney(-1_200_000)).toBe("-1,2 mi");
   });
 });
+
+describe("formatAxisMoney in English", () => {
+  it("uses k/M suffixes and a decimal point", () => {
+    expect(formatAxisMoney(2_000, "en")).toBe("2k");
+    expect(formatAxisMoney(1_500, "en")).toBe("1.5k");
+    expect(formatAxisMoney(-1_500_000, "en")).toBe("-1.5M");
+  });
+});

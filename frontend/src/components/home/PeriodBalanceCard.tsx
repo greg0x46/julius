@@ -1,3 +1,4 @@
+import { useTranslation } from "../../i18n/context";
 import { ReportValuation } from "../shared/ReportValuation";
 import { zonedToday } from "../../presentation/timezone";
 import { useMemo } from "react";
@@ -33,6 +34,7 @@ function FlowFigure({ value, direction }: { value: string; direction: "inflow" |
  * print under the figure, never a sentence above it.
  */
 export function PeriodBalanceCard({ period }: { period: Period }) {
+  const { t } = useTranslation();
   const { bounds, isLoading: rangeLoading, error: rangeError, refetch: refetchRange } = useHomePeriodBounds(period);
   // Only the day span matters here, not the exact instant, so this needs
   // none of ProjectionSummaryCard's midnight-rollover handling.
@@ -65,10 +67,10 @@ export function PeriodBalanceCard({ period }: { period: Period }) {
 
   if (isLoading || error || !bounds || balance === null || inflow === null || outflow === null) {
     return (
-      <Section title="Resultado do período">
+      <Section title={t("periodResult")}>
         {isLoading && (
           // The shape of the strip it becomes: hero figure, then the two figures.
-          <div role="status" aria-label="Carregando o resultado do período">
+          <div role="status" aria-label={t("loadingPeriodResult")}>
             <Skeleton.Input active block style={{ height: 36, marginBottom: 12 }} />
             <Skeleton active title={false} paragraph={{ rows: 1 }} />
           </div>
@@ -80,7 +82,7 @@ export function PeriodBalanceCard({ period }: { period: Period }) {
               if (timeline.error) timeline.refetch();
             }}
           >
-            {problemMessage(timeline.error) ?? "Não foi possível carregar o resultado do período."}
+            {problemMessage(timeline.error) ?? t("periodResultError")}
             <ReportingDetails
               report={reportingError(timeline.error)?.problem?.reporting}
               totals={reportingError(timeline.error)?.problem?.totals}
@@ -96,31 +98,31 @@ export function PeriodBalanceCard({ period }: { period: Period }) {
 
   return (
     <ReportValuation valuation={timeline.valuation}>
-      <section className="period-balance" aria-label="Resultado do período">
+      <section className="period-balance" aria-label={t("periodResult")}>
         <dl className="period-balance-row">
           <div className="period-balance-item">
-            <dt>Resultado do período</dt>
+            <dt>{t("periodResult")}</dt>
             <dd>
               <Money value={balance} tone="result" size="row" />
             </dd>
           </div>
           <div className="period-balance-item">
-            <dt>Entradas</dt>
+            <dt>{t("inflows")}</dt>
             <dd>
               <Link
                 to={transactionsLink("inflow")}
-                aria-label={`Entradas: ${formatReportMoney(inflow, timeline.currencyCode)}. Ver transações`}
+                aria-label={t("flowTransactionsLabel").replace("{flow}", t("inflows")).replace("{amount}", formatReportMoney(inflow, timeline.currencyCode))}
               >
                 <FlowFigure value={inflow} direction="inflow" />
               </Link>
             </dd>
           </div>
           <div className="period-balance-item">
-            <dt>Saídas</dt>
+            <dt>{t("outflows")}</dt>
             <dd>
               <Link
                 to={transactionsLink("outflow")}
-                aria-label={`Saídas: ${formatReportMoney(outflow, timeline.currencyCode)}. Ver transações`}
+                aria-label={t("flowTransactionsLabel").replace("{flow}", t("outflows")).replace("{amount}", formatReportMoney(outflow, timeline.currencyCode))}
               >
                 <FlowFigure value={outflow} direction="outflow" />
               </Link>
@@ -129,7 +131,7 @@ export function PeriodBalanceCard({ period }: { period: Period }) {
         </dl>
         {/* The scenario caveat is small print, and only where there is room for it. */}
         <p className={`period-balance-note ${empty ? "" : "is-optional"}`}>
-          {empty ? "Nenhuma movimentação no período" : "Entradas menos saídas, incluindo cenários ativos"}
+          {empty ? t("noPeriodActivity") : t("periodResultHint")}
         </p>
         <ReportingDetails report={totals?.reporting} totals={totals?.totals} />
       </section>

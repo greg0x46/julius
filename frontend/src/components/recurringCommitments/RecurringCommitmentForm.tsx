@@ -1,3 +1,6 @@
+import { longMonthName } from "../../i18n/dateFormats";
+import { useTranslation } from "../../i18n/context";
+import type { MessageKey } from "../../i18n/messages";
 import { isPositiveDecimal, sumDecimals } from "../../presentation/decimal";
 import { Alert, DatePicker, Flex, Input, InputNumber, Select, Switch } from "../ui";
 import { calendar, type CalendarDate } from "../../presentation/calendar";
@@ -11,8 +14,8 @@ import type {
   RecurringCommitmentWrite,
 } from "../../api/contracts";
 import {
-  recurringCommitmentCadenceLabel,
-  recurringCommitmentKindLabel,
+  recurringCommitmentCadenceName,
+  recurringCommitmentKindName,
 } from "../../presentation/recurringCommitmentLabels";
 import { useTimezone } from "../../hooks/useTimezone";
 import { todayIn } from "../../presentation/timezone";
@@ -23,16 +26,6 @@ import { MoneyInput } from "../forms/MoneyInput";
 
 const dateFormat = "YYYY-MM-DD";
 
-const kindOptions = (Object.keys(recurringCommitmentKindLabel) as RecurringCommitmentKind[]).map(
-  (value) => ({ value, label: recurringCommitmentKindLabel[value] }),
-);
-const cadenceOptions = (
-  Object.keys(recurringCommitmentCadenceLabel) as RecurringCommitmentCadence[]
-).map((value) => ({ value, label: recurringCommitmentCadenceLabel[value] }));
-const monthOptions = Array.from({ length: 12 }, (_, index) => ({
-  value: index + 1,
-  label: new Intl.DateTimeFormat("pt-BR", { month: "long" }).format(new Date(2000, index, 1)),
-}));
 
 export type RecurringCommitmentDraft = {
   name: string;
@@ -88,15 +81,16 @@ function draftFrom(
 /** Validates the draft; an empty "Dia do mês" falls back to the start date's day. */
 function buildWrite(
   draft: RecurringCommitmentDraft,
+  t: (key: MessageKey) => string,
 ): { error: string } | { write: RecurringCommitmentWrite } {
-  if (draft.name.trim() === "") return { error: "Informe um nome para a recorrência." };
-  if (draft.amount === null || !isPositiveDecimal(draft.amount)) return { error: "Informe um valor maior que zero." };
-  if (draft.categoryId === null) return { error: "Selecione uma categoria." };
+  if (draft.name.trim() === "") return { error: t("recurrenceNameRequired") };
+  if (draft.amount === null || !isPositiveDecimal(draft.amount)) return { error: t("positiveAmountRequired") };
+  if (draft.categoryId === null) return { error: t("categoryRequired") };
   if (draft.cadence === "annual" && draft.monthOfYear === null) {
-    return { error: "Informe o mês do ano para uma recorrência anual." };
+    return { error: t("monthOfYearRequired") };
   }
   if (draft.endDate && draft.endDate.isBefore(draft.startDate, "day")) {
-    return { error: "A data de término não pode ser anterior à data de início." };
+    return { error: t("endBeforeStart") };
   }
   return {
     write: {
@@ -129,22 +123,35 @@ function RecurringCommitmentFieldset({
   setDraft: Dispatch<SetStateAction<RecurringCommitmentDraft>>;
   categories: Category[];
 }) {
+  const { t, language } = useTranslation();
+  const kindOptions = (["income", "expense"] as RecurringCommitmentKind[]).map((value) => ({
+    value,
+    label: recurringCommitmentKindName(value, language),
+  }));
+  const cadenceOptions = (["monthly", "annual"] as RecurringCommitmentCadence[]).map((value) => ({
+    value,
+    label: recurringCommitmentCadenceName(value, language),
+  }));
+  const monthOptions = Array.from({ length: 12 }, (_, index) => ({
+    value: index + 1,
+    label: longMonthName(language, index),
+  }));
   const categoryOptions = categories
     .filter((category) => category.is_active && category.kind !== "transfer")
     .map((category) => ({ value: category.id, label: category.name }));
 
   return (
     <>
-      <FormField label="Nome" htmlFor="recurring-commitment-name">
+      <FormField label={t("name")} htmlFor="recurring-commitment-name">
         <Input
           id="recurring-commitment-name"
           value={draft.name}
           onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))}
-          placeholder="Ex.: Salário, Aluguel, Netflix"
+          placeholder={t("recurrenceNameExample")}
         />
       </FormField>
 
-      <FormField label="Tipo" htmlFor="recurring-commitment-kind">
+      <FormField label={t("type")} htmlFor="recurring-commitment-kind">
         <Select
           id="recurring-commitment-kind"
           value={draft.kind}
@@ -153,7 +160,7 @@ function RecurringCommitmentFieldset({
         />
       </FormField>
 
-      <FormField label="Valor" htmlFor="recurring-commitment-amount">
+      <FormField label={t("amount")} htmlFor="recurring-commitment-amount">
         <MoneyInput
           id="recurring-commitment-amount"
           min="0"
@@ -162,19 +169,19 @@ function RecurringCommitmentFieldset({
         />
       </FormField>
 
-      <FormField label="Categoria" htmlFor="recurring-commitment-category">
+      <FormField label={t("category")} htmlFor="recurring-commitment-category">
         <Select
           id="recurring-commitment-category"
           value={draft.categoryId ?? undefined}
           options={categoryOptions}
           showSearch
           optionFilterProp="label"
-          placeholder="Selecione uma categoria"
+          placeholder={t("selectACategory")}
           onChange={(value: string) => setDraft((current) => ({ ...current, categoryId: value }))}
         />
       </FormField>
 
-      <FormField label="Conta (opcional)" htmlFor="recurring-commitment-account">
+      <FormField label={t("accountOptional")} htmlFor="recurring-commitment-account">
         <AccountSelect
           id="recurring-commitment-account"
           optional
@@ -183,7 +190,7 @@ function RecurringCommitmentFieldset({
         />
       </FormField>
 
-      <FormField label="Cadência" htmlFor="recurring-commitment-cadence">
+      <FormField label={t("cadence")} htmlFor="recurring-commitment-cadence">
         <Select
           id="recurring-commitment-cadence"
           value={draft.cadence}
@@ -193,9 +200,9 @@ function RecurringCommitmentFieldset({
       </FormField>
 
       <FormField
-        label="Dia do mês"
+        label={t("dayOfMonth")}
         htmlFor="recurring-commitment-day"
-        hint="Usado só para agendar a data esperada no calendário. Em branco, vale o dia da data de início."
+        hint={t("dayOfMonthHintBlank")}
       >
         <InputNumber
           id="recurring-commitment-day"
@@ -211,42 +218,40 @@ function RecurringCommitmentFieldset({
       </FormField>
 
       {draft.cadence === "annual" && (
-        <FormField label="Mês do ano" htmlFor="recurring-commitment-month">
+        <FormField label={t("monthOfYear")} htmlFor="recurring-commitment-month">
           <Select
             id="recurring-commitment-month"
             value={draft.monthOfYear ?? undefined}
             options={monthOptions}
-            placeholder="Selecione um mês"
+            placeholder={t("selectAMonth")}
             onChange={(value: number) => setDraft((current) => ({ ...current, monthOfYear: value }))}
           />
         </FormField>
       )}
 
-      <FormField label="Data de início" htmlFor="recurring-commitment-start-date">
+      <FormField label={t("startDateLabel")} htmlFor="recurring-commitment-start-date">
         <DatePicker
           id="recurring-commitment-start-date"
           style={{ width: "100%" }}
-          format="DD/MM/YYYY"
           value={draft.startDate}
           allowClear={false}
           onChange={(value) => value && setDraft((current) => ({ ...current, startDate: value }))}
         />
       </FormField>
 
-      <FormField label="Data de término (opcional)" htmlFor="recurring-commitment-end-date">
+      <FormField label={t("endDateOptional")} htmlFor="recurring-commitment-end-date">
         <DatePicker
           id="recurring-commitment-end-date"
           style={{ width: "100%" }}
-          format="DD/MM/YYYY"
           value={draft.endDate}
           onChange={(value) => setDraft((current) => ({ ...current, endDate: value }))}
         />
       </FormField>
 
-      <FormField label="Ativa" htmlFor="recurring-commitment-active">
+      <FormField label={t("activeFeminineHeader")} htmlFor="recurring-commitment-active">
         <Switch
           id="recurring-commitment-active"
-          aria-label="Recorrência ativa"
+          aria-label={t("recurrenceActive")}
           checked={draft.isActive}
           onChange={(checked) => setDraft((current) => ({ ...current, isActive: checked }))}
           style={{ width: "fit-content" }}
@@ -282,6 +287,7 @@ export function RecurringCommitmentFields({
   submitting = false,
   onSubmit,
 }: FieldsProps & { submitting?: boolean }) {
+  const { t } = useTranslation();
   const timezone = useTimezone();
   const [draft, setDraft] = useState<RecurringCommitmentDraft>(() => draftFrom(commitment, initialDraft, timezone));
   const [error, setError] = useState<string | null>(null);
@@ -292,7 +298,7 @@ export function RecurringCommitmentFields({
       onSubmit={(event) => {
         event.preventDefault();
         if (submitting) return;
-        const built = buildWrite(draft);
+        const built = buildWrite(draft, t);
         if ("error" in built) {
           setError(built.error);
           return;
@@ -331,6 +337,7 @@ export function RecurringCommitmentForm({
   onCancel: () => void;
   extra?: ReactNode;
 }) {
+  const { t } = useTranslation();
   const timezone = useTimezone();
   const [draft, setDraft] = useState<RecurringCommitmentDraft>(() => draftFrom(commitment, initialDraft, timezone));
   const [error, setError] = useState<string | null>(null);
@@ -345,7 +352,7 @@ export function RecurringCommitmentForm({
   }, [open, commitment?.id]);
 
   const submit = () => {
-    const built = buildWrite(draft);
+    const built = buildWrite(draft, t);
     if ("error" in built) {
       setError(built.error);
       return;
@@ -356,7 +363,7 @@ export function RecurringCommitmentForm({
 
   return (
     <FormDrawer
-      title={commitment ? "Editar recorrência" : "Nova recorrência"}
+      title={commitment ? t("editRecurrence") : t("newRecurrence")}
       open={open}
       onClose={onCancel}
       onSubmit={submit}

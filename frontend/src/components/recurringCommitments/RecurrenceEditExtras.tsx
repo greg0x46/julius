@@ -1,3 +1,4 @@
+import { useTranslation } from "../../i18n/context";
 import { Button } from "../ui";
 
 import type { RecurringCommitment } from "../../api/contracts";
@@ -17,6 +18,7 @@ export function RecurrenceEditExtras({
   commitment: RecurringCommitment;
   onDelete: (commitment: RecurringCommitment) => void;
 }) {
+  const { t } = useTranslation();
   const confirm = useConfirm();
 
   return (
@@ -24,19 +26,19 @@ export function RecurrenceEditExtras({
       {commitment.is_active && (
         <section className="recurrence-extra" aria-labelledby="recurrence-extra-occurrences">
           <h3 id="recurrence-extra-occurrences" className="recurrence-extra-title">
-            Ocorrências
+            {t("occurrencesTitle")}
           </h3>
           <RecurrenceOccurrenceList commitment={commitment} />
         </section>
       )}
       <Button danger type="text" className="recurrence-extra-delete" onClick={() =>
           confirm({
-            title: "Excluir recorrência",
-            description: "Esta ação não pode ser desfeita.",
+            title: t("deleteRecurrence"),
+            description: t("irreversibleAction"),
             onConfirm: () => onDelete(commitment),
           })
         }>
-        Excluir recorrência
+        {t("deleteRecurrence")}
       </Button>
     </>
   );

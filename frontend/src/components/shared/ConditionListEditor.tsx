@@ -1,3 +1,4 @@
+import { useTranslation } from "../../i18n/context";
 import { DeleteOutlined, PlusOutlined } from "../ui/icons";
 import { Button, Flex, Input, Select } from "../ui";
 
@@ -56,6 +57,7 @@ export function ConditionListEditor({
   fieldConfigs: ConditionFieldConfig[];
   minConditions?: number;
 }) {
+  const { t } = useTranslation();
   const fieldOptions = fieldConfigs.map((config) => ({ value: config.field, label: config.label }));
   const configFor = (field: RuleConditionField) =>
     fieldConfigs.find((config) => config.field === field) ?? fieldConfigs[0];
@@ -88,7 +90,7 @@ export function ConditionListEditor({
         return (
           <Flex key={index} gap="small" align="center" className="condition-row">
             <Select
-              aria-label="Campo"
+              aria-label={t("field")}
               value={condition.field}
               options={fieldOptions}
               onChange={(value: RuleConditionField) => changeField(index, value)}
@@ -99,23 +101,23 @@ export function ConditionListEditor({
                 return (
                   <>
                     <Input
-                      aria-label={config.pairFirstLabel ?? "Valor"}
+                      aria-label={config.pairFirstLabel ?? t("valueLabel")}
                       type="number"
                       min={config.pairMin}
                       max={config.pairMax}
                       value={first}
                       onChange={(event) => updateCondition(index, { value: `${event.target.value}:${second}` })}
-                      placeholder={config.pairFirstLabel ?? "Valor"}
+                      placeholder={config.pairFirstLabel ?? t("valueLabel")}
                       suffix={config.pairFirstSuffix}
                     />
                     <Input
-                      aria-label={config.pairSecondLabel ?? "Valor"}
+                      aria-label={config.pairSecondLabel ?? t("valueLabel")}
                       type="number"
                       min={config.pairMin}
                       max={config.pairMax}
                       value={second}
                       onChange={(event) => updateCondition(index, { value: `${first}:${event.target.value}` })}
-                      placeholder={config.pairSecondLabel ?? "Valor"}
+                      placeholder={config.pairSecondLabel ?? t("valueLabel")}
                       suffix={config.pairSecondSuffix}
                     />
                   </>
@@ -124,35 +126,35 @@ export function ConditionListEditor({
             ) : (
               <>
                 <Select
-                  aria-label="Operador"
+                  aria-label={t("operator")}
                   value={condition.operator}
                   options={config.operators}
                   onChange={(value: RuleConditionOperator) => updateCondition(index, { operator: value })}
                 />
                 {config.valueOptions ? (
                   <Select
-                    aria-label="Valor"
+                    aria-label={t("valueLabel")}
                     value={condition.value || undefined}
                     options={config.valueOptions(condition.field)}
                     loading={config.valueOptionsLoading}
                     showSearch
                     optionFilterProp="label"
-                    placeholder={config.valuePlaceholder?.(condition.field) ?? "Selecione"}
+                    placeholder={config.valuePlaceholder?.(condition.field) ?? t("select")}
                     notFoundContent={config.valueNotFoundContent?.(condition.field)}
                     onChange={(value: string) => updateCondition(index, { value })}
                   />
                 ) : (
                   <Input
-                    aria-label="Valor"
+                    aria-label={t("valueLabel")}
                     value={condition.value}
                     onChange={(event) => updateCondition(index, { value: event.target.value })}
-                    placeholder="Valor"
+                    placeholder={t("valueLabel")}
                   />
                 )}
               </>
             )}
             <Button
-              aria-label="Remover condição"
+              aria-label={t("removeCondition")}
               icon={<DeleteOutlined aria-hidden="true" />}
               disabled={conditions.length <= minConditions}
               onClick={() => removeCondition(index)}
@@ -161,7 +163,7 @@ export function ConditionListEditor({
         );
       })}
       <Button icon={<PlusOutlined aria-hidden="true" />} onClick={addCondition}>
-        Adicionar condição
+        {t("addCondition")}
       </Button>
     </Flex>
   );

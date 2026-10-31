@@ -1,3 +1,4 @@
+import { useTranslation } from "../../i18n/context";
 import { DownOutlined } from "../ui/icons";
 import { Button, Spin } from "../ui";
 import { useState } from "react";
@@ -30,6 +31,7 @@ export function CategoryField({
   loading?: boolean;
   disabled?: boolean;
 }) {
+  const { t } = useTranslation();
   const [recentIds, setRecentIds] = useState<string[]>(() => readRecentCategories());
   const current = options.find((option) => option.value === value) ?? null;
 
@@ -53,7 +55,7 @@ export function CategoryField({
             type="button"
             id={id}
             className={`category-field-trigger ${current ? "" : "is-placeholder"}`}
-            aria-label="Categoria"
+            aria-label={t("category")}
             aria-haspopup="listbox"
             aria-expanded={open}
             disabled={disabled || loading}
@@ -66,11 +68,11 @@ export function CategoryField({
                 </span>
                 <span className="category-option-name">
                   {current.name}
-                  {!current.isActive && <span className="category-option-note"> (inativa)</span>}
+                  {!current.isActive && <span className="category-option-note">{t("inactiveCategory")}</span>}
                 </span>
               </span>
             ) : (
-              <span className="category-field-value">Sem categoria</span>
+              <span className="category-field-value">{t("uncategorized")}</span>
             )}
             {loading ? <Spin size="small" /> : <DownOutlined aria-hidden="true" />}
           </button>
@@ -79,10 +81,10 @@ export function CategoryField({
       {suggested && suggested.value !== value && (
         <div className="category-field-suggestion">
           <span>
-            <span aria-hidden="true">✨</span> Sugestão: <strong>{suggested.name}</strong>
+            <span aria-hidden="true">✨</span> {t("suggestion")}: <strong>{suggested.name}</strong>
           </span>
           <Button type="link" size="small" disabled={disabled || loading} onClick={() => pick(suggested.value)}>
-            Usar
+            {t("use")}
           </Button>
         </div>
       )}

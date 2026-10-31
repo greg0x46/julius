@@ -1,3 +1,4 @@
+import { useTranslation } from "../i18n/context";
 import { DailyAllowanceCard } from "../components/home/DailyAllowanceCard";
 import { MonthBalancesCard } from "../components/home/MonthBalancesCard";
 import { NegativeBalanceAlert } from "../components/home/NegativeBalanceAlert";
@@ -13,10 +14,11 @@ import { Page } from "../components/layout";
 import { usePeriod } from "../hooks/usePeriod";
 
 export function HomePage() {
+  const { t } = useTranslation();
   const { period, setPeriod, presets } = usePeriod();
   return (
     <Page
-      title="Início"
+      title={t("home")}
       compactMobileHeader
       context={
         <PeriodNavigator
@@ -24,7 +26,7 @@ export function HomePage() {
           value={[period.from, period.to]}
           presets={presets}
           onChange={setPeriod}
-          reset={{ preset: "this-month", label: "Este mês" }}
+          reset={{ preset: "this-month", label: t("thisMonth") }}
           bare
         />
       }

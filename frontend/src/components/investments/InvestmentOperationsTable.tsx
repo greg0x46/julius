@@ -1,8 +1,9 @@
+import { useTranslation } from "../../i18n/context";
 import { Table } from "../ui";
 import type { ColumnsType } from "../ui/Table";
 
 import type { InvestmentOperation, InvestmentPosition } from "../../api/contracts";
-import { investmentOperationKindLabel } from "../../presentation/investmentWorkspaceLabels";
+import { investmentOperationKindName } from "../../presentation/investmentWorkspaceLabels";
 import { EmptyState, ResponsiveList } from "../layout";
 import { Money } from "../shared/Money";
 import { formatDate } from "./investmentDate";
@@ -22,54 +23,55 @@ export function InvestmentOperationsTable({
   onDelete: (operation: InvestmentOperation) => void;
   busy: boolean;
 }) {
+  const { t, language } = useTranslation();
   const confirm = useConfirm();
   const positionName = new Map(positions.map((position) => [position.id, position.name]));
   const positionOf = (operation: InvestmentOperation) =>
-    operation.position_id ? positionName.get(operation.position_id) ?? "Posição removida" : "Só caixa";
-  const kindOf = (operation: InvestmentOperation) => investmentOperationKindLabel[operation.kind];
+    operation.position_id ? positionName.get(operation.position_id) ?? t("removedPosition") : t("cashOnly");
+  const kindOf = (operation: InvestmentOperation) => investmentOperationKindName(operation.kind, language);
 
   // A synced movement is the institution's record and has no actions at all.
   const menu = (operation: InvestmentOperation) => {
     if (!operation.is_editable) return null;
     const items: RecordMenuItem[] = [
-      { key: "edit", label: "Corrigir", disabled: busy, onClick: () => onEdit(operation) },
+      { key: "edit", label: t("correct"), disabled: busy, onClick: () => onEdit(operation) },
       {
         key: "delete",
-        label: "Excluir",
+        label: t("delete"),
         danger: true,
         disabled: busy,
         onClick: () =>
           confirm({
-            title: "Excluir movimentação",
-            description: "Os saldos e custos da conta serão recalculados.",
+            title: t("deleteOperation"),
+            description: t("deleteOperationHint"),
             onConfirm: () => onDelete(operation),
           }),
       },
     ];
-    return <RecordMenu label={`Ações da movimentação de ${formatDate(operation.occurred_on)}`} items={items} />;
+    return <RecordMenu label={t("operationActionsOn", { date: formatDate(operation.occurred_on, language) })} items={items} />;
   };
 
   const columns: ColumnsType<InvestmentOperation> = [
-    { title: "Data", key: "occurred_on", render: (_, operation) => formatDate(operation.occurred_on) },
+    { title: t("date"), key: "occurred_on", render: (_, operation) => formatDate(operation.occurred_on, language) },
     {
-      title: "Tipo",
+      title: t("type"),
       key: "kind",
       render: (_, operation) => (
         <div className="investment-cell">
           <span className="investment-cell-title">{kindOf(operation)}</span>
-          {operation.source === "synced" && <span className="investment-quiet">Informado pela instituição</span>}
+          {operation.source === "synced" && <span className="investment-quiet">{t("reportedByInstitution")}</span>}
         </div>
       ),
     },
-    { title: "Posição", key: "position", render: (_, operation) => positionOf(operation) },
+    { title: t("position"), key: "position", render: (_, operation) => positionOf(operation) },
     {
-      title: "Valor",
+      title: t("amount"),
       key: "amount",
       align: "right",
       render: (_, operation) => <Money value={operation.amount} tone="neutral" />,
     },
     {
-      title: <span className="investment-visually-hidden">Ações</span>,
+      title: <span className="investment-visually-hidden">{t("actions")}</span>,
       key: "actions",
       width: 48,
       render: (_, operation) => menu(operation),
@@ -78,17 +80,17 @@ export function InvestmentOperationsTable({
 
   return (
     <ResponsiveList
-      label="Movimentações"
+      label={t("operations")}
       stackBelow="lg"
       items={operations}
       getKey={(operation) => operation.id}
-      empty={<EmptyState title="Nenhuma movimentação" />}
+      empty={<EmptyState title={t("noOperations")} />}
       row={(operation) => ({
         title: kindOf(operation),
         meta: [
-          formatDate(operation.occurred_on),
+          formatDate(operation.occurred_on, language),
           positionOf(operation),
-          operation.source === "synced" ? "Informado pela instituição" : null,
+          operation.source === "synced" ? t("reportedByInstitution") : null,
         ]
           .filter(Boolean)
           .join(" · "),
@@ -104,7 +106,7 @@ export function InvestmentOperationsTable({
       })}
       wide={
         <Table<InvestmentOperation>
-          aria-label="Movimentações"
+          aria-label={t("operations")}
           className="investment-table"
           size="small"
           rowKey="id"

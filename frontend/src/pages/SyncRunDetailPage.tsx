@@ -1,3 +1,4 @@
+import { useTranslation } from "../i18n/context";
 import { useParams } from "react-router-dom";
 
 import { isUuid } from "../api/contracts";
@@ -6,25 +7,24 @@ import { SyncFailureList } from "../components/SyncFailureList";
 import { SyncRunOverview } from "../components/SyncRunOverview";
 import { useSyncRun } from "../hooks/useSyncRun";
 
-const pageTitle = "Sincronização";
 const backTo = "/configuracoes/open-banking";
-const backLabel = "Voltar para sincronizações";
 
 function ValidRunDetail({ id }: { id: string }) {
+  const { t } = useTranslation();
   const { state, retry } = useSyncRun(id);
 
   return (
     <DetailPage
-      title={pageTitle}
+      title={t("sync")}
       backTo={backTo}
-      backLabel={backLabel}
+      backLabel={t("backToSyncs")}
       width="narrow"
       state={state}
       retry={retry}
-      loadingLabel="Carregando sincronização…"
-      notFoundMessage="Sincronização não encontrada"
-      notFoundDescription="Não existe uma execução com este identificador."
-      unavailableMessage="Não foi possível consultar esta sincronização agora."
+      loadingLabel={t("loadingSync")}
+      notFoundMessage={t("syncNotFound")}
+      notFoundDescription={t("syncNotFoundDescription")}
+      unavailableMessage={t("syncUnavailable")}
     >
       {(snapshot) => (
         <>
@@ -37,16 +37,17 @@ function ValidRunDetail({ id }: { id: string }) {
 }
 
 export function SyncRunDetailPage() {
+  const { t } = useTranslation();
   const { id = "" } = useParams();
   return isUuid(id) ? (
     <ValidRunDetail id={id} />
   ) : (
     <InvalidDetailPage
-      title={pageTitle}
+      title={t("sync")}
       backTo={backTo}
-      backLabel={backLabel}
+      backLabel={t("backToSyncs")}
       width="narrow"
-      invalidTitle="Endereço de sincronização inválido"
+      invalidTitle={t("invalidSyncAddress")}
     />
   );
 }

@@ -1,3 +1,4 @@
+import { translate, type Language } from "../i18n/messages";
 import { ApiError } from "../api/problems";
 
 /**
@@ -12,14 +13,14 @@ export function isInvestmentLinkedProblem(error: unknown): boolean {
   return error instanceof ApiError && error.problem?.type === investmentLinkedProblem;
 }
 
-export function manualTransactionErrorMessage(error: unknown, action: "save" | "delete"): string {
+export function manualTransactionErrorMessage(error: unknown, action: "save" | "delete", language: Language = "pt-BR"): string {
   if (isInvestmentLinkedProblem(error)) {
     return action === "delete"
-      ? "Esta transação tem parcelas vinculadas a aportes ou resgates. Desfaça os vínculos em “Vincular a investimento”, no detalhe da transação, antes de excluí-la."
-      : "Esta transação tem parcelas vinculadas a aportes ou resgates. Desfaça os vínculos em “Vincular a investimento”, no detalhe da transação, antes de editá-la.";
+      ? translate(language, "investmentLinkedDeleteError")
+      : translate(language, "investmentLinkedEditError");
   }
   if (error instanceof Error) return error.message;
   return action === "delete"
-    ? "Não foi possível excluir a transação manual."
-    : "Não foi possível salvar a transação manual.";
+    ? translate(language, "manualTransactionDeleteError")
+    : translate(language, "manualTransactionSaveError");
 }

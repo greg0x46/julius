@@ -1,20 +1,11 @@
+import { translate, type Language } from "../i18n/messages";
 import { subtractDecimals, sumDecimals } from "./decimal";
-import type { Investment, InvestmentTransaction, YieldUnavailableReason } from "../api/contracts";
+import type { Investment, InvestmentTransaction } from "../api/contracts";
 
 // Pluggy's investment "type"/"subtype"/movement "type" fields are free text
 // from the provider (not a closed enum github.com/greg0x46/julius validates), so these
 // maps only translate the values we've actually seen — anything else falls
 // back to the raw string instead of failing.
-const investmentTypeLabels: Record<string, string> = {
-  MUTUAL_FUND: "Fundo de investimento",
-  FIXED_INCOME: "Renda fixa",
-  EQUITY: "Renda variável",
-  SECURITY: "Título",
-  COE: "COE",
-  ETF: "ETF",
-  PENSION: "Previdência",
-};
-
 /**
  * A provider value with no label of its own: a raw enum ("OTHER_MOVEMENT")
  * reads as a bug, so it becomes sentence case ("Other movement"); anything
@@ -26,9 +17,12 @@ function humanizeProviderValue(value: string): string {
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
-export function investmentTypeLabel(type: string | null): string {
-  if (type === null) return "Tipo não informado";
-  return investmentTypeLabels[type] ?? humanizeProviderValue(type);
+export function investmentTypeLabel(type: string | null, language: Language = "pt-BR"): string {
+  if (type === null) return translate(language, "unknownAccountType");
+  if (type === "COE" || type === "ETF") return type;
+  const keys = { MUTUAL_FUND: "investmentTypeFund", FIXED_INCOME: "assetClassFixedIncome", EQUITY: "assetClassVariableIncome", SECURITY: "investmentTypeSecurity", PENSION: "investmentTypePension" } as const;
+  const key = keys[type as keyof typeof keys];
+  return key ? translate(language, key) : humanizeProviderValue(type);
 }
 
 /**
@@ -36,37 +30,25 @@ export function investmentTypeLabel(type: string | null): string {
  * comma as the mark, dots between thousands, no trailing zeros ("100.00" is
  * "100"). Works on the text, so nothing passes through a float.
  */
-export function formatDecimal(value: string): string {
+export function formatDecimal(value: string, language: Language = "pt-BR"): string {
   const negative = value.startsWith("-");
   const unsigned = negative ? value.slice(1) : value;
   const [integer = "0", fraction = ""] = unsigned.split(".");
-  const grouped = integer.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  const grouped = integer.replace(/\B(?=(\d{3})+(?!\d))/g, language === "en" ? "," : ".");
   const decimals = fraction.replace(/0+$/, "");
-  return `${negative ? "-" : ""}${grouped}${decimals === "" ? "" : `,${decimals}`}`;
+  return `${negative ? "-" : ""}${grouped}${decimals === "" ? "" : `${language === "en" ? "." : ","}${decimals}`}`;
 }
 
 /** "1 cota", "0,2 cotas": the unit agrees with the number. */
-export function quotaCount(quantity: string): string {
-  return `${formatDecimal(quantity)} ${Number(quantity) === 1 ? "cota" : "cotas"}`;
+export function quotaCount(quantity: string, language: Language = "pt-BR"): string {
+  return `${formatDecimal(quantity, language)} ${translate(language, Number(quantity) === 1 ? "quotaOne" : "quotaMany")}`;
 }
 
-const movementTypeLabels: Record<string, string> = {
-  BUY: "Aplicação",
-  SELL: "Resgate",
-  APPLICATION: "Aplicação",
-  REDEMPTION: "Resgate",
-  DIVIDEND: "Dividendo",
-  INTEREST: "Rendimento",
-  INCOME: "Rendimento",
-  TAX: "Imposto",
-  FEE: "Taxa",
-  TRANSFER: "Transferência",
-  OTHER_MOVEMENT: "Outra movimentação",
-};
-
-export function movementTypeLabel(type: string | null): string {
-  if (type === null) return "Movimentação";
-  return movementTypeLabels[type] ?? humanizeProviderValue(type);
+export function movementTypeLabel(type: string | null, language: Language = "pt-BR"): string {
+  if (type === null) return translate(language, "movementGeneric");
+  const keys = { BUY: "movementBuy", SELL: "movementSell", APPLICATION: "movementBuy", REDEMPTION: "movementSell", DIVIDEND: "movementDividend", INTEREST: "movementInterest", INCOME: "movementInterest", TAX: "movementTax", FEE: "movementFee", TRANSFER: "movementTransfer", OTHER_MOVEMENT: "movementOther" } as const;
+  const key = keys[type as keyof typeof keys];
+  return key ? translate(language, key) : humanizeProviderValue(type);
 }
 
 export type YieldEstimate = {
@@ -88,25 +70,16 @@ export function investmentYield(investment: Investment): YieldEstimate {
   return { value: investment.yield_value, source: investment.yield_source };
 }
 
-const yieldUnavailableLabels: Record<YieldUnavailableReason, string> = {
-  sem_historico: "Sem histórico",
-  historico_incompleto: "Histórico incompleto",
-  saldo_indisponivel: "Sem saldo atual",
-};
-
-const yieldUnavailableHints: Record<YieldUnavailableReason, string> = {
-  sem_historico: "Nenhuma movimentação sincronizada para este investimento ainda.",
-  historico_incompleto:
-    "As movimentações sincronizadas não cobrem a posição inteira — a instituição não enviou as aplicações anteriores à conexão. Calcular o rendimento aqui contaria o principal como lucro.",
-  saldo_indisponivel:
-    "O histórico está completo, mas a instituição não informou o saldo atual desta posição — não há contra o que descontar as aplicações.",
-};
-
 /** What to show in place of a yield the backend refused to state, and why. */
-export function yieldUnavailable(investment: Investment): { label: string; hint: string } {
+export function yieldUnavailable(investment: Investment, language: Language = "pt-BR"): { label: string; hint: string } {
   const reason = investment.yield_unavailable_reason;
-  if (reason === null) return { label: "Não disponível", hint: "" };
-  return { label: yieldUnavailableLabels[reason], hint: yieldUnavailableHints[reason] };
+  if (reason === null) return { label: translate(language, "yieldNotAvailable"), hint: "" };
+  const keys = {
+    sem_historico: ["yieldNoHistory", "yieldNoHistoryHint"],
+    historico_incompleto: ["yieldIncompleteHistory", "yieldIncompleteHistoryHint"],
+    saldo_indisponivel: ["yieldNoCurrentBalance", "yieldNoBalanceHint"],
+  } as const;
+  return { label: translate(language, keys[reason][0]), hint: translate(language, keys[reason][1]) };
 }
 
 // Returns null when the history cannot be netted: a movement whose direction

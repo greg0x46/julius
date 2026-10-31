@@ -1,3 +1,4 @@
+import { useTranslation } from "../../i18n/context";
 import { Input, Select, Switch } from "../ui";
 
 import type { InvestmentAssetClass, InvestmentAssetClassDefinition } from "../../api/contracts";
@@ -20,21 +21,22 @@ export function InvestmentAssetFields({
   classification: InvestmentAssetClassDefinition[];
   quoteMarket: string | null;
 }) {
+  const { t } = useTranslation();
   const classDefinition = classification.find((item) => item.asset_class === draft.assetClass);
   const quoteSource = draft.quoteEnabled ? quoteMarket : null;
   const classOptions = classification.map((item) => ({ value: item.asset_class, label: item.label }));
   const typeOptions = [
     ...(classDefinition?.types.map((item) => ({ value: item.name, label: item.name })) ?? []),
-    { value: customAssetType, label: "Outro tipo" },
+    { value: customAssetType, label: t("otherType") },
   ];
 
   return (
     <>
-      <FormField label="Classe" htmlFor="investment-asset-class">
+      <FormField label={t("classLabel")} htmlFor="investment-asset-class">
         <Select
           id="investment-asset-class"
           value={draft.assetClass || undefined}
-          placeholder="Selecione a classe financeira"
+          placeholder={t("selectFinancialClass")}
           options={classOptions}
           onChange={(value: InvestmentAssetClass) =>
             onChange((current) => ({
@@ -48,12 +50,12 @@ export function InvestmentAssetFields({
           }
         />
       </FormField>
-      <FormField label="Tipo" htmlFor="investment-asset-type">
+      <FormField label={t("type")} htmlFor="investment-asset-type">
         <Select
           id="investment-asset-type"
           value={draft.assetType || undefined}
           disabled={!draft.assetClass}
-          placeholder="Selecione o tipo de instrumento"
+          placeholder={t("selectInstrumentType")}
           options={typeOptions}
           showSearch
           optionFilterProp="label"
@@ -69,7 +71,7 @@ export function InvestmentAssetFields({
         />
       </FormField>
       {draft.assetType === customAssetType && (
-        <FormField label="Descrição do tipo" htmlFor="investment-asset-custom-type">
+        <FormField label={t("typeDescription")} htmlFor="investment-asset-custom-type">
           <Input
             id="investment-asset-custom-type"
             value={draft.customType}
@@ -77,23 +79,23 @@ export function InvestmentAssetFields({
           />
         </FormField>
       )}
-      <FormField label="Nome" htmlFor="investment-asset-name">
+      <FormField label={t("name")} htmlFor="investment-asset-name">
         <Input
           id="investment-asset-name"
           value={draft.name}
-          placeholder="Ex.: Tesouro Selic 2029"
+          placeholder={t("assetNameExample")}
           onChange={(event) => onChange((current) => ({ ...current, name: event.target.value }))}
         />
       </FormField>
-      <FormField label={quoteSource ? "Código" : "Código (opcional)"} htmlFor="investment-asset-ticker">
+      <FormField label={quoteSource ? t("codeLabel") : t("codeOptional")} htmlFor="investment-asset-ticker">
         <Input
           id="investment-asset-ticker"
           value={draft.ticker}
-          placeholder="Ex.: PETR4"
+          placeholder={t("tickerExample")}
           onChange={(event) => onChange((current) => ({ ...current, ticker: event.target.value }))}
         />
       </FormField>
-      <FormField label="Moeda" htmlFor="investment-asset-currency">
+      <FormField label={t("currency")} htmlFor="investment-asset-currency">
         <Input
           id="investment-asset-currency"
           value={draft.currencyCode}
@@ -103,12 +105,12 @@ export function InvestmentAssetFields({
         />
       </FormField>
       <FormField
-        label="Cotação automática"
+        label={t("autoQuote")}
         htmlFor="investment-asset-quote-enabled"
         hint={
           quoteMarket
-            ? "Atualiza o preço e busca o histórico do ativo em reais."
-            : "Para este tipo, registre avaliações manualmente ou use os valores da instituição integrada."
+            ? t("autoQuoteHint")
+            : t("manualQuoteHint")
         }
       >
         <div>
@@ -122,11 +124,11 @@ export function InvestmentAssetFields({
       </FormField>
       {quoteSource && (
         <details>
-          <summary>Código alternativo para cotação</summary>
+          <summary>{t("altQuoteCode")}</summary>
           <FormField
-            label="Código para cotação (opcional)"
+            label={t("quoteCodeOptional")}
             htmlFor="investment-asset-quote-symbol"
-            hint="Em branco, usa o código do ativo. Preencha somente quando o código cotado for diferente."
+            hint={t("quoteCodeHint")}
           >
             <Input
               id="investment-asset-quote-symbol"

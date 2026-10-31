@@ -1,3 +1,4 @@
+import { useTranslation } from "../../i18n/context";
 const RADIUS = 40;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 const SIZE = 96;
@@ -32,6 +33,7 @@ interface GoalProgressRingProps {
  * colour moves from red to green with the progress.
  */
 export function GoalProgressRing({ percent, tone, label }: GoalProgressRingProps) {
+  const { t } = useTranslation();
   const clamped = Math.min(100, Math.max(0, percent));
   const offset = CIRCUMFERENCE * (1 - clamped / 100);
   const text = `${percent}%`;
@@ -71,7 +73,7 @@ export function GoalProgressRing({ percent, tone, label }: GoalProgressRingProps
         {text}
       </text>
       <text x={CENTER} y={CENTER + 16} textAnchor="middle" className="goal-ring-subtext">
-        da meta
+        {t("ofGoal")}
       </text>
     </svg>
   );

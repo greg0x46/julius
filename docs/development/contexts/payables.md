@@ -19,6 +19,9 @@ code). `Kind` covers only `debt`/`receivable` and will stay that way: goals
 by linked real transactions; a goal measures a figure owned by another engine.
 The name "Payables" therefore remains accurate.
 
+The list, detail shell, form and timeline follow the browser language selector.
+Server errors may remain in Portuguese; see the [frontend reference](../frontend.md).
+
 ## Backend
 
 `internal/payables` — total/settled/remaining always recomputed on read from

@@ -1,33 +1,13 @@
+import { translate, type Language } from "../i18n/messages";
 import type {
   InvestmentAccountKind,
   InvestmentOperationKind,
-  InvestmentValuationBasis,
 } from "../api/contracts";
 
-export const investmentAccountKindLabel: Record<InvestmentAccountKind, string> = {
-  manual: "Manual",
-  integrated: "Integrada",
-  // Kept for data written by the first preview of the investment workspace.
-  synced: "Integrada",
-};
-
-export const investmentOperationKindLabel: Record<InvestmentOperationKind, string> = {
-  initial_balance: "Saldo inicial",
-  deposit: "Aporte em caixa",
-  withdrawal: "Resgate da caixa",
-  buy: "Compra",
-  sell: "Venda",
-  income: "Rendimento",
-  fee: "Taxa",
-  tax: "Imposto",
-  valuation: "Cotação manual",
-  transfer_out: "Transferência enviada",
-  transfer_in: "Transferência recebida",
-};
-
-export const investmentValuationBasisLabel: Record<InvestmentValuationBasis, string> = {
-  manual_valuation: "Cotação manual",
-  cost_basis: "Custo médio",
-  provider_balance: "Saldo informado pela instituição",
-  market_quote: "Cotação de mercado",
-};
+export function investmentAccountKindName(kind: InvestmentAccountKind, language: Language = "pt-BR"): string {
+  return kind === "manual" ? "Manual" : translate(language, "integratedFeminine");
+}
+export function investmentOperationKindName(kind: InvestmentOperationKind, language: Language = "pt-BR"): string {
+  const keys = { initial_balance: "operationInitialBalance", deposit: "operationDeposit", withdrawal: "operationWithdrawal", buy: "operationBuy", sell: "operationSell", income: "operationIncome", fee: "operationFee", tax: "operationTax", valuation: "operationValuation", transfer_out: "operationTransferOut", transfer_in: "operationTransferIn" } as const;
+  return translate(language, keys[kind]);
+}

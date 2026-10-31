@@ -1,3 +1,5 @@
+import { useTranslation } from "../../i18n/context";
+import type { Language } from "../../i18n/messages";
 import { WarningOutlined } from "../ui/icons";
 import { Link } from "react-router-dom";
 
@@ -7,8 +9,8 @@ import { formatDateOnly, formatDayMonth } from "../../presentation/dates";
 import { formatReportMoney } from "../../presentation/money";
 
 /** "21/11", or "21/11/2027" when the day is not in the year of the reference day. */
-function alertDate(date: string, referenceDate: string): string {
-  return date.slice(0, 4) === referenceDate.slice(0, 4) ? formatDayMonth(date) : formatDateOnly(date);
+function alertDate(date: string, referenceDate: string, language: Language): string {
+  return date.slice(0, 4) === referenceDate.slice(0, 4) ? formatDayMonth(date, language) : formatDateOnly(date, language);
 }
 
 /**
@@ -20,6 +22,7 @@ function alertDate(date: string, referenceDate: string): string {
  * the balance never goes negative.
  */
 export function NegativeBalanceAlert({ period }: { period: Period }) {
+  const { t, language } = useTranslation();
   const { timeline, base, bounds, referenceDate, isLoading, error } = useHomeProjection(period);
   if (isLoading || error || !base || !bounds || base.first_negative === null) return null;
 
@@ -29,23 +32,23 @@ export function NegativeBalanceAlert({ period }: { period: Period }) {
   const lowestIsLast = base.lowest_balance.date === lastDate;
 
   return (
-    <section className="home-alert" aria-label="Alerta de projeção">
+    <section className="home-alert" aria-label={t("projectionAlert")}>
       <WarningOutlined className="home-alert-icon" aria-hidden="true" />
       <p className="home-alert-text">
-        <strong>O saldo fica negativo em {alertDate(base.first_negative, referenceDate)}</strong> se nada mudar.
+        <strong>{t("balanceNegativeOn").replace("{date}", alertDate(base.first_negative, referenceDate, language))}</strong> {t("ifNothingChanges")}
         {!lowestIsLast && (
           <>
             {" "}
-            Ponto mais baixo: {formatReportMoney(base.lowest_balance.balance, timeline.currencyCode)} em{" "}
-            {alertDate(base.lowest_balance.date, referenceDate)}.
+            {t("lowestPoint")} {formatReportMoney(base.lowest_balance.balance, timeline.currencyCode)} {t("atDate")}{" "}
+            {alertDate(base.lowest_balance.date, referenceDate, language)}.
           </>
         )}{" "}
         <Link
           className="home-alert-link"
           to={`/transacoes?date_from=${bounds.from}&date_to=${bounds.to}`}
-          aria-label="Ver transações do período"
+          aria-label={t("viewPeriodTransactions")}
         >
-          Ver transações
+          {t("viewTransactions")}
         </Link>
       </p>
     </section>

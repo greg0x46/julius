@@ -1,3 +1,4 @@
+import { useTranslation } from "../../i18n/context";
 import { Input, Select } from "../ui";
 import { useEffect, useState } from "react";
 
@@ -24,6 +25,7 @@ export function InvestmentAccountForm({
   onSubmit: (write: InvestmentAccountWrite) => void;
   onCancel: () => void;
 }) {
+  const { t } = useTranslation();
   const [draft, setDraft] = useState<Draft>(blankDraft);
   const [error, setError] = useState<string | null>(null);
 
@@ -36,7 +38,7 @@ export function InvestmentAccountForm({
 
   const submit = () => {
     if (draft.name.trim() === "") {
-      setError("Informe o nome da conta de investimento.");
+      setError(t("investmentAccountNameRequired"));
       return;
     }
     setError(null);
@@ -54,37 +56,37 @@ export function InvestmentAccountForm({
 
   return (
     <FormDrawer
-      title="Nova conta de investimento"
+      title={t("newInvestmentAccount")}
       open={open}
       onClose={onCancel}
       onSubmit={submit}
-      submitLabel="Criar conta"
+      submitLabel={t("createAccount")}
       submitting={submitting}
       error={error ?? submitError}
       width={440}
     >
       <p className="form-field-hint">
-        Conta manual em reais, para controlar posições e saldo. A integração bancária não poderá ser alterada por aqui.
+        {t("manualInvestmentAccountHint")}
       </p>
-      <FormField label="Nome" htmlFor="investment-account-name">
+      <FormField label={t("name")} htmlFor="investment-account-name">
         <Input
           id="investment-account-name"
           value={draft.name}
           onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))}
-          placeholder="Ex.: Corretora XP"
+          placeholder={t("investmentAccountExample")}
           autoFocus
         />
       </FormField>
       <FormField
-        label="Conta bancária associada (opcional)"
+        label={t("linkedBankAccountOptional")}
         htmlFor="investment-financial-account"
-        hint="Selecione se o saldo vier de uma conta importada."
+        hint={t("linkedBankAccountHint")}
       >
         <Select
           id="investment-financial-account"
           value={draft.financialAccountId ?? undefined}
           options={accountOptions}
-          placeholder="Nenhuma conta associada"
+          placeholder={t("noAssociatedAccount")}
           allowClear
           showSearch
           optionFilterProp="label"

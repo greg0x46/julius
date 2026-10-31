@@ -14,6 +14,9 @@ adds to any total.
 Goals replaced the old investment "objetivos" (grouping of positions): there is
 no per-position or per-account goal, and positions carry no goal reference.
 
+Goal labels, controls and projections follow the browser language selector.
+See the [frontend reference](../frontend.md) for overall translation coverage.
+
 ## State vs. ideal
 
 Only the metric `invested_value` is accepted. The schema CHECK already admits

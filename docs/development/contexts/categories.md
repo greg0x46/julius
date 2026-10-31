@@ -17,6 +17,9 @@ debt. `expense`/`income` remain plain labels. The seed ships one category of
 this kind (`Transferência entre Contas Próprias`, `00004_categories.sql`); users
 can create more.
 
+Category controls and the transaction category picker follow the browser language
+selector; server-provided errors may remain in Portuguese. See the [frontend reference](../frontend.md) for overall coverage.
+
 ## Backend
 
 `internal/categories` — simple CRUD (`Create/Update/Get/List`) over

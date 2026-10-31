@@ -1,6 +1,6 @@
+import { translate, type Language } from "../i18n/messages";
 import type {
   InvestmentPeriodAssetClass,
-  InvestmentPeriodGrouping,
   InvestmentPeriodPosition,
   InvestmentPeriodReason,
 } from "../api/contracts";
@@ -9,62 +9,18 @@ import { multiplyDecimals, roundDecimal } from "./decimal";
 
 /** Display only: the backend states the figures; these choose words and place the decimal point. */
 
-export const investmentGroupingLabel: Record<InvestmentPeriodGrouping, string> = {
-  class: "Classe de ativo",
-  account: "Custódia",
-  none: "Sem agrupamento",
-};
-
-export const investmentAssetClassLabel: Record<InvestmentPeriodAssetClass, string> = {
-  fixed_income: "Renda fixa",
-  variable_income: "Renda variável",
-  multimarket: "Multimercado",
-  currency: "Moeda",
-  crypto: "Criptoativos",
-  other: "Outros",
-  unclassified: "Sem classe",
-};
-
-/** Why a position has no figures for the period. */
-export const periodUnavailableLabel: Record<InvestmentPeriodReason, { short: string; hint: string }> = {
-  sem_historico: {
-    short: "Sem histórico",
-    hint: "Nenhuma movimentação registrada para esta posição, então não há como medir o período.",
-  },
-  historico_incompleto: {
-    short: "Histórico incompleto",
-    hint: "As movimentações não cobrem a posição inteira (a instituição não enviou as aplicações anteriores à conexão). Calcular o período contaria o principal como lucro.",
-  },
-  saldo_indisponivel: {
-    short: "Sem saldo",
-    hint: "Não há saldo ou cotação para o início ou o fim do período.",
-  },
-  cambio_indisponivel: {
-    short: "Sem câmbio",
-    hint: "Não há cotação de câmbio para converter esta posição para a moeda de referência.",
-  },
-};
-
-/** Why the invested amount ("valor investido") is unknown. */
-export const investedUnavailableHint: Record<InvestmentPeriodReason, string> = {
-  sem_historico: "Sem movimentações para saber quanto foi investido.",
-  historico_incompleto: "O histórico não inclui a primeira aplicação, então o valor investido é desconhecido.",
-  saldo_indisponivel: "Sem saldo para calcular o valor investido.",
-  cambio_indisponivel: "Sem câmbio para converter o valor investido.",
-};
-
 /**
  * A ratio string ("0.0123456789" = 1,23%) as a pt-BR percentage, rounded on
  * the decimal text so nothing passes through a float. `signed` adds an
  * explicit "+" to positive values (a yield); zero is never signed.
  */
-export function formatRatioPercent(ratio: string, { signed = false }: { signed?: boolean } = {}): string {
+export function formatRatioPercent(ratio: string, { signed = false, language = "pt-BR" }: { signed?: boolean; language?: Language } = {}): string {
   const rounded = roundDecimal(multiplyDecimals(ratio, "100"), 2);
   const negative = rounded.startsWith("-");
   const [integer, fraction] = rounded.replace(/^-/, "").split(".");
   const zero = /^0+$/.test(`${integer}${fraction}`);
   const sign = zero ? "" : negative ? "-" : signed ? "+" : "";
-  return `${sign}${integer.replace(/\B(?=(\d{3})+(?!\d))/g, ".")},${fraction}%`;
+  return `${sign}${integer.replace(/\B(?=(\d{3})+(?!\d))/g, language === "en" ? "," : ".")}${language === "en" ? "." : ","}${fraction}%`;
 }
 
 /** Sign of a decimal/ratio string for tone and wording; "0" when it rounds to nothing at 2 places. */
@@ -89,14 +45,15 @@ export function periodRequest(period: Period, today: string): PeriodRequest | nu
 }
 
 /** What "N positions are partial" is made of, for the summary's tooltip. */
-export function partialReasons(positions: InvestmentPeriodPosition[]): string[] {
+export function partialReasons(positions: InvestmentPeriodPosition[], language: Language = "pt-BR"): string[] {
   const counts = new Map<InvestmentPeriodReason, number>();
   for (const position of positions) {
     if (position.unavailable_reason !== null) {
       counts.set(position.unavailable_reason, (counts.get(position.unavailable_reason) ?? 0) + 1);
     }
   }
-  return [...counts].map(([reason, count]) => `${count}× ${periodUnavailableLabel[reason].short}`);
+  const keys = { sem_historico: "noInvestmentHistory", historico_incompleto: "incompleteInvestmentHistory", saldo_indisponivel: "noInvestmentBalance", cambio_indisponivel: "noExchangeRate" } as const;
+  return [...counts].map(([reason, count]) => `${count}× ${translate(language, keys[reason])}`);
 }
 
 const normalize = (value: string) =>
@@ -113,4 +70,16 @@ export function matchesAssetSearch(
   const needle = normalize(search.trim());
   if (needle === "") return true;
   return normalize(`${position.name} ${position.ticker ?? ""}`).includes(needle);
+}
+
+export function investmentClassName(value: InvestmentPeriodAssetClass, language: Language = "pt-BR"): string {
+  const keys = { fixed_income: "assetClassFixedIncome", variable_income: "assetClassVariableIncome", multimarket: "assetClassMultimarket", currency: "assetClassCurrency", crypto: "assetClassCrypto", other: "assetClassOther", unclassified: "assetClassUnclassified" } as const;
+  return translate(language, keys[value]);
+}
+
+export function investmentUnavailable(reason: InvestmentPeriodReason, language: Language = "pt-BR") {
+  const shortKeys = { sem_historico: "noInvestmentHistory", historico_incompleto: "incompleteInvestmentHistory", saldo_indisponivel: "noInvestmentBalance", cambio_indisponivel: "noExchangeRate" } as const;
+  const hintKeys = { sem_historico: "investmentHistoryMissingHint", historico_incompleto: "investmentHistoryIncompleteHint", saldo_indisponivel: "investmentBalanceMissingHint", cambio_indisponivel: "investmentExchangeMissingHint" } as const;
+  const investedKeys = { sem_historico: "investedNoHistory", historico_incompleto: "investedIncompleteHistory", saldo_indisponivel: "investedNoBalance", cambio_indisponivel: "investedNoExchange" } as const;
+  return { short: translate(language, shortKeys[reason]), hint: translate(language, hintKeys[reason]), investedHint: translate(language, investedKeys[reason]) };
 }

@@ -266,3 +266,23 @@ describe("TotalOwedCard", () => {
     expect(refetch).toHaveBeenCalled();
   });
 });
+
+
+it("updates wealth and debt cards when the language changes", async () => {
+  const { I18nProvider } = await import("../../i18n/I18nProvider");
+  const { useTranslation } = await import("../../i18n/context");
+  function LanguageSwitch() {
+    const { setLanguage } = useTranslation();
+    return <button onClick={() => setLanguage("en")}>English</button>;
+  }
+  const series = [point("2026-09-25", "180000.10"), point("2026-10-22", "184300.00")];
+  mockNetWorth({ series, latest: series[1] });
+  vi.mocked(owedHook.usePayableTotalOwed).mockReturnValue({ isLoading: true, error: null, total: null, refetch: vi.fn() });
+  localStorage.removeItem("julius.language");
+  render(<I18nProvider><MemoryRouter><LanguageSwitch /><NetWorthSummaryCard /><TotalOwedCard /></MemoryRouter></I18nProvider>);
+  await userEvent.click(screen.getByRole("button", { name: "English" }));
+  expect(screen.getByRole("img", { name: "Wealth trend since 09/25" })).toBeInTheDocument();
+  expect(screen.getByText("Total debt")).toBeVisible();
+  expect(screen.getByRole("status", { name: "Loading total debt" })).toBeInTheDocument();
+  localStorage.removeItem("julius.language");
+});

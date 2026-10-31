@@ -1,3 +1,4 @@
+import { useTranslation } from "../../i18n/context";
 import { Descriptions, Tag } from "../ui";
 
 import type { TransactionItem } from "../../api/contracts";
@@ -6,28 +7,29 @@ import { internalCategoryOriginLabel } from "../../presentation/categoryLabels";
 import { formatBRL, formatMoney, moneySourceLabel } from "../../presentation/money";
 import { dateTime, installmentLabel, investmentSplit, remainderLabel } from "../../presentation/transactionDetail";
 import { movementTypeLabel } from "../../presentation/transactionLabels";
-import { exclusionReasonLabel, inclusionOriginLabel } from "../../presentation/transactionStatus";
+import { exclusionReason, inclusionOriginLabel } from "../../presentation/transactionStatus";
 import { PanelSection } from "../shared/PanelStack";
 
 /** Where and when, plus the history behind the current decisions — read-only. */
 export function TransactionDetailsScreen({ item }: { item: TransactionItem }) {
+  const { t, language } = useTranslation();
   const timezone = useTimezone();
   const split = investmentSplit(item);
   return (
     <>
-      <PanelSection title="Quando & onde">
+      <PanelSection title={t("whenWhere")}>
         <Descriptions column={1} size="small" colon={false}>
-          <Descriptions.Item label="Data e hora">{dateTime(item.occurred_at, timezone)}</Descriptions.Item>
-          <Descriptions.Item label="Conta">{item.account.name ?? "Conta não informada"}</Descriptions.Item>
-          <Descriptions.Item label="Instituição">
-            {item.account.institution ?? "Instituição não informada"}
+          <Descriptions.Item label={t("dateAndTime")}>{dateTime(item.occurred_at, timezone, language)}</Descriptions.Item>
+          <Descriptions.Item label={t("account")}>{item.account.name ?? t("accountNotProvided")}</Descriptions.Item>
+          <Descriptions.Item label={t("institution")}>
+            {item.account.institution ?? t("institutionNotProvided")}
           </Descriptions.Item>
           {item.card && (
-            <Descriptions.Item label="Cartão">
+            <Descriptions.Item label={t("card")}>
               {item.card.number}
-              {installmentLabel(item.card) && (
+              {installmentLabel(item.card, language) && (
                 <Tag className="transaction-card-installment" color="blue">
-                  {installmentLabel(item.card)}
+                  {installmentLabel(item.card, language)}
                 </Tag>
               )}
             </Descriptions.Item>
@@ -35,23 +37,23 @@ export function TransactionDetailsScreen({ item }: { item: TransactionItem }) {
         </Descriptions>
       </PanelSection>
 
-      <PanelSection title="Decisões">
+      <PanelSection title={t("decisions")}>
         <Descriptions column={1} size="small" colon={false}>
-          <Descriptions.Item label="Categoria">
+          <Descriptions.Item label={t("category")}>
             {item.internal_category
-              ? `${item.internal_category.name} · ${internalCategoryOriginLabel(item.internal_category)}`
-              : "Sem categoria"}
+              ? `${item.internal_category.name} · ${internalCategoryOriginLabel(item.internal_category, language)}`
+              : t("uncategorized")}
           </Descriptions.Item>
-          <Descriptions.Item label="Sugestão do banco">{item.source_category ?? "Não informada"}</Descriptions.Item>
-          <Descriptions.Item label="Nos totais">
-            {item.inclusion.state === "ignored" ? "Não" : "Sim"}
+          <Descriptions.Item label={t("bankSuggestion")}>{item.source_category ?? t("notProvidedFeminine")}</Descriptions.Item>
+          <Descriptions.Item label={t("inTotals")}>
+            {item.inclusion.state === "ignored" ? t("no") : t("yes")}
             {item.inclusion.changed_at &&
-              ` · ${inclusionOriginLabel(item.inclusion)} em ${dateTime(item.inclusion.changed_at, timezone)}`}
+              ` · ${inclusionOriginLabel(item.inclusion, language)} ${t("atDate")} ${dateTime(item.inclusion.changed_at, timezone, language)}`}
           </Descriptions.Item>
           {split && (
-            <Descriptions.Item label="Investimento">
-              {item.classification === "inflow" ? "Resgate" : "Aporte"} vinculado: {formatBRL(split.transferred)} ·{" "}
-              {remainderLabel(item, split.remaining)}
+            <Descriptions.Item label={t("investment")}>
+              {item.classification === "inflow" ? t("redemption") : t("contribution")} {t("linked")}: {formatBRL(split.transferred)} ·{" "}
+              {remainderLabel(item, split.remaining, language)}
             </Descriptions.Item>
           )}
         </Descriptions>
@@ -62,31 +64,32 @@ export function TransactionDetailsScreen({ item }: { item: TransactionItem }) {
 
 /** The provider's raw view of the line, for when a figure needs to be traced back. */
 export function TransactionTechnicalScreen({ item }: { item: TransactionItem }) {
+  const { t, language } = useTranslation();
   const reason = item.totals_eligibility.reason;
   return (
     <PanelSection>
       <Descriptions column={1} size="small" colon={false}>
-        <Descriptions.Item label="Origem">{item.origin === "manual" ? "Manual" : item.source_provider === "file" ? "Arquivo importado" : "Conexão automática"}</Descriptions.Item>
-        <Descriptions.Item label="Identificador externo">{item.external_id}</Descriptions.Item>
-        <Descriptions.Item label="Tipo original">{movementTypeLabel(item.movement_type)}</Descriptions.Item>
-        <Descriptions.Item label="Valor original">
-          {item.amount !== null && item.currency_code ? formatMoney(item.amount, item.currency_code) : "Não informado"}
+        <Descriptions.Item label={t("origin")}>{item.origin === "manual" ? "Manual" : item.source_provider === "file" ? t("importedFile") : t("automaticConnection")}</Descriptions.Item>
+        <Descriptions.Item label={t("externalIdentifier")}>{item.external_id}</Descriptions.Item>
+        <Descriptions.Item label={t("originalType")}>{movementTypeLabel(item.movement_type, language)}</Descriptions.Item>
+        <Descriptions.Item label={t("originalAmount")}>
+          {item.amount !== null && item.currency_code ? formatMoney(item.amount, item.currency_code) : t("notProvided")}
         </Descriptions.Item>
-        <Descriptions.Item label="Moeda original">{item.currency_code ?? "Não informada"}</Descriptions.Item>
-        <Descriptions.Item label="Status original da integração">
-          {item.provider_status ?? "Não informado"}
+        <Descriptions.Item label={t("originalCurrency")}>{item.currency_code ?? t("notProvidedFeminine")}</Descriptions.Item>
+        <Descriptions.Item label={t("originalProviderStatus")}>
+          {item.provider_status ?? t("notProvided")}
         </Descriptions.Item>
         {item.effective_money && (
-          <Descriptions.Item label="Origem do valor exibido">
-            {moneySourceLabel(item.effective_money.source)}
+          <Descriptions.Item label={t("displayedAmountSource")}>
+            {moneySourceLabel(item.effective_money.source, language)}
           </Descriptions.Item>
         )}
-        <Descriptions.Item label="Totalização">
+        <Descriptions.Item label={t("totalization")}>
           {item.totals_eligibility.included
-            ? "Incluída nos totais"
+            ? t("includedInTotals")
             : reason
-              ? exclusionReasonLabel[reason]
-              : "Não incluída"}
+              ? exclusionReason(reason, language)
+              : t("notIncluded")}
         </Descriptions.Item>
       </Descriptions>
     </PanelSection>

@@ -10,6 +10,8 @@ Julius is a self-hosted personal finance app that brings your accounts, transact
 
 ## Features
 
+- Portuguese/English navigation with a saved browser preference; page translations are incremental.
+
 - **Open Finance** — sync accounts, cards, transactions, and investments via Pluggy; start with manual accounts and CSV imports, too.
 - **Transactions & automation** — categories, configurable rules, own-account transfers, recurring commitments, and payables.
 - **Financial planning** — projections, daily spending allowance, future balance, and explicitly hypothetical scenarios selected when you need them.

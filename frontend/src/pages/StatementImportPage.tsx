@@ -1,3 +1,5 @@
+import { useTranslation } from "../i18n/context";
+import { translate, type Language } from "../i18n/messages";
 import { DownloadOutlined, InboxOutlined } from "../components/ui/icons";
 import { Alert, Button, Checkbox, Input, Radio, Select, Skeleton, Space, Typography } from "../components/ui";
 import { useEffect, useRef, useState } from "react";
@@ -14,11 +16,12 @@ import { useStatementImports } from "../hooks/useStatementImports";
 
 const accountsPath = "/contas-e-cartoes";
 
-function message(error: unknown): string {
-  return error instanceof Error ? error.message : "Não foi possível concluir a operação.";
+function message(error: unknown, language: Language): string {
+  return error instanceof Error ? error.message : translate(language, "operationFailedGeneric");
 }
 
 export function StatementImportPage() {
+  const { t, language } = useTranslation();
   const compact = useCompactScreen();
   const feedback = useFeedback();
   const { accounts, history, preview: previewing, confirm: confirming, template, discard } = useStatementImports();
@@ -44,8 +47,8 @@ export function StatementImportPage() {
   // The confirm button sits in the bottom bar, far from where a failure is
   // written (above the preview): say it where the user is looking too.
   useEffect(() => {
-    if (confirming.error) feedback.error(message(confirming.error));
-  }, [confirming.error, feedback]);
+    if (confirming.error) feedback.error(message(confirming.error, language));
+  }, [confirming.error, feedback, language]);
 
   function loadPreview(selectedFile: File, selectedAccountId?: string) {
     setAllowPartial(false);
@@ -84,16 +87,16 @@ export function StatementImportPage() {
   // Only a preview still waiting for its confirmation has an action to offer.
   const confirmAction = preview && !result ? (
     <Button type="primary" loading={busy} disabled={!canConfirm} onClick={confirm}>
-      {selectedNew === 0 ? "Registrar reenvio sem novas transações" : `Importar ${selectedNew} ${selectedNew === 1 ? "transação" : "transações"}`}
+      {selectedNew === 0 ? t("registerResendNoNew") : t("importNTransactions", { count: selectedNew, unit: selectedNew === 1 ? t("transactionSingularLower") : t("transactionPluralLower") })}
     </Button>
   ) : undefined;
 
   return (
     <Page
-      title="Importar extrato"
+      title={t("importStatement")}
       backTo={accountsPath}
-      backLabel="Voltar para contas e cartões"
-      description="Revise as movimentações de um arquivo antes de adicioná-las à sua conta."
+      backLabel={t("backToAccounts")}
+      description={t("statementImportDescription")}
       actions={confirmAction}
       className="statement-import-page"
       width="narrow"
@@ -102,66 +105,66 @@ export function StatementImportPage() {
     >
       <div className="statement-import-sections">
         {result && <div ref={resultRef} className="statement-import-result">
-          <Alert type="success" showIcon message={result.counts.new > 0 ? "Extrato importado" : "Extrato conferido: nenhuma transação nova"}
-            description={<Space direction="vertical"><span>{result.counts.new} novos, {result.counts.duplicate} já importados e {result.counts.invalid} inválidos.</span>
-              <Link to={`${accountsPath}/${result.account_id}`}>Ver conta</Link></Space>} />
+          <Alert type="success" showIcon message={result.counts.new > 0 ? t("statementImported") : t("statementCheckedNoNew")}
+            description={<Space direction="vertical"><span>{t("importCountsSummary", { new: result.counts.new, duplicate: result.counts.duplicate, invalid: result.counts.invalid })}</span>
+              <Link to={`${accountsPath}/${result.account_id}`}>{t("viewAccount")}</Link></Space>} />
         </div>}
 
-        <Section title="Selecione o arquivo">
+        <Section title={t("selectFileSection")}>
           <div className="statement-import-panel">
             <label className="statement-file-picker">
               <InboxOutlined aria-hidden="true" />
-              <span>{file ? file.name : "Selecionar arquivo CSV"}</span>
-              <input type="file" accept=".csv,text/csv" aria-label="Arquivo CSV" onChange={(event) => changeFile(event.target.files?.[0] ?? null)} />
+              <span>{file ? file.name : t("selectCsvFile")}</span>
+              <input type="file" accept=".csv,text/csv" aria-label={t("csvFileLabel")} onChange={(event) => changeFile(event.target.files?.[0] ?? null)} />
             </label>
-            <Typography.Text type="secondary">O período é lido das movimentações, mesmo que o nome do arquivo indique outro mês.</Typography.Text>
+            <Typography.Text type="secondary">{t("periodReadFromMovements")}</Typography.Text>
             <div className="statement-template">
-              <Typography.Text type="secondary">Não tem o arquivo? Baixe o modelo no formato Flash, substitua as linhas de exemplo e envie.</Typography.Text>
+              <Typography.Text type="secondary">{t("templateHint")}</Typography.Text>
               <Button type="link" className="statement-template-action" icon={<DownloadOutlined />} loading={template.isPending} onClick={template.download}>
-                Baixar modelo (CSV)
+                {t("downloadTemplate")}
               </Button>
             </div>
-            {template.error && <Alert type="error" showIcon message={message(template.error)} />}
+            {template.error && <Alert type="error" showIcon message={message(template.error, language)} />}
           </div>
         </Section>
 
-        <Section title="Escolha a conta">
+        <Section title={t("chooseAccountSection")}>
           <div className="statement-import-panel">
-            <Typography.Paragraph>Use uma conta de arquivo. Extratos enviados aqui ficam separados de conexões automáticas.</Typography.Paragraph>
+            <Typography.Paragraph>{t("fileAccountHint")}</Typography.Paragraph>
             <Radio.Group value={targetKind} onChange={(event) => changeTarget(event.target.value as "new" | "existing")}>
-              <Radio value="new">Criar conta de arquivo</Radio>
-              <Radio value="existing" disabled={accounts.state.kind !== "ready"}>Usar conta existente</Radio>
+              <Radio value="new">{t("createFileAccount")}</Radio>
+              <Radio value="existing" disabled={accounts.state.kind !== "ready"}>{t("useExistingAccount")}</Radio>
             </Radio.Group>
             {accounts.state.kind === "unavailable" &&
-              <UnavailableState onRetry={accounts.retry}>Não foi possível listar contas de arquivo</UnavailableState>}
+              <UnavailableState onRetry={accounts.retry}>{t("fileAccountsListError")}</UnavailableState>}
             <div className="statement-account-field">
-              {targetKind === "new" ? <Input value={newAccountName} maxLength={100} placeholder="Nome da conta, por exemplo Flash"
-                aria-label="Nome da nova conta" onChange={(event) => setNewAccountName(event.target.value)} /> :
-                <Select value={accountId} placeholder="Selecione uma conta de arquivo" aria-label="Conta de arquivo" className="statement-account-select"
+              {targetKind === "new" ? <Input value={newAccountName} maxLength={100} placeholder={t("newAccountNamePlaceholder")}
+                aria-label={t("newAccountNameLabel")} onChange={(event) => setNewAccountName(event.target.value)} /> :
+                <Select value={accountId} placeholder={t("selectFileAccount")} aria-label={t("fileAccountLabel")} className="statement-account-select"
                   options={accounts.state.kind === "ready" ? accounts.state.items.map((account) => ({ value: account.id, label: `${account.name} (${account.currency_code})` })) : []}
                   onChange={(value) => changeTarget("existing", value)} />}
             </div>
           </div>
         </Section>
 
-        {busy && <LoadingState>Processando extrato…</LoadingState>}
-        {failure && <Alert type="error" showIcon message={message(failure)} action={file && !preview && !result ?
-          <Button size="small" onClick={() => loadPreview(file, targetKind === "existing" ? accountId : undefined)}>Gerar prévia novamente</Button> : undefined} />}
+        {busy && <LoadingState>{t("processingStatement")}</LoadingState>}
+        {failure && <Alert type="error" showIcon message={message(failure, language)} action={file && !preview && !result ?
+          <Button size="small" onClick={() => loadPreview(file, targetKind === "existing" ? accountId : undefined)}>{t("generatePreviewAgain")}</Button> : undefined} />}
 
         {preview && (
-          <Section title="Revise a prévia" flush>
+          <Section title={t("reviewPreview")} flush>
             <StatementPreviewSummary preview={preview} />
             <div className="statement-import-review-notes">
-              {!targetReady && <Typography.Text type="secondary">Informe a conta para confirmar.</Typography.Text>}
-              {targetKind === "new" && preview.counts.new === 0 && <Alert type="info" showIcon message="Não há transações válidas para criar esta conta." />}
+              {!targetReady && <Typography.Text type="secondary">{t("informAccountToConfirm")}</Typography.Text>}
+              {targetKind === "new" && preview.counts.new === 0 && <Alert type="info" showIcon message={t("noValidTransactionsForAccount")} />}
               {preview.counts.new === 0 && preview.counts.duplicate > 0 && ambiguousRows.length === 0 &&
-                <Alert type="info" showIcon message="Este extrato já foi importado nesta conta. Nenhuma transação nova será criada." />}
-              {ambiguousRows.length > 0 && <Alert type="warning" showIcon message="Há movimentações com saldos diferentes. Compare os valores e escolha o que fazer em cada linha." />}
+                <Alert type="info" showIcon message={t("statementAlreadyImported")} />}
+              {ambiguousRows.length > 0 && <Alert type="warning" showIcon message={t("differentBalancesWarning")} />}
               {preview.warnings.map((warning, index) => <Alert key={index} type="warning" showIcon message={warning} />)}
               {preview.counts.invalid > 0 && <Alert type="warning" showIcon
-                message={`${preview.counts.invalid} linha(s) inválida(s). Corrija o arquivo ou escolha importar apenas as válidas.`} />}
+                message={t("invalidRowsWarning", { count: preview.counts.invalid })} />}
               {preview.counts.invalid > 0 && <Checkbox checked={allowPartial} onChange={(event) => setAllowPartial(event.target.checked)}>
-                Importar somente as linhas válidas; as inválidas serão ignoradas
+                {t("importOnlyValidRows")}
               </Checkbox>}
             </div>
             <StatementPreviewRows rows={preview.rows} conflicts={preview.conflicts} filename={preview.filename} ambiguousDecisions={ambiguousDecisions}
@@ -169,15 +172,15 @@ export function StatementImportPage() {
           </Section>
         )}
 
-        <Section title="Importações recentes" flush={history.state.kind === "ready"}>
+        <Section title={t("recentImports")} flush={history.state.kind === "ready"}>
           {history.state.kind === "loading" && (
-            <div role="status" aria-label="Carregando histórico">
+            <div role="status" aria-label={t("loadingHistoryShort")}>
               <Skeleton active paragraph={{ rows: 3 }} />
             </div>
           )}
-          {history.state.kind === "empty" && <EmptyState title="Nenhum extrato importado ainda" />}
+          {history.state.kind === "empty" && <EmptyState title={t("noStatementsImported")} />}
           {history.state.kind === "unavailable" &&
-            <UnavailableState onRetry={history.retry}>Não foi possível carregar o histórico</UnavailableState>}
+            <UnavailableState onRetry={history.retry}>{t("historyLoadError")}</UnavailableState>}
           {history.state.kind === "ready" && <StatementImportHistory items={history.state.items} />}
         </Section>
       </div>

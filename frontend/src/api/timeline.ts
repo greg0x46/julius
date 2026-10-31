@@ -1,3 +1,4 @@
+import { apiMessage } from "../i18n/apiMessage";
 import { apiFetch } from "./transport";
 import {
   parseProblem,
@@ -10,7 +11,7 @@ import {
 } from "./contracts";
 import { ApiError, isAbortError } from "./problems";
 
-const defaultMessage = "Não foi possível carregar a linha do tempo.";
+const defaultMessage = () => apiMessage("apiTimelineLoad");
 
 function buildQuery(params: TimelineParams): string {
   const search = new URLSearchParams({
@@ -45,7 +46,7 @@ async function request(url: string, signal?: AbortSignal): Promise<Response> {
     });
   } catch (error) {
     if (isAbortError(error)) throw error;
-    throw new ApiError("transport", defaultMessage);
+    throw new ApiError("transport", defaultMessage());
   }
 
   const contentType = response.headers.get("content-type")?.split(";")[0].trim();
@@ -59,11 +60,11 @@ async function request(url: string, signal?: AbortSignal): Promise<Response> {
         problem = undefined;
       }
     }
-    throw new ApiError("response", problem?.detail ?? problem?.title ?? defaultMessage, problem);
+    throw new ApiError("response", problem?.detail ?? problem?.title ?? defaultMessage(), problem);
   }
 
   if (contentType !== "application/json") {
-    throw new ApiError("response", defaultMessage);
+    throw new ApiError("response", defaultMessage());
   }
   return response;
 }
@@ -74,6 +75,6 @@ async function readJSON<T>(response: Response, parse: (value: unknown) => T): Pr
   try {
     return parse(await response.json());
   } catch {
-    throw new ApiError("response", defaultMessage);
+    throw new ApiError("response", defaultMessage());
   }
 }

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   formatDate,
+  formatDateOnly,
   formatDay,
   formatDayMonth,
   formatLocalDay,
@@ -43,6 +44,14 @@ describe("date presentation", () => {
     expect(formatLocalDay(instant, "America/Sao_Paulo")).toBe("01/04/2026");
     expect(formatLocalDay(instant, "Asia/Tokyo")).toBe("02/04/2026");
     expect(formatOptionalLocalDay(instant, "UTC")).toBe("02/04/2026");
+  });
+
+  it("formats calendar dates and missing values in English", () => {
+    expect(formatDay("2026-04-03T00:00:00Z", "en")).toBe("4/3/26");
+    expect(formatDateOnly("2026-04-03", "en")).toBe("04/03/2026");
+    expect(formatDayMonth("2026-04-03", "en")).toBe("04/03");
+    expect(formatOptionalDateTime(null, zone, "en")).toBe("Not yet available");
+    expect(formatDay("invalid", "en")).toBe("Invalid date");
   });
 
   it("formats an updated-at instant as a sentence, without seconds", () => {

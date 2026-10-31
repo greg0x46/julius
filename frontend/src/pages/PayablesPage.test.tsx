@@ -74,3 +74,22 @@ describe("PayablesPage", () => {
     expect(screen.getAllByRole("button", { name: /Nova pendência|Nova$/ })).toHaveLength(1);
   });
 });
+
+it("switches debt and receivable labels with the selected language", async () => {
+  const { I18nProvider } = await import("../i18n/I18nProvider");
+  const { useTranslation } = await import("../i18n/context");
+  const userEvent = (await import("@testing-library/user-event")).default;
+  function LanguageSwitch() {
+    const { setLanguage } = useTranslation();
+    return <button onClick={() => setLanguage("en")}>English</button>;
+  }
+  vi.mocked(payablesApi.listPayables).mockResolvedValue([payable({}), payable({ id: "p2", kind: "receivable", name: "Para Ana" })]);
+  localStorage.removeItem("julius.language");
+  render(<I18nProvider><MemoryRouter><QueryTestProvider><LanguageSwitch /><PayablesPage /></QueryTestProvider></MemoryRouter></I18nProvider>);
+  await screen.findByText("Você deve");
+  await userEvent.click(screen.getByRole("button", { name: "English" }));
+  expect(screen.getByText("You owe")).toBeVisible();
+  expect(screen.getByText("Owed to you")).toBeVisible();
+  expect(screen.getByRole("radio", { name: "Debts" })).toBeVisible();
+  localStorage.removeItem("julius.language");
+});

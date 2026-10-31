@@ -1,3 +1,4 @@
+import { useTranslation } from "../../i18n/context";
 import { CloseOutlined } from "../ui/icons";
 import { Button, Drawer } from "../ui";
 import { useEffect, useRef, type ReactNode } from "react";
@@ -16,7 +17,7 @@ import { useCompactScreen } from "../shared/useCompactScreen";
 export function FilterPanel({
   open,
   onClose,
-  title = "Filtros",
+  title,
   activeCount,
   onClear,
   onApply,
@@ -34,10 +35,11 @@ export function FilterPanel({
   width?: number;
   children: ReactNode;
 }) {
+  const { t } = useTranslation();
   const compact = useCompactScreen();
   const headingRef = useRef<HTMLHeadingElement>(null);
   const status =
-    activeCount === 0 ? "Nenhum ativo" : activeCount === 1 ? "1 ativo" : `${activeCount} ativos`;
+    activeCount === 0 ? t("noActive") : activeCount === 1 ? t("oneActive") : t("manyActive", { count: activeCount });
 
   // Opening replaces what the person was looking at; the title tells
   // assistive tech (and the keyboard) where they are.
@@ -59,7 +61,7 @@ export function FilterPanel({
         <div className="filter-panel-header">
           <div className="filter-panel-heading">
             <h2 ref={headingRef} tabIndex={-1} className="filter-panel-title">
-              {title}
+              {title ?? t("filters")}
             </h2>
             <span className={`filter-panel-status ${activeCount ? "is-active" : ""}`} aria-live="polite">
               {status}
@@ -69,7 +71,7 @@ export function FilterPanel({
             type="text"
             className="filter-panel-close"
             icon={<CloseOutlined />}
-            aria-label="Fechar filtros"
+            aria-label={t("closeFilters")}
             onClick={onClose}
           />
         </div>
@@ -77,10 +79,10 @@ export function FilterPanel({
       footer={
         <div className="filter-panel-footer">
           <Button type="link" className="filter-panel-clear" disabled={clearDisabled} onClick={onClear}>
-            Limpar filtros
+            {t("clearFilters")}
           </Button>
           <Button type="primary" onClick={onApply}>
-            Aplicar
+            {t("apply")}
           </Button>
         </div>
       }

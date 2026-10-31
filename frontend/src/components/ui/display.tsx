@@ -1,3 +1,4 @@
+import { useTranslation } from "../../i18n/context";
 import {
   Children,
   createElement,
@@ -88,6 +89,7 @@ export function Alert({
   closable?: boolean;
   onClose?: () => void;
 }) {
+  const { t } = useTranslation();
   const [hidden, setHidden] = useState(false);
   return hidden ? null : (
     <div
@@ -106,7 +108,7 @@ export function Alert({
       {closable && (
         <button
           type="button"
-          aria-label="Fechar aviso"
+          aria-label={t("closeNotice")}
           onClick={() => {
             setHidden(true);
             onClose?.();
@@ -131,6 +133,7 @@ export function Tag({
   onClose?: (event: MouseEvent<HTMLButtonElement>) => void;
   closeIcon?: ReactNode;
 }) {
+  const { t } = useTranslation();
   return (
     <span
       {...props}
@@ -139,7 +142,7 @@ export function Tag({
     >
       {children}
       {closable && (
-        <button type="button" aria-label="Remover filtro" onClick={onClose}>
+        <button type="button" aria-label={t("removeFilter")} onClick={onClose}>
           {closeIcon ?? "×"}
         </button>
       )}
@@ -172,11 +175,12 @@ export function Spin({
   tip?: ReactNode;
   size?: string;
 }) {
+  const { t } = useTranslation();
   void size;
   return (
     <span aria-hidden="true" className="ui-spin">
       <span className="ui-spinner" aria-hidden="true" />
-      {tip ?? <span className="visually-hidden">Carregando…</span>}
+      {tip ?? <span className="visually-hidden">{t("loading")}</span>}
       {children}
     </span>
   );
@@ -275,6 +279,7 @@ function text(
   });
 }
 export function Text(props: TextProps) {
+  const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
   const [failed, setFailed] = useState(false);
   if (!props.copyable) return text("span", props);
@@ -283,7 +288,7 @@ export function Text(props: TextProps) {
       {text("span", props)}
       <button
         type="button"
-        aria-label={copied ? "Copiado" : "Copiar identificador"}
+        aria-label={copied ? t("copied") : t("copyIdentifier")}
         onClick={async () => {
           try {
             await navigator.clipboard.writeText(String(props.children ?? ""));
@@ -294,11 +299,11 @@ export function Text(props: TextProps) {
           }
         }}
       >
-        {copied ? "Copiado" : "Copiar"}
+        {copied ? t("copied") : t("copy")}
       </button>
       {failed && (
         <span role="status">
-          Não foi possível copiar. Selecione o texto para copiar.
+          {t("copyFailed")}
         </span>
       )}
     </span>

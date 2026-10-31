@@ -1,4 +1,5 @@
 import { monthRange, shiftDay, zonedToday } from "../../presentation/timezone";
+import { translate, type Language } from "../../i18n/messages";
 import type { DateRangePreset } from "./PeriodNavigator";
 
 /**
@@ -11,13 +12,13 @@ import type { DateRangePreset } from "./PeriodNavigator";
  * "Todo o período" is the pair of nulls: transactions read it as "no date
  * filter" and the balance widget resolves it against the database's own span.
  */
-export function periodPresets(timezone: string): DateRangePreset[] {
+export function periodPresets(timezone: string, language: Language = "pt-BR"): DateRangePreset[] {
   return [
-    { value: "this-month", label: "Este mês", range: () => monthRange(zonedToday(timezone), 0) },
-    { value: "last-month", label: "Mês passado", range: () => monthRange(zonedToday(timezone), -1) },
+    { value: "this-month", label: translate(language, "thisMonth"), range: () => monthRange(zonedToday(timezone), 0) },
+    { value: "last-month", label: translate(language, "lastMonth"), range: () => monthRange(zonedToday(timezone), -1) },
     {
       value: "last-30-days",
-      label: "Últimos 30 dias",
+      label: translate(language, "last30Days"),
       range: () => {
         const end = zonedToday(timezone);
         return [shiftDay(end, -29), end];
@@ -25,12 +26,12 @@ export function periodPresets(timezone: string): DateRangePreset[] {
     },
     {
       value: "this-year",
-      label: "Este ano",
+      label: translate(language, "thisYear"),
       range: () => {
         const year = zonedToday(timezone).slice(0, 4);
         return [`${year}-01-01`, `${year}-12-31`];
       },
     },
-    { value: "all", label: "Todo o período", range: () => [null, null] },
+    { value: "all", label: translate(language, "allTime"), range: () => [null, null] },
   ];
 }

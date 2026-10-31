@@ -1,3 +1,4 @@
+import { useTranslation } from "../../i18n/context";
 import { Input } from "../ui";
 import { useEffect, useState } from "react";
 
@@ -17,6 +18,7 @@ export function StandaloneScenarioForm({
   onSubmit: (name: string) => void;
   onCancel: () => void;
 }) {
+  const { t } = useTranslation();
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
 
@@ -29,7 +31,7 @@ export function StandaloneScenarioForm({
 
   const submit = () => {
     if (name.trim() === "") {
-      setError("Informe um nome para o cenário.");
+      setError(t("scenarioNameRequired"));
       return;
     }
     setError(null);
@@ -38,7 +40,7 @@ export function StandaloneScenarioForm({
 
   return (
     <FormDrawer
-      title="Novo cenário"
+      title={t("newScenario")}
       open={open}
       onClose={onCancel}
       onSubmit={submit}
@@ -46,15 +48,15 @@ export function StandaloneScenarioForm({
       error={error ?? submitError}
     >
       <FormField
-        label="Nome"
+        label={t("name")}
         htmlFor="standalone-scenario-name"
-        hint="Depois de criar, adicione as transações hipotéticas do cenário."
+        hint={t("scenarioNameHint")}
       >
         <Input
           id="standalone-scenario-name"
           value={name}
           onChange={(event) => setName(event.target.value)}
-          placeholder="Ex.: Viagem, Novo emprego"
+          placeholder={t("scenarioNameExample")}
         />
       </FormField>
     </FormDrawer>
