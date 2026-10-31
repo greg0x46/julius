@@ -8,8 +8,17 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/greg0x46/julius/internal/auth"
+	"github.com/greg0x46/julius/internal/httpapi"
 	"github.com/greg0x46/julius/internal/httplog"
 )
+
+// publicHandler is everything the binary serves: security headers around the
+// access log around the routes. The outermost position lets a handler's own
+// stricter headers (/oauth/*) replace the defaults.
+func publicHandler(logger *slog.Logger, config auth.Config, api, mcp http.Handler) http.Handler {
+	return httpapi.SecurityHeaders(config)(loggedHandler(logger, api, mcp))
+}
 
 // loggedHandler puts the access log around every route served by serverHandler.
 func loggedHandler(logger *slog.Logger, api, mcp http.Handler) http.Handler {

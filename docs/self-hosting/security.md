@@ -21,6 +21,30 @@ an exact matching `Origin` and `X-Julius-Request: 1`; the built-in UI supplies
 these. A hostname mismatch causes `invalid-origin`. HTTP public origins are
 accepted only on loopback hosts for local development.
 
+## Browser security headers
+
+Julius sets these headers on every response (the interface, `/api`, `/health`,
+`/mcp` and `/oauth/*`), so you do not need to add them in the proxy:
+
+| Header | Value |
+| --- | --- |
+| `X-Content-Type-Options` | `nosniff` |
+| `X-Frame-Options` | `DENY` |
+| `Referrer-Policy` | `same-origin` |
+| `Content-Security-Policy` | Same-origin only, no inline scripts, no framing (`frame-ancestors 'none'`), `base-uri 'none'`, `object-src 'none'`, `form-action 'self'`. The interface also loads its brand font from `fonts.googleapis.com` and `fonts.gstatic.com`. |
+| `Strict-Transport-Security` | `max-age=31536000`, only when `JULIUS_PUBLIC_URL` is HTTPS |
+
+The OAuth consent pages and `/mcp` send an even stricter policy
+(`default-src 'none'`) that replaces the default. `Referrer-Policy` must stay
+`same-origin`: with `no-referrer` browsers send `Origin: null` on the consent
+forms and Julius rejects them.
+
+Keep the proxy from removing or weakening these headers. It may add more, such
+as `Strict-Transport-Security` with `includeSubDomains`, once every subdomain
+of the host serves HTTPS. Julius leaves `includeSubDomains` and `preload` to
+you because they bind the whole domain. A proxy that sets a header Julius also
+sets can replace it; check the final response with `curl -I`.
+
 ## Master key and stored secrets
 
 Use the [one-time key generation](../getting-started.md#2-configure-the-key-and-local-origin)
