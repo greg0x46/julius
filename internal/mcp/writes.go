@@ -201,18 +201,10 @@ func (o *oauthServer) approveWrite(w http.ResponseWriter, r *http.Request) {
 		o.renderWrite(w, 200, id, a, "", "")
 		return
 	}
-	if o.limited(true) {
-		rateLimited(w, r, "oauth_consent_attempts", "window_exceeded")
+	_, handled, err := o.verifyOwner(w, r)
+	if handled {
 		return
 	}
-	select {
-	case o.hashing <- struct{}{}:
-		defer func() { <-o.hashing }()
-	default:
-		rateLimited(w, r, "oauth_hashing_busy", "busy")
-		return
-	}
-	_, err = o.store.VerifyOwner(r.Context(), r.PostForm.Get("email"), r.PostForm.Get("password"))
 	if errors.Is(err, auth.ErrCredentials) {
 		httplog.SetAuth(r.Context(), httplog.AuthNone, httplog.AuthRejected)
 		httplog.SetError(r.Context(), "invalid_credentials", "invalid_credentials", "")

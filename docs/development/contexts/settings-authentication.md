@@ -84,10 +84,19 @@ endpoints. No session: 401; database failure: 503. Static files and `/health`
 are public. The legacy setup/unlock routes are not registered. Writes,
 including login, require the configured Origin and `X-Julius-Request: 1`
 (403 otherwise), with no CORS. `/api` responses get `Cache-Control: no-store`.
-Login and password change share limits of five attempts/minute per email and
-thirty global, in bounded memory, plus one concurrent KDF operation. Excess or
-contention: 429 with `Retry-After`. Credential messages are generic; the KDF
-also runs for a wrong email. Authentication bodies are limited to 4 KiB.
+Login limits budgets of *failed* credential checks (`auth.Limiter`, fixed
+one-minute windows, in bounded memory): five per normalized email plus thirty
+globally. The budget is checked first and only a rejected check is recorded, so
+successful logins never spend it; while it is spent, even correct credentials get
+429 with `Retry-After: 60` without a KDF run. Password change has its own
+budget keyed by a hash of the session token (five per session, thirty overall),
+so unauthenticated guesses cannot block it. One KDF operation runs at a time
+across both; contention also gives 429. Residual trade-off: whoever knows the
+owner email can keep the owner out for as long as they keep failing, and
+thirty failures per minute with any emails spend the global backstop;
+restarting the process clears the in-memory counters (`reset-password` does
+not). Credential messages are generic; the KDF also runs for a wrong email.
+Authentication bodies are limited to 4 KiB.
 Every route, REST or OAuth/MCP, is covered by the access log and security
 events described in "HTTP access log and security events" below.
 
@@ -297,9 +306,22 @@ loopback; no forwarded header determines the issuer/resource. See MCP tool refer
 for client setup and synthetic dev validation.
 
 OAuth routes have a per-instance 120/minute global limit and 16 KiB bodies;
-credential verification is limited to five/minute and one concurrent KDF.
-Registration is capped at 1,000 clients per database. These local limits do not
-replace edge abuse controls for publicly exposed deployments.
+`POST /oauth/register` has its own 20/minute bucket instead, so registration
+spam cannot starve the other routes (and the shared one cannot starve it).
+Owner credential verification (consent and write approval share it) has a
+budget of five *failed* checks per minute per instance, checked first and
+spent only by failures, plus one concurrent KDF; the residual lockout
+trade-off is the one described for login above. Registration is capped at
+1,000 clients per database. `oauth_clients.created_at` (migration
+`0009_oauth_client_created_at`; existing rows are dated at migration time,
+SQLite uses a sentinel default for inserts that omit it) drives cleanup: each
+registration first deletes never-authorized clients older than 24 hours and,
+when the cap is reached, the oldest never-authorized one. "Never authorized"
+means no `mcp_authorizations` row (revoked ones count) and no unexpired
+`oauth_grants` row, so an open consent page protects its client; deleting a
+client cascades to its expired grants. If nothing is evictable, registration
+keeps returning 429 `client_registry_full`. These local limits do not replace
+edge abuse controls for publicly exposed deployments.
 
 Tests in `internal/mcp/oauth_test.go` run on SQLite and Postgres: successful
 registration/consent/exchange/discovery, restart, denial, replay and concurrent
@@ -683,9 +705,9 @@ request line. A name outside this set is dropped (`httplog.eventLevels`).
 | `security.rate_limited` | warn | A limiter refused the request (429) | `limiter`, `reason` |
 | `security.invalid_origin` | warn | A state-changing request has a wrong `Origin` or missing `X-Julius-Request` | `reason` |
 
-`limiter` is `auth_attempts` or `auth_hashing_busy` (REST login and password
-change), `oauth_requests`, `oauth_consent_attempts`, `oauth_hashing_busy` or
-`mcp_concurrency`; `reason` is `window_exceeded` or `busy`. For
+`limiter` is `auth_attempts` (REST login), `auth_password_attempts` (password
+change), `auth_hashing_busy` (either), `oauth_requests`, `oauth_register`,
+`oauth_consent_attempts`, `oauth_hashing_busy` or `mcp_concurrency`; `reason` is `window_exceeded` or `busy`. For
 `security.invalid_origin`, `reason` is `origin_mismatch`, `origin_missing`,
 `origin_null` (the header is exactly `null`; MCP and OAuth only) or, for REST
 only, `request_header_missing`. A wrong current password on
@@ -727,7 +749,8 @@ logged, so the log identifies the exact validation:
 | 400 | `invalid_redirect_uri` | `too_long` | `redirect_uris` | - | Over 2048 bytes |
 | 400 | `invalid_redirect_uri` | `scheme_not_allowed` | `redirect_uris` | - | Neither `https` nor `http` |
 | 400 | `invalid_redirect_uri` | `http_non_loopback` | `redirect_uris` | - | `http` to a host other than `127.0.0.1`, `::1` or `localhost` |
-| 429 | `temporarily_unavailable` | `client_registry_full` | - | - | 1,000 clients already registered |
+| 429 | `temporarily_unavailable` | `rate_limited` | - | - | More than 20 requests per minute to this route; also `security.rate_limited` (`oauth_register`, `window_exceeded`) |
+| 429 | `temporarily_unavailable` | `client_registry_full` | - | - | 1,000 clients registered and none can be evicted: all have an authorization or a live grant |
 | 503 | `temporarily_unavailable` | `db_error` | - | - | Insert failed |
 
 Success is 201 with `oauth.client.registered`, which exists only for that
@@ -740,7 +763,7 @@ with `["implicit"]` means the client asked for a grant Julius does not support.
 
 | Status | `error_code` | `error_reason` | Cause |
 |---|---|---|---|
-| 429 | `temporarily_unavailable` | `rate_limited` | 120 requests per minute per process; also `security.rate_limited` (`oauth_requests`, `window_exceeded`) |
+| 429 | `temporarily_unavailable` | `rate_limited` | 120 requests per minute per process, not counting `POST /oauth/register`, which has its own bucket (see its table); also `security.rate_limited` (`oauth_requests`, `window_exceeded`) |
 | 503 | `temporarily_unavailable` | `settings_unavailable` | Authentication setting unreadable |
 | 403 | `access_denied` | `authentication_disabled` | Open mode |
 
@@ -795,7 +818,7 @@ Success is 200 (consent page) with no event.
 | 403 | `access_denied` | `csrf_cookie_missing` | - | Browser binding cookie absent |
 | 403 | `access_denied` | `csrf_mismatch` | - | Cookie does not match the request |
 | 400 | `invalid_request` | `invalid_decision` | `decision` | Neither `allow` nor `deny` |
-| 429 | `temporarily_unavailable` | `rate_limited` | - | 5 verifications per minute (`oauth_consent_attempts`, `window_exceeded`) or one in progress (`oauth_hashing_busy`, `busy`); `security.rate_limited` |
+| 429 | `temporarily_unavailable` | `rate_limited` | - | 5 failed verifications in the last minute (`oauth_consent_attempts`, `window_exceeded`; successes do not count and `Retry-After: 60` is sent) or one in progress (`oauth_hashing_busy`, `busy`); `security.rate_limited` |
 | 401 | `invalid_credentials` | `invalid_credentials` | - | Wrong owner credentials (HTML page); auth `none`/`rejected`; `oauth.credentials.rejected` |
 | 200 | `access_denied` | `user_denied` | - | Explicit denial; callback page; `oauth.consent.denied` |
 | 200 | - | - | - | Granted; callback page; `oauth.consent.granted` |
@@ -882,7 +905,7 @@ Protocol and JSON-RPC errors come from the MCP SDK and carry no `error_code`.
 | 401 | `unauthorized` | `invalid_session` | Unknown, expired, revoked or malformed cookie |
 | 503 | `auth-unavailable` | `auth_unavailable` | Session store failure (also login, logout, password change) |
 | 401 | `unauthorized` | `invalid_credentials` | Wrong password on login (`auth.login.failure`) or wrong current password on `PUT /api/auth/password` (no event) |
-| 429 | `too-many-attempts` | `window_exceeded` | 5 attempts per minute per email or 30 per minute per process on login and password change; `security.rate_limited` (`auth_attempts`) |
+| 429 | `too-many-attempts` | `window_exceeded` | 5 failed logins per minute for the email or 30 per minute per process, or 5 failed current-password checks per minute for the session on password change; successes do not count; `security.rate_limited` (`auth_attempts` for login, `auth_password_attempts` for password change) |
 | 429 | `too-many-attempts` | `busy` | A password hash is already running; `security.rate_limited` (`auth_hashing_busy`) |
 
 Every other `writeProblem(w, status, kind, ...)` in `internal/httpapi` (over

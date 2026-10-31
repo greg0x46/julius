@@ -105,11 +105,14 @@ clients must support Dynamic Client Registration. There are no client secrets,
 refresh tokens, implicit/password grants, device flow, OIDC identity tokens,
 registration-management API or browser CORS support. The consent page works
 without JavaScript, requires a bound anti-CSRF cookie and matching Origin, and
-cannot be framed. OAuth endpoints allow 120 requests/minute per instance;
-credential checks allow five/minute and one concurrent password hash. At most
-1,000 clients may be registered per database. These limits protect a small
-self-hosted instance; an untrusted public deployment also needs edge abuse
-controls. Application names are self-reported, not verified identities.
+cannot be framed. OAuth endpoints allow 120 requests/minute per instance and
+registration its own 20/minute; consent and write approval allow five failed
+credential checks per minute (a success never counts) and one concurrent
+password hash. At most 1,000 clients may be registered per database; a full
+registry makes room by removing the oldest client that never completed an
+authorization, and clients with any authorization are never removed. These
+limits protect a small self-hosted instance; an untrusted public deployment
+also needs edge abuse controls. Application names are self-reported, not verified identities.
 
 Self-hosting requires a reachable HTTPS `JULIUS_PUBLIC_URL` with a valid
 certificate; HTTP is allowed only on loopback for development. Keep discovery,

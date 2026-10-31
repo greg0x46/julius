@@ -82,6 +82,40 @@ The command prompts for a new password and confirmation, requires no master
 key, and revokes all sessions. The server still needs its original key to run.
 There is no email-based password recovery.
 
+### Sign-in throttling
+
+Sign-in guards against password guessing with a budget of **failed** attempts:
+five per minute for each e-mail address, plus a backstop of thirty per minute
+for the whole instance. Only a rejected password spends the budget; a correct
+sign-in never does, so your own logins and password changes cannot lock you
+out. When the budget is spent, Julius answers `429` with `Retry-After: 60`
+without checking the password, even a correct one. Changing the password
+under **Configurações** has a separate budget (five failed current-password
+checks per minute for each session), so guesses at the login form cannot block
+it. The consent and write-approval pages for MCP clients use one shared budget
+of five failed checks per minute.
+
+This does not fully protect against lockout. Anyone who knows your e-mail
+address can keep sending wrong passwords, and while they do you get `429` for
+up to a minute at a time; wrong passwords for any other addresses can use up
+the thirty-per-minute backstop the same way. Counters are kept in memory by
+each process, in one-minute windows. To recover, wait a minute or restart
+Julius, which clears the counters.
+`./julius auth reset-password` does not clear them; it only replaces the
+password and revokes all sessions. For an instance on the public internet, add
+rate limiting or an access gate at the reverse proxy.
+
+### MCP client registry
+
+When the optional MCP integration is on, `/oauth/register` is public, as
+OAuth dynamic client registration requires. It has its own limit of twenty
+requests per minute, separate from the other OAuth routes, and the registry
+holds at most 1,000 clients. Clients that never completed an authorization are
+removed after 24 hours, and a full registry makes room by removing the oldest
+of them. A client that has any authorization, including a revoked one, is never
+removed automatically; each of those needed your consent. Only if all 1,000
+clients have one do new registrations get `429`.
+
 **Configurações > Acesso** can disable authentication. This lets anyone who
 can reach the instance read and change all data. Keep it enabled on a hosted
 installation; origin checks alone do not restrict who can read your data.

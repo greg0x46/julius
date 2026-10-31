@@ -38,14 +38,19 @@ func logLines(t *testing.T, buf *bytes.Buffer) []map[string]any {
 	return out
 }
 
-// acquire tells the two ways a request is throttled apart: the attempt window
-// (per e-mail and global) and a hashing slot that is already taken.
+// acquire tells the two ways a request is throttled apart: the failure budget
+// (per e-mail and global) and a hashing slot that is already taken. A request
+// with fail=1 stands for a rejected credential check.
 func TestAcquireNamesTheLimiter(t *testing.T) {
 	newRig := func() (*authAPI, http.Handler, *bytes.Buffer) {
 		a := newAuthAPI(nil, auth.Config{})
 		var buf bytes.Buffer
 		h := httplog.Middleware(slog.New(slog.NewJSONHandler(&buf, nil)))(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if a.acquire(w, r, r.URL.Query().Get("email")) {
+			email := r.URL.Query().Get("email")
+			if a.acquire(w, r, a.logins, email, "auth_attempts") {
+				if r.URL.Query().Get("fail") == "1" {
+					a.logins.Record(email)
+				}
 				<-a.hashing
 				w.WriteHeader(http.StatusNoContent)
 			}
@@ -54,7 +59,7 @@ func TestAcquireNamesTheLimiter(t *testing.T) {
 	}
 	get := func(h http.Handler, email string) *httptest.ResponseRecorder {
 		rec := httptest.NewRecorder()
-		h.ServeHTTP(rec, httptest.NewRequest("GET", "/x?email="+email, nil))
+		h.ServeHTTP(rec, httptest.NewRequest("GET", "/x?fail=1&email="+email, nil))
 		return rec
 	}
 	assertThrottled := func(t *testing.T, rec *httptest.ResponseRecorder, buf *bytes.Buffer, limiter, reason string) {
@@ -109,6 +114,16 @@ func TestAcquireNamesTheLimiter(t *testing.T) {
 		}
 		buf.Reset()
 		assertThrottled(t, get(h, "u30@mail.example"), buf, "auth_attempts", "window_exceeded")
+	})
+	t.Run("successes never throttle", func(t *testing.T) {
+		_, h, _ := newRig()
+		for i := 0; i < 40; i++ {
+			rec := httptest.NewRecorder()
+			h.ServeHTTP(rec, httptest.NewRequest("GET", "/x?email=a@mail.example", nil))
+			if rec.Code != 204 {
+				t.Fatalf("success %d: %d", i, rec.Code)
+			}
+		}
 	})
 	t.Run("no event when allowed", func(t *testing.T) {
 		_, h, buf := newRig()
@@ -197,4 +212,39 @@ func TestProblemKindsAreLoggable(t *testing.T) {
 	if checked < 100 {
 		t.Fatalf("only %d problem kinds found; the scan is probably broken", checked)
 	}
+}
+
+// The password-change budget is keyed by session and independent of the login
+// one, and its refusals name their own limiter.
+func TestPasswordBudgetIsSeparateAndNamed(t *testing.T) {
+	a := newAuthAPI(nil, auth.Config{})
+	for i := 0; i < 5; i++ {
+		a.logins.Record("session-key")
+	}
+	if !a.logins.Blocked("session-key") || a.passwords.Blocked("session-key") {
+		t.Fatal("the login budget leaked into the password budget")
+	}
+	var buf bytes.Buffer
+	h := httplog.Middleware(slog.New(slog.NewJSONHandler(&buf, nil)))(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if a.acquire(w, r, a.passwords, "session-key", "auth_password_attempts") {
+			<-a.hashing
+		}
+	}))
+	for i := 0; i < 5; i++ {
+		a.passwords.Record("session-key")
+	}
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest("PUT", "/x", nil))
+	if rec.Code != 429 || rec.Header().Get("Retry-After") != "60" {
+		t.Fatalf("status %d, Retry-After %q", rec.Code, rec.Header().Get("Retry-After"))
+	}
+	for _, l := range logLines(t, &buf) {
+		if l["event"] == "security.rate_limited" {
+			if l["limiter"] != "auth_password_attempts" || l["reason"] != "window_exceeded" {
+				t.Fatalf("event %v", l)
+			}
+			return
+		}
+	}
+	t.Fatalf("no security.rate_limited event:\n%s", &buf)
 }
