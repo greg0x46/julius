@@ -30,3 +30,21 @@ must be added to `domTsTests` (or become `.tsx`); details in
 `frontend/TESTING.md`. Playwright financial journeys run with `npm run test:e2e`
 against disposable SQLite databases; install Chromium first as described there.
 
+
+## Translation catalogs
+
+`frontend/src/i18n/messages.ts` contains Portuguese (`pt-BR`, default) and
+English (`en`) catalogs. `I18nProvider` wraps the application;
+`useTranslation()` returns `t(key)`, `language` and `setLanguage(language)`.
+Keys are checked by TypeScript. The catalog test checks matching keys.
+Add messages to both catalogs and call `t` during rendering for reactive text.
+
+The header selector updates the document `lang` and saves `julius.language`
+in browser storage. Other tabs follow storage changes. Invalid or unavailable
+storage defaults to Portuguese; switching still works when saving is blocked.
+This preference belongs to the browser, independently of authentication.
+
+Initial coverage includes navigation, the skip link, theme switch label and
+brand subtitle. Page content, shared controls, server messages and money/date
+formatting remain Portuguese. Language does not change financial reference
+currency, stored data or API values.
