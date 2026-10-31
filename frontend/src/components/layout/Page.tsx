@@ -1,3 +1,4 @@
+import { useTranslation } from "../../i18n/context";
 import { LeftOutlined } from "../ui/icons";
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
@@ -68,7 +69,7 @@ interface PageProps {
 export function Page({
   title,
   backTo,
-  backLabel = "Voltar",
+  backLabel,
   description,
   context,
   actions,
@@ -79,6 +80,7 @@ export function Page({
   className,
   children,
 }: PageProps) {
+  const { t } = useTranslation();
   const compact = useCompactScreen();
   const bottomBar = compact && hasBottomActionBar === true;
   const hideDescription = compactMobileHeader === true && compact;
@@ -96,7 +98,7 @@ export function Page({
               <Link
                 to={backTo}
                 className="page-back-link"
-                aria-label={backLabel}
+                aria-label={backLabel ?? t("back")}
               >
                 <LeftOutlined aria-hidden="true" />
               </Link>

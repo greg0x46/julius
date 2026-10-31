@@ -1,3 +1,4 @@
+import { useTranslation } from "../../i18n/context";
 import { Alert, Skeleton } from "../ui";
 
 import type { AccountCard } from "../../api/contracts";
@@ -20,16 +21,23 @@ export function AccountCardsTable({
   isLoading: boolean;
   error: unknown;
 }) {
+  const { t, language } = useTranslation();
+  const cardMeta = (card: AccountCard) =>
+    t("cardTransactionsLastUse", {
+      count: card.transaction_count,
+      unit: card.transaction_count === 1 ? t("transactionSingularLower") : t("transactionPluralLower"),
+      date: formatOptionalLocalDay(card.last_transaction_at, language),
+    });
   // One physical card is a fact about the account, not a list: a titled
   // section for a single row is more frame than content, so it is one quiet row.
   if (cards.length === 1 && !isLoading && (error === null || error === undefined)) {
     const [card] = cards;
     return (
-      <section className="section accounts-single-card" aria-label="Cartão vinculado">
+      <section className="section accounts-single-card" aria-label={t("linkedCard")}>
         <ul className="list-rows">
           <ListRow
-            title={`Cartão ${maskedCardNumber(card.card_number)}`}
-            meta={`${card.transaction_count} ${card.transaction_count === 1 ? "transação" : "transações"} · Último uso ${formatOptionalLocalDay(card.last_transaction_at)}`}
+            title={t("cardMasked", { number: maskedCardNumber(card.card_number) })}
+            meta={cardMeta(card)}
           />
         </ul>
       </section>
@@ -38,28 +46,28 @@ export function AccountCardsTable({
 
   const failed = error !== null && error !== undefined;
   return (
-    <Section title="Cartões vinculados">
+    <Section title={t("linkedCards")}>
       {failed && (
-        <Alert type="error" showIcon message="Não foi possível carregar os cartões desta conta." />
+        <Alert type="error" showIcon message={t("cardsLoadError")} />
       )}
       {isLoading ? (
-        <div role="status" aria-label="Carregando cartões vinculados">
+        <div role="status" aria-label={t("loadingLinkedCards")}>
           <Skeleton active paragraph={{ rows: 2 }} title={false} />
         </div>
       ) : cards.length === 0 ? (
         failed ? null : (
           <EmptyState
-            title="Nenhum cartão vinculado"
-            hint="Os números dos cartões aparecem aqui quando surgem nas transações desta conta."
+            title={t("noLinkedCard")}
+            hint={t("noLinkedCardHint")}
           />
         )
       ) : (
-        <ul className="list-rows" aria-label="Cartões vinculados">
+        <ul className="list-rows" aria-label={t("linkedCards")}>
           {cards.map((card) => (
             <ListRow
               key={card.card_number}
               title={maskedCardNumber(card.card_number)}
-              meta={`${card.transaction_count} ${card.transaction_count === 1 ? "transação" : "transações"} · Último uso ${formatOptionalLocalDay(card.last_transaction_at)}`}
+              meta={cardMeta(card)}
             />
           ))}
         </ul>

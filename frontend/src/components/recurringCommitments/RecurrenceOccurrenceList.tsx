@@ -1,3 +1,4 @@
+import { useTranslation } from "../../i18n/context";
 import { Alert, Button, Flex, Skeleton, Space, Table, Typography } from "../ui";
 import type { ColumnsType } from "../ui/Table";
 import { useState } from "react";
@@ -42,6 +43,7 @@ function ReconcileDialog({
   onCancel: () => void;
   onConfirm: (transactionId: string) => Promise<unknown>;
 }) {
+  const { t, language } = useTranslation();
   const { search, setSearch, candidates, isSearching } = useReconciliationCandidates(
     commitmentId,
     occurrence?.date ?? null,
@@ -65,7 +67,7 @@ function ReconcileDialog({
       setSelectedId(null);
       onCancel();
     } catch (caught) {
-      setError(errorMessage(caught, "Não foi possível conciliar a transação."));
+      setError(errorMessage(caught, t("reconcileFailed")));
     } finally {
       setSubmitting(false);
     }
@@ -78,30 +80,30 @@ function ReconcileDialog({
   return (
     <>
       <FormDrawer
-        title={occurrence === null ? "Conciliar ocorrência" : `Conciliar ocorrência de ${formatDay(occurrence.date)}`}
+        title={occurrence === null ? t("reconcileOccurrence") : t("reconcileOccurrenceOf", { date: formatDay(occurrence.date, language) })}
         open={occurrence !== null}
         onClose={close}
         onSubmit={submit}
-        submitLabel="Conciliar"
+        submitLabel={t("reconcileAction")}
         submitting={submitting}
         submitDisabled={selectedId === null}
         error={error}
       >
         {occurrence && (
-          <Typography.Text type="secondary">Valor esperado: {formatBRL(occurrence.expected_amount)}</Typography.Text>
+          <Typography.Text type="secondary">{t("expectedAmountValue", { amount: formatBRL(occurrence.expected_amount) })}</Typography.Text>
         )}
         <TransactionPicker
           id="recurrence-reconcile-transaction"
-          label="Buscar transação para conciliar"
+          label={t("searchTransactionToReconcile")}
           allowClear
-          placeholder="Buscar por descrição"
+          placeholder={t("searchByDescriptionPlaceholder")}
           value={selectedId}
           search={{ value: search, onChange: setSearch }}
           loading={isSearching}
-          emptyText="Nenhuma transação elegível por perto"
+          emptyText={t("noEligibleNearby")}
           transactions={candidates.map((candidate) => ({
             id: candidate.id,
-            description: candidate.description ?? "Sem descrição",
+            description: candidate.description ?? t("noDescription"),
             amount: candidate.effective_money.value,
             direction: kind === "expense" ? "outflow" : "inflow",
             date: candidate.occurred_at,
@@ -128,6 +130,7 @@ function ReconcileDialog({
  * stays visible; the other two sit behind a `···`.
  */
 export function RecurrenceOccurrenceList({ commitment }: { commitment: RecurringCommitment }) {
+  const { t, language } = useTranslation();
   const compact = useCompactScreen();
   const occurrences = useRecurrenceOccurrences(commitment.id);
   const [picking, setPicking] = useState<RecurrenceOccurrence | null>(null);
@@ -158,7 +161,7 @@ export function RecurrenceOccurrenceList({ commitment }: { commitment: Recurring
   const transactionText = (occurrence: RecurrenceOccurrence): string | null => {
     if (occurrence.transaction === null) return null;
     const { occurred_at, description, effective_money } = occurrence.transaction;
-    return `${formatOptionalLocalDay(occurred_at)} · ${description ?? "Sem descrição"} · ${formatBRL(effective_money.value)}`;
+    return `${formatOptionalLocalDay(occurred_at, language)} · ${description ?? t("noDescription")} · ${formatBRL(effective_money.value)}`;
   };
 
   const actions = (occurrence: RecurrenceOccurrence) => {
@@ -168,19 +171,19 @@ export function RecurrenceOccurrenceList({ commitment }: { commitment: Recurring
         ? [
             {
               key: "detach",
-              label: "Desconciliar",
+              label: t("detachAction"),
               danger: true,
               onClick: () =>
                 confirm({
-                  title: "Desconciliar ocorrência",
-                  description: "A ocorrência volta a ser projetada no Início. A transação permanece inalterada.",
-                  okText: "Desconciliar",
+                  title: t("detachOccurrence"),
+                  description: t("detachDescription"),
+                  okText: t("detachAction"),
                   onConfirm: () =>
                     runAction(
                       occurrence.date,
                       () => occurrences.detach(occurrence.date),
-                      "Não foi possível desconciliar a ocorrência.",
-                      "Ocorrência desconciliada",
+                      t("detachFailed"),
+                      t("occurrenceDetached"),
                     ),
                 }),
             },
@@ -189,13 +192,13 @@ export function RecurrenceOccurrenceList({ commitment }: { commitment: Recurring
           ? [
               {
                 key: "restore",
-                label: "Voltar ao automático",
+                label: t("backToAutomatic"),
                 onClick: () =>
                   void runAction(
                     occurrence.date,
                     () => occurrences.restoreAutomatic(occurrence.date),
-                    "Não foi possível voltar ao automático.",
-                    "Ocorrência de volta ao automático",
+                    t("restoreFailed"),
+                    t("occurrenceRestored"),
                   ),
               },
             ]
@@ -204,12 +207,12 @@ export function RecurrenceOccurrenceList({ commitment }: { commitment: Recurring
       <Space size={0}>
         {occurrence.status !== "reconciled" && (
           <Button type="link" loading={pending} onClick={() => setPicking(occurrence)}>
-            Conciliar com…
+            {t("reconcileWithEllipsis")}
           </Button>
         )}
         {secondary.length > 0 && (
           <RecordMenu
-            label={`Mais ações da ocorrência de ${formatDay(occurrence.date)}`}
+            label={t("moreOccurrenceActions", { date: formatDay(occurrence.date, language) })}
             loading={pending && occurrence.status === "reconciled"}
             items={secondary}
           />
@@ -220,49 +223,49 @@ export function RecurrenceOccurrenceList({ commitment }: { commitment: Recurring
 
   const columns: ColumnsType<RecurrenceOccurrence> = [
     {
-      title: "Ocorrência",
+      title: t("occurrenceHeader"),
       dataIndex: "date",
       width: 120,
-      render: (_: unknown, occurrence) => <span style={{ whiteSpace: "nowrap" }}>{formatDay(occurrence.date)}</span>,
+      render: (_: unknown, occurrence) => <span style={{ whiteSpace: "nowrap" }}>{formatDay(occurrence.date, language)}</span>,
     },
     {
-      title: "Valor esperado",
+      title: t("expectedAmount"),
       dataIndex: "expected_amount",
       render: (_: unknown, occurrence) => (
         <Money value={occurrence.expected_amount} tone="flow" direction={direction} />
       ),
     },
     {
-      title: "Situação",
+      title: t("status"),
       dataIndex: "status",
       render: (_: unknown, occurrence) => (
         <StatusTag tone={reconciliationStatusTone[occurrence.status]}>
-          {reconciliationLabel(occurrence.status, occurrence.origin)}
+          {reconciliationLabel(occurrence.status, occurrence.origin, language)}
         </StatusTag>
       ),
     },
     {
-      title: "Transação",
+      title: t("transaction"),
       dataIndex: "transaction",
       render: (_: unknown, occurrence) => transactionText(occurrence) ?? "—",
     },
     {
-      title: "Ação",
+      title: t("actionSingular"),
       render: (_: unknown, occurrence) => actions(occurrence),
     },
   ];
 
   const stacked = (
-    <ul className="occurrence-rows" aria-label={`Ocorrências de ${commitment.name}`}>
+    <ul className="occurrence-rows" aria-label={t("occurrencesOf", { name: commitment.name })}>
       {occurrences.occurrences.map((occurrence) => (
         <li key={occurrence.date} className="occurrence-row">
           <div className="occurrence-row-line">
-            <span className="occurrence-row-title">{formatDay(occurrence.date)}</span>
+            <span className="occurrence-row-title">{formatDay(occurrence.date, language)}</span>
             <Money value={occurrence.expected_amount} tone="flow" direction={direction} size="row" />
           </div>
           <div className="occurrence-row-meta">
             <StatusTag tone={reconciliationStatusTone[occurrence.status]}>
-              {reconciliationLabel(occurrence.status, occurrence.origin)}
+              {reconciliationLabel(occurrence.status, occurrence.origin, language)}
             </StatusTag>
             {transactionText(occurrence) && <span>{transactionText(occurrence)}</span>}
           </div>
@@ -287,33 +290,33 @@ export function RecurrenceOccurrenceList({ commitment }: { commitment: Recurring
         <Alert
           type="warning"
           showIcon
-          message="Não foi possível carregar as ocorrências."
-          action={<Button onClick={occurrences.retry}>Tentar novamente</Button>}
+          message={t("occurrencesLoadError")}
+          action={<Button onClick={occurrences.retry}>{t("retry")}</Button>}
         />
       )}
       {occurrences.isLoading ? (
         // Rows the shape of the ones that follow, on either layout, so the
         // expanded row or the drawer does not jump when they arrive.
-        <div role="status" aria-label="Carregando ocorrências">
+        <div role="status" aria-label={t("loadingOccurrences")}>
           <Skeleton active title={false} paragraph={{ rows: 3 }} />
         </div>
       ) : compact ? (
         occurrences.occurrences.length === 0 ? (
-          <Typography.Text type="secondary">Nenhuma ocorrência neste período.</Typography.Text>
+          <Typography.Text type="secondary">{t("noOccurrencesPeriod")}</Typography.Text>
         ) : (
           stacked
         )
       ) : (
 
         <Table<RecurrenceOccurrence>
-          aria-label={`Ocorrências de ${commitment.name}`}
+          aria-label={t("occurrencesOf", { name: commitment.name })}
           columns={columns}
           dataSource={occurrences.occurrences}
           rowKey="date"
           pagination={false}
           size="small"
           locale={{
-            emptyText: "Nenhuma ocorrência neste período.",
+            emptyText: t("noOccurrencesPeriod"),
           }}
         />
       )}
@@ -324,7 +327,7 @@ export function RecurrenceOccurrenceList({ commitment }: { commitment: Recurring
         onCancel={() => setPicking(null)}
         onConfirm={async (transactionId) => {
           await occurrences.reconcile(picking!.date, transactionId);
-          feedback.success("Ocorrência conciliada");
+          feedback.success(t("occurrenceReconciled"));
         }}
       />
     </Flex>

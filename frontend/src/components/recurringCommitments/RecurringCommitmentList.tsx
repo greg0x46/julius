@@ -1,3 +1,4 @@
+import { useTranslation } from "../../i18n/context";
 import { Skeleton, Switch, Table } from "../ui";
 import type { ColumnsType } from "../ui/Table";
 import type { ReactNode } from "react";
@@ -10,7 +11,7 @@ import {
   recurrenceScheduleLabel,
   recurrenceScheduleSentence,
   recurrenceStanding,
-  recurringCommitmentKindLabel,
+  recurringCommitmentKindName,
 } from "../../presentation/recurringCommitmentLabels";
 import { ResponsiveList } from "../layout";
 import { Money } from "../shared/Money";
@@ -19,13 +20,7 @@ import { StatusTag } from "../shared/StatusTag";
 import { useConfirm } from "../shared/useConfirm";
 import { RecurrenceOccurrenceList } from "./RecurrenceOccurrenceList";
 
-const standingLabel = { paused: "Pausada", ended: "Encerrada" } as const;
-
-const loading = (
-  <div className="recurrences-loading" role="status" aria-label="Carregando recorrências">
-    <Skeleton active paragraph={{ rows: 3 }} />
-  </div>
-);
+const standingLabelKey = { paused: "standingPaused", ended: "standingEnded" } as const;
 
 /**
  * The recurrences as one list, two shapes: stacked rows below `lg` — the
@@ -53,27 +48,33 @@ export function RecurringCommitmentList({
   onToggle: (commitment: RecurringCommitment, isActive: boolean) => void;
   onDelete: (commitment: RecurringCommitment) => void;
 }) {
+  const { t, language } = useTranslation();
+  const loading = (
+    <div className="recurrences-loading" role="status" aria-label={t("loadingRecurrences")}>
+      <Skeleton active paragraph={{ rows: 3 }} />
+    </div>
+  );
   const confirm = useConfirm();
   const today = localToday();
 
   const categoryName = (categoryId: string) =>
-    categories.find((category) => category.id === categoryId)?.name ?? "Categoria removida";
+    categories.find((category) => category.id === categoryId)?.name ?? t("removedCategory");
 
   const direction = (commitment: RecurringCommitment) => (commitment.kind === "income" ? "inflow" : "outflow");
 
   const columns: ColumnsType<RecurringCommitment> = [
     {
-      title: "Nome",
+      title: t("name"),
       dataIndex: "name",
       render: (_, commitment) => <span className="recurrence-name">{commitment.name}</span>,
     },
     {
-      title: "Tipo",
+      title: t("type"),
       dataIndex: "kind",
-      render: (_, commitment) => recurringCommitmentKindLabel[commitment.kind],
+      render: (_, commitment) => recurringCommitmentKindName(commitment.kind, language),
     },
     {
-      title: "Valor",
+      title: t("amount"),
       dataIndex: "amount",
       align: "right",
       render: (_, commitment) => (
@@ -81,23 +82,23 @@ export function RecurringCommitmentList({
       ),
     },
     {
-      title: "Categoria",
+      title: t("category"),
       dataIndex: "category_id",
       render: (_, commitment) => categoryName(commitment.category_id),
     },
     {
-      title: "Recorrência",
+      title: t("recurrence"),
       dataIndex: "cadence",
       className: "recurrence-schedule-cell",
       render: (_, commitment) =>
-        recurrenceScheduleLabel(commitment.cadence, commitment.day_of_month, commitment.month_of_year),
+        recurrenceScheduleLabel(commitment.cadence, commitment.day_of_month, commitment.month_of_year, language),
     },
     {
-      title: "Ativa",
+      title: t("activeFeminineHeader"),
       dataIndex: "is_active",
       render: (_, commitment) => (
         <Switch
-          aria-label={`${commitment.is_active ? "Pausar" : "Ativar"} recorrência ${commitment.name}`}
+          aria-label={t("toggleRecurrence", { action: commitment.is_active ? t("pause") : t("activate"), name: commitment.name })}
           checked={commitment.is_active}
           loading={togglingCommitmentId === commitment.id}
           onChange={(checked) => onToggle(commitment, checked)}
@@ -105,22 +106,22 @@ export function RecurringCommitmentList({
       ),
     },
     {
-      title: <span className="visually-hidden">Ações</span>,
+      title: <span className="visually-hidden">{t("actions")}</span>,
       key: "actions",
       align: "right",
       render: (_, commitment) => (
         <RecordMenu
-          label={`Ações de ${commitment.name}`}
+          label={t("actionsFor", { name: commitment.name })}
           items={[
-            { key: "edit", label: "Editar", onClick: () => onEdit(commitment) },
+            { key: "edit", label: t("edit"), onClick: () => onEdit(commitment) },
             {
               key: "delete",
-              label: "Excluir",
+              label: t("delete"),
               danger: true,
               onClick: () =>
                 confirm({
-                  title: "Excluir recorrência",
-                  description: "Esta ação não pode ser desfeita.",
+                  title: t("deleteRecurrence"),
+                  description: t("irreversibleAction"),
                   onConfirm: () => onDelete(commitment),
                 }),
             },
@@ -132,7 +133,7 @@ export function RecurringCommitmentList({
 
   return (
     <ResponsiveList
-      label="Recorrências"
+      label={t("recurrencesTitle")}
       items={commitments}
       getKey={(commitment) => commitment.id}
       isLoading={isLoading}
@@ -143,9 +144,9 @@ export function RecurringCommitmentList({
         const standing = recurrenceStanding(commitment, today);
         const next = standing === null ? nextOccurrenceDate(commitment, today) : null;
         const meta = [
-          recurringCommitmentKindLabel[commitment.kind],
-          recurrenceScheduleSentence(commitment.cadence, commitment.day_of_month, commitment.month_of_year),
-          next !== null ? `próxima ${formatNextDay(next, today)}` : null,
+          recurringCommitmentKindName(commitment.kind, language),
+          recurrenceScheduleSentence(commitment.cadence, commitment.day_of_month, commitment.month_of_year, language),
+          next !== null ? t("nextOccurrenceOn", { date: formatNextDay(next, today) }) : null,
         ]
           .filter(Boolean)
           .join(" · ");
@@ -153,15 +154,15 @@ export function RecurringCommitmentList({
           title: commitment.name,
           meta,
           trailing: <Money value={commitment.amount} tone="flow" direction={direction(commitment)} />,
-          status: standing !== null ? <StatusTag tone="neutral">{standingLabel[standing]}</StatusTag> : undefined,
+          status: standing !== null ? <StatusTag tone="neutral">{t(standingLabelKey[standing])}</StatusTag> : undefined,
           onClick: () => onEdit(commitment),
-          ariaLabel: `Abrir ${commitment.name}`,
+          ariaLabel: t("openNamedItem", { name: commitment.name }),
         };
       }}
       wide={
         <Table<RecurringCommitment>
           className="recurrences-table"
-          aria-label="Recorrências"
+          aria-label={t("recurrencesTitle")}
           columns={columns}
           dataSource={commitments}
           rowKey="id"

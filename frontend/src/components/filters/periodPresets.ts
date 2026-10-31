@@ -1,3 +1,4 @@
+import { translate, type Language } from "../../i18n/messages";
 import type { DateRangePreset } from "./PeriodNavigator";
 
 function dateText(date: Date): string {
@@ -25,13 +26,13 @@ function monthRange(offset: number): [string, string] {
  * "Todo o período" is the pair of nulls: transactions read it as "no date
  * filter" and the balance widget resolves it against the database's own span.
  */
-export function periodPresets(): DateRangePreset[] {
+export function periodPresets(language: Language = "pt-BR"): DateRangePreset[] {
   return [
-    { value: "this-month", label: "Este mês", range: () => monthRange(0) },
-    { value: "last-month", label: "Mês passado", range: () => monthRange(-1) },
+    { value: "this-month", label: translate(language, "thisMonth"), range: () => monthRange(0) },
+    { value: "last-month", label: translate(language, "lastMonth"), range: () => monthRange(-1) },
     {
       value: "last-30-days",
-      label: "Últimos 30 dias",
+      label: translate(language, "last30Days"),
       range: () => {
         const end = new Date();
         const start = new Date(end.getFullYear(), end.getMonth(), end.getDate() - 29);
@@ -40,7 +41,7 @@ export function periodPresets(): DateRangePreset[] {
     },
     {
       value: "this-year",
-      label: "Este ano",
+      label: translate(language, "thisYear"),
       range: () => {
         const today = new Date();
         return [
@@ -49,6 +50,6 @@ export function periodPresets(): DateRangePreset[] {
         ];
       },
     },
-    { value: "all", label: "Todo o período", range: () => [null, null] },
+    { value: "all", label: translate(language, "allTime"), range: () => [null, null] },
   ];
 }

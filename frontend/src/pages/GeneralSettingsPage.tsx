@@ -1,3 +1,4 @@
+import { useTranslation } from "../i18n/context";
 import { Alert, Button, Radio, Select, Skeleton } from "../components/ui";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { listAccountCurrencies } from "../api/accounts";
@@ -17,16 +18,17 @@ function errorMessage(error: unknown, fallback: string): string {
 }
 
 export function GeneralSettingsPage() {
+  const { t, language } = useTranslation();
   const client = useQueryClient();
   const currencies = useQuery({
     queryKey: ["account-currencies"],
     queryFn: ({ signal }) => listAccountCurrencies(signal),
   });
-  const names = new Intl.DisplayNames(["pt-BR"], { type: "currency" });
+  const names = new Intl.DisplayNames([language], { type: "currency" });
   const [currency, setCurrency] = useState("BRL");
   const [basis, setBasis] = useState<TransactionsPeriodBasis | null>(null);
   const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
@@ -35,7 +37,7 @@ export function GeneralSettingsPage() {
   useEffect(() => {
     const controller = new AbortController();
     setLoading(true);
-    setLoadError(null);
+    setLoadError(false);
     getPreferences(controller.signal)
       .then((preferences) => {
         setBasis(preferences.transactions_period_basis);
@@ -44,7 +46,7 @@ export function GeneralSettingsPage() {
       .catch((error) => {
         if (error instanceof DOMException && error.name === "AbortError") return;
         // A fixed sentence: whatever the transport said is not for the user.
-        setLoadError("Não foi possível carregar as preferências.");
+        setLoadError(true);
       })
       .finally(() => setLoading(false));
     return () => controller.abort();
@@ -69,9 +71,9 @@ export function GeneralSettingsPage() {
         await client.cancelQueries({ queryKey });
         client.removeQueries({ queryKey });
       }
-      feedback.success("Preferências salvas");
+      feedback.success(t("preferencesSaved"));
     } catch (error) {
-      const message = errorMessage(error, "Não foi possível salvar as preferências.");
+      const message = errorMessage(error, t("preferencesSaveError"));
       setSaveError(message);
       feedback.error(message);
     } finally {
@@ -80,18 +82,18 @@ export function GeneralSettingsPage() {
   };
 
   return (
-    <PageContainer title="Geral" subTitle="Preferências gerais do Julius" compactMobileHeader>
-      <Section title="Preferências">
+    <PageContainer title={t("general")} subTitle={t("generalSubtitle")} compactMobileHeader>
+      <Section title={t("preferences")}>
         {loading ? (
           <Skeleton active paragraph={{ rows: 2 }} />
         ) : loadError ? (
-          <UnavailableState onRetry={() => setAttempt((count) => count + 1)}>{loadError}</UnavailableState>
+          <UnavailableState onRetry={() => setAttempt((count) => count + 1)}>{t("preferencesLoadError")}</UnavailableState>
         ) : (
           <div className="settings-form">
             <FormField
-              label="Moeda de referência"
+              label={t("referenceCurrency")}
               htmlFor="reference-currency"
-              hint="Moeda usada nos totais e relatórios. Os valores originais de contas, transações e investimentos são preservados."
+              hint={t("referenceCurrencyHint")}
             >
               <Select
                 id="reference-currency"
@@ -112,18 +114,17 @@ export function GeneralSettingsPage() {
             {currencies.isError && (
               <Alert
                 type="error"
-                message="Não foi possível carregar as moedas."
-                action={<Button onClick={() => currencies.refetch()}>Tentar novamente</Button>}
+                message={t("currenciesLoadError")}
+                action={<Button onClick={() => currencies.refetch()}>{t("retry")}</Button>}
               />
             )}
-            <h3>Mês das transações de cartão de crédito</h3>
+            <h3>{t("cardTransactionMonth")}</h3>
             <p className="settings-radio-hint">
-              Escolha se as compras no cartão contam no mês em que foram feitas ou no mês da fatura em que são
-              pagas. Transações de débito e de outras contas não têm essa distinção.
+              {t("cardMonthHint")}
             </p>
             {saveError && <Alert type="error" showIcon message={saveError} />}
             <Radio.Group
-              aria-label="Mês das transações de cartão de crédito"
+              aria-label={t("cardTransactionMonth")}
               disabled={saving}
               value={basis}
               onChange={(event) => setBasis(event.target.value as TransactionsPeriodBasis)}
@@ -131,24 +132,22 @@ export function GeneralSettingsPage() {
               <div className="settings-radio">
                 <Radio value="occurred_at">
                   <span className="settings-radio-body">
-                    Mês da compra
-                    <span className="settings-radio-hint">Cada compra conta no mês em que foi realizada.</span>
+                    {t("purchaseMonth")}
+                    <span className="settings-radio-hint">{t("purchaseMonthHint")}</span>
                   </span>
                 </Radio>
                 <Radio value="paid_at">
                   <span className="settings-radio-body">
-                    Mês do pagamento
+                    {t("paymentMonth")}
                     <span className="settings-radio-hint">
-                      Cada compra conta no mês da fatura em que é efetivamente paga. Compras recentes, cuja
-                      fatura ainda não fechou, usam uma estimativa que se ajusta sozinha assim que a fatura
-                      fecha numa sincronização seguinte.
+                      {t("paymentMonthHint")}
                     </span>
                   </span>
                 </Radio>
               </div>
             </Radio.Group>
             <Button type="primary" loading={saving} disabled={!currencies.data} onClick={save}>
-              Salvar
+              {t("save")}
             </Button>
           </div>
         )}

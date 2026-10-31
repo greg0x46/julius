@@ -1,3 +1,4 @@
+import { useTranslation } from "../i18n/context";
 import { Skeleton } from "../components/ui";
 import { useParams } from "react-router-dom";
 
@@ -16,17 +17,16 @@ import { useAccountDetail } from "../hooks/useAccountDetail";
 import { useCategories } from "../hooks/useCategories";
 import { accountHeaderTitle } from "../presentation/accountLabels";
 
-const pageTitle = "Conta";
 const backTo = "/contas-e-cartoes";
-const backLabel = "Voltar para contas e cartões";
 
 /**
  * The shape of the loaded page — a summary block, then a list — so the
  * content does not jump when the account arrives.
  */
 function AccountDetailSkeleton() {
+  const { t } = useTranslation();
   return (
-    <div role="status" aria-label="Carregando conta">
+    <div role="status" aria-label={t("loadingAccount")}>
       <Skeleton active title={{ width: "35%" }} paragraph={{ rows: 2 }} />
       <Skeleton active title={{ width: "25%" }} paragraph={{ rows: 4 }} />
     </div>
@@ -34,6 +34,7 @@ function AccountDetailSkeleton() {
 }
 
 function ValidAccountDetail({ id }: { id: string }) {
+  const { t, language } = useTranslation();
   const account = useAccountDetail(id);
 
   // The recent-transactions panel reuses the exact same interaction the
@@ -66,9 +67,9 @@ function ValidAccountDetail({ id }: { id: string }) {
     return (
       <Page
         className="accounts-page"
-        title={pageTitle}
+        title={t("account")}
         backTo={backTo}
-        backLabel={backLabel}
+        backLabel={t("backToAccounts")}
         compactMobileHeader
       >
         <AccountDetailSkeleton />
@@ -79,15 +80,15 @@ function ValidAccountDetail({ id }: { id: string }) {
   return (
     <DetailPage
       className="accounts-page"
-      title={pageTitle}
+      title={t("account")}
       backTo={backTo}
-      backLabel={backLabel}
-      recordTitle={accountHeaderTitle}
+      backLabel={t("backToAccounts")}
+      recordTitle={(value) => accountHeaderTitle(value, language)}
       state={account.state}
       retry={account.retry}
-      notFoundMessage="Conta não encontrada"
-      notFoundDescription="Não existe uma conta com este identificador."
-      unavailableMessage="Não foi possível consultar esta conta agora."
+      notFoundMessage={t("accountNotFound")}
+      notFoundDescription={t("accountNotFoundDescription")}
+      unavailableMessage={t("accountUnavailable")}
     >
       {(snapshot) => (
         <>
@@ -141,16 +142,17 @@ function ValidAccountDetail({ id }: { id: string }) {
 }
 
 export function AccountDetailPage() {
+  const { t } = useTranslation();
   const { id = "" } = useParams();
   return isUuid(id) ? (
     <ValidAccountDetail id={id} />
   ) : (
     <InvalidDetailPage
       className="accounts-page"
-      title={pageTitle}
+      title={t("account")}
       backTo={backTo}
-      backLabel={backLabel}
-      invalidTitle="Endereço de conta inválido"
+      backLabel={t("backToAccounts")}
+      invalidTitle={t("invalidAccountAddress")}
     />
   );
 }

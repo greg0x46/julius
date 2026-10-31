@@ -1,3 +1,6 @@
+import { longMonthName } from "../../i18n/dateFormats";
+import { useTranslation } from "../../i18n/context";
+import type { Language } from "../../i18n/messages";
 import { isPositiveDecimal, sumDecimals } from "../../presentation/decimal";
 import { Button, Checkbox, DatePicker, Divider, Input, InputNumber, Popconfirm, Segmented, Select, Switch } from "../ui";
 import { calendar, type CalendarDate } from "../../presentation/calendar";
@@ -16,15 +19,15 @@ import type {
   RuleLogicOperator,
 } from "../../api/contracts";
 import {
-  recurringCommitmentCadenceLabel,
-  recurringCommitmentKindLabel,
+  recurringCommitmentCadenceName,
+  recurringCommitmentKindName,
 } from "../../presentation/recurringCommitmentLabels";
 import {
-  ruleConditionFieldLabel,
-  ruleConditionOperatorLabel,
-  ruleLogicOperatorLabel,
+  ruleConditionFieldName,
+  ruleConditionOperatorName,
+  ruleLogicOperatorName,
 } from "../../presentation/ruleConditionLabels";
-import { categoryKindLabel } from "../../presentation/categoryLabels";
+import { categoryKindName } from "../../presentation/categoryLabels";
 import { AccountSelect } from "../forms/AccountSelect";
 import { FormDrawer } from "../forms/FormDrawer";
 import { FormField } from "../forms/FormField";
@@ -33,12 +36,6 @@ import { ConditionFieldConfig, ConditionListEditor } from "../shared/ConditionLi
 import { deleteRuleDescription } from "./deleteRuleDescription";
 
 const dateFormat = "YYYY-MM-DD";
-
-const actionOptions: { value: AutomationActionType; label: string }[] = [
-  { value: "ignore", label: "Ignorar transação" },
-  { value: "reconcile", label: "Conciliar recorrência" },
-  { value: "set_category", label: "Aplicar categoria" },
-];
 
 export type AutomationEntry = {
   rule: AutomationRule;
@@ -60,24 +57,11 @@ export type AutomationEntrySubmitPayload = {
   } | null;
 };
 
-const ruleLogicOptions = (Object.keys(ruleLogicOperatorLabel) as RuleLogicOperator[]).map((value) => ({
-  value,
-  label: ruleLogicOperatorLabel[value],
-}));
-const kindOptions = (Object.keys(recurringCommitmentKindLabel) as RecurringCommitmentKind[]).map(
-  (value) => ({ value, label: recurringCommitmentKindLabel[value] }),
-);
-const cadenceOptions = (
-  Object.keys(recurringCommitmentCadenceLabel) as RecurringCommitmentCadence[]
-).map((value) => ({ value, label: recurringCommitmentCadenceLabel[value] }));
-const monthOptions = Array.from({ length: 12 }, (_, index) => ({
-  value: index + 1,
-  label: new Intl.DateTimeFormat("pt-BR", { month: "long" }).format(new Date(2000, index, 1)),
-}));
-const commitmentModeOptions: { value: "new" | "existing"; label: string }[] = [
-  { value: "new", label: "Nova recorrência" },
-  { value: "existing", label: "Recorrência existente" },
-];
+const monthOptions = (language: Language) =>
+  Array.from({ length: 12 }, (_, index) => ({
+    value: index + 1,
+    label: longMonthName(language, index),
+  }));
 
 type RuleDraft = {
   name: string;
@@ -193,6 +177,28 @@ export function AutomationEntryForm({
   /** Deleting lives in the edit sheet, not on the row: one tap target per row. */
   onDelete?: (rule: AutomationRule) => void;
 }) {
+  const { t, language } = useTranslation();
+  const actionOptions: { value: AutomationActionType; label: string }[] = [
+    { value: "ignore", label: t("ignoreTransaction") },
+    { value: "reconcile", label: t("reconcileRecurrenceAction") },
+    { value: "set_category", label: t("actionSetCategory") },
+  ];
+  const ruleLogicOptions = (["and", "or"] as RuleLogicOperator[]).map((value) => ({
+    value,
+    label: ruleLogicOperatorName(value, language),
+  }));
+  const kindOptions = (["income", "expense"] as RecurringCommitmentKind[]).map((value) => ({
+    value,
+    label: recurringCommitmentKindName(value, language),
+  }));
+  const cadenceOptions = (["monthly", "annual"] as RecurringCommitmentCadence[]).map((value) => ({
+    value,
+    label: recurringCommitmentCadenceName(value, language),
+  }));
+  const commitmentModeOptions: { value: "new" | "existing"; label: string }[] = [
+    { value: "new", label: t("newRecurrence") },
+    { value: "existing", label: t("existingRecurrence") },
+  ];
   const isEditing = entry !== null;
   const initialActionTypes: AutomationActionType[] = entry
     ? entry.rule.actions.map((action) => action.type)
@@ -270,56 +276,56 @@ export function AutomationEntryForm({
   const baseFieldConfigs: ConditionFieldConfig[] = [
     {
       field: "description",
-      label: ruleConditionFieldLabel.description,
+      label: ruleConditionFieldName("description", language),
       operators: [
-        { value: "contains", label: ruleConditionOperatorLabel.contains },
-        { value: "equals", label: ruleConditionOperatorLabel.equals },
+        { value: "contains", label: ruleConditionOperatorName("contains", language) },
+        { value: "equals", label: ruleConditionOperatorName("equals", language) },
       ],
     },
     {
       field: "card",
-      label: ruleConditionFieldLabel.card,
+      label: ruleConditionFieldName("card", language),
       operators: [
-        { value: "contains", label: ruleConditionOperatorLabel.contains },
-        { value: "equals", label: ruleConditionOperatorLabel.equals },
+        { value: "contains", label: ruleConditionOperatorName("contains", language) },
+        { value: "equals", label: ruleConditionOperatorName("equals", language) },
       ],
       valueOptions: () => conditionOptions.cards.map((value) => ({ value, label: value })),
       valueOptionsLoading: conditionOptionsLoading,
-      valuePlaceholder: () => "Selecione um cartão",
-      valueNotFoundContent: () => (conditionOptionsLoading ? "Carregando…" : "Nenhum cartão encontrado"),
+      valuePlaceholder: () => t("selectCard"),
+      valueNotFoundContent: () => (conditionOptionsLoading ? t("loading") : t("noCardFound")),
     },
     {
       field: "account",
-      label: ruleConditionFieldLabel.account,
+      label: ruleConditionFieldName("account", language),
       operators: [
-        { value: "contains", label: ruleConditionOperatorLabel.contains },
-        { value: "equals", label: ruleConditionOperatorLabel.equals },
+        { value: "contains", label: ruleConditionOperatorName("contains", language) },
+        { value: "equals", label: ruleConditionOperatorName("equals", language) },
       ],
       valueOptions: () => conditionOptions.accounts.map((value) => ({ value, label: value })),
       valueOptionsLoading: conditionOptionsLoading,
-      valuePlaceholder: () => "Selecione uma conta",
-      valueNotFoundContent: () => (conditionOptionsLoading ? "Carregando…" : "Nenhuma conta encontrada"),
+      valuePlaceholder: () => t("selectAnAccount"),
+      valueNotFoundContent: () => (conditionOptionsLoading ? t("loading") : t("noAccountFound")),
     },
   ];
 
   const reconcileFieldConfigs: ConditionFieldConfig[] = [
     {
       field: "amount",
-      label: ruleConditionFieldLabel.amount,
-      operators: [{ value: "within_percent", label: ruleConditionOperatorLabel.within_percent }],
+      label: ruleConditionFieldName("amount", language),
+      operators: [{ value: "within_percent", label: ruleConditionOperatorName("within_percent", language) }],
       pairOperator: "within_percent",
-      pairFirstLabel: "Valor esperado",
-      pairSecondLabel: "Tolerância",
+      pairFirstLabel: t("expectedAmount"),
+      pairSecondLabel: t("tolerance"),
       pairSecondSuffix: "%",
       pairMin: 0,
     },
     {
       field: "day_of_month",
-      label: ruleConditionFieldLabel.day_of_month,
-      operators: [{ value: "day_range", label: ruleConditionOperatorLabel.day_range }],
+      label: ruleConditionFieldName("day_of_month", language),
+      operators: [{ value: "day_range", label: ruleConditionOperatorName("day_range", language) }],
       pairOperator: "day_range",
-      pairFirstLabel: "Do dia",
-      pairSecondLabel: "Até o dia",
+      pairFirstLabel: t("fromDay"),
+      pairSecondLabel: t("untilDay"),
       pairMin: 1,
       pairMax: 31,
     },
@@ -340,7 +346,7 @@ export function AutomationEntryForm({
     .filter((category) => category.is_active)
     .map((category) => ({
       value: category.id,
-      label: `${categoryKindLabel[category.kind]}: ${category.name}`,
+      label: `${categoryKindName(category.kind, language)}: ${category.name}`,
     }));
 
   const commitmentCategoryOptions = categories
@@ -349,54 +355,54 @@ export function AutomationEntryForm({
 
   const submit = () => {
     if (ruleDraft.name.trim() === "") {
-      setError("Informe um nome para a regra.");
+      setError(t("ruleNameRequired"));
       return;
     }
     if (ruleDraft.conditions.length === 0) {
-      setError("Adicione ao menos uma condição.");
+      setError(t("conditionRequired"));
       return;
     }
     if (ruleDraft.conditions.some((condition) => condition.value.trim() === "")) {
-      setError("Preencha o valor de todas as condições.");
+      setError(t("conditionValueRequired"));
       return;
     }
     if (ruleDraft.conditions.some(hasZeroAmountReference)) {
-      setError("Informe um valor esperado maior que zero.");
+      setError(t("expectedAmountPositive"));
       return;
     }
     if (actionTypes.length === 0) {
-      setError("Selecione ao menos uma ação.");
+      setError(t("actionRequired"));
       return;
     }
     if (actionTypes.includes("set_category") && !actionTypes.includes("reconcile") && categoryId === null) {
-      setError("Selecione uma categoria para aplicar.");
+      setError(t("categoryToApplyRequired"));
       return;
     }
 
     let reconcile: AutomationEntrySubmitPayload["reconcile"] = null;
     if (actionTypes.includes("reconcile")) {
       if (commitmentDraft.name.trim() === "") {
-        setError("Informe um nome para a recorrência.");
+        setError(t("recurrenceNameRequired"));
         return;
       }
       if (commitmentDraft.amount === null || !isPositiveDecimal(commitmentDraft.amount)) {
-        setError("Informe um valor maior que zero.");
+        setError(t("positiveAmountRequired"));
         return;
       }
       if (commitmentDraft.categoryId === null) {
-        setError("Selecione uma categoria.");
+        setError(t("categoryRequired"));
         return;
       }
       if (commitmentDraft.dayOfMonth === null) {
-        setError("Informe o dia do mês.");
+        setError(t("dayOfMonthRequired"));
         return;
       }
       if (commitmentDraft.cadence === "annual" && commitmentDraft.monthOfYear === null) {
-        setError("Informe o mês do ano para uma recorrência anual.");
+        setError(t("monthOfYearRequired"));
         return;
       }
       if (commitmentDraft.endDate && commitmentDraft.endDate.isBefore(commitmentDraft.startDate, "day")) {
-        setError("A data de término não pode ser anterior à data de início.");
+        setError(t("endBeforeStart"));
         return;
       }
       reconcile = {
@@ -435,33 +441,33 @@ export function AutomationEntryForm({
 
   return (
     <FormDrawer
-      title={isEditing ? "Editar automação" : "Nova automação"}
+      title={isEditing ? t("editAutomation") : t("newAutomation")}
       open={open}
       onClose={onCancel}
       onSubmit={submit}
       submitting={submitting}
       error={error ?? submitError}
     >
-      <FormField label="Nome da automação" htmlFor="automation-rule-name">
+      <FormField label={t("automationName")} htmlFor="automation-rule-name">
         <Input
           id="automation-rule-name"
           value={ruleDraft.name}
           onChange={(event) => setRuleDraft((current) => ({ ...current, name: event.target.value }))}
-          placeholder="Ex.: Ignorar assinaturas, Conciliar aluguel"
+          placeholder={t("automationNameExample")}
         />
       </FormField>
 
-      <FormField label="Ativa" htmlFor="automation-rule-active">
+      <FormField label={t("activeFeminineHeader")} htmlFor="automation-rule-active">
         <Switch
           id="automation-rule-active"
-          aria-label="Automação ativa"
+          aria-label={t("automationActive")}
           checked={ruleDraft.isActive}
           onChange={(checked) => setRuleDraft((current) => ({ ...current, isActive: checked }))}
           style={{ width: "fit-content" }}
         />
       </FormField>
 
-      <FormField label="Condições" labelId="automation-conditions-label">
+      <FormField label={t("conditionsHeader")} labelId="automation-conditions-label">
         <ConditionListEditor
           conditions={ruleDraft.conditions}
           fieldConfigs={conditionFieldConfigs}
@@ -473,7 +479,7 @@ export function AutomationEntryForm({
           only appears once there is something to combine. The stored
           operator is untouched either way. */}
       {ruleDraft.conditions.length >= 2 && (
-        <FormField label="Combinar condições com" htmlFor="automation-rule-logic">
+        <FormField label={t("combineConditionsWith")} htmlFor="automation-rule-logic">
           <Select
             id="automation-rule-logic"
             value={ruleDraft.logicOperator}
@@ -485,7 +491,7 @@ export function AutomationEntryForm({
         </FormField>
       )}
 
-      <FormField label="Ações" labelId="automation-actions-label">
+      <FormField label={t("actions")} labelId="automation-actions-label">
         <Checkbox.Group
           aria-labelledby="automation-actions-label"
           value={actionTypes}
@@ -497,9 +503,9 @@ export function AutomationEntryForm({
 
       {(actionTypes.includes("set_category") || actionTypes.includes("reconcile")) && (
         <FormField
-          label={actionTypes.includes("reconcile") ? "Categoria a aplicar (opcional)" : "Categoria a aplicar"}
+          label={actionTypes.includes("reconcile") ? t("categoryToApplyOptional") : t("categoryToApply")}
           htmlFor="automation-entry-category"
-          hint={actionTypes.includes("reconcile") ? "Aplica a categoria às transações que casarem com as condições. Categorias definidas manualmente são preservadas." : undefined}
+          hint={actionTypes.includes("reconcile") ? t("categoryToApplyHint") : undefined}
         >
           <Select
             id="automation-entry-category"
@@ -509,7 +515,7 @@ export function AutomationEntryForm({
             options={ruleCategoryOptions}
             showSearch
             optionFilterProp="label"
-            placeholder={actionTypes.includes("reconcile") ? "Sem categoria a aplicar" : "Selecione uma categoria"}
+            placeholder={actionTypes.includes("reconcile") ? t("noCategoryToApply") : t("selectACategory")}
             onChange={(value: string | undefined) => {
               setCategoryEdited(true);
               setCategoryId(value ?? null);
@@ -520,14 +526,14 @@ export function AutomationEntryForm({
 
       {(actionTypes.includes("ignore") || (actionTypes.includes("reconcile") ? categoryId !== null : actionTypes.includes("set_category"))) && (
         <Checkbox checked={applyRetroactively} onChange={(event) => setApplyRetroactively(event.target.checked)}>
-          Aplicar agora às transações existentes que casarem com as condições
+          {t("applyNowToExisting")}
         </Checkbox>
       )}
 
       {actionTypes.includes("reconcile") && (
         <>
           {!isEditing && (
-            <FormField label="Recorrência" labelId="recurring-commitment-mode-label">
+            <FormField label={t("recurrence")} labelId="recurring-commitment-mode-label">
               <Segmented
                 id="recurring-commitment-mode"
                 aria-labelledby="recurring-commitment-mode-label"
@@ -539,13 +545,13 @@ export function AutomationEntryForm({
           )}
 
           {commitmentMode === "existing" && (
-            <FormField label="Selecione uma recorrência" htmlFor="recurring-commitment-existing">
+            <FormField label={t("selectARecurrence")} htmlFor="recurring-commitment-existing">
               <Select
                 id="recurring-commitment-existing"
                 showSearch
                 optionFilterProp="label"
                 loading={commitmentsLoading}
-                placeholder="Selecione uma recorrência existente"
+                placeholder={t("selectAnExistingRecurrence")}
                 value={selectedCommitmentId ?? undefined}
                 options={commitments.map((commitment) => ({ value: commitment.id, label: commitment.name }))}
                 onChange={(value: string) => selectExistingCommitment(value)}
@@ -554,19 +560,19 @@ export function AutomationEntryForm({
           )}
 
           <Divider orientation="left" plain style={{ margin: 0 }}>
-            Dados da recorrência
+            {t("recurrenceData")}
           </Divider>
 
-          <FormField label="Nome" htmlFor="recurring-commitment-name">
+          <FormField label={t("name")} htmlFor="recurring-commitment-name">
             <Input
               id="recurring-commitment-name"
               value={commitmentDraft.name}
               onChange={(event) => setCommitmentDraft((current) => ({ ...current, name: event.target.value }))}
-              placeholder="Ex.: Salário, Aluguel, Netflix"
+              placeholder={t("recurrenceNameExample")}
             />
           </FormField>
 
-          <FormField label="Tipo" htmlFor="recurring-commitment-kind">
+          <FormField label={t("type")} htmlFor="recurring-commitment-kind">
             <Select
               id="recurring-commitment-kind"
               value={commitmentDraft.kind}
@@ -577,7 +583,7 @@ export function AutomationEntryForm({
             />
           </FormField>
 
-          <FormField label="Valor" htmlFor="recurring-commitment-amount">
+          <FormField label={t("amount")} htmlFor="recurring-commitment-amount">
             <MoneyInput
               id="recurring-commitment-amount"
               min="0"
@@ -586,19 +592,19 @@ export function AutomationEntryForm({
             />
           </FormField>
 
-          <FormField label="Categoria" htmlFor="recurring-commitment-category">
+          <FormField label={t("category")} htmlFor="recurring-commitment-category">
             <Select
               id="recurring-commitment-category"
               value={commitmentDraft.categoryId ?? undefined}
               options={commitmentCategoryOptions}
               showSearch
               optionFilterProp="label"
-              placeholder="Selecione uma categoria"
+              placeholder={t("selectACategory")}
               onChange={(value: string) => setCommitmentDraft((current) => ({ ...current, categoryId: value }))}
             />
           </FormField>
 
-          <FormField label="Conta (opcional)" htmlFor="recurring-commitment-account">
+          <FormField label={t("accountOptional")} htmlFor="recurring-commitment-account">
             <AccountSelect
               id="recurring-commitment-account"
               optional
@@ -607,7 +613,7 @@ export function AutomationEntryForm({
             />
           </FormField>
 
-          <FormField label="Cadência" htmlFor="recurring-commitment-cadence">
+          <FormField label={t("cadence")} htmlFor="recurring-commitment-cadence">
             <Select
               id="recurring-commitment-cadence"
               value={commitmentDraft.cadence}
@@ -619,9 +625,9 @@ export function AutomationEntryForm({
           </FormField>
 
           <FormField
-            label="Dia do mês"
+            label={t("dayOfMonth")}
             htmlFor="recurring-commitment-day"
-            hint="Usado só para agendar a data esperada no calendário — não obriga a conciliação a exigir esse dia."
+            hint={t("dayOfMonthHint")}
           >
             <InputNumber
               id="recurring-commitment-day"
@@ -636,42 +642,40 @@ export function AutomationEntryForm({
           </FormField>
 
           {commitmentDraft.cadence === "annual" && (
-            <FormField label="Mês do ano" htmlFor="recurring-commitment-month">
+            <FormField label={t("monthOfYear")} htmlFor="recurring-commitment-month">
               <Select
                 id="recurring-commitment-month"
                 value={commitmentDraft.monthOfYear ?? undefined}
-                options={monthOptions}
-                placeholder="Selecione um mês"
+                options={monthOptions(language)}
+                placeholder={t("selectAMonth")}
                 onChange={(value: number) => setCommitmentDraft((current) => ({ ...current, monthOfYear: value }))}
               />
             </FormField>
           )}
 
-          <FormField label="Data de início" htmlFor="recurring-commitment-start-date">
+          <FormField label={t("startDateLabel")} htmlFor="recurring-commitment-start-date">
             <DatePicker
               id="recurring-commitment-start-date"
               style={{ width: "100%" }}
-              format="DD/MM/YYYY"
               value={commitmentDraft.startDate}
               allowClear={false}
               onChange={(value) => value && setCommitmentDraft((current) => ({ ...current, startDate: value }))}
             />
           </FormField>
 
-          <FormField label="Data de término (opcional)" htmlFor="recurring-commitment-end-date">
+          <FormField label={t("endDateOptional")} htmlFor="recurring-commitment-end-date">
             <DatePicker
               id="recurring-commitment-end-date"
               style={{ width: "100%" }}
-              format="DD/MM/YYYY"
               value={commitmentDraft.endDate}
               onChange={(value) => setCommitmentDraft((current) => ({ ...current, endDate: value }))}
             />
           </FormField>
 
-          <FormField label="Recorrência ativa" htmlFor="recurring-commitment-active">
+          <FormField label={t("recurrenceActive")} htmlFor="recurring-commitment-active">
             <Switch
               id="recurring-commitment-active"
-              aria-label="Recorrência ativa"
+              aria-label={t("recurrenceActive")}
               checked={commitmentDraft.isActive}
               onChange={(checked) => setCommitmentDraft((current) => ({ ...current, isActive: checked }))}
               style={{ width: "fit-content" }}
@@ -683,13 +687,13 @@ export function AutomationEntryForm({
       {entry && onDelete && (
         <div className="automation-form-delete">
           <Popconfirm
-            title="Excluir automação"
-            description={deleteRuleDescription(entry.rule)}
+            title={t("deleteAutomation")}
+            description={deleteRuleDescription(entry.rule, language)}
             onConfirm={() => onDelete(entry.rule)}
-            okText="Excluir"
-            cancelText="Cancelar"
+            okText={t("delete")}
+            cancelText={t("cancel")}
           >
-            <Button danger>Excluir automação</Button>
+            <Button danger>{t("deleteAutomation")}</Button>
           </Popconfirm>
         </div>
       )}

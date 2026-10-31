@@ -1,3 +1,4 @@
+import { apiMessage } from "../i18n/apiMessage";
 import { apiFetch } from "./transport";
 import { parseProblem, type Problem } from "./contracts";
 import { ApiError, isAbortError } from "./problems";
@@ -16,7 +17,7 @@ async function parseBody(response: Response): Promise<unknown> {
   try {
     return await response.json();
   } catch {
-    throw new ApiError("response", "A resposta do servidor não pôde ser confirmada.");
+    throw new ApiError("response", apiMessage("apiResponseUnconfirmed"));
   }
 }
 
@@ -33,7 +34,7 @@ export async function requestJson<T>(
     if (isAbortError(error)) {
       throw error;
     }
-    throw new ApiError("transport", "Não foi possível comunicar com o servidor.");
+    throw new ApiError("transport", apiMessage("apiCommunication"));
   }
 
   const contentType = response.headers.get("content-type");
@@ -49,14 +50,14 @@ export async function requestJson<T>(
     throw new ApiError(
       response.status === 404 ? "not_found" : "conflict",
       response.status === 404
-        ? "A sincronização não foi encontrada."
-        : "Já existe uma sincronização em andamento.",
+        ? apiMessage("apiSyncNotFound")
+        : apiMessage("apiSyncRunning"),
       problem,
     );
   }
 
   if (response.status !== expectedStatus || !isJson(contentType)) {
-    throw new ApiError("response", "A resposta do servidor não pôde ser confirmada.");
+    throw new ApiError("response", apiMessage("apiResponseUnconfirmed"));
   }
 
   try {
@@ -65,6 +66,6 @@ export async function requestJson<T>(
     if (error instanceof ApiError) {
       throw error;
     }
-    throw new ApiError("response", "A resposta do servidor não pôde ser confirmada.");
+    throw new ApiError("response", apiMessage("apiResponseUnconfirmed"));
   }
 }

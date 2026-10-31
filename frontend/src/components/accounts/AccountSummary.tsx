@@ -1,3 +1,4 @@
+import { useTranslation } from "../../i18n/context";
 import { Tooltip } from "../ui";
 
 import type { Account } from "../../api/contracts";
@@ -32,18 +33,19 @@ export function AccountSummary({
   onSaveClosingDay: (closingDay: number | null) => Promise<unknown>;
   savingClosingDay: boolean;
 }) {
+  const { t, language } = useTranslation();
   const isCredit = account.account_type === "CREDIT";
   // The heading is the account's own name, so the institution lives on this line.
   const legalName =
     account.institution_name !== null && account.institution_name !== shortInstitutionName(account.institution_name)
       ? account.institution_name
       : undefined;
-  const identityLine = accountMetaLine(account);
+  const identityLine = accountMetaLine(account, language);
 
   const items: SummaryStripItem[] = isCredit
     ? [
         {
-          label: "Limite disponível",
+          label: t("availableLimit"),
           value: (
             <AccountMoney
               value={account.available_credit_limit}
@@ -53,26 +55,26 @@ export function AccountSummary({
           ),
         },
         {
-          label: "Limite total",
+          label: t("totalLimit"),
           value: <AccountMoney value={account.credit_limit} currencyCode={account.currency_code} tone="balance" />,
         },
         // Its own row, not a second line under the available limit: every
         // definition row is one label and one value, so the column stays even.
         ...(account.credit_usage_ratio !== null
-          ? [{ label: "Limite usado", value: creditUsagePercent(account.credit_usage_ratio) }]
+          ? [{ label: t("usedLimit"), value: creditUsagePercent(account.credit_usage_ratio, language) }]
           : []),
-        { label: "Vence", value: formatOptionalDay(account.balance_due_date) },
+        { label: t("due"), value: formatOptionalDay(account.balance_due_date, language) },
         {
-          label: "Fechamento",
+          label: t("closing"),
           value: <ClosingDayField account={account} onSave={onSaveClosingDay} saving={savingClosingDay} />,
         },
       ]
-    : account.origin === "manual" ? [{ label: "Saldo inicial", value: <AccountMoney value={account.opening_balance} currencyCode={account.currency_code} tone="balance" /> }] : [];
+    : account.origin === "manual" ? [{ label: t("openingBalance"), value: <AccountMoney value={account.opening_balance} currencyCode={account.currency_code} tone="balance" /> }] : [];
 
   return (
     <SummaryStrip
       className="account-summary"
-      label={isCredit ? "Fatura atual" : "Saldo disponível"}
+      label={isCredit ? t("currentBillCapitalized") : t("availableBalance")}
       value={<AccountMoney value={account.balance} currencyCode={account.currency_code} tone="balance" size="hero" />}
       note={
         <>
@@ -82,7 +84,7 @@ export function AccountSummary({
             </Tooltip>
           )}
           <span className="account-summary-meta">
-            Atualizado em {formatOptionalDateTime(account.provider_updated_at ?? account.updated_at)}
+            {t("updatedAt").replace("{date}", formatOptionalDateTime(account.provider_updated_at ?? account.updated_at, language))}
           </span>
         </>
       }

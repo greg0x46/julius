@@ -1,3 +1,4 @@
+import { useTranslation } from "../../i18n/context";
 import type { Account } from "../../api/contracts";
 import { sumBRL } from "../../presentation/money";
 import { SummaryStrip } from "../layout";
@@ -24,20 +25,21 @@ function sumAccounts(accounts: Account[], pick: (account: Account) => string | n
  * the cards section's header, next to the cards it actually limits.
  */
 export function AccountsSummary({ accounts }: { accounts: Account[] }) {
+  const { t } = useTranslation();
   const bank = accounts.filter((account) => account.account_type !== "CREDIT");
   const credit = accounts.filter((account) => account.account_type === "CREDIT");
   const hasForeignAccounts = bank.some((account) => !isBRL(account));
 
   return (
     <SummaryStrip
-      label="Saldo em contas"
+      label={t("accountBalance")}
       value={<Money value={sumAccounts(bank, (account) => account.balance)} tone="balance" size="hero" />}
-      note={hasForeignAccounts ? "Soma só as contas em reais." : undefined}
+      note={hasForeignAccounts ? t("brlAccountsOnly") : undefined}
       items={
         credit.length > 0
           ? [
               {
-                label: "Fatura atual dos cartões",
+                label: t("currentCardBills"),
                 value: <Money value={sumAccounts(credit, (account) => account.balance)} tone="balance" />,
               },
             ]

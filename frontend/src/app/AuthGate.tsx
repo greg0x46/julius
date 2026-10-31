@@ -1,3 +1,4 @@
+import { useTranslation } from "../i18n/context";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, type ReactNode } from "react";
 import { getSession } from "../api/auth";
@@ -8,6 +9,7 @@ import { AppLoadingScreen } from "./AppLoadingScreen";
 import { invalidateAuthSession, queryKeys } from "../api/queryKeys";
 
 export function AuthGate({ children }: { children: ReactNode }) {
+  const { t } = useTranslation();
   const client = useQueryClient();
   const wasAuthenticated = useRef(false);
   const { data, isLoading, refetch } = useQuery({
@@ -36,7 +38,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
   }, [client, data?.authenticated, data?.authentication_enabled]);
   // A failed background refetch keeps the last known session; only a missing one is an error.
   if (isLoading) return <AppLoadingScreen />;
-  if (!data) return <UnavailableState onRetry={() => refetch()}>Não foi possível verificar sua sessão.</UnavailableState>;
+  if (!data) return <UnavailableState onRetry={() => refetch()}>{t("sessionUnavailable")}</UnavailableState>;
   if (data.authentication_enabled && !data.authenticated) return <LoginPage onDone={() => { void invalidateAuthSession(client); }} />;
   return <>{children}</>;
 }

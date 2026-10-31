@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
 import { I18nProvider } from "./I18nProvider";
-import { languageStorageKey, useTranslation } from "./context";
+import { defaultLanguage, languageStorageKey, rememberLanguage, storedLanguage, useTranslation } from "./context";
 
 function Consumer() {
   const { t, setLanguage } = useTranslation();
@@ -11,6 +11,7 @@ function Consumer() {
 
 afterEach(() => {
   localStorage.clear();
+  rememberLanguage(defaultLanguage);
   document.documentElement.lang = "pt-BR";
   vi.restoreAllMocks();
 });
@@ -44,4 +45,12 @@ it("switches with blocked storage", async () => {
   render(<I18nProvider><Consumer /></I18nProvider>);
   await userEvent.click(screen.getByRole("button", { name: "Início" }));
   expect(screen.getByRole("button", { name: "Home" })).toBeInTheDocument();
+});
+
+it("keeps API messages in the chosen language when storage is blocked", async () => {
+  vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new Error("blocked"); });
+  vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => { throw new Error("blocked"); });
+  render(<I18nProvider><Consumer /></I18nProvider>);
+  await userEvent.click(screen.getByRole("button", { name: "Início" }));
+  expect(storedLanguage()).toBe("en");
 });

@@ -1,3 +1,5 @@
+import { useTranslation } from "../../i18n/context";
+import { translate, type Language } from "../../i18n/messages";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Alert, Button, Spin } from "../ui";
 import { useEffect, useState } from "react";
@@ -14,24 +16,24 @@ import { TransactionPicker, type PickerTransaction } from "../shared/Transaction
 import { useConfirm } from "../shared/useConfirm";
 import { TransferDetail } from "./TransferDetail";
 
-function movement(item: TransactionItem): TransferMovement & { amount: string } {
+function movement(item: TransactionItem, language: Language): TransferMovement & { amount: string } {
   return {
     transaction_id: item.id,
     account_id: item.account.id,
-    account_name: item.account.name ?? "Conta",
+    account_name: item.account.name ?? translate(language, "account"),
     amount: item.amount_in_account_currency ?? "0",
     currency_code: item.account.currency_code ?? "BRL",
   };
 }
-function pickable(item: TransactionItem): PickerTransaction {
+function pickable(item: TransactionItem, language: Language): PickerTransaction {
   return {
     id: item.id,
-    description: item.description ?? "Sem descrição",
+    description: item.description ?? translate(language, "noDescription"),
     account: item.account.name,
     date: item.occurred_at,
     direction: item.classification === "unclassified" ? null : item.classification,
-    amount: movement(item).amount.replace(/^-/, ""),
-    currency_code: movement(item).currency_code,
+    amount: movement(item, language).amount.replace(/^-/, ""),
+    currency_code: movement(item, language).currency_code,
   };
 }
 function usable(row: TransactionItem) {
@@ -41,6 +43,7 @@ function usable(row: TransactionItem) {
 }
 
 export function TransactionTransferScreen({ item }: { item: TransactionItem }) {
+  const { t, language } = useTranslation();
   const client = useQueryClient();
   const confirm = useConfirm();
   const relation = useQuery({
@@ -91,15 +94,15 @@ export function TransactionTransferScreen({ item }: { item: TransactionItem }) {
       setCounterpart(null);
       setFee(null);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Não foi possível salvar a transferência.");
+      setError(caught instanceof Error ? caught.message : t("transferSaveError"));
     } finally {
       setSaving(false);
     }
   };
-  if (relation.isPending) return <PanelSection><Spin aria-label="Carregando transferência" /></PanelSection>;
+  if (relation.isPending) return <PanelSection><Spin aria-label={t("loadingTransfer")} /></PanelSection>;
   if (relation.isError) return (
     <PanelSection>
-      <Alert type="error" message="Não foi possível consultar a transferência" action={<Button onClick={() => void relation.refetch()}>Tentar novamente</Button>} />
+      <Alert type="error" message={t("transferLookupError")} action={<Button onClick={() => void relation.refetch()}>{t("retry")}</Button>} />
     </PanelSection>
   );
   if (relation.data) return (
@@ -108,25 +111,25 @@ export function TransactionTransferScreen({ item }: { item: TransactionItem }) {
       {error && <Alert type="error" showIcon message={error} />}
       <PanelFooter>
         <Button danger block loading={saving} onClick={() => confirm({
-          title: "Desvincular transferência",
-          okText: "Desvincular",
-          description: "Os lançamentos serão mantidos e voltarão a seguir suas decisões anteriores nos relatórios.",
+          title: t("unlinkTransfer"),
+          okText: t("unlink"),
+          description: t("unlinkTransferHint"),
           onConfirm: () => write(async () => { await deleteTransfer(relation.data!.id); return null; }),
-        })}>Desvincular transferência</Button>
+        })}>{t("unlinkTransfer")}</Button>
       </PanelFooter>
     </>
   );
-  const counterpartLabel = isOutflow ? "Entrada na conta de destino" : "Saída da conta de origem";
+  const counterpartLabel = isOutflow ? t("destinationInflow") : t("sourceOutflow");
   return (
     <>
       <PanelSection>
-        <p>{item.description} · {item.account.name} · {formatMoney(movement(item).amount, movement(item).currency_code)}</p>
+        <p>{item.description} · {item.account.name} · {formatMoney(movement(item, language).amount, movement(item, language).currency_code)}</p>
         <FormField label={counterpartLabel} htmlFor="transfer-counterpart">
           <TransactionPicker
             id="transfer-counterpart" label={counterpartLabel}
-            value={counterpart?.id ?? null} transactions={options.map(pickable)}
+            value={counterpart?.id ?? null} transactions={options.map((option) => pickable(option, language))}
             loading={candidates.isFetching} disabled={saving}
-            emptyText="Nenhuma movimentação compatível disponível."
+            emptyText={t("noCompatibleMovements")}
             search={{ value: search, onChange: (value) => { setSearch(value); setPage(1); } }}
             onSelect={(id) => {
               setCounterpart(options.find((row) => row.id === id) ?? null);
@@ -134,42 +137,42 @@ export function TransactionTransferScreen({ item }: { item: TransactionItem }) {
             }}
           />
         </FormField>
-        {candidates.isError && <Alert type="error" message="Não foi possível consultar as movimentações" action={<Button onClick={() => void candidates.refetch()}>Tentar novamente</Button>} />}
+        {candidates.isError && <Alert type="error" message={t("movementsLookupError")} action={<Button onClick={() => void candidates.refetch()}>{t("retry")}</Button>} />}
         {(candidates.data?.page.total_pages ?? 0) > 1 && (
           <div>
-            <Button disabled={page === 1 || candidates.isFetching} onClick={() => setPage(page - 1)}>Movimentações anteriores</Button>
-            <Button disabled={page >= (candidates.data?.page.total_pages ?? 1) || candidates.isFetching} onClick={() => setPage(page + 1)}>Próximas movimentações</Button>
+            <Button disabled={page === 1 || candidates.isFetching} onClick={() => setPage(page - 1)}>{t("previousMovements")}</Button>
+            <Button disabled={page >= (candidates.data?.page.total_pages ?? 1) || candidates.isFetching} onClick={() => setPage(page + 1)}>{t("nextMovements")}</Button>
           </div>
         )}
-        <FormField label="Tarifa registrada (opcional)" htmlFor="transfer-fee" hint="Selecione a cobrança registrada separadamente. A diferença de câmbio não cria uma tarifa.">
+        <FormField label={t("optionalRecordedFee")} htmlFor="transfer-fee" hint={t("selectExistingFeeHint")}>
           <TransactionPicker
-            id="transfer-fee" label="Tarifa registrada (opcional)"
-            value={fee?.id ?? null} transactions={feeOptions.map(pickable)} allowClear
+            id="transfer-fee" label={t("optionalRecordedFee")}
+            value={fee?.id ?? null} transactions={feeOptions.map((option) => pickable(option, language))} allowClear
             disabled={!counterpart || saving} loading={fees.isFetching}
             search={{ value: feeSearch, onChange: (value) => { setFeeSearch(value); setFeePage(1); } }}
             onSelect={(id) => setFee(feeOptions.find((row) => row.id === id) ?? null)}
           />
         </FormField>
-        {fees.isError && <Alert type="error" message="Não foi possível consultar as tarifas" action={<Button onClick={() => void fees.refetch()}>Tentar novamente</Button>} />}
+        {fees.isError && <Alert type="error" message={t("feesLookupError")} action={<Button onClick={() => void fees.refetch()}>{t("retry")}</Button>} />}
         {counterpart && (fees.data?.page.total_pages ?? 0) > 1 && (
           <div>
-            <Button disabled={feePage === 1 || fees.isFetching} onClick={() => setFeePage(feePage - 1)}>Tarifas anteriores</Button>
-            <Button disabled={feePage >= (fees.data?.page.total_pages ?? 1) || fees.isFetching} onClick={() => setFeePage(feePage + 1)}>Próximas tarifas</Button>
+            <Button disabled={feePage === 1 || fees.isFetching} onClick={() => setFeePage(feePage - 1)}>{t("previousFees")}</Button>
+            <Button disabled={feePage >= (fees.data?.page.total_pages ?? 1) || fees.isFetching} onClick={() => setFeePage(feePage + 1)}>{t("nextFees")}</Button>
           </div>
         )}
         {error && <Alert type="error" showIcon message={error} />}
       </PanelSection>
       {source && destination && <TransferDetail transfer={{
-        id: "", source: movement(source), destination: movement(destination),
-        effective_rate: transferRate(movement(source).amount, movement(destination).amount),
-        fee: fee ? movement(fee) : null,
+        id: "", source: movement(source, language), destination: movement(destination, language),
+        effective_rate: transferRate(movement(source, language).amount, movement(destination, language).amount),
+        fee: fee ? movement(fee, language) : null,
       }} />}
       <PanelFooter>
         <Button type="primary" block loading={saving} disabled={!source || !destination} onClick={() => void write(() => createTransfer({
           source_transaction_id: source!.id,
           destination_transaction_id: destination!.id,
           ...(fee ? { fee_transaction_id: fee.id } : {}),
-        }))}>Vincular transferência</Button>
+        }))}>{t("linkTransfer")}</Button>
       </PanelFooter>
     </>
   );

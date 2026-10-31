@@ -1,11 +1,6 @@
+import { translate, type Language } from "../i18n/messages";
 import type { ReconciliationOrigin, ReconciliationStatus } from "../api/contracts";
 import type { StatusTagTone } from "../components/shared/StatusTag";
-
-export const reconciliationStatusLabel: Record<ReconciliationStatus, string> = {
-  reconciled: "Conciliada",
-  unreconciled: "Não conciliada",
-  detached: "Desconciliada",
-};
 
 // StatusTag tones: success for the settled case, the quietest for "nothing
 // happened yet", and a warning for a state the user deliberately put the
@@ -14,11 +9,6 @@ export const reconciliationStatusTone: Record<ReconciliationStatus, StatusTagTon
   reconciled: "success",
   unreconciled: "neutral",
   detached: "warning",
-};
-
-export const reconciliationOriginLabel: Record<ReconciliationOrigin, string> = {
-  rule: "automática",
-  manual: "manual",
 };
 
 /**
@@ -30,8 +20,9 @@ export const reconciliationOriginLabel: Record<ReconciliationOrigin, string> = {
 export function reconciliationLabel(
   status: ReconciliationStatus,
   origin: ReconciliationOrigin | null,
+  language: Language = "pt-BR",
 ): string {
-  const base = reconciliationStatusLabel[status];
+  const base = translate(language, { reconciled: "reconciledStatus", unreconciled: "unreconciledStatus", detached: "detachedStatus" }[status] as "reconciledStatus");
   if (status !== "reconciled" || origin === null) return base;
-  return `${base} (${reconciliationOriginLabel[origin]})`;
+  return `${base} (${translate(language, origin === "rule" ? "originAutomatic" : "originManualLower")})`;
 }

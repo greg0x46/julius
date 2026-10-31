@@ -1,3 +1,4 @@
+import { useTranslation } from "../../i18n/context";
 import { Button, Input, Select, Switch } from "../ui";
 import { useEffect, useState } from "react";
 
@@ -27,6 +28,7 @@ export function InvestmentAccountEditForm({
   onSubmit: (write: InvestmentAccountUpdate) => void;
   onCancel: () => void;
 }) {
+  const { t } = useTranslation();
   const [name, setName] = useState("");
   const [financialAccountId, setFinancialAccountId] = useState<string | null>(null);
   const [active, setActive] = useState(true);
@@ -43,7 +45,7 @@ export function InvestmentAccountEditForm({
 
   const submit = () => {
     if (name.trim() === "") {
-      setError("Informe o nome da conta de investimento.");
+      setError(t("investmentAccountNameRequired"));
       return;
     }
     setError(null);
@@ -52,7 +54,7 @@ export function InvestmentAccountEditForm({
 
   return (
     <FormDrawer
-      title="Editar conta de investimento"
+      title={t("editInvestmentAccount")}
       open={open}
       onClose={onCancel}
       onSubmit={submit}
@@ -60,7 +62,7 @@ export function InvestmentAccountEditForm({
       error={error ?? submitError}
       width={440}
     >
-      <FormField label="Nome" htmlFor="investment-account-edit-name">
+      <FormField label={t("name")} htmlFor="investment-account-edit-name">
         <Input
           id="investment-account-edit-name"
           disabled={account?.kind === "integrated"}
@@ -69,7 +71,7 @@ export function InvestmentAccountEditForm({
           onChange={(event) => setName(event.target.value)}
         />
       </FormField>
-      <FormField label="Caixa da corretora já importado" htmlFor="investment-account-edit-financial">
+      <FormField label={t("importedBrokerageCash")} htmlFor="investment-account-edit-financial">
         <Select
           id="investment-account-edit-financial"
           allowClear
@@ -78,7 +80,7 @@ export function InvestmentAccountEditForm({
             .filter((item) => item.currency_code === "BRL" && item.account_type !== "CREDIT")
             .map((item) => ({ value: item.id, label: item.name ?? item.id }))}
           onChange={(value: string | undefined) => setFinancialAccountId(value ?? null)}
-          placeholder="Nenhuma conta vinculada"
+          placeholder={t("noLinkedAccount")}
         />
         {/* The Select's clear icon only shows on hover, which hides the fact
             that a link can be undone; the button makes it a visible action. */}
@@ -89,18 +91,18 @@ export function InvestmentAccountEditForm({
             style={{ justifySelf: "start", paddingInline: 0 }}
             onClick={() => setFinancialAccountId(null)}
           >
-            Desvincular conta
+            {t("unlinkAccount")}
           </Button>
         )}
       </FormField>
-      <FormField label="Conta em uso" htmlFor="investment-account-edit-active">
+      <FormField label={t("accountInUse")} htmlFor="investment-account-edit-active">
         <Switch
           id="investment-account-edit-active"
           disabled={account?.kind === "integrated"}
           checked={active}
           onChange={setActive}
-          checkedChildren="Sim"
-          unCheckedChildren="Não"
+          checkedChildren={t("yes")}
+          unCheckedChildren={t("no")}
           style={{ width: "fit-content" }}
         />
       </FormField>

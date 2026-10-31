@@ -1,3 +1,4 @@
+import { useTranslation } from "../i18n/context";
 import { Alert, Button, Skeleton, Table } from "./ui";
 import type { ColumnsType } from "./ui/Table";
 import { useEffect, useState } from "react";
@@ -49,6 +50,7 @@ export function InvestmentAssetSettings({
   creating: boolean;
   onCreatingClose: () => void;
 }) {
+  const { t, language } = useTranslation();
   const assets = useInvestmentAssets();
   const feedback = useFeedback();
   const confirm = useConfirm();
@@ -89,7 +91,7 @@ export function InvestmentAssetSettings({
   const sortedAssets = [...assets.assets].sort((left, right) => {
     const order = (value: InvestmentAssetClass) =>
       assets.classification.findIndex((item) => item.asset_class === value);
-    return order(left.asset_class) - order(right.asset_class) || left.name.localeCompare(right.name, "pt-BR");
+    return order(left.asset_class) - order(right.asset_class) || left.name.localeCompare(right.name, language);
   });
 
   const submit = async () => {
@@ -100,7 +102,7 @@ export function InvestmentAssetSettings({
       editing !== null && (editing.ticker ?? "").trim().toLowerCase() !== draft.ticker.trim().toLowerCase();
     const symbolUntouched = editing !== null && draft.quoteSymbol.trim() === (editing.quote_symbol ?? "");
     const quoteSymbol = !quoteSource || (tickerChanged && symbolUntouched) ? "" : draft.quoteSymbol.trim();
-    const write = assetWriteFrom(draft, quoteSource, quoteSymbol);
+    const write = assetWriteFrom(draft, quoteSource, quoteSymbol, t);
     if (typeof write === "string") {
       setFormError(write);
       return;
@@ -113,9 +115,9 @@ export function InvestmentAssetSettings({
         await assets.createAsset(write);
       }
       close();
-      feedback.success("Salvo");
+      feedback.success(t("saved"));
     } catch (error) {
-      setFormError(errorMessage(error, "Não foi possível salvar o ativo."));
+      setFormError(errorMessage(error, t("assetSaveError")));
     }
   };
 
@@ -124,9 +126,9 @@ export function InvestmentAssetSettings({
     setDeletingId(asset.id);
     try {
       await assets.deleteAsset(asset.id);
-      feedback.success("Excluído");
+      feedback.success(t("deleted"));
     } catch (error) {
-      const message = errorMessage(error, "Não foi possível excluir o ativo.");
+      const message = errorMessage(error, t("assetDeleteError"));
       setActionError(message);
       feedback.error(message);
     } finally {
@@ -136,18 +138,18 @@ export function InvestmentAssetSettings({
 
   const menu = (asset: InvestmentAsset) => (
     <RecordMenu
-      label={`Ações de ${asset.name}`}
+      label={t("actionsFor", { name: asset.name })}
       items={[
-        { key: "edit", label: "Editar", disabled: !catalogReady, onClick: () => setEditing(asset) },
+        { key: "edit", label: t("edit"), disabled: !catalogReady, onClick: () => setEditing(asset) },
         {
           key: "delete",
-          label: "Excluir",
+          label: t("delete"),
           danger: true,
           disabled: deletingId !== null,
           onClick: () =>
             confirm({
-              title: "Excluir ativo",
-              description: "O ativo só pode ser excluído quando não estiver associado a nenhuma posição.",
+              title: t("deleteAsset"),
+              description: t("deleteAssetHint"),
               onConfirm: () => void remove(asset),
             }),
         },
@@ -157,26 +159,26 @@ export function InvestmentAssetSettings({
 
   const columns: ColumnsType<InvestmentAsset> = [
     {
-      title: "Nome",
+      title: t("name"),
       dataIndex: "name",
-      sorter: (left, right) => left.name.localeCompare(right.name, "pt-BR"),
+      sorter: (left, right) => left.name.localeCompare(right.name, language),
     },
     {
-      title: "Código",
+      title: t("codeLabel"),
       dataIndex: "ticker",
       render: (_, asset) => asset.ticker ?? <span className="investment-quiet">—</span>,
     },
     {
-      title: "Classe",
+      title: t("classLabel"),
       dataIndex: "asset_class",
       render: (_, asset) => classLabel(asset.asset_class),
       filters: classOptions.map((item) => ({ text: item.label, value: item.value })),
       onFilter: (value, asset) => asset.asset_class === value,
     },
-    { title: "Tipo", dataIndex: "asset_type" },
-    { title: "Moeda", dataIndex: "currency_code", width: 100 },
+    { title: t("type"), dataIndex: "asset_type" },
+    { title: t("currency"), dataIndex: "currency_code", width: 100 },
     {
-      title: <span className="investment-visually-hidden">Ações</span>,
+      title: <span className="investment-visually-hidden">{t("actions")}</span>,
       key: "actions",
       width: 48,
       render: (_, asset) => <span onClick={(event) => event.stopPropagation()}>{menu(asset)}</span>,
@@ -199,8 +201,8 @@ export function InvestmentAssetSettings({
         <Alert
           type="error"
           showIcon
-          message="Não foi possível carregar os ativos"
-          action={<Button onClick={() => assets.refetch()}>Tentar novamente</Button>}
+          message={t("assetsLoadError")}
+          action={<Button onClick={() => assets.refetch()}>{t("retry")}</Button>}
           style={{ marginBottom: 16 }}
         />
       )}
@@ -209,20 +211,20 @@ export function InvestmentAssetSettings({
       {!assets.error && (
         <DataCard flush className="settings-list-card">
           <ResponsiveList
-            label="Ativos de investimento"
+            label={t("investmentAssets")}
             items={sortedAssets}
             getKey={(asset) => asset.id}
             isLoading={assets.isLoading}
             loading={
-              <div role="status" aria-label="Carregando ativos">
+              <div role="status" aria-label={t("loadingAssets")}>
                 <Skeleton active paragraph={{ rows: 3 }} title={false} />
               </div>
             }
             // No action: the page's own "Novo ativo" is the way out.
             empty={
               <EmptyState
-                title="Nenhum ativo cadastrado"
-                hint="Cadastre o primeiro ativo para usá-lo nas posições de investimento."
+                title={t("noAssetsRegistered")}
+                hint={t("noAssetsRegisteredHint")}
               />
             }
             row={(asset) => ({
@@ -235,7 +237,7 @@ export function InvestmentAssetSettings({
             })}
             wide={
               <Table<InvestmentAsset>
-                aria-label="Ativos de investimento"
+                aria-label={t("investmentAssets")}
                 className="investment-table"
                 rowKey="id"
                 columns={columns}
@@ -254,7 +256,7 @@ export function InvestmentAssetSettings({
       )}
 
       <FormDrawer
-        title={editing ? "Editar ativo" : "Novo ativo"}
+        title={editing ? t("editAsset") : t("newAsset")}
         open={open}
         onClose={close}
         onSubmit={() => void submit()}

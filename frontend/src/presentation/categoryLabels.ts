@@ -1,3 +1,4 @@
+import { translate, type Language } from "../i18n/messages";
 import {
   BankOutlined,
   BulbOutlined,
@@ -115,34 +116,32 @@ export function renderCategoryIcon(iconKey: string | undefined, props?: Record<s
   return createElement(Icon, props);
 }
 
-export const categoryKindLabel: Record<CategoryKind, string> = {
-  expense: "Despesa",
-  income: "Receita",
-  transfer: "Transferência",
-};
-
 export const categoryKindColor: Record<CategoryKind, string> = {
   expense: "red",
   income: "green",
   transfer: "blue",
 };
 
-export function internalCategoryOriginLabel(category: InternalCategory): string {
+export function internalCategoryOriginLabel(category: InternalCategory, language: Language = "pt-BR"): string {
   switch (category.origin) {
     case "manual":
-      return "Categorização manual";
+      return translate(language, "manualCategorization");
     case "learned":
-      return "Categorização aprendida de uma decisão manual anterior";
+      return translate(language, "learnedCategorization");
     default:
-      return "Categorização automática";
+      return translate(language, "automaticCategorization");
   }
 }
 
-export function internalCategoryName(item: Pick<TransactionItem, "internal_category">): string {
-  return item.internal_category?.name ?? "Sem categoria";
+export function internalCategoryName(item: Pick<TransactionItem, "internal_category">, language: Language = "pt-BR"): string {
+  return item.internal_category?.name ?? translate(language, "uncategorized");
 }
 
-export function categoryFilterOptions(categories: CategoryOption[] | undefined): FilterOption[] {
+export function categoryKindName(kind: CategoryKind, language: Language = "pt-BR"): string {
+  return translate(language, kind === "expense" ? "expenseCategory" : kind === "income" ? "incomeCategory" : "transferCategory");
+}
+
+export function categoryFilterOptions(categories: CategoryOption[] | undefined, language: Language = "pt-BR"): FilterOption[] {
   if (!categories) return [];
   const byKind = ["expense", "income", "transfer"] as const;
   const sorted = [...categories].sort((a, b) => {
@@ -152,7 +151,7 @@ export function categoryFilterOptions(categories: CategoryOption[] | undefined):
   });
   return sorted.map((option) => ({
     value: option.id,
-    label: `${categoryKindLabel[option.kind]}: ${option.name}${option.is_active ? "" : " (inativa)"}`,
+    label: `${categoryKindName(option.kind, language)}: ${option.name}${option.is_active ? "" : translate(language, "inactiveCategory")}`,
     icon: option.icon,
     color: option.color,
   }));

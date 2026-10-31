@@ -1,3 +1,4 @@
+import { apiMessage } from "../i18n/apiMessage";
 import { useQuery } from "@tanstack/react-query";
 import { getCategoryBreakdown } from "../api/transactions";
 import type { CategoryDirection } from "../api/contracts";
@@ -13,5 +14,5 @@ export function useCategoryBreakdown(period: Period, classification: CategoryDir
     queryFn: ({ signal }) => getCategoryBreakdown(timezone!, period, classification, signal),
     enabled: timezone !== null,
   });
-  return { ...query, error: timezone === null ? new Error("Fuso horário indisponível.") : query.error };
+  return { ...query, error: timezone === null ? new Error(apiMessage("apiTimezoneUnavailable")) : query.error };
 }

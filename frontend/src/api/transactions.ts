@@ -1,3 +1,4 @@
+import { apiMessage } from "../i18n/apiMessage";
 import { apiFetch } from "./transport";
 import type { Period } from "../hooks/usePeriod";
 import { requestJson } from "./client";
@@ -37,7 +38,7 @@ export async function queryTransactions(
     });
   } catch (error) {
     if (isAbortError(error)) throw error;
-    throw new ApiError("transport", "Não foi possível consultar as transações.");
+    throw new ApiError("transport", apiMessage("apiTransactionsQuery"));
   }
 
   const contentType = response.headers.get("content-type")?.split(";")[0].trim();
@@ -45,7 +46,7 @@ export async function queryTransactions(
   try {
     body = await response.json();
   } catch {
-    throw new ApiError("response", "A resposta de transações não pôde ser confirmada.");
+    throw new ApiError("response", apiMessage("apiTransactionsResponse"));
   }
 
   if (!response.ok) {
@@ -59,17 +60,17 @@ export async function queryTransactions(
     }
     throw new ApiError(
       "response",
-      problem?.detail ?? problem?.title ?? "Não foi possível consultar as transações.",
+      problem?.detail ?? problem?.title ?? apiMessage("apiTransactionsQuery"),
       problem,
     );
   }
   if (contentType !== "application/json") {
-    throw new ApiError("response", "A resposta de transações não pôde ser confirmada.");
+    throw new ApiError("response", apiMessage("apiTransactionsResponse"));
   }
   try {
     return parseTransactionQueryResult(body);
   } catch {
-    throw new ApiError("response", "A resposta de transações não pôde ser confirmada.");
+    throw new ApiError("response", apiMessage("apiTransactionsResponse"));
   }
 }
 
@@ -89,7 +90,7 @@ export async function getSpendingByCategory(
     });
   } catch (error) {
     if (isAbortError(error)) throw error;
-    throw new ApiError("transport", "Não foi possível consultar os gastos por categoria.");
+    throw new ApiError("transport", apiMessage("apiSpendingQuery"));
   }
 
   const contentType = response.headers.get("content-type")?.split(";")[0].trim();
@@ -97,7 +98,7 @@ export async function getSpendingByCategory(
   try {
     body = await response.json();
   } catch {
-    throw new ApiError("response", "A resposta de gastos por categoria não pôde ser confirmada.");
+    throw new ApiError("response", apiMessage("apiSpendingResponse"));
   }
 
   if (!response.ok) {
@@ -111,17 +112,17 @@ export async function getSpendingByCategory(
     }
     throw new ApiError(
       "response",
-      problem?.detail ?? problem?.title ?? "Não foi possível consultar os gastos por categoria.",
+      problem?.detail ?? problem?.title ?? apiMessage("apiSpendingQuery"),
       problem,
     );
   }
   if (contentType !== "application/json") {
-    throw new ApiError("response", "A resposta de gastos por categoria não pôde ser confirmada.");
+    throw new ApiError("response", apiMessage("apiSpendingResponse"));
   }
   try {
     return parseSpendingByCategory(body);
   } catch {
-    throw new ApiError("response", "A resposta de gastos por categoria não pôde ser confirmada.");
+    throw new ApiError("response", apiMessage("apiSpendingResponse"));
   }
 }
 
@@ -138,7 +139,7 @@ export async function setTransactionInclusion(
     });
   } catch (error) {
     if (isAbortError(error)) throw error;
-    throw new ApiError("transport", "Não foi possível salvar a decisão da transação.");
+    throw new ApiError("transport", apiMessage("apiDecisionSave"));
   }
 
   const contentType = response.headers.get("content-type")?.split(";")[0].trim();
@@ -146,7 +147,7 @@ export async function setTransactionInclusion(
   try {
     body = await response.json();
   } catch {
-    throw new ApiError("response", "A confirmação da decisão é inválida.");
+    throw new ApiError("response", apiMessage("apiDecisionInvalid"));
   }
   if (!response.ok) {
     let problem: Problem | undefined;
@@ -159,17 +160,17 @@ export async function setTransactionInclusion(
     }
     throw new ApiError(
       "response",
-      problem?.detail ?? problem?.title ?? "Não foi possível salvar a decisão da transação.",
+      problem?.detail ?? problem?.title ?? apiMessage("apiDecisionSave"),
       problem,
     );
   }
   if (contentType !== "application/json") {
-    throw new ApiError("response", "A confirmação da decisão é inválida.");
+    throw new ApiError("response", apiMessage("apiDecisionInvalid"));
   }
   try {
     return parseTransactionInclusionResult(body);
   } catch {
-    throw new ApiError("response", "A confirmação da decisão é inválida.");
+    throw new ApiError("response", apiMessage("apiDecisionInvalid"));
   }
 }
 
@@ -186,7 +187,7 @@ export async function setTransactionCategory(
     });
   } catch (error) {
     if (isAbortError(error)) throw error;
-    throw new ApiError("transport", "Não foi possível salvar a categoria da transação.");
+    throw new ApiError("transport", apiMessage("apiTxCategorySave"));
   }
 
   const contentType = response.headers.get("content-type")?.split(";")[0].trim();
@@ -194,7 +195,7 @@ export async function setTransactionCategory(
   try {
     body = await response.json();
   } catch {
-    throw new ApiError("response", "A confirmação da categoria é inválida.");
+    throw new ApiError("response", apiMessage("apiCategoryConfirmInvalid"));
   }
   if (!response.ok) {
     let problem: Problem | undefined;
@@ -207,17 +208,17 @@ export async function setTransactionCategory(
     }
     throw new ApiError(
       "response",
-      problem?.detail ?? problem?.title ?? "Não foi possível salvar a categoria da transação.",
+      problem?.detail ?? problem?.title ?? apiMessage("apiTxCategorySave"),
       problem,
     );
   }
   if (contentType !== "application/json") {
-    throw new ApiError("response", "A confirmação da categoria é inválida.");
+    throw new ApiError("response", apiMessage("apiCategoryConfirmInvalid"));
   }
   try {
     return parseTransactionCategoryResult(body);
   } catch {
-    throw new ApiError("response", "A confirmação da categoria é inválida.");
+    throw new ApiError("response", apiMessage("apiCategoryConfirmInvalid"));
   }
 }
 
@@ -273,7 +274,7 @@ async function sendManualTransaction(
 }
 
 export function createManualTransaction(write: ManualTransactionWrite, idempotencyKey: string = crypto.randomUUID()): Promise<TransactionItem> {
-  return sendManualTransaction("POST", "/api/transactions", write, "Não foi possível criar a transação manual.", idempotencyKey);
+  return sendManualTransaction("POST", "/api/transactions", write, apiMessage("apiManualCreate"), idempotencyKey);
 }
 
 export function updateManualTransaction(
@@ -284,12 +285,12 @@ export function updateManualTransaction(
     "PUT",
     `/api/transactions/${encodeURIComponent(transactionId)}`,
     write,
-    "Não foi possível salvar a transação manual.",
+    apiMessage("apiManualSave"),
   );
 }
 
 export async function deleteManualTransaction(transactionId: string): Promise<void> {
-  const failure = "Não foi possível excluir a transação manual.";
+  const failure = apiMessage("apiManualDelete");
   let response: Response;
   try {
     response = await apiFetch(`/api/transactions/${encodeURIComponent(transactionId)}`, { method: "DELETE" });
@@ -325,7 +326,7 @@ export async function getTransactionReconciliation(
   transactionId: string,
   signal?: AbortSignal,
 ): Promise<TransactionReconciliation> {
-  const failure = "Não foi possível consultar a conciliação desta transação.";
+  const failure = apiMessage("apiReconciliationQuery");
   let response: Response;
   try {
     response = await apiFetch(`/api/transactions/${encodeURIComponent(transactionId)}/reconciliation`, {

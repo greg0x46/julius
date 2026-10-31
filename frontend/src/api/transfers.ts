@@ -1,3 +1,4 @@
+import { apiMessage } from "../i18n/apiMessage";
 import type { ManualTransactionWrite } from "./contracts";
 import { parseProblem } from "./contracts";
 import { decimal, isUuid, requiredRecord } from "./contracts/shared";
@@ -45,10 +46,10 @@ async function transferRequest(url: string, method: "GET" | "POST" | "DELETE", w
     response = await apiFetch(url, { method, headers: { "Content-Type": "application/json" }, body: write ? JSON.stringify(write) : undefined, signal });
   } catch (error) {
     if (isAbortError(error)) throw error;
-    throw new ApiError("transport", "Não foi possível comunicar com o servidor.");
+    throw new ApiError("transport", apiMessage("apiCommunication"));
   }
   if (response.status === 204 && method === "DELETE") return null;
-  const failure = "Não foi possível confirmar a transferência. Tente novamente.";
+  const failure = apiMessage("apiTransferUnconfirmed");
   let body: unknown;
   try { body = await response.json(); }
   catch { throw new ApiError("response", failure); }

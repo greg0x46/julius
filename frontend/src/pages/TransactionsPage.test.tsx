@@ -171,3 +171,33 @@ describe("TransactionsPage", () => {
     expect(screen.getByText("Página 2 de 2")).toBeVisible();
   });
 });
+
+it("translates transaction filters, rows and the manual form when the language changes", async () => {
+  const { I18nProvider } = await import("../i18n/I18nProvider");
+  const { useTranslation } = await import("../i18n/context");
+  function LanguageSwitch() {
+    const { setLanguage } = useTranslation();
+    return <button onClick={() => setLanguage("en")}>English</button>;
+  }
+  vi.mocked(accountsApi.listAccounts).mockResolvedValue([]);
+  vi.mocked(categoriesApi.listCategories).mockResolvedValue([]);
+  vi.mocked(transactionsApi.queryTransactions).mockResolvedValue(transactionResult);
+  localStorage.removeItem("julius.language");
+  render(<I18nProvider><MemoryRouter initialEntries={["/transacoes?period=all"]}><QueryTestProvider><LanguageSwitch /><TransactionsPage /></QueryTestProvider></MemoryRouter></I18nProvider>);
+  await screen.findByRole("button", { name: /Ver detalhes de Mercado/ });
+  await userEvent.click(screen.getByRole("button", { name: "English" }));
+  expect(screen.getByRole("heading", { name: "Transactions" })).toBeVisible();
+  expect(screen.getByRole("button", { name: /View details of Mercado/ })).toBeVisible();
+  expect(screen.getByRole("button", { name: "Filters" })).toBeVisible();
+  await userEvent.click(screen.getByRole("button", { name: /View details of Mercado/ }));
+  const panel = within(await screen.findByRole("dialog"));
+  expect(panel.getByRole("heading", { name: "Transaction" })).toBeVisible();
+  expect(panel.getByRole("switch", { name: "Include in totals" })).toBeVisible();
+  await userEvent.click(panel.getByRole("button", { name: "Close" }));
+  await userEvent.click(screen.getByRole("button", { name: "New transaction" }));
+  const dialog = within(await screen.findByRole("dialog"));
+  expect(dialog.getByLabelText("Description")).toBeVisible();
+  await userEvent.click(dialog.getByRole("button", { name: "Save" }));
+  expect(dialog.getByText("Select an account.")).toBeVisible();
+  localStorage.removeItem("julius.language");
+});

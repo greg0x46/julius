@@ -1,3 +1,4 @@
+import { useTranslation } from "../../i18n/context";
 import {
   Fragment,
   useState,
@@ -64,6 +65,7 @@ export default function Table<T>({
   style,
   "aria-label": label,
 }: TableProps<T>) {
+  const { t } = useTranslation();
   const [filters, setFilters] = useState<Record<number, string>>({});
   const [sort, setSort] = useState<{ index: number; direction: number } | null>(
     null,
@@ -111,7 +113,7 @@ export default function Table<T>({
               {expandable && (
                 <th scope="col">
                   {expandable.columnTitle ?? (
-                    <span className="visually-hidden">Detalhes</span>
+                    <span className="visually-hidden">{t("details")}</span>
                   )}
                 </th>
               )}
@@ -162,7 +164,7 @@ export default function Table<T>({
                           setPage(1);
                         }}
                       >
-                        <option value="">Todos</option>
+                        <option value="">{t("all")}</option>
                         {column.filters.map((item) => (
                           <option
                             key={String(item.value)}
@@ -213,8 +215,8 @@ export default function Table<T>({
                             type="text"
                             aria-label={
                               keys.includes(key)
-                                ? "Recolher detalhes"
-                                : "Expandir detalhes"
+                                ? t("collapseDetails")
+                                : t("expandDetails")
                             }
                             aria-expanded={keys.includes(key)}
                             onClick={() => {
@@ -261,8 +263,8 @@ export default function Table<T>({
               <tr>
                 <td colSpan={columns.length + (expandable ? 1 : 0)}>
                   {loading
-                    ? "Carregando…"
-                    : (locale?.emptyText ?? "Nenhum registro")}
+                    ? t("loading")
+                    : (locale?.emptyText ?? t("noRecords"))}
                 </td>
               </tr>
             )}
@@ -270,12 +272,12 @@ export default function Table<T>({
         </table>
       </div>
       {pagination && rows.length > pageSize && (
-        <nav aria-label="Paginação" className="ui-pagination">
+        <nav aria-label={t("pagination")} className="ui-pagination">
           <Button
             disabled={currentPage === 1}
             onClick={() => setPage(currentPage - 1)}
           >
-            Anterior
+            {t("previous")}
           </Button>
           <span>
             {currentPage} / {Math.ceil(rows.length / pageSize)}
@@ -284,7 +286,7 @@ export default function Table<T>({
             disabled={currentPage * pageSize >= rows.length}
             onClick={() => setPage(currentPage + 1)}
           >
-            Próxima
+            {t("next")}
           </Button>
         </nav>
       )}

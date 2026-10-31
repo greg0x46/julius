@@ -1,3 +1,4 @@
+import { useTranslation } from "../../i18n/context";
 import { Alert } from "../ui";
 import { useState } from "react";
 
@@ -15,6 +16,7 @@ import { InvestmentOperationsTable } from "./InvestmentOperationsTable";
  * well as from the account's own list.
  */
 export function InvestmentPositionOperations({ investmentId }: { investmentId: string }) {
+  const { t } = useTranslation();
   const workspace = useInvestmentWorkspace();
   const feedback = useFeedback();
   const [editing, setEditing] = useState<InvestmentOperation | null>(null);
@@ -35,25 +37,25 @@ export function InvestmentPositionOperations({ investmentId }: { investmentId: s
     try {
       await workspace.updateOperation({ operationId: editing.id, write });
       setEditing(null);
-      feedback.success("Salvo");
+      feedback.success(t("saved"));
     } catch (error) {
-      setSaveError(errorMessage(error, "Não foi possível salvar a movimentação."));
+      setSaveError(errorMessage(error, t("operationSaveError")));
     }
   };
   const remove = async (operation: InvestmentOperation) => {
     setActionError(null);
     try {
       await workspace.deleteOperation(operation.id);
-      feedback.success("Excluído");
+      feedback.success(t("deleted"));
     } catch (error) {
-      const message = errorMessage(error, "Não foi possível excluir a movimentação.");
+      const message = errorMessage(error, t("operationDeleteError"));
       setActionError(message);
       feedback.error(message);
     }
   };
 
   return (
-    <Section title={`Movimentações registradas (${operations.length})`}>
+    <Section title={t("recordedMovements", { count: operations.length })}>
       {actionError && (
         <Alert
           type="error"

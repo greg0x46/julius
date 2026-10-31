@@ -1,3 +1,4 @@
+import { useTranslation } from "../../i18n/context";
 import { App } from "../ui";
 import type { ReactNode } from "react";
 import { useCallback } from "react";
@@ -20,8 +21,9 @@ export interface ConfirmOptions {
 /** Shared asynchronous confirmation; standalone consumers fall back to the browser dialog. */
 export function useConfirm(): (options: ConfirmOptions) => void {
   const { modal } = App.useApp();
+  const { t } = useTranslation();
   return useCallback(
-    ({ title, description, okText = "Excluir", danger = true, onConfirm }) => {
+    ({ title, description, okText = t("delete"), danger = true, onConfirm }) => {
       if (typeof modal?.confirm !== "function") {
         const text = typeof description === "string" ? `${title}\n${description}` : title;
         if (window.confirm(text)) void onConfirm();
@@ -31,11 +33,11 @@ export function useConfirm(): (options: ConfirmOptions) => void {
         title,
         content: description,
         okText,
-        cancelText: "Cancelar",
+        cancelText: t("cancel"),
         okButtonProps: { danger },
         onOk: onConfirm,
       });
     },
-    [modal],
+    [modal, t],
   );
 }

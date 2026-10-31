@@ -1,3 +1,4 @@
+import { useTranslation } from "../../i18n/context";
 import { Link } from "react-router-dom";
 
 import type { ImportHistoryItem } from "../../api/statementImports";
@@ -9,23 +10,24 @@ import { formatOptionalDateTime } from "../../presentation/dates";
  * runs, but as rows so a phone never scrolls it sideways.
  */
 export function StatementImportHistory({ items }: { items: ImportHistoryItem[] }) {
+  const { t, language } = useTranslation();
   return (
-    <ul className="statement-history-list" aria-label="Extratos importados">
+    <ul className="statement-history-list" aria-label={t("importedStatements")}>
       {items.map((item) => (
         <li key={item.run_id} className="statement-history-row">
           <div className="statement-history-identity">
             <span className="statement-history-account">{item.account_name}</span>
-            <span className="statement-history-meta">{item.filename} · {formatOptionalDateTime(item.created_at)}</span>
+            <span className="statement-history-meta">{item.filename} · {formatOptionalDateTime(item.created_at, language)}</span>
           </div>
           <span className="statement-history-counts">
-            {item.counts.new} novos · {item.counts.duplicate} já importados · {item.counts.invalid} inválidos
+            {t("importHistoryCounts", { new: item.counts.new, duplicate: item.counts.duplicate, invalid: item.counts.invalid })}
           </span>
           <Link
             className="statement-history-link"
-            aria-label={`Ver conta ${item.account_name}`}
+            aria-label={t("viewAccountNamed", { name: item.account_name })}
             to={`/contas-e-cartoes/${item.account_id}`}
           >
-            Ver conta
+            {t("viewAccount")}
           </Link>
         </li>
       ))}

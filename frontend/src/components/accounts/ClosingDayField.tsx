@@ -1,3 +1,4 @@
+import { useTranslation } from "../../i18n/context";
 import { useEffect, useState } from "react";
 import { Button, InputNumber, Tooltip, Typography } from "../ui";
 
@@ -21,6 +22,7 @@ export function ClosingDayField({
   onSave: (closingDay: number | null) => Promise<unknown>;
   saving: boolean;
 }) {
+  const { t, language } = useTranslation();
   const feedback = useFeedback();
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<number | null>(account.closing_day);
@@ -35,32 +37,32 @@ export function ClosingDayField({
 
   const submit = async (value: number | null) => {
     if (value !== null && (!Number.isInteger(value) || value < 1 || value > 31)) {
-      setError("Informe um dia entre 1 e 31.");
+      setError(t("closingDayInvalid"));
       return;
     }
     try {
       await onSave(value);
       setOpen(false);
-      feedback.success(value === null ? "Voltou ao dado da instituição" : "Dia de fechamento salvo");
+      feedback.success(value === null ? t("institutionValueRestored") : t("closingDaySaved"));
     } catch {
-      setError("Não foi possível salvar o dia de fechamento.");
+      setError(t("closingDaySaveError"));
     }
   };
 
   return (
     <>
       <span className="closing-day-field">
-        <Tooltip title={closingDaySourceHint(account.closing_day_source)}>
-          <span>{closingDayLabel(account.closing_day)}</span>
+        <Tooltip title={closingDaySourceHint(account.closing_day_source, language)}>
+          <span>{closingDayLabel(account.closing_day, language)}</span>
         </Tooltip>
         <Button size="small" type="link" className="closing-day-field-action" onClick={() => setOpen(true)}>
-          {account.closing_day === null ? "Definir" : "Alterar"}
+          {account.closing_day === null ? t("define") : t("change")}
         </Button>
       </span>
 
       <FormDrawer
         open={open}
-        title="Dia de fechamento"
+        title={t("closingDay")}
         onClose={() => setOpen(false)}
         onSubmit={() => void submit(draft)}
         submitting={saving}
@@ -71,15 +73,14 @@ export function ClosingDayField({
         error={error}
       >
         <Typography.Paragraph type="secondary">
-          Nem toda instituição informa o fechamento do cartão. Defina o dia aqui para que o
-          Julius use o seu valor.
+          {t("closingDayHint")}
         </Typography.Paragraph>
         {account.closing_day !== null && (
           <Typography.Paragraph type="secondary">
-            Valor atual: {closingDaySourceHint(account.closing_day_source).toLowerCase()}.
+            {t("currentValue").replace("{value}", closingDaySourceHint(account.closing_day_source, language).toLocaleLowerCase(language))}
           </Typography.Paragraph>
         )}
-        <FormField label="Dia do mês" htmlFor="closing-day-input">
+        <FormField label={t("dayOfMonth")} htmlFor="closing-day-input">
           <InputNumber
             id="closing-day-input"
             min={1}
@@ -93,7 +94,7 @@ export function ClosingDayField({
         </FormField>
         {account.closing_day_source === "manual" && (
           <Button danger type="text" className="closing-day-clear" loading={saving} onClick={() => void submit(null)}>
-            Usar o dado da instituição
+            {t("useInstitutionValue")}
           </Button>
         )}
       </FormDrawer>

@@ -1,3 +1,4 @@
+import { useTranslation } from "../../i18n/context";
 import { formatDateOnly } from "../../presentation/dates";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { formatAxisMoney } from "../../presentation/chartAxis";
@@ -46,6 +47,7 @@ export function LinePlot({
   markers = [],
   label,
 }: LinePlotProps) {
+  const { t, language } = useTranslation();
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const selectedIndex = selectedDate == null ? -1 : dates.indexOf(selectedDate);
   const selected = selectedIndex >= 0 ? selectedIndex : null;
@@ -69,7 +71,7 @@ export function LinePlot({
   const min = Math.min(0, ...values);
   const max = Math.max(0, ...values);
   const span = max - min || 1;
-  const left = yAxisWidth(values);
+  const left = yAxisWidth(values, language);
   const right = 20;
   const top = 28;
   const bottom = height - 32;
@@ -131,7 +133,7 @@ export function LinePlot({
                 style={{ fontSize: "var(--fs-caption)" }}
                 fill={balanceChartColor.axis}
               >
-                {formatAxisMoney(value)}
+                {formatAxisMoney(value, language)}
               </text>
             </g>
           );
@@ -278,9 +280,9 @@ export function LinePlot({
       </svg>
       <div className="ui-chart-controls">
         <label>
-          Consultar data{" "}
+          {t("queryChartDate")}{" "}
           <select
-            aria-label="Consultar data do gráfico"
+            aria-label={t("queryChartDateLabel")}
             value={selected ?? ""}
             onChange={(event) =>
               setSelectedDate(
@@ -290,17 +292,17 @@ export function LinePlot({
               )
             }
           >
-            <option value="">Selecione</option>
+            <option value="">{t("select")}</option>
             {dates.map((date, index) => (
               <option key={date} value={index}>
-                {formatDateOnly(date)}
+                {formatDateOnly(date, language)}
               </option>
             ))}
           </select>
         </label>
         {onSelect && selected != null && (canSelect?.(selected) ?? true) && (
           <button type="button" onClick={() => onSelect(selected)}>
-            Ver transações do dia
+            {t("viewDayTransactions")}
           </button>
         )}
       </div>

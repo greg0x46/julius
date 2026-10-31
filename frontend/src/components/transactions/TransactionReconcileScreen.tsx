@@ -1,3 +1,4 @@
+import { useTranslation } from "../../i18n/context";
 import { Alert, Button, Popconfirm, Skeleton, Typography } from "../ui";
 import { useState } from "react";
 
@@ -6,8 +7,6 @@ import { useTransactionReconciliation } from "../../hooks/useTransactionReconcil
 import { errorMessage } from "../../presentation/errors";
 import { formatDay } from "../../presentation/dates";
 import { formatBRL } from "../../presentation/money";
-import { reconciliationOriginLabel } from "../../presentation/reconciliationLabels";
-import { recurringCommitmentKindLabel } from "../../presentation/recurringCommitmentLabels";
 import { TransactionAmount } from "./TransactionAmount";
 import { TransactionPicker } from "../shared/TransactionPicker";
 import { PanelDisclosure, PanelFooter, PanelSection } from "../shared/PanelStack";
@@ -38,6 +37,7 @@ export function TransactionReconcileScreen({
   /** Called after a successful write so the stack can pop back. */
   onDone: () => void;
 }) {
+  const { t, language } = useTranslation();
   const reconciliation = useTransactionReconciliation(item.id);
   const [selected, setSelected] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -54,13 +54,13 @@ export function TransactionReconcileScreen({
 
   const reconcile = () => {
     if (selected === null) {
-      setError("Selecione uma ocorrência para conciliar.");
+      setError(t("selectOccurrenceToReconcile"));
       return;
     }
     const [commitmentId, occurrenceDate] = selected.split("|") as [string, string];
     void run(
       () => reconciliation.reconcile({ commitmentId, occurrenceDate }),
-      "Não foi possível conciliar a transação.",
+      t("reconcileTransactionError"),
     );
   };
 
@@ -70,7 +70,7 @@ export function TransactionReconcileScreen({
     <>
       <header className="transaction-screen-summary">
         <TransactionAmount item={item} />
-        <span>{item.description ?? "Descrição não informada"}</span>
+        <span>{item.description ?? t("descriptionNotProvided")}</span>
       </header>
 
       {error && (
@@ -78,7 +78,7 @@ export function TransactionReconcileScreen({
       )}
 
       {reconciliation.isLoading ? (
-        <div role="status" aria-label="Carregando conciliação">
+        <div role="status" aria-label={t("loadingReconciliation")}>
           <Skeleton active paragraph={{ rows: 2 }} title={{ width: "40%" }} />
         </div>
       ) : reconciliation.isError ? (
@@ -86,24 +86,24 @@ export function TransactionReconcileScreen({
         <Alert
           type="error"
           showIcon
-          message="Não foi possível consultar as recorrências"
-          description={<Button onClick={reconciliation.refetch}>Tentar novamente</Button>}
+          message={t("recurrencesLookupError")}
+          description={<Button onClick={reconciliation.refetch}>{t("retry")}</Button>}
         />
       ) : current !== null ? (
-        <PanelSection title="Conciliada com">
+        <PanelSection title={t("reconciledWith")}>
           <div className="transaction-reconciled">
             <strong>{current.commitment_name}</strong>
             <span>
-              {formatDay(current.occurrence_date)} · {formatBRL(current.expected_amount)}
+              {formatDay(current.occurrence_date, language)} · {formatBRL(current.expected_amount)}
             </span>
             <Typography.Text type="secondary">
-              Conciliação {reconciliationOriginLabel[current.origin]}
+              {t(current.origin === "rule" ? "reconciliationAutomatic" : "reconciliationManual")}
             </Typography.Text>
           </div>
           <PanelFooter>
             <Popconfirm
-              title="Desconciliar"
-              description="A ocorrência volta a ser projetada na Home. A transação permanece inalterada."
+              title={t("unreconcile")}
+              description={t("unreconcileHint")}
               onConfirm={() =>
                 run(
                   () =>
@@ -111,46 +111,45 @@ export function TransactionReconcileScreen({
                       commitmentId: current.commitment_id,
                       occurrenceDate: current.occurrence_date,
                     }),
-                  "Não foi possível desconciliar.",
+                  t("unreconcileError"),
                 )
               }
-              okText="Desconciliar"
-              cancelText="Cancelar"
+              okText={t("unreconcile")}
+              cancelText={t("cancel")}
             >
               <Button danger block loading={reconciliation.isWriting}>
-                Desconciliar
+                {t("unreconcile")}
               </Button>
             </Popconfirm>
           </PanelFooter>
         </PanelSection>
       ) : (
         <>
-          <PanelSection title="Ocorrência">
+          <PanelSection title={t("occurrence")}>
             <TransactionPicker
               id="transaction-reconcile-occurrence"
-              label="Conciliar com uma recorrência"
+              label={t("reconcileWithRecurrence")}
               value={selected}
-              placeholder="Selecione uma ocorrência"
+              placeholder={t("selectOccurrence")}
               disabled={reconciliation.options.length === 0}
-              emptyText="Nenhuma ocorrência compatível por perto"
+              emptyText={t("noCompatibleOccurrence")}
               transactions={reconciliation.options.map((option) => ({
                 id: optionValue(option),
                 description: option.commitment_name,
                 amount: option.expected_amount,
                 direction: option.kind === "expense" ? "outflow" : "inflow",
                 date: option.occurrence_date,
-                category: `${recurringCommitmentKindLabel[option.kind]} recorrente`,
+                category: t(option.kind === "expense" ? "recurringExpense" : "recurringIncome"),
               }))}
               onSelect={setSelected}
             />
             {reconciliation.options.length === 0 && (
               <Typography.Text type="secondary" className="transaction-field-hint">
-                Nenhuma ocorrência de recorrência compatível perto desta data.
+                {t("noCompatibleOccurrenceHint")}
               </Typography.Text>
             )}
-            <PanelDisclosure summary="A ocorrência escolhida deixa de ser projetada.">
-              Só aparecem ocorrências na mesma direção desta transação e com data próxima. Ao conciliar, o
-              valor previsto dessa ocorrência sai da projeção e passa a ser representado por esta transação.
+            <PanelDisclosure summary={t("occurrenceProjectionRemoved")}>
+              {t("reconciliationExplanation")}
             </PanelDisclosure>
           </PanelSection>
           <PanelFooter>
@@ -161,7 +160,7 @@ export function TransactionReconcileScreen({
               disabled={reconciliation.options.length === 0}
               onClick={reconcile}
             >
-              Conciliar
+              {t("reconcile")}
             </Button>
           </PanelFooter>
         </>

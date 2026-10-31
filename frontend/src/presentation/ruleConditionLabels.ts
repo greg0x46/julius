@@ -1,31 +1,26 @@
+import { translate, type Language } from "../i18n/messages";
 import type { RuleCondition, RuleConditionField, RuleConditionOperator, RuleLogicOperator } from "../api/contracts";
 
-export const ruleConditionFieldLabel: Record<RuleConditionField, string> = {
-  description: "Descrição",
-  card: "Cartão",
-  account: "Conta",
-  amount: "Valor",
-  day_of_month: "Dia do mês",
-};
+export function ruleConditionFieldName(field: RuleConditionField, language: Language = "pt-BR"): string {
+  const keys = { description: "description", card: "card", account: "account", amount: "amount", day_of_month: "ruleFieldDayOfMonth" } as const;
+  return translate(language, keys[field]);
+}
 
-export const ruleConditionOperatorLabel: Record<RuleConditionOperator, string> = {
-  contains: "contém",
-  equals: "é",
-  within_percent: "próximo de",
-  day_range: "entre os dias",
-};
+export function ruleConditionOperatorName(operator: RuleConditionOperator, language: Language = "pt-BR"): string {
+  const keys = { contains: "ruleOpContains", equals: "ruleOpEquals", within_percent: "ruleOpWithinPercent", day_range: "ruleOpDayRange" } as const;
+  return translate(language, keys[operator]);
+}
 
-export const ruleLogicOperatorLabel: Record<RuleLogicOperator, string> = {
-  and: "E",
-  or: "OU",
-};
+export function ruleLogicOperatorName(operator: RuleLogicOperator, language: Language = "pt-BR"): string {
+  return translate(language, operator === "and" ? "ruleLogicAnd" : "ruleLogicOr");
+}
 
-function formatConditionValue(condition: RuleCondition): string {
+function formatConditionValue(condition: RuleCondition, language: Language): string {
   if (condition.operator === "day_range") {
     const [min, max] = condition.value.split(":");
     // A half-filled range reads as what is there, never "e undefined".
     if (!min || !max) return min || max || "—";
-    return `${min} e ${max}`;
+    return translate(language, "ruleValueAnd", { min, max });
   }
   if (condition.operator === "within_percent") {
     const [reference, tolerance] = condition.value.split(":");
@@ -35,11 +30,11 @@ function formatConditionValue(condition: RuleCondition): string {
   return `"${condition.value}"`;
 }
 
-export function summarizeConditions(conditions: RuleCondition[], logicOperator: RuleLogicOperator): string {
+export function summarizeConditions(conditions: RuleCondition[], logicOperator: RuleLogicOperator, language: Language = "pt-BR"): string {
   return conditions
     .map(
       (condition) =>
-        `${ruleConditionFieldLabel[condition.field]} ${ruleConditionOperatorLabel[condition.operator]} ${formatConditionValue(condition)}`,
+        `${ruleConditionFieldName(condition.field, language)} ${ruleConditionOperatorName(condition.operator, language)} ${formatConditionValue(condition, language)}`,
     )
-    .join(` ${ruleLogicOperatorLabel[logicOperator]} `);
+    .join(` ${ruleLogicOperatorName(logicOperator, language)} `);
 }

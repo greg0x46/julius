@@ -1,19 +1,10 @@
+import { translate, type Language } from "../i18n/messages";
 import type { ScenarioKind, ScenarioTransactionStatus } from "../api/contracts";
 
-export const scenarioKindLabel: Record<ScenarioKind, string> = {
-  debt_plan: "Plano de dívida",
-  receivable_plan: "Plano de recebível",
-  standalone: "Hipotético",
-  recurring: "Recorrente",
-};
-
-export const scenarioTransactionStatusLabel: Record<ScenarioTransactionStatus, string> = {
-  atrasada: "Atrasada",
-  projetada: "Planejado",
-  paga_parcialmente: "Paga parcialmente",
-  paga: "Paga",
-  paga_a_mais: "Paga a mais",
-};
+export function scenarioKindName(kind: ScenarioKind, language: Language = "pt-BR"): string {
+  const keys = { debt_plan: "scenarioKindDebtPlan", receivable_plan: "scenarioKindReceivablePlan", standalone: "scenarioKindStandalone", recurring: "scenarioKindRecurring" } as const;
+  return translate(language, keys[kind]);
+}
 
 export const scenarioTransactionStatusColor: Record<ScenarioTransactionStatus, string> = {
   atrasada: "error",
@@ -34,3 +25,8 @@ export const scenarioTransactionStatusDashed: Record<ScenarioTransactionStatus, 
   paga: false,
   paga_a_mais: false,
 };
+
+export function scenarioTransactionStatus(status: ScenarioTransactionStatus, language: Language = "pt-BR"): string {
+  const keys = { atrasada: "installmentStatusOverdue", projetada: "installmentStatusPlanned", paga_parcialmente: "installmentStatusPartial", paga: "installmentStatusPaid", paga_a_mais: "installmentStatusOverpaid" } as const;
+  return translate(language, keys[status]);
+}

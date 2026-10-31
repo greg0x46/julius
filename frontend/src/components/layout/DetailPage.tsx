@@ -1,3 +1,4 @@
+import { useTranslation } from "../../i18n/context";
 import { Alert, Button, Flex, Skeleton } from "../ui";
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
@@ -33,7 +34,6 @@ interface DetailPageFrameProps {
   className?: string;
 }
 
-const defaultInvalidDescription = "O identificador informado não possui o formato esperado.";
 
 /**
  * Shown instead of ever calling the page's data hook when the route's id
@@ -50,15 +50,16 @@ export function InvalidDetailPage({
   width,
   className,
   invalidTitle,
-  invalidDescription = defaultInvalidDescription,
+  invalidDescription,
 }: DetailPageFrameProps & { invalidTitle: string; invalidDescription?: string }) {
+  const { t } = useTranslation();
   return (
     <Page title={title} backTo={backTo} backLabel={backLabel} width={width} className={className} compactMobileHeader>
       <Alert
         type="error"
         showIcon
         message={invalidTitle}
-        description={invalidDescription}
+        description={invalidDescription ?? t("invalidIdentifier")}
         action={<Link to={backTo}>{backLabel}</Link>}
       />
     </Page>
@@ -112,6 +113,7 @@ export function DetailPage<T>({
   actions,
   children,
 }: DetailPageProps<T>) {
+  const { t } = useTranslation();
   const back = <Link to={backTo}>{backLabel}</Link>;
   const pageTitle = state.snapshot !== null && recordTitle !== undefined ? recordTitle(state.snapshot) : title;
   return (
@@ -132,7 +134,7 @@ export function DetailPage<T>({
           <div role="status" className="detail-page-skeleton">
             <Skeleton active title={{ width: "35%" }} paragraph={{ rows: 2 }} />
             <Skeleton active title={{ width: "25%" }} paragraph={{ rows: 4 }} />
-            <span className="visually-hidden">{loadingLabel ?? "Carregando…"}</span>
+            <span className="visually-hidden">{loadingLabel ?? t("loading")}</span>
           </div>
         )}
         {state.freshness === "not_found" && (
@@ -153,10 +155,10 @@ export function DetailPage<T>({
               <Alert
                 type="warning"
                 showIcon
-                message="As informações podem estar desatualizadas."
+                message={t("informationMayBeOutdated")}
                 action={
                   <Button loading={state.retrying} onClick={retry}>
-                    Tentar novamente
+                    {t("retry")}
                   </Button>
                 }
               />

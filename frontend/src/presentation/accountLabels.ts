@@ -1,44 +1,45 @@
+import { translate, type MessageKey, type Language } from "../i18n/messages";
 import type { Account, AccountClosingDaySource, AccountType } from "../api/contracts";
 import { formatBRL, formatMoney } from "./money";
 
-const accountTypeLabels: Record<AccountType, string> = {
-  BANK: "Conta bancária",
-  CREDIT: "Cartão de crédito",
+const accountTypeLabels: Record<AccountType, MessageKey> = {
+  BANK: "bankAccount",
+  CREDIT: "creditCard",
 };
 
-export function accountTypeLabel(type: AccountType | null): string {
-  if (type === null) return "Tipo não informado";
-  return accountTypeLabels[type];
+export function accountTypeLabel(type: AccountType | null, language: Language = "pt-BR"): string {
+  if (type === null) return translate(language, "unknownAccountType");
+  return translate(language, accountTypeLabels[type]);
 }
 
 // Pluggy's account subtype is free text from the provider, not a closed enum
 // github.com/greg0x46/julius validates, so this map only translates the values we've
 // actually seen — anything else falls back to the raw string.
-const accountSubtypeLabels: Record<string, string> = {
-  CHECKING_ACCOUNT: "Conta corrente",
-  SAVINGS_ACCOUNT: "Poupança",
-  CREDIT_CARD: "Cartão de crédito",
+const accountSubtypeLabels: Record<string, MessageKey> = {
+  CHECKING_ACCOUNT: "checkingAccount",
+  SAVINGS_ACCOUNT: "savingsAccount",
+  CREDIT_CARD: "creditCard",
 };
 
-export function accountSubtypeLabel(subtype: string | null): string | null {
+export function accountSubtypeLabel(subtype: string | null, language: Language = "pt-BR"): string | null {
   if (subtype === null) return null;
-  return accountSubtypeLabels[subtype] ?? subtype;
+  return accountSubtypeLabels[subtype] ? translate(language, accountSubtypeLabels[subtype]) : subtype;
 }
 
-export function closingDayLabel(day: number | null): string {
-  return day === null ? "Não informado" : `Todo dia ${day}`;
+export function closingDayLabel(day: number | null, language: Language = "pt-BR"): string {
+  return day === null ? translate(language, "notProvided") : translate(language, "everyDayOfMonth").replace("{day}", String(day));
 }
 
-const closingDaySourceHints: Record<AccountClosingDaySource, string> = {
-  manual: "Definido por você",
-  informado: "Informado pela instituição",
-  estimado: "Estimado a partir da última fatura fechada",
+const closingDaySourceHints: Record<AccountClosingDaySource, MessageKey> = {
+  manual: "setByYou",
+  informado: "providedByInstitution",
+  estimado: "estimatedFromBill",
 };
 
-export function closingDaySourceHint(source: AccountClosingDaySource | null): string {
+export function closingDaySourceHint(source: AccountClosingDaySource | null, language: Language = "pt-BR"): string {
   return source === null
-    ? "A instituição não informa o fechamento deste cartão — defina o dia manualmente"
-    : closingDaySourceHints[source];
+    ? translate(language, "closingDayMissing")
+    : translate(language, closingDaySourceHints[source]);
 }
 
 export function maskedCardNumber(number: string): string {
@@ -57,8 +58,8 @@ export function maskedAccountNumber(number: string | null): string | null {
 
 /** Formats a 0–1 usage ratio as a pt-BR percentage. Values above 100% are
  *  real (the limit was exceeded) and are shown as-is. */
-export function creditUsagePercent(ratio: string): string {
-  return `${(Number(ratio) * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`;
+export function creditUsagePercent(ratio: string, language: Language = "pt-BR"): string {
+  return `${(Number(ratio) * 100).toLocaleString(language, { maximumFractionDigits: 1 })}%`;
 }
 
 /** The share of the limit to paint in the meter, clamped so an over-limit
@@ -90,9 +91,9 @@ export function isCreditAccount(account: Account): boolean {
  * institution name for an account that has none. The institution rides
  * along on the identity line instead (see `accountMetaLine`).
  */
-export function accountDisplayName(account: Account): string {
+export function accountDisplayName(account: Account, language: Language = "pt-BR"): string {
   if (account.name !== null) return account.name;
-  return account.institution_name !== null ? shortInstitutionName(account.institution_name) : "Conta sem nome";
+  return account.institution_name !== null ? shortInstitutionName(account.institution_name) : translate(language, "unnamedAccount");
 }
 
 // A registered institution name often carries a corporate suffix and a
@@ -110,14 +111,14 @@ export function shortInstitutionName(name: string): string {
 /** The account detail page's heading. It is the same name the list row shows
  *  (`accountDisplayName`): a record is not called one thing in the list and
  *  another once opened. */
-export function accountHeaderTitle(account: Account): string {
-  return accountDisplayName(account);
+export function accountHeaderTitle(account: Account, language: Language = "pt-BR"): string {
+  return accountDisplayName(account, language);
 }
 
 /** "Conta corrente · •••• 0966" — the compact identity line under a name,
  *  shared by the account list rows and the detail page header. */
-export function accountIdentityLine(account: Account): string {
-  const parts = [accountSubtypeLabel(account.account_subtype), maskedAccountNumber(account.number)];
+export function accountIdentityLine(account: Account, language: Language = "pt-BR"): string {
+  const parts = [accountSubtypeLabel(account.account_subtype, language), maskedAccountNumber(account.number)];
   return parts.filter((part): part is string => part !== null).join(" · ");
 }
 
@@ -125,11 +126,11 @@ export function accountIdentityLine(account: Account): string {
  *  institution — the part of the account the name does not already carry. Only
  *  the parts that exist, so an account with nothing to say gets "" and no line,
  *  never a lone dash. Shared by the list rows and the detail header. */
-export function accountMetaLine(account: Account): string {
-  if (account.origin === "manual") return ["Conta manual", account.currency_code, account.archived_at ? "Arquivada" : ""].filter(Boolean).join(" · ");
-  const name = accountDisplayName(account);
+export function accountMetaLine(account: Account, language: Language = "pt-BR"): string {
+  if (account.origin === "manual") return [translate(language, "manualAccount"), account.currency_code, account.archived_at ? translate(language, "archivedFeminine") : ""].filter(Boolean).join(" · ");
+  const name = accountDisplayName(account, language);
   const institution = account.institution_name !== null ? shortInstitutionName(account.institution_name) : "";
-  return [accountIdentityLine(account), institution !== name ? institution : ""]
+  return [accountIdentityLine(account, language), institution !== name ? institution : ""]
     .filter((part) => part !== "")
     .join(" · ");
 }

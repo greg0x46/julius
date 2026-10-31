@@ -1,3 +1,4 @@
+import { translate, type Language } from "../i18n/messages";
 import type { TimelineDayPoint, TimelineEntry } from "../api/contracts";
 import { formatDayMonth } from "./dates";
 import { compareDecimals, sumDecimals } from "./decimal";
@@ -32,10 +33,10 @@ function shorten(text: string): string {
   return trimmed.length > maxDescription ? `${trimmed.slice(0, maxDescription - 1).trimEnd()}…` : trimmed;
 }
 
-function labelOf(kind: ChartEventKind, description: string): string {
-  if (kind === "bill") return "Fatura";
-  if (kind === "installment") return "Parcela";
-  return shorten(description) || "Recorrência";
+function labelOf(kind: ChartEventKind, description: string, language: Language): string {
+  if (kind === "bill") return translate(language, "eventBill");
+  if (kind === "installment") return translate(language, "eventInstallment");
+  return shorten(description) || translate(language, "eventRecurrence");
 }
 
 const magnitude = (value: string) => (value.startsWith("-") ? value.slice(1) : value);
@@ -55,6 +56,7 @@ export function selectChartEvents(
   referenceDate: string,
   limit: number,
   skipDates: string[] = [],
+  language: Language = "pt-BR",
 ): ChartEvent[] {
   const balanceByDate = new Map(points.map((point) => [point.date, point.balance]));
   const groups = new Map<string, { kind: ChartEventKind; date: string; description: string; amounts: string[] }>();
@@ -71,7 +73,7 @@ export function selectChartEvents(
   const candidates = [...groups.values()]
     .map((group) => ({ ...group, amount: sumDecimals(group.amounts) }))
     .filter((group) => compareDecimals(group.amount, "0") !== 0)
-    .map((group) => ({ ...group, label: labelOf(group.kind, group.description) }))
+    .map((group) => ({ ...group, label: labelOf(group.kind, group.description, language) }))
     .sort(
       (a, b) =>
         compareDecimals(magnitude(b.amount), magnitude(a.amount)) ||
@@ -93,7 +95,7 @@ export function selectChartEvents(
     .map((event) => ({
       kind: event.kind,
       date: event.date,
-      label: `${event.label} ${formatDayMonth(event.date)}`,
+      label: `${event.label} ${formatDayMonth(event.date, language)}`,
       amount: event.amount,
       balance: balanceByDate.get(event.date) as string,
     }));

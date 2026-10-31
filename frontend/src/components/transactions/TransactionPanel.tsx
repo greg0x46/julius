@@ -1,3 +1,5 @@
+import type { MessageKey } from "../../i18n/messages";
+import { useTranslation } from "../../i18n/context";
 import { useQueryClient } from "@tanstack/react-query";
 import { Alert, Button } from "../ui";
 import { useEffect, useState } from "react";
@@ -48,16 +50,16 @@ export type TransactionScreen =
   | { kind: "investment-new"; amount: string | null }
   | { kind: "edit-manual" };
 
-const screenTitle: Record<TransactionScreen["kind"], string> = {
-  overview: "Transação",
-  details: "Detalhes da transação",
-  technical: "Informações técnicas",
-  recurrence: "Criar recorrência",
-  reconcile: "Conciliar com recorrência",
-  investment: "Vincular a investimento",
-  transfer: "Transferência entre contas",
-  "investment-new": "Nova movimentação",
-  "edit-manual": "Editar transação",
+const screenTitle: Record<TransactionScreen["kind"], MessageKey> = {
+  overview: "transaction",
+  details: "transactionDetails",
+  technical: "technicalInformation",
+  recurrence: "createRecurrence",
+  reconcile: "reconcileRecurrence",
+  investment: "linkInvestment",
+  transfer: "transferBetweenAccounts",
+  "investment-new": "newMovement",
+  "edit-manual": "editTransaction",
 };
 
 const root: TransactionScreen = { kind: "overview" };
@@ -114,6 +116,7 @@ function TransactionStack({
   deleteManualPending = false,
   deleteManualError = null,
 }: TransactionPanelProps & { item: TransactionItem; open: boolean }) {
+  const { t } = useTranslation();
   const stack = useScreenStack<TransactionScreen>(root);
   const confirm = useConfirm();
   const current = stack.current;
@@ -128,23 +131,23 @@ function TransactionStack({
   const menu =
     isManual && current.kind === "overview" ? (
       <RecordMenu
-        label="Mais ações"
+        label={t("moreActions")}
         items={[
           {
             key: "edit",
-            label: "Editar transação",
+            label: t("editTransaction"),
             disabled: !onSaveManual,
             onClick: () => stack.push({ kind: "edit-manual" }),
           },
           {
             key: "delete",
-            label: "Excluir transação",
+            label: t("deleteTransaction"),
             danger: true,
             disabled: !onDeleteManual || deleteManualPending,
             onClick: () =>
               confirm({
-                title: "Excluir transação",
-                description: "Esta ação não pode ser desfeita.",
+                title: t("deleteTransaction"),
+                description: t("irreversibleAction"),
                 onConfirm: () => onDeleteManual?.(item.id),
               }),
           },
@@ -156,7 +159,7 @@ function TransactionStack({
     <PanelStack
       open={open}
       onClose={onClose}
-      title={screenTitle[current.kind]}
+      title={t(screenTitle[current.kind])}
       onBack={stack.depth > 1 ? stack.pop : undefined}
       extra={menu}
     >
@@ -216,6 +219,7 @@ function CreateRecurrenceScreen({
   categories: Category[];
   onDone: () => void;
 }) {
+  const { t } = useTranslation();
   const commitments = useRecurringCommitments();
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
@@ -229,7 +233,7 @@ function CreateRecurrenceScreen({
       await invalidateTransactionReconciliation(queryClient, item.id);
       onDone();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Não foi possível salvar a recorrência.");
+      setError(caught instanceof Error ? caught.message : t("recurrenceSaveError"));
     }
   };
 
@@ -248,7 +252,7 @@ function CreateRecurrenceScreen({
       </PanelSection>
       <PanelFooter>
         <Button type="primary" block htmlType="submit" form={recurrenceFormId} loading={commitments.isSaving}>
-          Criar recorrência
+          {t("createRecurrence")}
         </Button>
       </PanelFooter>
     </>
@@ -275,11 +279,12 @@ function EditManualScreen({
   onSave: (id: string, write: ManualTransactionWrite) => Promise<void>;
   onDone: () => void;
 }) {
+  const { t, language } = useTranslation();
   const [draft, setDraft] = useState<ManualDraft>(() => manualDraftFrom(item, item.account.id));
   const [error, setError] = useState<string | null>(null);
   const [issue, setIssue] = useState<ManualIssue | null>(null);
   const submit = async () => {
-    const problem = manualDraftIssue(draft);
+    const problem = manualDraftIssue(draft, language);
     setIssue((previous) => nextIssue(previous, problem));
     setError(null);
     if (problem !== null) return;
@@ -287,7 +292,7 @@ function EditManualScreen({
       await onSave(item.id, manualDraftToWrite(draft));
       onDone();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Não foi possível salvar a transação.");
+      setError(caught instanceof Error ? caught.message : t("transactionSaveError"));
     }
   };
   return (
@@ -314,7 +319,7 @@ function EditManualScreen({
       </PanelSection>
       <PanelFooter>
         <Button type="primary" block htmlType="submit" form={manualFormId} loading={submitting}>
-          Salvar
+          {t("save")}
         </Button>
       </PanelFooter>
     </>

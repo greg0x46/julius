@@ -1,3 +1,4 @@
+import { useTranslation } from "../../i18n/context";
 import type { Column } from "../ui/Table";
 import Table from "../ui/Table";
 import { Skeleton, Switch } from "../ui";
@@ -15,11 +16,11 @@ type EntryRow = {
   rule: AutomationRule;
 };
 
-const actionLabel: Record<AutomationActionType, string> = {
-  ignore: "Ignorar",
-  reconcile: "Conciliar",
-  set_category: "Aplicar categoria",
-};
+const actionLabelKey = {
+  ignore: "actionIgnore",
+  reconcile: "actionReconcile",
+  set_category: "actionSetCategory",
+} as const satisfies Record<AutomationActionType, string>;
 
 /**
  * The rules as one list, two shapes: stacked rows below `lg` (the table has
@@ -48,26 +49,27 @@ export function AutomationEntryList({
   onToggleRule: (rule: AutomationRule, isActive: boolean) => void;
   onDeleteRule: (rule: AutomationRule) => void | Promise<unknown>;
 }) {
+  const { t, language } = useTranslation();
   const confirm = useConfirm();
   const commitmentName = (scenarioId: string) =>
     commitments.find((commitment) => commitment.id === scenarioId)?.name ??
-    "Recorrência removida";
+    t("removedRecurrence");
   const categoryName = (categoryId: string) =>
-    categories.find((category) => category.id === categoryId)?.name ?? "Categoria removida";
+    categories.find((category) => category.id === categoryId)?.name ?? t("removedCategory");
 
   const actionText = (action: AutomationRule["actions"][number]) =>
     action.type === "reconcile" && action.scenario_id
-      ? `Concilia: ${commitmentName(action.scenario_id)}`
+      ? t("reconcilesWith", { name: commitmentName(action.scenario_id) })
       : action.type === "set_category" && action.category_id
-        ? `Categoriza: ${categoryName(action.category_id)}`
-        : actionLabel[action.type];
+        ? t("categorizesAs", { name: categoryName(action.category_id) })
+        : t(actionLabelKey[action.type]);
 
   const rows: EntryRow[] = rules.map((rule) => ({ key: rule.id, rule }));
 
   const columns: Column<EntryRow>[] = [
-    { title: "Nome", dataIndex: ["rule", "name"] },
+    { title: t("name"), dataIndex: ["rule", "name"] },
     {
-      title: "Ações",
+      title: t("actions"),
       key: "actions",
       render: (_, row) => (
         <ul className="automation-actions">
@@ -78,17 +80,17 @@ export function AutomationEntryList({
       ),
     },
     {
-      title: "Condições",
+      title: t("conditionsHeader"),
       key: "summary",
-      render: (_, row) => summarizeConditions(row.rule.conditions, row.rule.logic_operator),
+      render: (_, row) => summarizeConditions(row.rule.conditions, row.rule.logic_operator, language),
     },
     {
-      title: "Ativa",
+      title: t("activeFeminineHeader"),
       dataIndex: ["rule", "is_active"],
       render: (_, row) => (
         <span onClick={(event) => event.stopPropagation()}>
           <Switch
-            aria-label={`${row.rule.is_active ? "Desativar" : "Ativar"} automação ${row.rule.name}`}
+            aria-label={t("toggleAutomation", { action: row.rule.is_active ? t("deactivate") : t("activate"), name: row.rule.name })}
             checked={row.rule.is_active}
             loading={togglingRuleId === row.rule.id}
             onChange={(checked) => onToggleRule(row.rule, checked)}
@@ -97,23 +99,23 @@ export function AutomationEntryList({
       ),
     },
     {
-      title: <span className="visually-hidden">Ações da automação</span>,
+      title: <span className="visually-hidden">{t("automationActionsLabel")}</span>,
       key: "options",
       width: 56,
       render: (_, row) => (
         <span onClick={(event) => event.stopPropagation()}>
           <RecordMenu
-            label={`Ações de ${row.rule.name}`}
+            label={t("actionsFor", { name: row.rule.name })}
             items={[
-              { key: "edit", label: "Editar", onClick: () => onEditRule(row.rule) },
+              { key: "edit", label: t("edit"), onClick: () => onEditRule(row.rule) },
               {
                 key: "delete",
-                label: "Excluir",
+                label: t("delete"),
                 danger: true,
                 onClick: () =>
                   confirm({
-                    title: "Excluir automação",
-                    description: deleteRuleDescription(row.rule),
+                    title: t("deleteAutomation"),
+                    description: deleteRuleDescription(row.rule, language),
                     onConfirm: () => onDeleteRule(row.rule),
                   }),
               },
@@ -127,7 +129,7 @@ export function AutomationEntryList({
   return (
     <DataCard flush className="settings-list-card">
       <ResponsiveList<AutomationRule>
-        label="Automações"
+        label={t("automation")}
         items={rules}
         getKey={(rule) => rule.id}
         stackBelow="xl"
@@ -135,26 +137,26 @@ export function AutomationEntryList({
         loading={<Skeleton active paragraph={{ rows: 4 }} />}
         empty={
           <EmptyState
-            title="Nenhuma automação ainda"
-            hint="Crie regras no estilo de filtros de e-mail: ignore transações repetidas ou concilie recorrências (salário, aluguel, assinaturas) com as transações reais."
+            title={t("noAutomationsYet")}
+            hint={t("noAutomationsHint")}
           />
         }
         row={(rule) => ({
           title: rule.name,
           meta: (
             <span className="meta-clamp">
-              {[rule.actions.map(actionText).join(", "), summarizeConditions(rule.conditions, rule.logic_operator)]
+              {[rule.actions.map(actionText).join(", "), summarizeConditions(rule.conditions, rule.logic_operator, language)]
                 .filter((part) => part !== "")
                 .join(" · ")}
             </span>
           ),
-          status: rule.is_active ? undefined : <StatusTag tone="neutral">Inativa</StatusTag>,
+          status: rule.is_active ? undefined : <StatusTag tone="neutral">{t("inactiveFeminine")}</StatusTag>,
           onClick: () => onEditRule(rule),
-          ariaLabel: `Editar automação ${rule.name}`,
+          ariaLabel: t("editAutomationNamed", { name: rule.name }),
         })}
         wide={
           <Table<EntryRow>
-            aria-label="Automações"
+            aria-label={t("automation")}
             columns={columns}
             dataSource={rows}
             rowKey="key"

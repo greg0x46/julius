@@ -1,3 +1,4 @@
+import { useTranslation } from "../../i18n/context";
 import { CloseOutlined } from "../ui/icons";
 import { Button, Drawer } from "../ui";
 import type { ReactNode } from "react";
@@ -21,6 +22,7 @@ export function BottomSheet({
   title: string;
   children: ReactNode;
 }) {
+  const { t, language } = useTranslation();
   return (
     <Drawer
       open={open}
@@ -39,7 +41,7 @@ export function BottomSheet({
               type="text"
               className="bottom-sheet-close"
               icon={<CloseOutlined aria-hidden="true" />}
-              aria-label={`Fechar ${title.toLocaleLowerCase("pt-BR")}`}
+              aria-label={`${t("close")} ${title.toLocaleLowerCase(language)}`}
               onClick={onClose}
             />
           </div>

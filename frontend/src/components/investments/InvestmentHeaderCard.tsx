@@ -1,3 +1,4 @@
+import { useTranslation } from "../../i18n/context";
 import type { ReactNode } from "react";
 
 import type { Investment, InvestmentTransaction } from "../../api/contracts";
@@ -25,8 +26,9 @@ export function InvestmentHeaderCard({
   investment: Investment;
   transactions: InvestmentTransaction[];
 }) {
+  const { t, language } = useTranslation();
   const yieldEstimate = investmentYield(investment);
-  const unavailable = yieldUnavailable(investment);
+  const unavailable = yieldUnavailable(investment, language);
   // A history the backend judged too partial to net is too partial to show a
   // total for either. Without this the page contradicts itself: "Rendimento:
   // Histórico incompleto" directly above a confident "Aportes líquidos"
@@ -43,61 +45,61 @@ export function InvestmentHeaderCard({
         ? undefined
         : unavailable.hint
       : yieldEstimate.source === "informado"
-        ? "Rendimento informado pela instituição."
-        : "Rendimento calculado a partir do histórico de aplicações e resgates.";
+        ? t("yieldReported")
+        : t("yieldCalculated");
 
   const facts: { label: string; value: ReactNode }[] = [
-    { label: "Tipo", value: investmentTypeLabel(investment.investment_type) },
+    { label: t("type"), value: investmentTypeLabel(investment.investment_type, language) },
     ...(investment.source_display_name !== null
-      ? [{ label: "Instituição", value: investment.source_display_name }]
+      ? [{ label: t("factInstitution"), value: investment.source_display_name }]
       : []),
     ...(investment.amount_original !== null
-      ? [{ label: "Valor aplicado", value: <Money value={investment.amount_original} tone="neutral" /> }]
+      ? [{ label: t("factAppliedAmount"), value: <Money value={investment.amount_original} tone="neutral" /> }]
       : []),
     ...(investment.taxes !== null
-      ? [{ label: "IR retido", value: <Money value={investment.taxes} tone="neutral" /> }]
+      ? [{ label: t("factIncomeTax"), value: <Money value={investment.taxes} tone="neutral" /> }]
       : []),
     ...(investment.taxes2 !== null
-      ? [{ label: "IOF retido", value: <Money value={investment.taxes2} tone="neutral" /> }]
+      ? [{ label: t("factIof"), value: <Money value={investment.taxes2} tone="neutral" /> }]
       : []),
-    ...(investment.annual_rate !== null ? [{ label: "Taxa anual", value: `${formatDecimal(investment.annual_rate)}%` }] : []),
+    ...(investment.annual_rate !== null ? [{ label: t("factAnnualRate"), value: `${formatDecimal(investment.annual_rate, language)}%` }] : []),
     ...(investment.last_twelve_months_rate !== null
-      ? [{ label: "Rentabilidade 12 meses", value: `${formatDecimal(investment.last_twelve_months_rate)}%` }]
+      ? [{ label: t("factTwelveMonthReturn"), value: `${formatDecimal(investment.last_twelve_months_rate, language)}%` }]
       : []),
     ...(investment.rate !== null
       ? [
           {
-            label: "Taxa contratada",
-            value: `${formatDecimal(investment.rate)}${investment.rate_type !== null ? ` ${investment.rate_type}` : ""}`,
+            label: t("factContractedRate"),
+            value: `${formatDecimal(investment.rate, language)}${investment.rate_type !== null ? ` ${investment.rate_type}` : ""}`,
           },
         ]
       : []),
-    ...(investment.issuer !== null ? [{ label: "Emissor", value: investment.issuer }] : []),
+    ...(investment.issuer !== null ? [{ label: t("factIssuer"), value: investment.issuer }] : []),
     ...(investment.due_date !== null
-      ? [{ label: "Vencimento", value: formatOptionalDay(investment.due_date) }]
+      ? [{ label: t("factDueDate"), value: formatOptionalDay(investment.due_date, language) }]
       : []),
   ];
 
   return (
     <>
       <SummaryStrip
-        label="Saldo"
+        label={t("balanceLabel")}
         value={
           investment.balance !== null ? <Money value={investment.balance} tone="balance" size="hero" /> : "—"
         }
         items={[
           {
-            label: "Rendimento",
+            label: t("investmentYield"),
             value: yieldEstimate !== null ? <Money value={yieldEstimate.value} tone="result" /> : unavailable.label,
           },
           ...(contributed !== null
-            ? [{ label: "Aportes líquidos", value: <Money value={contributed} tone="neutral" /> }]
+            ? [{ label: t("netContributions"), value: <Money value={contributed} tone="neutral" /> }]
             : []),
-          { label: "Atualizado em", value: formatOptionalDay(investment.as_of_date) },
+          { label: t("updatedAtLabel"), value: formatOptionalDay(investment.as_of_date, language) },
         ]}
         note={yieldNote}
       />
-      <Section title="Dados do investimento">
+      <Section title={t("investmentData")}>
         <dl className="investment-facts">
           {facts.map((fact) => (
             <div key={fact.label} className="investment-fact">

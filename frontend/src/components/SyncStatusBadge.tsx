@@ -1,3 +1,4 @@
+import { useTranslation } from "../i18n/context";
 import type { SyncStatus } from "../api/contracts";
 import { getStatusMetadata } from "../presentation/syncStatus";
 import { StatusTag, type StatusTagTone } from "./shared/StatusTag";
@@ -15,6 +16,7 @@ const toneOf: Record<ReturnType<typeof getStatusMetadata>["tone"], StatusTagTone
  * says it.
  */
 export function SyncStatusBadge({ status }: { status: SyncStatus }) {
-  const metadata = getStatusMetadata(status);
+  const { language } = useTranslation();
+  const metadata = getStatusMetadata(status, language);
   return <StatusTag tone={toneOf[metadata.tone]}>{metadata.label}</StatusTag>;
 }

@@ -1,3 +1,4 @@
+import { useTranslation } from "../../i18n/context";
 import { Skeleton } from "../ui";
 
 import type { InvestmentTransaction } from "../../api/contracts";
@@ -24,30 +25,31 @@ export function InvestmentTimeline({
   error: unknown;
   onRetry: () => void;
 }) {
+  const { t, language } = useTranslation();
   const failed = error !== null && error !== undefined;
   return (
-    <Section title="Movimentações">
+    <Section title={t("movementsTitle")}>
       {isLoading ? (
-        <div role="status" aria-label="Carregando movimentações">
+        <div role="status" aria-label={t("loadingMovements")}>
           <Skeleton active paragraph={{ rows: 3 }} title={false} />
         </div>
       ) : failed ? (
         <UnavailableState onRetry={onRetry}>
-          Não foi possível carregar as movimentações deste investimento.
+          {t("investmentMovementsError")}
         </UnavailableState>
       ) : transactions.length === 0 ? (
-        <EmptyState title="Nenhuma movimentação sincronizada ainda" />
+        <EmptyState title={t("noSyncedMovements")} />
       ) : (
-        <ul className="list-rows" aria-label="Movimentações">
+        <ul className="list-rows" aria-label={t("movementsTitle")}>
           {transactions.map((transaction) => {
             const date = transaction.occurred_at ?? transaction.trade_date;
             return (
               <ListRow
                 key={transaction.id}
-                title={movementTypeLabel(transaction.movement_type)}
+                title={movementTypeLabel(transaction.movement_type, language)}
                 meta={[
-                  date !== null ? formatCompactDay(date) : "Sem data",
-                  transaction.quantity !== null ? quotaCount(transaction.quantity) : null,
+                  date !== null ? formatCompactDay(date, language) : t("noDate"),
+                  transaction.quantity !== null ? quotaCount(transaction.quantity, language) : null,
                 ]
                   .filter(Boolean)
                   .join(" · ")}

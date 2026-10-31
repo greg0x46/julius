@@ -1,3 +1,4 @@
+import { useTranslation } from "../i18n/context";
 import type { SyncFailure } from "../api/contracts";
 import { formatDate } from "../presentation/dates";
 import { getFailureStageLabel } from "../presentation/syncStatus";
@@ -10,24 +11,25 @@ import { Section } from "./layout";
  * does not need a list of red boxes.
  */
 export function SyncFailureList({ failures }: { failures: SyncFailure[] }) {
+  const { t, language } = useTranslation();
   if (failures.length === 0) {
     return null;
   }
   return (
-    <Section title="Falhas registradas">
-      <ul className="sync-failure-list" aria-label="Falhas registradas">
+    <Section title={t("recordedFailures")}>
+      <ul className="sync-failure-list" aria-label={t("recordedFailures")}>
         {failures.map((failure, index) => (
           <li key={`${failure.code}-${failure.occurred_at}-${index}`} className="sync-failure-row">
-            <span className="sync-failure-stage">{getFailureStageLabel(failure.stage)}</span>
+            <span className="sync-failure-stage">{getFailureStageLabel(failure.stage, language)}</span>
             <span>{failure.message}</span>
             <span className="sync-failure-meta">
-              Ocorrida em <time dateTime={failure.occurred_at}>{formatDate(failure.occurred_at)}</time>
+              {t("occurredAt")} <time dateTime={failure.occurred_at}>{formatDate(failure.occurred_at, language)}</time>
             </span>
             {failure.external_account_id !== null && (
-              <span className="sync-failure-meta">Conta relacionada: {failure.external_account_id}</span>
+              <span className="sync-failure-meta">{t("relatedAccount")}: {failure.external_account_id}</span>
             )}
             {failure.external_transaction_id !== null && (
-              <span className="sync-failure-meta">Transação relacionada: {failure.external_transaction_id}</span>
+              <span className="sync-failure-meta">{t("relatedTransaction")}: {failure.external_transaction_id}</span>
             )}
           </li>
         ))}

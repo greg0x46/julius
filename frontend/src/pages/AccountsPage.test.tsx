@@ -153,3 +153,22 @@ describe("AccountsPage", () => {
     expect(screen.getByText("Conta corrente · •••• 3456 · Nu Pagamentos")).toBeVisible();
   });
 });
+
+it("translates account labels and credit usage when the language changes", async () => {
+  vi.mocked(accountsApi.listAccounts).mockResolvedValue([bankAccount, creditAccount]);
+  const { I18nProvider } = await import("../i18n/I18nProvider");
+  const { useTranslation } = await import("../i18n/context");
+  function LanguageSwitch() {
+    const { setLanguage } = useTranslation();
+    return <button onClick={() => setLanguage("en")}>English</button>;
+  }
+  localStorage.removeItem("julius.language");
+  render(<I18nProvider><MemoryRouter><QueryTestProvider><LanguageSwitch /><AccountsPage /></QueryTestProvider></MemoryRouter></I18nProvider>);
+  await screen.findByText("Conta Corrente");
+  await userEvent.click(screen.getByRole("button", { name: "English" }));
+  expect(screen.getByRole("heading", { name: "Bank accounts" })).toBeVisible();
+  expect(screen.getByRole("heading", { name: "Credit cards" })).toBeVisible();
+  expect(screen.getByText(/24\.7% used/)).toBeVisible();
+  expect(screen.getByText(/Checking account/)).toBeVisible();
+  localStorage.removeItem("julius.language");
+});

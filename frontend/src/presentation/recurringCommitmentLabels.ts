@@ -1,47 +1,34 @@
+import { intlLocale, longMonthName } from "../i18n/dateFormats";
+import { translate, type Language } from "../i18n/messages";
 import type {
   RecurringCommitment,
   RecurringCommitmentCadence,
   RecurringCommitmentKind,
 } from "../api/contracts";
 
-export const recurringCommitmentKindLabel: Record<RecurringCommitmentKind, string> = {
-  income: "Entrada",
-  expense: "Saída",
-};
+export function recurringCommitmentKindName(kind: RecurringCommitmentKind, language: Language = "pt-BR"): string {
+  return translate(language, kind === "income" ? "recurringKindIncome" : "recurringKindExpense");
+}
 
-export const recurringCommitmentCadenceLabel: Record<RecurringCommitmentCadence, string> = {
-  monthly: "Mensal",
-  annual: "Anual",
-};
+export function recurringCommitmentCadenceName(cadence: RecurringCommitmentCadence, language: Language = "pt-BR"): string {
+  return translate(language, cadence === "monthly" ? "cadenceMonthly" : "cadenceAnnual");
+}
 
-const monthNames = [
-  "Janeiro",
-  "Fevereiro",
-  "Março",
-  "Abril",
-  "Maio",
-  "Junho",
-  "Julho",
-  "Agosto",
-  "Setembro",
-  "Outubro",
-  "Novembro",
-  "Dezembro",
-];
-
-export function monthOfYearLabel(monthOfYear: number): string {
-  return monthNames[monthOfYear - 1] ?? String(monthOfYear);
+export function monthOfYearLabel(monthOfYear: number, language: Language = "pt-BR"): string {
+  const name = longMonthName(language, monthOfYear - 1);
+  return name.charAt(0).toLocaleUpperCase(intlLocale(language)) + name.slice(1);
 }
 
 export function recurrenceScheduleLabel(
   cadence: RecurringCommitmentCadence,
   dayOfMonth: number,
   monthOfYear: number | null,
+  language: Language = "pt-BR",
 ): string {
   if (cadence === "annual" && monthOfYear !== null) {
-    return `Dia ${dayOfMonth} de ${monthOfYearLabel(monthOfYear)}`;
+    return translate(language, "scheduleAnnualLabel", { day: dayOfMonth, month: monthOfYearLabel(monthOfYear, language) });
   }
-  return `Todo dia ${dayOfMonth}`;
+  return translate(language, "scheduleMonthlyLabel", { day: dayOfMonth });
 }
 
 const pad = (value: number) => String(value).padStart(2, "0");
@@ -110,9 +97,10 @@ export function recurrenceScheduleSentence(
   cadence: RecurringCommitmentCadence,
   dayOfMonth: number,
   monthOfYear: number | null,
+  language: Language = "pt-BR",
 ): string {
   if (cadence === "annual" && monthOfYear !== null) {
-    return `dia ${dayOfMonth} de ${monthOfYearLabel(monthOfYear).toLowerCase()}`;
+    return translate(language, "scheduleAnnualSentence", { day: dayOfMonth, month: monthOfYearLabel(monthOfYear, language).toLowerCase() });
   }
-  return `todo dia ${dayOfMonth}`;
+  return translate(language, "scheduleMonthlySentence", { day: dayOfMonth });
 }

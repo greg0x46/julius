@@ -1,3 +1,4 @@
+import { useTranslation } from "../../i18n/context";
 import { LinkOutlined, RedoOutlined, SwapOutlined } from "../ui/icons";
 import { Alert, Button, Switch, Typography } from "../ui";
 import { useQuery } from "@tanstack/react-query";
@@ -9,7 +10,7 @@ import type { Category, TransactionInclusionState, TransactionItem } from "../..
 import { useTransactionReconciliation } from "../../hooks/useTransactionReconciliation";
 import { internalCategoryOriginLabel } from "../../presentation/categoryLabels";
 import { formatDay } from "../../presentation/dates";
-import { exclusionReasonLabel } from "../../presentation/transactionStatus";
+import { exclusionReason } from "../../presentation/transactionStatus";
 import { formatBRL, formatMoney } from "../../presentation/money";
 import {
   allowsInvestmentLink,
@@ -58,6 +59,7 @@ export function TransactionOverviewScreen({
   deleteError: string | null;
   navigate: (screen: TransactionScreen) => void;
 }) {
+  const { t, language } = useTranslation();
   const ignored = item.inclusion.state === "ignored";
   const transfer = useQuery({ queryKey: queryKeys.transactionTransfer(item.id), queryFn: ({ signal }) => getTransactionTransfer(item.id, signal), retry: false });
   const linked = !!transfer.data || item.totals_eligibility.reason === "linked_transfer";
@@ -66,9 +68,9 @@ export function TransactionOverviewScreen({
     ? (transfer.data.source.transaction_id === item.id ? transfer.data.destination : transfer.data.source)
     : null;
   const transferHint = otherMovement
-    ? `${otherMovement.account_name} · ${(otherMovement.amount === null ? "Valor indisponível" : formatMoney(otherMovement.amount.replace(/^-/, ""), otherMovement.currency_code))}`
-    : transfer.isLoading ? "Carregando…" : transfer.isError ? "Não foi possível consultar" : linked ? "Transferência vinculada" : "Nenhum vínculo";
-  const choices = useMemo(() => categoryChoices(categories, item), [categories, item]);
+    ? `${otherMovement.account_name} · ${(otherMovement.amount === null ? t("transferAmountUnavailable") : formatMoney(otherMovement.amount.replace(/^-/, ""), otherMovement.currency_code))}`
+    : transfer.isLoading ? t("loading") : transfer.isError ? t("queryUnavailable") : linked ? t("linkedTransfer") : t("noLink");
+  const choices = useMemo(() => categoryChoices(categories, item, language), [categories, item, language]);
   const suggestion = suggestedCategory(item, choices);
   const split = investmentSplit(item);
   const prefill = recurringCommitmentPrefill(item);
@@ -76,32 +78,32 @@ export function TransactionOverviewScreen({
   const reconciliation = useTransactionReconciliation(item.id, !ignored);
 
   const where = item.card
-    ? [item.card.number, installmentLabel(item.card)].filter(Boolean).join(" · ")
+    ? [item.card.number, installmentLabel(item.card, language)].filter(Boolean).join(" · ")
     : [item.account.name, item.account.institution].filter(Boolean).join(" · ");
 
   const reconciliationHint = ignored
-    ? "Transações fora dos totais não conciliam"
+    ? t("ignoredCannotReconcile")
     : reconciliation.isLoading
-      ? "Carregando…"
+      ? t("loading")
       : reconciliation.isError
-        ? "Não foi possível consultar"
+        ? t("queryUnavailable")
         : reconciliation.current
-        ? `${reconciliation.current.commitment_name} · ${formatDay(reconciliation.current.occurrence_date)}`
+        ? `${reconciliation.current.commitment_name} · ${formatDay(reconciliation.current.occurrence_date, language)}`
         : reconciliation.options.length > 0
-          ? `${reconciliation.options.length} ${reconciliation.options.length === 1 ? "ocorrência próxima" : "ocorrências próximas"}`
-          : "Nenhuma recorrência por perto";
+          ? t(reconciliation.options.length === 1 ? "oneNearbyOccurrence" : "manyNearbyOccurrences", { count: reconciliation.options.length })
+          : t("noNearbyRecurrences");
 
   const investmentHint = split
-    ? `${formatBRL(split.transferred)} vinculados`
-    : "Nenhum vínculo";
+    ? t("amountLinked", { amount: formatBRL(split.transferred) })
+    : t("noLink");
 
   // Origin and "out of the totals" are facts about the line, so they read as
   // plain text beside the date rather than as coloured tags.
   const when = [
-    shortDateTime(item.occurred_at),
+    shortDateTime(item.occurred_at, language),
     item.origin === "manual" ? "Manual" : null,
-    item.source_provider === "file" ? "Arquivo" : null,
-    ignored ? "Fora dos totais" : null,
+    item.source_provider === "file" ? t("file") : null,
+    ignored ? t("excludedFromTotals") : null,
   ]
     .filter(Boolean)
     .join(" · ");
@@ -110,20 +112,20 @@ export function TransactionOverviewScreen({
     <>
       <header className="transaction-identity">
         <strong className="transaction-identity-description">
-          {item.description ?? "Descrição não informada"}
+          {item.description ?? t("descriptionNotProvided")}
         </strong>
         {where && <span className="transaction-identity-where">{where}</span>}
         <TransactionAmount item={item} size="hero" className="transaction-identity-amount" />
         <span className="transaction-identity-when">{when}</span>
         {split && (
           <span className="transaction-identity-split">
-            {item.classification === "inflow" ? "resgate" : "aporte"} vinculado:{" "}
-            {formatBRL(split.transferred)} · {remainderLabel(item, split.remaining)}
+            {item.classification === "inflow" ? t("redemptionLower") : t("contributionLower")} {t("linkedLower")}:{" "}
+            {formatBRL(split.transferred)} · {remainderLabel(item, split.remaining, language)}
           </span>
         )}
       </header>
 
-      <PanelSection title="Categoria">
+      <PanelSection title={t("category")}>
         <CategoryField
           id="transaction-category"
           value={item.internal_category?.id ?? null}
@@ -135,22 +137,22 @@ export function TransactionOverviewScreen({
         />
         {item.internal_category && (
           <Typography.Text type="secondary" className="transaction-field-hint">
-            {internalCategoryOriginLabel(item.internal_category)}
+            {internalCategoryOriginLabel(item.internal_category, language)}
           </Typography.Text>
         )}
-        {categoryError && <WriteFailure issue={categoryError} title="Não foi possível salvar a categoria" />}
+        {categoryError && <WriteFailure issue={categoryError} title={t("categorySaveError")} />}
         {item.internal_category && !item.internal_category.is_active && (
           <Alert
             type="warning"
             showIcon
-            message="Esta categoria foi desativada. Ela continua vigente para esta transação, mas não pode ser escolhida em outras."
+            message={t("inactiveCategoryWarning")}
           />
         )}
       </PanelSection>
 
       <PanelSection>
         <div className="transaction-toggle-row">
-          <label htmlFor="transaction-considered">Considerar nos totais</label>
+          <label htmlFor="transaction-considered">{t("includeInTotals")}</label>
           <Switch
             id="transaction-considered"
             checked={!ignored}
@@ -159,32 +161,32 @@ export function TransactionOverviewScreen({
             onChange={(checked) => onInclusion?.(item.id, checked ? "considered" : "ignored")}
           />
         </div>
-        {linkedPrincipal && <Typography.Text type="secondary">Transferência vinculada: fora das receitas e despesas. Desvincule para alterar a inclusão.</Typography.Text>}
+        {linkedPrincipal && <Typography.Text type="secondary">{t("linkedTransferWarning")}</Typography.Text>}
         {ignored && (
           <Typography.Text type="secondary" className="transaction-field-hint">
-            Fora dos totais: esta transação não entra nos relatórios e cálculos do período.
+            {t("ignoredTransactionHint")}
           </Typography.Text>
         )}
         {!ignored && !linkedPrincipal && !item.totals_eligibility.included && item.totals_eligibility.reason && (
           <Typography.Text type="secondary" className="transaction-field-hint">
-            {exclusionReasonLabel[item.totals_eligibility.reason]}
+            {exclusionReason(item.totals_eligibility.reason, language)}
           </Typography.Text>
         )}
-        {inclusionError && <WriteFailure issue={inclusionError} title="Não foi possível salvar a decisão" />}
+        {inclusionError && <WriteFailure issue={inclusionError} title={t("decisionSaveError")} />}
       </PanelSection>
 
-      <PanelSection title="Ações" className="panel-section-rows">
-        <PanelNavRow icon={<SwapOutlined />} label="Transferência entre contas" hint={transferHint} disabled={!linked && (ignored || item.classification === "unclassified")} onClick={() => navigate({ kind: "transfer" })} />
+      <PanelSection title={t("actions")} className="panel-section-rows">
+        <PanelNavRow icon={<SwapOutlined />} label={t("transferBetweenAccounts")} hint={transferHint} disabled={!linked && (ignored || item.classification === "unclassified")} onClick={() => navigate({ kind: "transfer" })} />
         {prefill && (
           <PanelNavRow
             icon={<RedoOutlined />}
-            label="Criar recorrência"
+            label={t("createRecurrence")}
             onClick={() => navigate({ kind: "recurrence" })}
           />
         )}
         <PanelNavRow
           icon={<SwapOutlined />}
-          label="Conciliar com recorrência"
+          label={t("reconcileRecurrence")}
           hint={reconciliationHint}
           disabled={ignored}
           onClick={() => navigate({ kind: "reconcile" })}
@@ -192,24 +194,24 @@ export function TransactionOverviewScreen({
         {allowsInvestmentLink(item) && (
           <PanelNavRow
             icon={<LinkOutlined />}
-            label="Vincular a investimento"
+            label={t("linkInvestment")}
             hint={investmentHint}
             onClick={() => navigate({ kind: "investment" })}
           />
         )}
       </PanelSection>
 
-      <PanelSection title="Mais informações" className="panel-section-rows">
-        <PanelNavRow label="Detalhes da transação" onClick={() => navigate({ kind: "details" })} />
-        <PanelNavRow label="Informações técnicas" onClick={() => navigate({ kind: "technical" })} />
+      <PanelSection title={t("moreInformation")} className="panel-section-rows">
+        <PanelNavRow label={t("transactionDetails")} onClick={() => navigate({ kind: "details" })} />
+        <PanelNavRow label={t("technicalInformation")} onClick={() => navigate({ kind: "technical" })} />
       </PanelSection>
 
       {item.origin === "manual" && split && (
         <Alert
           type="warning"
           showIcon
-          message="Transação vinculada a investimento"
-          description="Para editar ou excluir esta transação, desfaça antes os vínculos em “Vincular a investimento”."
+          message={t("investmentLinkedTransaction")}
+          description={t("investmentLinkedWarning")}
         />
       )}
       {deleteError && <Alert type="error" showIcon message={deleteError} />}
@@ -219,6 +221,7 @@ export function TransactionOverviewScreen({
 
 /** A failed write, in the panel and next to the control that caused it: what happened, and a retry. */
 function WriteFailure({ issue, title }: { issue: WriteIssue; title: string }) {
+  const { t } = useTranslation();
   return (
     <Alert
       type="error"
@@ -228,7 +231,7 @@ function WriteFailure({ issue, title }: { issue: WriteIssue; title: string }) {
         <>
           <p>{issue.message}</p>
           <Button size="small" onClick={issue.retry}>
-            Tentar novamente
+            {t("retry")}
           </Button>
         </>
       }

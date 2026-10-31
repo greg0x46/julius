@@ -1,3 +1,4 @@
+import { useTranslation } from "../i18n/context";
 import { ApiError } from "../api/problems";
 import { BankOutlined, PieChartOutlined, SwapOutlined } from "../components/ui/icons";
 import { Alert } from "../components/ui";
@@ -35,14 +36,13 @@ import { useInvestmentWorkspace } from "../hooks/useInvestmentWorkspace";
 import { usePeriod } from "../hooks/usePeriod";
 import { useToday } from "../hooks/useToday";
 import { errorMessage } from "../presentation/errors";
-import { investmentGroupingLabel, periodRequest } from "../presentation/investmentPeriod";
+import { periodRequest } from "../presentation/investmentPeriod";
 
-const groupingOptions = (["class", "account", "none"] as const).map((value) => ({
-  value,
-  label: investmentGroupingLabel[value],
-}));
+
 
 export function InvestmentsPage() {
+  const { t, language } = useTranslation();
+  const groupingOptions = [{ value: "class" as const, label: t("assetClassGrouping") }, { value: "account" as const, label: t("custody") }, { value: "none" as const, label: t("noGrouping") }];
   const workspace = useInvestmentWorkspace();
   const financialAccounts = useAccounts();
   const feedback = useFeedback();
@@ -87,7 +87,7 @@ export function InvestmentsPage() {
     try {
       await action();
       close();
-      feedback.success("Salvo");
+      feedback.success(t("saved"));
     } catch (error) {
       setSaveError(errorMessage(error, fallback));
     }
@@ -125,27 +125,27 @@ export function InvestmentsPage() {
   };
 
   const submitAccount = (write: InvestmentAccountWrite) =>
-    void save(() => workspace.createAccount(write), () => setAccountFormOpen(false), "Não foi possível criar a conta.");
+    void save(() => workspace.createAccount(write), () => setAccountFormOpen(false), t("accountCreateError"));
   const submitAccountEdit = (write: InvestmentAccountUpdate) => {
     if (!editingAccount) return;
     void save(
       () => workspace.updateAccount({ accountId: editingAccount.id, write }),
       () => setEditingAccount(null),
-      "Não foi possível salvar a conta.",
+      t("accountSaveError"),
     );
   };
   const submitPositionCreate = (write: InvestmentPositionWrite) =>
     void save(
       () => workspace.createPosition(write),
       () => setPositionFormOpen(false),
-      "Não foi possível criar a posição.",
+      t("positionCreateError"),
     );
   const submitPositionUpdate = (write: InvestmentPositionUpdate) => {
     if (!editingPosition) return;
     void save(
       () => workspace.updatePosition({ positionId: editingPosition.id, write }),
       () => setPositionFormOpen(false),
-      "Não foi possível salvar a posição.",
+      t("positionSaveError"),
     );
   };
   const submitOperation = (write: InvestmentOperationWrite) =>
@@ -155,7 +155,7 @@ export function InvestmentsPage() {
           ? workspace.updateOperation({ operationId: editingOperation.id, write })
           : workspace.createOperation(write),
       () => setOperationFormOpen(false),
-      "Não foi possível salvar a movimentação.",
+      t("operationSaveError"),
     );
 
   const busy = workspace.isSaving || workspace.isDeleting;
@@ -167,47 +167,47 @@ export function InvestmentsPage() {
     busy,
     onRename: openAccountEdit,
     onRemove: (account) =>
-      void run(() => workspace.deleteAccount(account.id), "Não foi possível excluir a conta.", "Excluído"),
+      void run(() => workspace.deleteAccount(account.id), t("accountDeleteError"), t("deleted")),
     onViewOperations: (account) => setAccountsScope({ accountId: account.id, positionId: null }),
     onViewPositionOperations: (position) =>
       setAccountsScope({ accountId: position.account_id, positionId: position.id }),
     onEditPosition: openPositionEdit,
     onRemovePosition: (position) =>
-      void run(() => workspace.deletePosition(position.id), "Não foi possível excluir a posição.", "Excluído"),
+      void run(() => workspace.deletePosition(position.id), t("positionDeleteError"), t("deleted")),
   });
   const accountOfGroup = (group: InvestmentPeriodGroup) =>
     group.account_id === null ? undefined : workspace.accounts.find((account) => account.id === group.account_id);
 
   const createMenu = (
     <CreateActionMenu
-      label="Adicionar"
+      label={t("add")}
       options={[
         {
           key: "operation",
-          label: "Registrar movimentação",
+          label: t("recordOperation"),
           description:
             workspace.accounts.length === 0
-              ? "Cadastre uma conta de investimento primeiro"
-              : "Aporte, resgate ou outra movimentação em uma conta",
+              ? t("createInvestmentAccountFirst")
+              : t("investmentOperationDescription"),
           icon: <SwapOutlined aria-hidden="true" />,
           disabled: workspace.accounts.length === 0,
           onClick: () => openOperationCreate(),
         },
         {
           key: "position",
-          label: "Nova posição",
+          label: t("newPosition"),
           description:
             holdingAccounts.length === 0
-              ? "Cadastre uma conta de investimento primeiro"
-              : "Um ativo dentro de uma conta de investimento",
+              ? t("createInvestmentAccountFirst")
+              : t("positionDescription"),
           icon: <PieChartOutlined aria-hidden="true" />,
           disabled: holdingAccounts.length === 0,
           onClick: openPositionCreate,
         },
         {
           key: "account",
-          label: "Nova conta de investimento",
-          description: "Onde suas posições ficam guardadas",
+          label: t("newInvestmentAccount"),
+          description: t("custodyDescription"),
           icon: <BankOutlined aria-hidden="true" />,
           onClick: openAccountCreate,
         },
@@ -217,16 +217,16 @@ export function InvestmentsPage() {
 
   return (
     <Page
-      title="Investimentos"
-      description="Patrimônio e rendimento da carteira no período"
+      title={t("investments")}
+      description={t("investmentsDescription")}
       compactMobileHeader
       context={
         <PeriodNavigator
           id="investments-period"
           value={[period.from, period.to]}
-          presets={periodPresets()}
+          presets={periodPresets(language)}
           onChange={setPeriod}
-          reset={{ preset: "this-month", label: "Este mês" }}
+          reset={{ preset: "this-month", label: t("thisMonth") }}
           bare
         />
       }
@@ -235,18 +235,18 @@ export function InvestmentsPage() {
           {createMenu}
           <PageAction
             icon={<BankOutlined aria-hidden="true" />}
-            label="Contas"
+            label={t("accountList")}
             // A failed load would read as "no accounts"; the retry above is the only answer then.
             disabled={workspace.isLoading || Boolean(workspace.error)}
             onClick={() => setAccountsScope({ accountId: null, positionId: null })}
           />
         </>
       }
-      tabs={<PageTabs label="Agrupar posições por" options={groupingOptions} value={groupBy} onChange={setGroupBy} />}
+      tabs={<PageTabs label={t("groupPositionsBy")} options={groupingOptions} value={groupBy} onChange={setGroupBy} />}
     >
       {workspace.error && !workspace.isLoading && (
         <UnavailableState onRetry={() => void workspace.refetch()}>
-          {workspace.error instanceof ApiError ? workspace.error.message : "Não foi possível carregar os investimentos"}
+          {workspace.error instanceof ApiError ? workspace.error.message : t("investmentsLoadError")}
         </UnavailableState>
       )}
       {actionError && (
@@ -284,8 +284,8 @@ export function InvestmentsPage() {
         onRemoveOperation={(operation) =>
           void run(
             () => workspace.deleteOperation(operation.id),
-            "Não foi possível excluir a movimentação.",
-            "Excluído",
+            t("operationDeleteError"),
+            t("deleted"),
           )
         }
         onClose={() => setAccountsScope(null)}
@@ -328,7 +328,7 @@ export function InvestmentsPage() {
         submitting={workspace.isSaving}
         submitError={saveError}
         onSubmit={submitOperation}
-        onSubmitCompound={(operations) => void save(() => workspace.createOperations({ operations }), () => setOperationFormOpen(false), "Não foi possível salvar a movimentação.")}
+        onSubmitCompound={(operations) => void save(() => workspace.createOperations({ operations }), () => setOperationFormOpen(false), t("operationSaveError"))}
         onCancel={() => setOperationFormOpen(false)}
       />
     </Page>

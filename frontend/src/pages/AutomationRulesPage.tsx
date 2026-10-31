@@ -1,3 +1,5 @@
+import { useTranslation } from "../i18n/context";
+import { translate, type Language } from "../i18n/messages";
 import { Alert, Button } from "../components/ui";
 import { useRef, useState } from "react";
 
@@ -16,16 +18,17 @@ import { useCategories } from "../hooks/useCategories";
 import { useRecurringCommitments } from "../hooks/useRecurringCommitments";
 import { errorMessage } from "../presentation/errors";
 
-function retroactiveMessage(result: RetroactiveApplyResult): string {
+function retroactiveMessage(result: RetroactiveApplyResult, language: Language): string {
   const changes: string[] = [];
-  if (result.ignored > 0) changes.push(`${result.ignored} ignorada(s)`);
-  if (result.categorized > 0) changes.push(`${result.categorized} categorizada(s)`);
+  if (result.ignored > 0) changes.push(translate(language, "retroIgnored", { count: result.ignored }));
+  if (result.categorized > 0) changes.push(translate(language, "retroCategorized", { count: result.categorized }));
   return changes.length > 0
-    ? `${result.matched} transação(ões) encontrada(s), ${changes.join(", ")} agora.`
-    : `${result.matched} transação(ões) encontrada(s), nenhuma alterada (já processadas ou com decisão manual).`;
+    ? translate(language, "retroFound", { matched: result.matched, changes: changes.join(", ") })
+    : translate(language, "retroNone", { matched: result.matched });
 }
 
 export function AutomationRulesPage() {
+  const { t, language } = useTranslation();
   const automationRules = useAutomationRules();
   const commitments = useRecurringCommitments();
   const categories = useCategories();
@@ -104,9 +107,9 @@ export function AutomationRulesPage() {
       createdCommitmentId.current = null;
       setLastResult(result.retroactive_apply);
       setFormOpen(false);
-      feedback.success("Automação salva");
+      feedback.success(t("automationSaved"));
     } catch (error) {
-      setSaveError(errorMessage(error, "Não foi possível salvar a automação."));
+      setSaveError(errorMessage(error, t("automationSaveError")));
     } finally {
       setSaving(false);
     }
@@ -117,9 +120,9 @@ export function AutomationRulesPage() {
     setTogglingRuleId(rule.id);
     try {
       await automationRules.toggleRule({ ruleId: rule.id, isActive });
-      feedback.success(isActive ? "Automação ativada" : "Automação desativada");
+      feedback.success(isActive ? t("automationEnabled") : t("automationDisabled"));
     } catch (error) {
-      const message = errorMessage(error, "Não foi possível atualizar a automação.");
+      const message = errorMessage(error, t("automationUpdateError"));
       setActionError(message);
       feedback.error(message);
     } finally {
@@ -133,9 +136,9 @@ export function AutomationRulesPage() {
     try {
       await automationRules.deleteRule(rule.id);
       setFormOpen(false);
-      feedback.success("Automação excluída");
+      feedback.success(t("automationDeleted"));
     } catch (error) {
-      const message = errorMessage(error, "Não foi possível excluir a automação.");
+      const message = errorMessage(error, t("automationDeleteError"));
       // Deleting from the edit drawer: the error must show there, not behind its mask.
       if (formOpen) {
         setSaveError(message);
@@ -150,11 +153,11 @@ export function AutomationRulesPage() {
 
   return (
     <PageContainer
-      title="Automações"
-      subTitle="Regras que ignoram, categorizam ou conciliam transações automaticamente"
+      title={t("automation")}
+      subTitle={t("automationsSubtitle")}
       compactMobileHeader
       extra={[
-        <PageAction key="new-entry" label="Nova automação" shortLabel="Nova" onClick={openCreate} />,
+        <PageAction key="new-entry" label={t("newAutomation")} shortLabel={t("newFeminine")} onClick={openCreate} />,
       ]}
     >
       {lastResult && (
@@ -163,7 +166,7 @@ export function AutomationRulesPage() {
           showIcon
           closable
           onClose={() => setLastResult(null)}
-          message={retroactiveMessage(lastResult)}
+          message={retroactiveMessage(lastResult, language)}
           style={{ marginBottom: 16 }}
         />
       )}
@@ -181,7 +184,7 @@ export function AutomationRulesPage() {
         <Alert
           type="error"
           showIcon
-          message="Não foi possível carregar as automações"
+          message={t("automationsLoadError")}
           description={
             <Button
               onClick={() => {
@@ -189,7 +192,7 @@ export function AutomationRulesPage() {
                 commitments.refetch();
               }}
             >
-              Tentar novamente
+              {t("retry")}
             </Button>
           }
           style={{ marginBottom: 16 }}

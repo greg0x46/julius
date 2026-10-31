@@ -1,3 +1,4 @@
+import { useTranslation } from "../../i18n/context";
 import { isPositiveDecimal } from "../../presentation/decimal";
 import { Button, DatePicker, Input, InputNumber, Select } from "../ui";
 import { calendar, type CalendarDate } from "../../presentation/calendar";
@@ -118,6 +119,7 @@ export function InvestmentPositionForm({
   onUpdate: (write: InvestmentPositionUpdate) => void;
   onCancel: () => void;
 }) {
+  const { t } = useTranslation();
   const [draft, setDraft] = useState<Draft>(() => draftFrom(position, accounts));
   const [error, setError] = useState<string | null>(null);
   const [creatingAsset, setCreatingAsset] = useState(false);
@@ -183,7 +185,7 @@ export function InvestmentPositionForm({
   // becomes the selection, so retrying a failed position never creates it twice.
   const createAsset = async (): Promise<InvestmentAsset | null> => {
     const quoteSource = assetDraft.quoteEnabled ? assetQuoteMarket : null;
-    const write = assetWriteFrom(assetDraft, quoteSource, quoteSource ? assetDraft.quoteSymbol.trim() : "");
+    const write = assetWriteFrom(assetDraft, quoteSource, quoteSource ? assetDraft.quoteSymbol.trim() : "", t);
     if (typeof write === "string") {
       setError(write);
       return null;
@@ -191,7 +193,7 @@ export function InvestmentPositionForm({
     const duplicate = findDuplicate(assets, write);
     if (duplicate) {
       pickAsset(duplicate);
-      setError(`Já existe o ativo ${assetLabel(duplicate)} no catálogo. Ele foi selecionado; confira e salve.`);
+      setError(t("duplicateAsset", { name: assetLabel(duplicate) }));
       return null;
     }
     setSavingAsset(true);
@@ -202,7 +204,7 @@ export function InvestmentPositionForm({
       setAssetDraft(emptyAssetDraft);
       return asset;
     } catch (failure) {
-      setError(errorMessage(failure, "Não foi possível cadastrar o ativo."));
+      setError(errorMessage(failure, t("assetCreateError")));
       return null;
     } finally {
       setSavingAsset(false);
@@ -211,27 +213,27 @@ export function InvestmentPositionForm({
 
   const submit = async () => {
     if (isEditing && draft.name.trim() === "") {
-      setError("Informe o nome da posição.");
+      setError(t("positionNameRequired"));
       return;
     }
     if (isEditing && draft.assetType.trim() === "") {
-      setError("Informe o tipo do ativo.");
+      setError(t("assetTypeRequired"));
       return;
     }
     if (!isEditing && !showNewAsset && !selectedAsset) {
-      setError("Escolha um ativo ou cadastre um novo.");
+      setError(t("chooseAssetOrCreate"));
       return;
     }
     if (!isEditing && draft.accountId === "") {
-      setError("Selecione uma conta de investimento.");
+      setError(t("selectInvestmentAccountRequired"));
       return;
     }
     if ((draft.initialQuantity !== null && !positive(draft.initialQuantity)) || (draft.initialUnitCost !== null && !positive(draft.initialUnitCost))) {
-      setError("Quantidade e custo unitário devem ser maiores que zero.");
+      setError(t("quantityCostPositive"));
       return;
     }
     if (!isEditing && ((draft.initialQuantity !== null || draft.initialUnitCost !== null) && !positive(draft.initialValue) && !(positive(draft.initialQuantity) && positive(draft.initialUnitCost)))) {
-      setError("Para informar um saldo inicial, preencha quantidade e custo unitário, ou o valor inicial.");
+      setError(t("initialBalanceIncomplete"));
       return;
     }
     setError(null);
@@ -267,7 +269,7 @@ export function InvestmentPositionForm({
 
   return (
     <FormDrawer
-      title={isEditing ? "Editar posição manual" : "Nova posição manual"}
+      title={isEditing ? t("editManualPosition") : t("newManualPosition")}
       open={open}
       onClose={onCancel}
       onSubmit={() => void submit()}
@@ -275,42 +277,38 @@ export function InvestmentPositionForm({
       error={error ?? submitError}
     >
       {!isEditing && (
-        <p className="form-field-hint">
-          Posição manual em reais. Ativos com cotação automática buscam preços de mercado. Para os demais, registre
-          avaliações manuais; sem avaliação, o valor exibido é o custo acumulado. Numa conta integrada, a posição
-          fica ao lado das posições da instituição e a sincronização não a altera.
-        </p>
+        <p className="form-field-hint">{t("manualPositionHint")}</p>
       )}
       <FormField
-        label="Conta de investimento"
+        label={t("investmentAccountField")}
         htmlFor="investment-position-account"
-        hint={isEditing ? "A conta é definida na criação." : undefined}
+        hint={isEditing ? t("accountSetOnCreation") : undefined}
       >
         <Select
           id="investment-position-account"
           value={draft.accountId || undefined}
           options={accountOptions}
           disabled={isEditing}
-          placeholder="Selecione uma conta de investimento"
+          placeholder={t("selectInvestmentAccountPlaceholder")}
           onChange={(value: string) => setDraft((current) => ({ ...current, accountId: value }))}
         />
       </FormField>
       {!isEditing && !showNewAsset && (
         <FormField
-          label="Ativo"
+          label={t("asset")}
           htmlFor="investment-position-asset"
           error={catalog.error ? (
             <>
-              Não foi possível carregar os ativos.{" "}
+              {t("assetsLoadFailed")}{" "}
               <Button type="link" size="small" htmlType="button" onClick={() => void catalog.refetch()}>
-                Tentar novamente
+                {t("retry")}
               </Button>
             </>
           ) : undefined}
           hint={selectedAsset && (
             <span aria-live="polite">
               {[classLabel(selectedAsset), selectedAsset.asset_type, selectedAsset.currency_code,
-                selectedAsset.quote_source ? "Cotação automática" : "Avaliação manual"].join(" · ")}
+                selectedAsset.quote_source ? t("autoQuote") : t("manualValuation")].join(" · ")}
             </span>
           )}
         >
@@ -324,27 +322,27 @@ export function InvestmentPositionForm({
             filterOption={(input, option) => searchKey(option?.label ?? "").includes(searchKey(input))}
             // Leaving the field clears its search; the last text typed still seeds a new asset.
             onSearch={(value) => value !== "" && setAssetSearch(value)}
-            notFoundContent="Nenhum ativo encontrado."
-            placeholder={catalog.isLoading ? "Carregando ativos…" : "Busque por código ou nome"}
+            notFoundContent={t("noAssetFound")}
+            placeholder={catalog.isLoading ? t("loadingAssetsEllipsis") : t("searchByCodeOrName")}
             loading={catalog.isLoading}
             onChange={(value: string) => pickAsset(assets.find((asset) => asset.id === value))}
           />
           <Button type="link" htmlType="button" className="investment-new-asset-link" onClick={startNewAsset}>
-            + Cadastrar novo ativo
+            {t("registerNewAsset")}
           </Button>
         </FormField>
       )}
       {!isEditing && showNewAsset && (
         <section className="investment-new-asset" role="group" aria-labelledby="investment-new-asset-title">
           <div className="investment-new-asset-header">
-            <h3 id="investment-new-asset-title">Novo ativo</h3>
+            <h3 id="investment-new-asset-title">{t("newAsset")}</h3>
             {!catalogEmpty && (
               <Button type="link" htmlType="button" onClick={() => setCreatingAsset(false)}>
-                Escolher ativo existente
+                {t("chooseExistingAsset")}
               </Button>
             )}
           </div>
-          {catalogEmpty && <p className="form-field-hint">Nenhum ativo no catálogo ainda.</p>}
+          {catalogEmpty && <p className="form-field-hint">{t("noAssetsInCatalog")}</p>}
           <InvestmentAssetFields
             draft={assetDraft}
             onChange={setAssetDraft}
@@ -355,30 +353,30 @@ export function InvestmentPositionForm({
       )}
       {isEditing && (
         <>
-          <FormField label="Nome" htmlFor="investment-position-name">
+          <FormField label={t("name")} htmlFor="investment-position-name">
             <Input
               id="investment-position-name"
               value={draft.name}
               autoFocus
               onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))}
-              placeholder="Ex.: Tesouro Selic 2029"
+              placeholder={t("assetNameExample")}
             />
           </FormField>
           <div className="investment-form-pair">
-            <FormField label="Código (opcional)" htmlFor="investment-position-ticker">
+            <FormField label={t("codeOptional")} htmlFor="investment-position-ticker">
               <Input
                 id="investment-position-ticker"
                 value={draft.ticker}
                 onChange={(event) => setDraft((current) => ({ ...current, ticker: event.target.value }))}
-                placeholder="Ex.: BOVA11"
+                placeholder={t("tickerExampleBova")}
               />
             </FormField>
-            <FormField label="Tipo do ativo" htmlFor="investment-position-type">
+            <FormField label={t("assetTypeField")} htmlFor="investment-position-type">
               <Input
                 id="investment-position-type"
                 value={draft.assetType}
                 onChange={(event) => setDraft((current) => ({ ...current, assetType: event.target.value }))}
-                placeholder="Ex.: ETF, CDB, Fundo"
+                placeholder={t("assetTypeExample")}
               />
             </FormField>
           </div>
@@ -387,7 +385,7 @@ export function InvestmentPositionForm({
       {!isEditing && (
         <>
           <div className="investment-form-pair">
-            <FormField label="Quantidade inicial" htmlFor="investment-position-quantity">
+            <FormField label={t("initialQuantity")} htmlFor="investment-position-quantity">
               <InputNumber
                 id="investment-position-quantity"
                 style={{ width: "100%" }}
@@ -399,7 +397,7 @@ export function InvestmentPositionForm({
                 onChange={(value) => setDecimal("initialQuantity", value)}
               />
             </FormField>
-            <FormField label="Custo unitário" htmlFor="investment-position-unit-cost">
+            <FormField label={t("unitCost")} htmlFor="investment-position-unit-cost">
               <InputNumber
                 id="investment-position-unit-cost"
                 style={{ width: "100%" }}
@@ -414,9 +412,9 @@ export function InvestmentPositionForm({
             </FormField>
           </div>
           <FormField
-            label="Valor inicial"
+            label={t("initialValue")}
             htmlFor="investment-position-value"
-            hint="Informe o valor, ou a quantidade e o custo unitário."
+            hint={t("initialValueHint")}
           >
             <MoneyInput
               id="investment-position-value"
@@ -425,19 +423,18 @@ export function InvestmentPositionForm({
               onChange={(value) => setDraft((current) => ({ ...current, initialValue: fromMoneyInput(value) }))}
             />
           </FormField>
-          <FormField label="Data do saldo inicial" htmlFor="investment-position-date">
+          <FormField label={t("initialBalanceDate")} htmlFor="investment-position-date">
             <DatePicker
               id="investment-position-date"
               style={{ width: "100%" }}
               value={draft.occurredOn}
               allowClear={false}
-              format="DD/MM/YYYY"
               onChange={(value) => value && setDraft((current) => ({ ...current, occurredOn: value }))}
             />
           </FormField>
         </>
       )}
-      <FormField label="Observações (opcional)" htmlFor="investment-position-notes">
+      <FormField label={t("notesOptional")} htmlFor="investment-position-notes">
         <Input.TextArea
           id="investment-position-notes"
           value={draft.notes}

@@ -1,10 +1,5 @@
+import { translate, type Language } from "../i18n/messages";
 import type { TransactionClassification, TransactionItem } from "../api/contracts";
-
-export const classificationLabel: Record<TransactionClassification, string> = {
-  inflow: "Entrada",
-  outflow: "Saída",
-  unclassified: "Não classificada",
-};
 
 export const classificationColor: Record<TransactionClassification, string> = {
   inflow: "green",
@@ -12,21 +7,18 @@ export const classificationColor: Record<TransactionClassification, string> = {
   unclassified: "default",
 };
 
-export function inclusionOriginLabel(inclusion: TransactionItem["inclusion"]): string {
-  const action = inclusion.state === "ignored" ? "Ignorada" : "Restaurada";
+export function inclusionOriginLabel(inclusion: TransactionItem["inclusion"], language: Language = "pt-BR"): string {
+  const action = translate(language, inclusion.state === "ignored" ? "ignoredFeminine" : "restoredFeminine");
   if (inclusion.origin === "rule") {
-    return inclusion.rule_name ? `${action} pela regra "${inclusion.rule_name}"` : `${action} por regra`;
+    return inclusion.rule_name ? translate(language, "inclusionByRule", { action, name: inclusion.rule_name }) : translate(language, "inclusionByUnnamedRule", { action });
   }
-  return `${action} manualmente`;
+  return translate(language, "inclusionManually", { action });
 }
 
-export const exclusionReasonLabel = {
-  ignored: "Fora dos totais: transação ignorada",
-  linked_transfer: "Fora dos totais: transferência vinculada entre contas próprias",
-  transfer_category: "Fora dos totais: transferência entre contas próprias",
-  unclassified: "Fora dos totais: tipo não classificado",
-  ineligible_status: "Fora dos totais: situação não elegível",
-  missing_money_pair: "Fora dos totais: valor e moeda incompletos",
-  zero_value: "Fora dos totais: valor zero",
-  investment_transfer: "Fora dos totais: valor transferido para investimento",
-} as const;
+export type ExclusionReason =
+  | "ignored" | "linked_transfer" | "transfer_category" | "unclassified" | "ineligible_status" | "missing_money_pair" | "zero_value" | "investment_transfer";
+
+export function exclusionReason(reason: ExclusionReason, language: Language = "pt-BR"): string {
+  const keys = { ignored: "reasonIgnored", linked_transfer: "reasonLinkedTransfer", transfer_category: "reasonTransferCategory", unclassified: "reasonUnclassified", ineligible_status: "reasonStatus", missing_money_pair: "reasonMissingMoney", zero_value: "reasonZero", investment_transfer: "reasonInvestment" } as const;
+  return translate(language, keys[reason]);
+}

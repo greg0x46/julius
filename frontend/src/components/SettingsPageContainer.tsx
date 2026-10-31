@@ -1,3 +1,4 @@
+import { useTranslation } from "../i18n/context";
 import type { ReactNode } from "react";
 
 import { Page } from "./layout";
@@ -33,12 +34,13 @@ export function SettingsPageContainer({
   compactMobileHeader,
   children,
 }: SettingsPageContainerProps) {
+  const { t } = useTranslation();
   return (
     <Page
       title={title}
       description={subTitle}
       backTo="/configuracoes"
-      backLabel="Voltar para configurações"
+      backLabel={t("backToSettings")}
       compactMobileHeader={compactMobileHeader}
       width="narrow"
       actions={extra}

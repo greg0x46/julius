@@ -1,3 +1,5 @@
+import { useTranslation } from "../../i18n/context";
+import { translate, type Language } from "../../i18n/messages";
 import { Skeleton } from "../ui";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
@@ -22,19 +24,15 @@ import { UnavailableState } from "../AsyncState";
 import { filtersToSearchParams } from "../filters/filterUrl";
 import { PageTabs, Section } from "../layout";
 
-const percentFormatter = new Intl.NumberFormat("pt-BR", {
-  minimumFractionDigits: 1,
-  maximumFractionDigits: 1,
-});
 
 /** Categories listed individually; the rest fold into one "Outras" row. */
 const maxListedCategories = categoryPalette.length;
 
-function percent(amount: number, total: number) {
+function percent(amount: number, total: number, language: Language) {
   const value = total > 0 ? (amount / total) * 100 : 0;
   return value > 0 && value < 0.1
-    ? "<0,1%"
-    : `${percentFormatter.format(value)}%`;
+    ? language === "en" ? "<0.1%" : "<0,1%"
+    : `${new Intl.NumberFormat(language, { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(value)}%`;
 }
 
 function transactionLink(
@@ -71,14 +69,14 @@ interface Slice {
  * income/expense green and red out of it); "Sem categoria" is a neutral
  * because it is the absence of a category, not one more.
  */
-function toSlices(items: CategorySpendingItem[]): Slice[] {
+function toSlices(items: CategorySpendingItem[], language: Language): Slice[] {
   const sorted = [...items].sort((a, b) => Number(b.amount) - Number(a.amount));
   const listed = sorted.slice(0, maxListedCategories);
   const rest = sorted.slice(maxListedCategories);
   let nextColor = 0;
   const slices: Slice[] = listed.map((item) => ({
     key: item.category_id ?? "uncategorized",
-    name: item.category_name,
+    name: item.category_id === null ? translate(language, "uncategorized") : item.category_name,
     amount: item.amount,
     value: Number(item.amount),
     color:
@@ -91,7 +89,7 @@ function toSlices(items: CategorySpendingItem[]): Slice[] {
     const amount = sumBRL(rest.map((item) => item.amount));
     slices.push({
       key: "others",
-      name: `Outras (${rest.length} categorias)`,
+      name: translate(language, "otherCategories").replace("{count}", String(rest.length)),
       amount,
       value: Number(amount),
       color: otherCategoriesColor,
@@ -108,8 +106,9 @@ function donutFigureSize(text: string): string {
 }
 
 function CategorySkeleton() {
+  const { t } = useTranslation();
   return (
-    <div role="status" aria-label="Carregando categorias">
+    <div role="status" aria-label={t("loadingCategories")}>
       <div className="category-skeleton-donut">
         <Skeleton.Avatar active shape="circle" size={160} />
       </div>
@@ -127,13 +126,13 @@ function Breakdown({
   period: Period;
   direction: CategoryDirection;
 }) {
+  const { t, language } = useTranslation();
   const [active, setActive] = useState<string | null>(null);
   const navigate = useNavigate();
   const total = Number(data.total);
-  const label = direction === "outflow" ? "saídas" : "entradas";
   const format = (value: string) =>
     formatReportMoney(value, data.currency_code);
-  const slices = toSlices(data.items);
+  const slices = toSlices(data.items, language);
   const linkFor = (slice: Slice) =>
     transactionLink(period, direction, slice.item);
 
@@ -142,7 +141,7 @@ function Breakdown({
       <div className="category-empty">
         <strong>{format("0.00")}</strong>
         <p>
-          Nenhuma {direction === "outflow" ? "saída" : "entrada"} neste período.
+          {t(direction === "outflow" ? "noOutflowsPeriod" : "noInflowsPeriod")}
         </p>
       </div>
     );
@@ -152,7 +151,7 @@ function Breakdown({
     <div className="category-breakdown">
       <div className="category-donut">
         <div className="category-donut-total">
-          <span>Total de {label}</span>
+          <span>{t(direction === "outflow" ? "totalOutflows" : "totalInflows")}</span>
           <strong
             title={format(data.total ?? "0")}
             style={{ fontSize: donutFigureSize(format(data.total ?? "0")) }}
@@ -165,7 +164,7 @@ function Breakdown({
           width="100%"
           height={200}
           role="img"
-          aria-label={`Distribuição de ${label} por categoria`}
+          aria-label={t(direction === "outflow" ? "outflowDistribution" : "inflowDistribution")}
         >
           {slices.map((slice, index) => {
             const start = slices
@@ -193,7 +192,7 @@ function Breakdown({
               >
                 <title>
                   {slice.name}: {format(slice.amount)} ·{" "}
-                  {percent(slice.value, total)}
+                  {percent(slice.value, total, language)}
                 </title>
               </circle>
             );
@@ -202,7 +201,7 @@ function Breakdown({
       </div>
       <ul
         className="category-breakdown-list"
-        aria-label={`Categorias de ${label}`}
+        aria-label={t(direction === "outflow" ? "outflowCategories" : "inflowCategories")}
       >
         {slices.map((slice) => (
           <li key={slice.key} data-active={active === slice.key}>
@@ -221,7 +220,7 @@ function Breakdown({
               <span className="category-breakdown-name">{slice.name}</span>
               <span className="category-breakdown-amount">
                 <strong>{format(slice.amount)}</strong>
-                <span>{percent(slice.value, total)}</span>
+                <span>{percent(slice.value, total, language)}</span>
               </span>
             </Link>
           </li>
@@ -232,6 +231,7 @@ function Breakdown({
 }
 
 export function SpendingByCategoryCard({ period }: { period: Period }) {
+  const { t, language } = useTranslation();
   const [direction, setDirection] = useState<CategoryDirection>("outflow");
   const { data, isLoading, error, refetch } = useCategoryBreakdown(
     period,
@@ -240,21 +240,21 @@ export function SpendingByCategoryCard({ period }: { period: Period }) {
 
   return (
     <Section
-      title="Por categoria"
+      title={t("byCategory")}
       trailing={
         <Link className="touch-link" to={transactionLink(period, direction)}>
-          Ver transações
+          {t("viewTransactions")}
         </Link>
       }
     >
       <div className="page-tabs">
         <PageTabs
-          label="Tipo de movimentação"
+          label={t("movementType")}
           value={direction}
           onChange={setDirection}
           options={[
-            { value: "outflow", label: "Saídas" },
-            { value: "inflow", label: "Entradas" },
+            { value: "outflow", label: t("outflows") },
+            { value: "inflow", label: t("inflows") },
           ]}
         />
       </div>
@@ -263,14 +263,14 @@ export function SpendingByCategoryCard({ period }: { period: Period }) {
           <CategorySkeleton />
         ) : error || !data ? (
           <UnavailableState onRetry={() => void refetch()}>
-            Não foi possível carregar as categorias.
+            {t("categoriesLoadError")}
           </UnavailableState>
         ) : data.total === null ? (
           <div role="status">
             <p>
               {data.reporting
-                ? reportingLabel(data.reporting)
-                : "Total indisponível"}
+                ? reportingLabel(data.reporting, language)
+                : t("totalUnavailable")}
             </p>
             <ReportingDetails report={data.reporting} totals={data.totals} />
           </div>

@@ -1,3 +1,4 @@
+import { useTranslation } from "../../i18n/context";
 import type { TransactionItem } from "../../api/contracts";
 import { Money } from "../shared/Money";
 
@@ -16,9 +17,10 @@ export function TransactionAmount({
   className?: string;
   size?: "row" | "hero";
 }) {
+  const { t } = useTranslation();
   const classes = `transaction-amount amount-${item.classification} ${className}`;
   if (!item.effective_money) {
-    return <span className={classes}>Valor indisponível</span>;
+    return <span className={classes}>{t("transferAmountUnavailable")}</span>;
   }
   return (
     <Money

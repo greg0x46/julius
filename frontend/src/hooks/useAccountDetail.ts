@@ -1,3 +1,4 @@
+import { apiMessage } from "../i18n/apiMessage";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import {
@@ -122,6 +123,6 @@ export function useAccountDetail(accountId: string) {
     transactions: transactionsQuery.data?.items ?? noTransactions,
     transactionsLoading: timezone !== null && transactionsQuery.isLoading,
     transactionsError:
-      timezone === null ? new Error("Fuso horário indisponível.") : transactionsQuery.error,
+      timezone === null ? new Error(apiMessage("apiTimezoneUnavailable")) : transactionsQuery.error,
   };
 }

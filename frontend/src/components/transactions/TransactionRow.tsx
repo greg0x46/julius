@@ -1,3 +1,6 @@
+import { formatTime } from "../../i18n/dateFormats";
+import { useTranslation } from "../../i18n/context";
+import { translate, type Language } from "../../i18n/messages";
 import type { TransactionInclusionState, TransactionItem } from "../../api/contracts";
 import { formatCompactDay } from "../../presentation/dates";
 import { inclusionOriginLabel } from "../../presentation/transactionStatus";
@@ -6,15 +9,15 @@ import { TransactionAmount } from "./TransactionAmount";
 import { TransactionCategory } from "./TransactionCategory";
 import type { RowLayout } from "./rowLayout";
 
-function rowTime(value: string | null): string | undefined {
+function rowTime(value: string | null, language: Language): string | undefined {
   if (!value) return undefined;
   const instant = new Date(value);
   if (Number.isNaN(instant.getTime())) return undefined;
-  return new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit" }).format(instant);
+  return formatTime(language, instant);
 }
 
-function rowDay(value: string | null): string {
-  return value ? formatCompactDay(value) : "Sem data";
+function rowDay(value: string | null, language: Language): string {
+  return value ? formatCompactDay(value, language) : translate(language, "undated");
 }
 
 /**
@@ -40,27 +43,28 @@ function TransactionMeta({
   /** Which columns the row has; what has no column folds into this line. */
   layout?: RowLayout;
 }) {
+  const { t, language } = useTranslation();
   const ignored = item.inclusion.state === "ignored";
-  const account = item.account.name ?? item.account.institution ?? "Conta não informada";
+  const account = item.account.name ?? item.account.institution ?? t("accountNotProvided");
   // A phone line has room for one place name: the category wins, and the
   // account (always in the panel) only shows when there is no category.
   const accountShown = showAccount && !(layout === "phone" && item.internal_category !== null);
   return (
     <span className="transaction-meta">
-      {layout === "phone" && <span className="transaction-meta-date">{rowDay(item.occurred_at)}</span>}
+      {layout === "phone" && <span className="transaction-meta-date">{rowDay(item.occurred_at, language)}</span>}
       {layout !== "wide" && <TransactionCategory item={item} />}
       {accountShown && <span className="transaction-meta-where">{account}</span>}
       {item.origin === "manual" && <span className="transaction-meta-flag">Manual</span>}
-      {item.source_provider === "file" && <span className="transaction-meta-flag">Arquivo</span>}
+      {item.source_provider === "file" && <span className="transaction-meta-flag">{t("file")}</span>}
       {!ignored && (item.totals_eligibility.reason === "transfer_category" || item.totals_eligibility.reason === "linked_transfer") && (
-        <span className="transaction-meta-flag">Fora dos totais</span>
+        <span className="transaction-meta-flag">{t("excludedFromTotals")}</span>
       )}
       {ignored && (
         <span
           className="transaction-meta-flag is-ignored"
-          title={item.inclusion.changed_at ? inclusionOriginLabel(item.inclusion) : undefined}
+          title={item.inclusion.changed_at ? inclusionOriginLabel(item.inclusion, language) : undefined}
         >
-          {item.inclusion.origin === "rule" ? "Fora dos totais (regra)" : "Fora dos totais"}
+          {item.inclusion.origin === "rule" ? t("excludedByRule") : t("excludedFromTotals")}
         </span>
       )}
     </span>
@@ -98,8 +102,9 @@ export function TransactionRow({
   inclusionPending?: boolean;
 }) {
   const compact = layout === "phone";
+  const { t, language } = useTranslation();
   const ignored = item.inclusion.state === "ignored";
-  const name = item.description ?? "transação sem descrição";
+  const name = item.description ?? t("transactionWithoutDescription");
   const states = [
     ignored ? "is-ignored" : "",
     selected ? "is-selected" : "",
@@ -109,19 +114,19 @@ export function TransactionRow({
 
   return (
     <div className={`transaction-row ${states}`} aria-current={selected || undefined} aria-busy={inclusionPending || undefined}>
-      <span className="transaction-row-date" title={rowTime(item.occurred_at)}>
-        {rowDay(item.occurred_at)}
+      <span className="transaction-row-date" title={rowTime(item.occurred_at, language)}>
+        {rowDay(item.occurred_at, language)}
       </span>
       <span className="transaction-row-identity">
         <button
           type="button"
           className="transaction-row-open"
           data-transaction-id={item.id}
-          aria-label={`Ver detalhes de ${name}`}
+          aria-label={t("viewDetailsOf", { name })}
           title={item.description ?? undefined}
           onClick={() => onSelect(item.id)}
         >
-          {item.description ?? "Descrição não informada"}
+          {item.description ?? t("descriptionNotProvided")}
         </button>
         <TransactionMeta item={item} showAccount={showAccount} layout={layout} />
       </span>

@@ -1,3 +1,4 @@
+import { useTranslation } from "../../i18n/context";
 import { Skeleton } from "../ui";
 
 import type { Account } from "../../api/contracts";
@@ -25,32 +26,33 @@ export function BankAccountList({
   failed?: boolean;
   onOpen: (account: Account) => void;
 }) {
+  const { t, language } = useTranslation();
   if (failed) return null;
   return (
-    <Section title="Contas bancárias">
+    <Section title={t("bankAccounts")}>
       {isLoading ? (
-        <div role="status" aria-label="Carregando contas bancárias">
+        <div role="status" aria-label={t("loadingBankAccounts")}>
           <Skeleton active paragraph={{ rows: 2 }} title={false} />
         </div>
       ) : accounts.length === 0 ? (
         <EmptyState
-          title="Nenhuma conta bancária"
-          hint="Crie uma conta manual, conecte um banco em Configurações ou importe um extrato."
+          title={t("noBankAccounts")}
+          hint={t("noBankAccountsHint")}
         />
       ) : (
-        <ul className="list-rows" aria-label="Contas bancárias">
+        <ul className="list-rows" aria-label={t("bankAccounts")}>
           {accounts.map((account) => (
             <ListRow
               key={account.id}
               className="account-row"
-              title={accountDisplayName(account)}
-              meta={accountMetaLine(account) || undefined}
+              title={accountDisplayName(account, language)}
+              meta={accountMetaLine(account, language) || undefined}
               trailing={
                 <AccountMoney value={account.balance} currencyCode={account.currency_code} tone="balance" />
               }
               truncate
               onClick={() => onOpen(account)}
-              ariaLabel={`Abrir ${accountDisplayName(account)}`}
+              ariaLabel={`${t("openItem")} ${accountDisplayName(account, language)}`}
             />
           ))}
         </ul>

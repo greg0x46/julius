@@ -1,3 +1,5 @@
+import { useTranslation } from "../../i18n/context";
+import { translate, type Language } from "../../i18n/messages";
 import { PlusOutlined } from "../ui/icons";
 import { useQueries } from "@tanstack/react-query";
 import { Alert, Button, InputNumber, List, Space, Typography } from "../ui";
@@ -16,7 +18,8 @@ import type {
 import { useInvestmentWorkspace } from "../../hooks/useInvestmentWorkspace";
 import { formatDateOnly } from "../../presentation/dates";
 import { isPositiveDecimal,isZeroDecimal, subtractDecimals, sumDecimals } from "../../presentation/decimal";
-import { investmentOperationKindLabel } from "../../presentation/investmentWorkspaceLabels";
+import { investmentOperationKindName } from "../../presentation/investmentWorkspaceLabels";
+import { movementTypeLabel } from "../../presentation/investmentLabels";
 import { formatBRL } from "../../presentation/money";
 import { detailValue } from "../../presentation/transactionDetail";
 import { PanelDisclosure, PanelFooter, PanelSection } from "../shared/PanelStack";
@@ -43,15 +46,13 @@ function pickerDescription(kind: string, position: string | null | undefined): s
   return [kind, position].filter(Boolean).join(" ");
 }
 
-function operationLabel(operation: InvestmentOperation, accountName: string, positionName: string | null): string {
-  const figures = `${formatBRL(operation.amount)} · ${formatDateOnly(operation.occurred_on)}`;
+function operationLabel(operation: InvestmentOperation, accountName: string, positionName: string | null, language: Language): string {
+  const figures = `${formatBRL(operation.amount)} · ${formatDateOnly(operation.occurred_on, language)}`;
   if (operation.source === "synced") {
-    return joinLabel([operation.notes ?? "Movimento importado", accountName, figures]);
+    return joinLabel([operation.notes ?? translate(language, "importedMovement"), accountName, figures]);
   }
-  return joinLabel([investmentOperationKindLabel[operation.kind], accountName, positionName, figures]);
+  return joinLabel([investmentOperationKindName(operation.kind, language), accountName, positionName, figures]);
 }
-
-const movementTypeLabel: Record<string, string> = { BUY: "Aplicação", SELL: "Resgate", INTEREST: "Rendimento" };
 
 function movementDate(movement: InvestmentTransaction): string | null {
   return (movement.trade_date ?? movement.occurred_at)?.slice(0, 10) ?? null;
@@ -101,6 +102,7 @@ export function InvestmentLinkScreen({
   /** Called after a successful link so the stack can pop back. */
   onDone: () => void;
 }) {
+  const { t, language } = useTranslation();
   const workspace = useInvestmentWorkspace();
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [amount, setAmount] = useState<string | null | undefined>(undefined);
@@ -145,12 +147,12 @@ export function InvestmentLinkScreen({
       key: `operation:${operation.id}`,
       picker: {
         id: `operation:${operation.id}`,
-        description: pickerDescription(investmentOperationKindLabel[operation.kind], positionName),
+        description: pickerDescription(investmentOperationKindName(operation.kind, language), positionName),
         amount: operation.amount,
         direction: transaction.classification === "unclassified" ? null : transaction.classification,
         date: operation.occurred_on,
-        account: accountById.get(operation.account_id)?.name ?? "Conta não encontrada",
-        category: "Movimentação manual",
+        account: accountById.get(operation.account_id)?.name ?? t("accountNotFoundShort"),
+        category: t("manualMovement"),
         keywords: operation.notes ? [operation.notes] : undefined,
       },
       operationId: operation.id,
@@ -171,14 +173,14 @@ export function InvestmentLinkScreen({
           picker: {
             id: `movement:${movement.id}`,
             description: pickerDescription(
-              movementTypeLabel[movement.movement_type ?? ""] ?? movement.movement_type ?? "Movimento",
+              movement.movement_type === null ? t("movementGenericSingular") : movementTypeLabel(movement.movement_type, language),
               position.name,
             ),
             amount: total,
             direction: transaction.classification === "unclassified" ? null : transaction.classification,
             date,
             account: accountById.get(position.account_id)?.name ?? null,
-            category: "Importado da instituição",
+            category: t("importedFromInstitution"),
             keywords: position.ticker ? [position.ticker] : undefined,
           },
           operationId: pivot?.id ?? null,
@@ -205,16 +207,16 @@ export function InvestmentLinkScreen({
 
   const link = async () => {
     if (!selected) {
-      setError("Selecione uma movimentação de destino.");
+      setError(t("selectDestinationMovement"));
       return;
     }
     const value = amountValue ?? "0";
     if (!positive(value)) {
-      setError("Informe um valor maior que zero.");
+      setError(t("positiveAmountRequired"));
       return;
     }
     if (positive(subtractDecimals(value, available))) {
-      setError("O valor vinculado não pode ser maior que o saldo disponível desta transação.");
+      setError(t("linkedAmountTooHigh"));
       return;
     }
     setError(null);
@@ -227,7 +229,7 @@ export function InvestmentLinkScreen({
       });
       onDone();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Não foi possível vincular a movimentação.");
+      setError(caught instanceof Error ? caught.message : t("linkMovementError"));
     }
   };
 
@@ -236,38 +238,38 @@ export function InvestmentLinkScreen({
     try {
       await workspace.deleteReconciliation(reconciliationId);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Não foi possível desfazer o vínculo.");
+      setError(caught instanceof Error ? caught.message : t("unlinkError"));
     }
   };
 
   const unsupportedReason =
     fullValue === null
-      ? "O valor desta transação não está disponível em reais para vincular."
+      ? t("amountNotInBrl")
       : direction === null
-        ? "Só entradas e saídas classificadas podem ser vinculadas a um investimento."
+        ? t("onlyClassifiedLinkable")
         : null;
   const canLink = unsupportedReason === null && positive(available);
 
   return (
     <>
       <header className="transaction-screen-summary">
-        <span className={`transaction-amount amount-${transaction.classification}`}>{detailValue(transaction)}</span>
-        <span>{transaction.description ?? "Descrição não informada"}</span>
+        <span className={`transaction-amount amount-${transaction.classification}`}>{detailValue(transaction, language)}</span>
+        <span>{transaction.description ?? t("descriptionNotProvided")}</span>
         {fullValue !== null && (
           <Typography.Text type="secondary">
-            {formatBRL(linkedAmount)} de {formatBRL(fullValue)} vinculados
-            {positive(available) ? " · ainda disponível para dividir" : " · valor integralmente vinculado"}
+            {t("linkedOfTotal", { linked: formatBRL(linkedAmount), total: formatBRL(fullValue) })}
+            {positive(available) ? t("stillAvailableToSplit") : t("fullyLinked")}
           </Typography.Text>
         )}
       </header>
 
       {error && <Alert type="error" showIcon message={error} />}
       {importedError && (
-        <Alert type="warning" showIcon message="Não foi possível carregar o histórico importado de todos os investimentos." />
+        <Alert type="warning" showIcon message={t("importedHistoryError")} />
       )}
 
       {links.length > 0 && (
-        <PanelSection title="Vínculos atuais">
+        <PanelSection title={t("currentLinks")}>
           <List
             size="small"
             dataSource={links}
@@ -286,17 +288,17 @@ export function InvestmentLinkScreen({
                       loading={workspace.isDeleting}
                       onClick={() => void unlink(link.id)}
                     >
-                      Desvincular
+                      {t("unlink")}
                     </Button>,
                   ]}
                 >
                   <Space direction="vertical" size={0}>
                     <span>
                       {operation
-                        ? operationLabel(operation, account?.name ?? "Conta não encontrada", position?.name ?? null)
-                        : "Movimentação não encontrada"}
+                        ? operationLabel(operation, account?.name ?? t("accountNotFoundShort"), position?.name ?? null, language)
+                        : t("movementNotFound")}
                     </span>
-                    <Typography.Text type="secondary">{formatBRL(link.amount)} vinculado</Typography.Text>
+                    <Typography.Text type="secondary">{t("amountLinkedSingular", { amount: formatBRL(link.amount) })}</Typography.Text>
                   </Space>
                 </List.Item>
               );
@@ -309,18 +311,18 @@ export function InvestmentLinkScreen({
         <Typography.Text type="secondary">{unsupportedReason}</Typography.Text>
       ) : (
         <>
-          <PanelSection title="Movimentação de destino">
+          <PanelSection title={t("destinationMovement")}>
             <TransactionPicker
               id="investment-link-destination"
-              label="Movimentação de destino"
+              label={t("destinationMovement")}
               value={selectedKey}
               loading={importedLoading}
               disabled={!canLink}
-              placeholder={direction === "deposit" ? "Selecione um aporte ou aplicação" : "Selecione um resgate ou rendimento"}
-              emptyText="Nenhuma movimentação compatível. Crie uma nova."
+              placeholder={direction === "deposit" ? t("selectContributionOrApplication") : t("selectRedemptionOrYield")}
+              emptyText={t("noCompatibleCreateNew")}
               transactions={candidates.map((candidate) => ({
                 ...candidate.picker,
-                tag: suggested(candidate) ? "Sugestão" : undefined,
+                tag: suggested(candidate) ? t("suggestionTag") : undefined,
               }))}
               onSelect={setSelectedKey}
             />
@@ -329,14 +331,14 @@ export function InvestmentLinkScreen({
               disabled={!canLink}
               onClick={() => onNewOperation(amountValue)}
             >
-              Nova movimentação
+              {t("newOperationButton")}
             </Button>
           </PanelSection>
 
-          <PanelSection title="Valor a vincular">
+          <PanelSection title={t("amountToLink")}>
             <InputNumber
               id="investment-link-amount"
-              aria-label="Valor a vincular"
+              aria-label={t("amountToLink")}
               style={{ width: "100%" }}
               min="0.01"
               max={available}
@@ -348,18 +350,16 @@ export function InvestmentLinkScreen({
               onChange={(value) => setAmount(value === null ? null : String(value))}
             />
             <Typography.Text type="secondary" className="transaction-field-hint">
-              Disponível: {formatBRL(available)}. Você pode vincular o restante depois.
+              {t("availableAmount", { amount: formatBRL(available) })}
             </Typography.Text>
-            <PanelDisclosure summary="Confira os dados antes de vincular.">
-              As sugestões usam direção, moeda, valor disponível e datas próximas. Movimentos importados da
-              instituição aparecem junto das movimentações manuais. Você decide o destino e pode dividir esta
-              transação em mais de uma movimentação.
+            <PanelDisclosure summary={t("checkBeforeLinking")}>
+              {t("linkSuggestionsExplanation")}
             </PanelDisclosure>
           </PanelSection>
 
           <PanelFooter>
             <Button type="primary" block loading={workspace.isSaving} disabled={!canLink} onClick={() => void link()}>
-              Vincular
+              {t("link")}
             </Button>
           </PanelFooter>
         </>
@@ -384,6 +384,7 @@ export function InvestmentLinkNewOperationScreen({
   amount: string | null;
   onDone: () => void;
 }) {
+  const { t } = useTranslation();
   const workspace = useInvestmentWorkspace();
   const [error, setError] = useState<string | null>(null);
   const links = workspace.reconciliations.filter((link) => link.financial_transaction_id === transaction.id);
@@ -392,7 +393,7 @@ export function InvestmentLinkNewOperationScreen({
   const createAndLink = async (write: InvestmentOperationWrite) => {
     const value = amount ?? "0";
     if (!positive(value) || positive(subtractDecimals(value, available))) {
-      setError("Revise o valor a vincular antes de criar a movimentação.");
+      setError(t("reviewLinkAmount"));
       return;
     }
     setError(null);
@@ -407,7 +408,7 @@ export function InvestmentLinkNewOperationScreen({
       });
       onDone();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Não foi possível criar e vincular a movimentação.");
+      setError(caught instanceof Error ? caught.message : t("createLinkError"));
     }
   };
 
@@ -431,7 +432,7 @@ export function InvestmentLinkNewOperationScreen({
       </PanelSection>
       <PanelFooter>
         <Button type="primary" block htmlType="submit" form={formId} loading={workspace.isSaving}>
-          Criar e vincular
+          {t("createAndLink")}
         </Button>
       </PanelFooter>
     </>

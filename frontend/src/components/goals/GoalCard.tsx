@@ -1,9 +1,10 @@
+import { useTranslation } from "../../i18n/context";
 import { useId } from "react";
 
 import type { Goal } from "../../api/contracts";
 import { formatDateOnly } from "../../presentation/dates";
 import { compareDecimals } from "../../presentation/decimal";
-import { goalMetricLabel, goalMonthsLabel, goalPercent } from "../../presentation/goals";
+import { goalMonthsLabel, goalPercent } from "../../presentation/goals";
 import { GoalIcon, TargetDateIcon } from "./GoalIcons";
 import { GoalProgressRing, type GoalProgressTone } from "./GoalProgressRing";
 import { GoalProjection } from "./GoalProjection";
@@ -29,6 +30,7 @@ export function GoalCard({
   onEdit: (goal: Goal) => void;
   onRemove: (goal: Goal) => void;
 }) {
+  const { t, language } = useTranslation();
   const confirm = useConfirm();
   const headingId = useId();
   const percent = goalPercent(goal.progress);
@@ -48,21 +50,21 @@ export function GoalCard({
           </span>
           <div className="goal-card-heading">
             <h2 id={headingId}>{goal.name}</h2>
-            <p className="goal-metric">{goalMetricLabel[goal.metric]}</p>
+            <p className="goal-metric">{t("investedValue")}</p>
           </div>
           <RecordMenu
-            label={`Ações de ${goal.name}`}
+            label={t("actionsFor", { name: goal.name })}
             items={[
-              { key: "edit", label: "Editar meta", onClick: () => onEdit(goal) },
+              { key: "edit", label: t("editGoal"), onClick: () => onEdit(goal) },
               {
                 key: "delete",
-                label: "Excluir meta",
+                label: t("deleteGoal"),
                 danger: true,
                 disabled: busy,
                 onClick: () =>
                   confirm({
-                    title: "Excluir meta",
-                    description: "Seus investimentos e saldos não são afetados; só o acompanhamento da meta é removido.",
+                    title: t("deleteGoal"),
+                    description: t("deleteGoalHint"),
                     onConfirm: () => onRemove(goal),
                   }),
               },
@@ -70,18 +72,18 @@ export function GoalCard({
           />
         </header>
         <div className="goal-summary">
-          <GoalProgressRing percent={percent} tone={tone} label={`Progresso de ${goal.name}`} />
+          <GoalProgressRing percent={percent} tone={tone} label={t("goalProgress", { name: goal.name })} />
           <div className="goal-figures-col">
             <div className="goal-figures">
               <Money currencyCode={goal.currency_code} value={goal.current_value} tone="balance" size="hero" />
               <span className="goal-target">
-                de <Money currencyCode={goal.currency_code} value={goal.target_amount} tone="neutral" />
+                {t("of")} <Money currencyCode={goal.currency_code} value={goal.target_amount} tone="neutral" />
               </span>
             </div>
             {reached ? (
-              <StatusTag tone="success">Meta atingida</StatusTag>
+              <StatusTag tone="success">{t("goalReached")}</StatusTag>
             ) : behind ? (
-              <StatusTag tone="warning">Atrás do ritmo</StatusTag>
+              <StatusTag tone="warning">{t("behindPace")}</StatusTag>
             ) : null}
           </div>
         </div>
@@ -89,8 +91,8 @@ export function GoalCard({
           <TargetDateIcon />
           <span>
             {goal.target_date === null
-              ? "Sem data-alvo definida"
-              : `${formatDateOnly(goal.target_date)}${goal.projection !== null ? ` · faltam ${goalMonthsLabel(goal.projection.months_remaining)}` : ""}`}
+              ? t("noTargetDate")
+              : `${formatDateOnly(goal.target_date, language)}${goal.projection !== null ? t("monthRemaining").replace("{months}", goalMonthsLabel(goal.projection.months_remaining, language)) : ""}`}
           </span>
         </p>
         <GoalProjection goal={goal} />

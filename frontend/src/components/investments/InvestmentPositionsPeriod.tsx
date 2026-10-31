@@ -1,3 +1,5 @@
+import { translate, type Language } from "../../i18n/messages";
+import { useTranslation } from "../../i18n/context";
 import { CaretDownOutlined, CaretRightOutlined } from "../ui/icons";
 import { Grid } from "../ui";
 import { useId, useState, type ReactNode } from "react";
@@ -12,10 +14,9 @@ import type {
 import { formatDecimal, investmentTypeLabel } from "../../presentation/investmentLabels";
 import {
   formatRatioPercent,
-  investmentAssetClassLabel,
-  investedUnavailableHint,
+  investmentClassName,
+  investmentUnavailable,
   matchesAssetSearch,
-  periodUnavailableLabel,
 } from "../../presentation/investmentPeriod";
 import { isZeroDecimal } from "../../presentation/decimal";
 import { formatMoney } from "../../presentation/money";
@@ -41,30 +42,29 @@ export interface InvestmentPositionsPeriodProps {
   empty: ReactNode;
 }
 
-const dash = (
-  <>
-    <span aria-hidden="true">—</span>
-    <span className="visually-hidden">Indisponível</span>
-  </>
-);
+function Dash() {
+  const { t } = useTranslation();
+  return <><span aria-hidden="true">—</span><span className="visually-hidden">{t("unavailable")}</span></>;
+}
 
 /** Why a figure is "—": the same words reach a screen reader and a tap. */
 function Unavailable({ label, hint }: { label: string; hint: string }) {
   return (
     <InvestmentHint label={`${label}: ${hint}`} content={hint}>
-      {dash}
+      {<Dash />}
     </InvestmentHint>
   );
 }
 
 function InvestedValue({ position }: { position: InvestmentPeriodPosition }) {
-  if (position.unavailable_reason !== null) return dash;
+  const { t, language } = useTranslation();
+  if (position.unavailable_reason !== null) return <Dash />;
   if (position.invested === null) {
     const reason = position.invested_unavailable_reason;
     return (
       <Unavailable
-        label="Valor investido indisponível"
-        hint={reason === null ? "O backend não informou o valor investido." : investedUnavailableHint[reason]}
+        label={t("investedValueUnavailable")}
+        hint={reason === null ? t("investedValueNotProvided") : investmentUnavailable(reason, language).investedHint}
       />
     );
   }
@@ -72,14 +72,15 @@ function InvestedValue({ position }: { position: InvestmentPeriodPosition }) {
 }
 
 function GroupInvested({ totals }: { totals: InvestmentPeriodTotals }) {
+  const { t } = useTranslation();
   if (totals.invested_unknown_positions === 0) return <Money value={totals.invested} tone="neutral" />;
   const unknown = totals.invested_unknown_positions;
   return (
     <span className="investment-invested-partial">
       <Money value={totals.invested} tone="neutral" />
       <InvestmentHint
-        label={`Soma só das posições com valor investido conhecido; ${unknown} ${unknown === 1 ? "não tem" : "não têm"}.`}
-        content={`Soma só das posições com valor investido conhecido; ${unknown} ${unknown === 1 ? "posição não tem" : "posições não têm"}.`}
+        label={t("knownInvestedSum", { count: unknown, verb: t(unknown === 1 ? "noInvestedOne" : "noInvestedMany") })}
+        content={t(unknown === 1 ? "knownInvestedSumDetailOne" : "knownInvestedSumDetailMany", { count: unknown })}
       >
         *
       </InvestmentHint>
@@ -89,17 +90,18 @@ function GroupInvested({ totals }: { totals: InvestmentPeriodTotals }) {
 
 /** The period's own figures for one position, plus the institution's number for conference. */
 function PositionDetails({ position }: { position: InvestmentPeriodPosition }) {
+  const { t, language } = useTranslation();
   const rows: [string, ReactNode][] = [
-    [`Valor inicial${position.opening_on ? ` (${formatDate(position.opening_on)})` : ""}`, <Money key="s" value={position.start_value ?? "0"} tone="neutral" />],
-    ["Aportes", <Money key="c" value={position.contributions ?? "0"} tone="neutral" />],
-    ["Resgates", <Money key="w" value={position.withdrawals ?? "0"} tone="neutral" />],
-    ["Rendimento", <Money key="y" value={position.yield ?? "0"} tone="result" />],
+    [`${t("startValue")}${position.opening_on ? ` (${formatDate(position.opening_on, language)})` : ""}`, <Money key="s" value={position.start_value ?? "0"} tone="neutral" />],
+    [t("contributions"), <Money key="c" value={position.contributions ?? "0"} tone="neutral" />],
+    [t("withdrawals"), <Money key="w" value={position.withdrawals ?? "0"} tone="neutral" />],
+    [t("investmentYield"), <Money key="y" value={position.yield ?? "0"} tone="result" />],
   ];
   if (position.costs !== null && !isZeroDecimal(position.costs)) {
-    rows.push(["Custos (já nos aportes e resgates)", <Money key="k" value={position.costs} tone="neutral" />]);
+    rows.push([t("costsIncludedInFlows"), <Money key="k" value={position.costs} tone="neutral" />]);
   }
   if (position.provisioned_taxes !== null && !isZeroDecimal(position.provisioned_taxes)) {
-    rows.push(["IR/IOF provisionado (não deduzido)", <Money key="t" value={position.provisioned_taxes} tone="neutral" />]);
+    rows.push([t("taxProvisioned"), <Money key="t" value={position.provisioned_taxes} tone="neutral" />]);
   }
   return (
     <dl className="investment-details">
@@ -111,11 +113,11 @@ function PositionDetails({ position }: { position: InvestmentPeriodPosition }) {
       ))}
       {position.reported_profit !== null && (
         <div className="investment-details-reported">
-          <dt>Informado pela instituição</dt>
+          <dt>{t("reportedByInstitution")}</dt>
           <dd>
             {formatMoney(position.reported_profit, position.currency_code)}
-            {position.reported_as_of !== null && ` em ${formatDate(position.reported_as_of)}`}
-            <span className="investment-quiet"> (conferência; não entra nos totais)</span>
+            {position.reported_as_of !== null && ` ${t("atDate")} ${formatDate(position.reported_as_of, language)}`}
+            <span className="investment-quiet">{t("reportedNotTotaled")}</span>
           </dd>
         </div>
       )}
@@ -124,38 +126,40 @@ function PositionDetails({ position }: { position: InvestmentPeriodPosition }) {
 }
 
 function YieldFigure({ position }: { position: InvestmentPeriodPosition }) {
-  if (position.unavailable_reason !== null || position.yield === null) return dash;
+  const { t } = useTranslation();
+  if (position.unavailable_reason !== null || position.yield === null) return <Dash />;
   return (
-    <InvestmentHint label={`Detalhes do período de ${position.name}`} content={<PositionDetails position={position} />}>
+    <InvestmentHint label={t("periodDetailsOf", { name: position.name })} content={<PositionDetails position={position} />}>
       <InvestmentYieldValue gain={position.yield} rate={position.yield_rate} />
     </InvestmentHint>
   );
 }
 
 function PositionBadges({ position }: { position: InvestmentPeriodPosition }) {
+  const { t, language } = useTranslation();
   const reason = position.unavailable_reason;
   return (
     <>
-      {position.closed_as_of_to && <StatusTag tone="neutral">Encerrada</StatusTag>}
+      {position.closed_as_of_to && <StatusTag tone="neutral">{t("closedFeminine")}</StatusTag>}
       {reason !== null && (
-        <InvestmentHint label={`${periodUnavailableLabel[reason].short}: ${periodUnavailableLabel[reason].hint}`} content={periodUnavailableLabel[reason].hint}>
-          <StatusTag tone="warning">{periodUnavailableLabel[reason].short}</StatusTag>
+        <InvestmentHint label={`${investmentUnavailable(reason, language).short}: ${investmentUnavailable(reason, language).hint}`} content={investmentUnavailable(reason, language).hint}>
+          <StatusTag tone="warning">{investmentUnavailable(reason, language).short}</StatusTag>
         </InvestmentHint>
       )}
       {reason === null && position.partial_start && (
         <InvestmentHint
-          label={`Início parcial: o período começou em ${formatDate(position.opening_on)}, primeiro dia com preço.`}
-          content={`O dia pedido não tinha preço; o período desta posição começa em ${formatDate(position.opening_on)}, o primeiro dia com preço.`}
+          label={t("partialStartLabel", { date: formatDate(position.opening_on, language) })}
+          content={t("partialStartHint", { date: formatDate(position.opening_on, language) })}
         >
-          <StatusTag tone="info">Início parcial</StatusTag>
+          <StatusTag tone="info">{t("partialStart")}</StatusTag>
         </InvestmentHint>
       )}
       {reason === null && !position.history_complete && (
         <InvestmentHint
-          label="Histórico incompleto: as movimentações não cobrem toda a posição, então o valor investido é desconhecido."
-          content="As movimentações sincronizadas não cobrem toda a posição. O rendimento é medido sobre o período, mas o valor investido é desconhecido."
+          label={t("incompleteHistoryLabel")}
+          content={t("incompleteHistoryHint")}
         >
-          <StatusTag tone="warning">Histórico incompleto</StatusTag>
+          <StatusTag tone="warning">{t("incompleteInvestmentHistory")}</StatusTag>
         </InvestmentHint>
       )}
     </>
@@ -163,19 +167,19 @@ function PositionBadges({ position }: { position: InvestmentPeriodPosition }) {
 }
 
 // Provider types are enums (MUTUAL_FUND); a manual type is the user's own text.
-const typeLabel = (position: InvestmentPeriodPosition) =>
-  position.source === "synced" ? investmentTypeLabel(position.asset_type) : position.asset_type;
+const typeLabel = (position: InvestmentPeriodPosition, language: Language) =>
+  position.source === "synced" ? investmentTypeLabel(position.asset_type, language) : position.asset_type;
 
-const quantityLabel = (position: InvestmentPeriodPosition) =>
-  position.quantity === null ? null : `Qtd. ${formatDecimal(position.quantity)}`;
+const quantityLabel = (position: InvestmentPeriodPosition, language: Language) =>
+  position.quantity === null ? null : translate(language, "quantityAbbreviation", { quantity: formatDecimal(position.quantity, language) });
 
 /** Stacked rows have no columns, so type and custody go in the line. */
-function stackedSubtitle(position: InvestmentPeriodPosition, data: InvestmentPeriod): string {
+function stackedSubtitle(position: InvestmentPeriodPosition, data: InvestmentPeriod, language: Language): string {
   return [
     position.ticker,
-    typeLabel(position),
+    typeLabel(position, language),
     data.group_by === "account" ? null : position.account_name,
-    quantityLabel(position),
+    quantityLabel(position, language),
   ]
     .filter(Boolean)
     .join(" · ");
@@ -197,28 +201,27 @@ function NativeValue({ position, data }: { position: InvestmentPeriodPosition; d
 }
 
 function GroupLabel({ group, shown }: { group: InvestmentPeriodGroup; shown: number }) {
+  const { t, language } = useTranslation();
   const total = group.positions.length;
   return (
     <>
-      <span className="investment-group-name">{group.label}</span>
+      <span className="investment-group-name">{group.asset_class ? investmentClassName(group.asset_class, language) : group.label}</span>
       <span className="investment-quiet">
-        {shown === total ? `${total} ${total === 1 ? "posição" : "posições"}` : `${shown} de ${total} posições`}
+        {shown === total ? t(total === 1 ? "positionCountOne" : "positionCountMany", { count: total }) : t("positionShownCount", { shown, total })}
       </span>
-      {group.totals.partial && <StatusTag tone="warning">Parcial</StatusTag>}
+      {group.totals.partial && <StatusTag tone="warning">{t("partial")}</StatusTag>}
     </>
   );
 }
 
-function share(group: InvestmentPeriodGroup): string {
-  return group.share === null ? "—" : formatRatioPercent(group.share);
-}
 
 /** The group's share as a figure and a thin bar; the width only sizes the bar. */
 function GroupShare({ group }: { group: InvestmentPeriodGroup }) {
+  const { language } = useTranslation();
   const width = group.share === null ? 0 : Math.max(0, Math.min(100, Number(group.share) * 100));
   return (
     <span className="investment-share">
-      <span>{share(group)}</span>
+      <span>{group.share === null ? "—" : formatRatioPercent(group.share, { language })}</span>
       <span className="investment-share-bar" aria-hidden="true">
         <span style={{ width: `${width}%` }} />
       </span>
@@ -240,6 +243,7 @@ export function InvestmentPositionsPeriod({
   groupMenu,
   empty,
 }: InvestmentPositionsPeriodProps) {
+  const { t, language } = useTranslation();
   const idBase = useId();
   // Eight columns need the room of a wide screen; below it the rows stack.
   const stacked = !Grid.useBreakpoint().xl;
@@ -281,19 +285,17 @@ export function InvestmentPositionsPeriod({
     <>
       {searching && (
         <p className="investment-note" role="status">
-          A busca só esconde linhas: totais, subtotais e participações continuam sendo os do grupo inteiro.
+          {t("searchHidesOnlyRows")}
         </p>
       )}
       {hiddenClosed.counted > 0 && (
         <p className="investment-note">
-          Totais e subtotais incluem {hiddenClosed.counted}{" "}
-          {hiddenClosed.counted === 1 ? "encerrada oculta" : "encerradas ocultas"}.
+          {t(hiddenClosed.counted === 1 ? "hiddenClosedCountOne" : "hiddenClosedCountMany", { count: hiddenClosed.counted })}
         </p>
       )}
       {hiddenClosed.unmeasured > 0 && (
         <p className="investment-note">
-          {hiddenClosed.unmeasured} {hiddenClosed.unmeasured === 1 ? "encerrada oculta está" : "encerradas ocultas estão"}{" "}
-          sem valor no período e fora dos totais.
+          {t(hiddenClosed.unmeasured === 1 ? "hiddenUnmeasuredOne" : "hiddenUnmeasuredMany", { count: hiddenClosed.unmeasured })}
         </p>
       )}
     </>
@@ -303,7 +305,7 @@ export function InvestmentPositionsPeriod({
     return (
       <>
         {notes}
-        <EmptyState title="Nenhuma posição encontrada" hint={`Nada corresponde a “${search.trim()}” neste período.`} />
+        <EmptyState title={t("noPositionsFound")} hint={t("noPositionsMatch", { search: search.trim() })} />
       </>
     );
   }
@@ -325,7 +327,7 @@ export function InvestmentPositionsPeriod({
             const open = !grouped || searching || expanded.has(group.key);
             const id = `${idBase}-${group.key}`;
             return (
-              <section key={group.key} className="investment-group" aria-label={group.label}>
+              <section key={group.key} className="investment-group" aria-label={group.asset_class ? investmentClassName(group.asset_class, language) : group.label}>
                 {grouped && (
                   <div className="investment-group-header">
                     <button type="button" className="investment-group-toggle" aria-expanded={open} aria-controls={id} disabled={searching} onClick={() => toggle(group.key)}>
@@ -345,11 +347,11 @@ export function InvestmentPositionsPeriod({
                         </span>
                       </span>
                     </button>
-                    {menu(groupMenu(group), `Ações de ${group.label}`)}
+                    {menu(groupMenu(group), t("actionsFor", { name: group.asset_class ? investmentClassName(group.asset_class, language) : group.label }))}
                   </div>
                 )}
                 {open && (
-                  <ul id={id} className="list-rows" aria-label={`Posições de ${group.label}`}>
+                  <ul id={id} className="list-rows" aria-label={t("positionsOf", { name: group.asset_class ? investmentClassName(group.asset_class, language) : group.label })}>
                     {rows.map((position) => (
                       <li key={`${position.source}-${position.id}`} className="list-row-item">
                         <div className="list-row">
@@ -357,19 +359,19 @@ export function InvestmentPositionsPeriod({
                             <span className="list-row-title">
                               <PositionName position={position} href={hrefOf(position)} />
                             </span>
-                            <span className="list-row-meta">{stackedSubtitle(position, data)}</span>
+                            <span className="list-row-meta">{stackedSubtitle(position, data, language)}</span>
                             <span className="list-row-meta investment-row-badges">
                               <PositionBadges position={position} />
                             </span>
                             {position.unavailable_reason === null && (
                               <span className="investment-mobile-metrics">
                                 <span>
-                                  <span className="investment-mobile-metric-label">Investido</span>
+                                  <span className="investment-mobile-metric-label">{t("invested")}</span>
                                   <InvestedValue position={position} />
                                 </span>
                                 <span>
-                                  <span className="investment-mobile-metric-label">Participação</span>
-                                  {position.share === null ? "—" : formatRatioPercent(position.share)}
+                                  <span className="investment-mobile-metric-label">{t("share")}</span>
+                                  {position.share === null ? "—" : formatRatioPercent(position.share, { language })}
                                 </span>
                               </span>
                             )}
@@ -379,14 +381,14 @@ export function InvestmentPositionsPeriod({
                               <span className="investment-row-trailing">
                                 <span className="investment-row-figures">
                                   <span className="investment-row-value">
-                                    {position.end_value === null ? dash : <Money value={position.end_value} tone="balance" />}
+                                    {position.end_value === null ? <Dash /> : <Money value={position.end_value} tone="balance" />}
                                   </span>
                                   <NativeValue position={position} data={data} />
                                   <span className="investment-row-yield">
                                     <YieldFigure position={position} />
                                   </span>
                                 </span>
-                                {menu(positionMenu(position), `Ações de ${position.name}`)}
+                                {menu(positionMenu(position), t("actionsFor", { name: position.name }))}
                               </span>
                             </span>
                           </span>
@@ -394,7 +396,7 @@ export function InvestmentPositionsPeriod({
 </li>
                     ))}
                     {rows.length === 0 && (
-                      <li className="list-row-item investment-quiet investment-group-empty">Nenhuma posição visível neste grupo.</li>
+                      <li className="list-row-item investment-quiet investment-group-empty">{t("noVisiblePositions")}</li>
                     )}
                   </ul>
                 )}
@@ -410,18 +412,18 @@ export function InvestmentPositionsPeriod({
     <>
       {notes}
       <div className="investment-table-wrap">
-        <table className="investment-period-table" aria-label="Posições">
+        <table className="investment-period-table" aria-label={t("positions")}>
           <thead>
             <tr>
-              <th scope="col">Ativo</th>
-              {showClass && <th scope="col">Classe</th>}
-              {showCustody && <th scope="col" className="investment-col-custody">Custódia</th>}
-              <th scope="col" className="investment-col-end">Valor atual</th>
-              <th scope="col" className="investment-col-end">Valor investido</th>
-              <th scope="col" className="investment-col-end">Rendimento</th>
-              <th scope="col" className="investment-col-end">Participação</th>
+              <th scope="col">{t("asset")}</th>
+              {showClass && <th scope="col">{t("assetClass")}</th>}
+              {showCustody && <th scope="col" className="investment-col-custody">{t("custody")}</th>}
+              <th scope="col" className="investment-col-end">{t("currentValueLabel")}</th>
+              <th scope="col" className="investment-col-end">{t("investedValueLabel")}</th>
+              <th scope="col" className="investment-col-end">{t("investmentYield")}</th>
+              <th scope="col" className="investment-col-end">{t("share")}</th>
               <th scope="col" className="investment-col-menu">
-                <span className="visually-hidden">Ações</span>
+                <span className="visually-hidden">{t("actions")}</span>
               </th>
             </tr>
           </thead>
@@ -445,7 +447,7 @@ export function InvestmentPositionsPeriod({
                       <InvestmentYieldValue gain={group.totals.yield} rate={group.totals.yield_rate} />
                     </td>
                     <td className="investment-col-end"><GroupShare group={group} /></td>
-                    <td className="investment-col-menu">{menu(groupMenu(group), `Ações de ${group.label}`)}</td>
+                    <td className="investment-col-menu">{menu(groupMenu(group), t("actionsFor", { name: group.asset_class ? investmentClassName(group.asset_class, language) : group.label }))}</td>
                   </tr>
                 )}
                 {open &&
@@ -457,7 +459,7 @@ export function InvestmentPositionsPeriod({
                             <PositionName position={position} href={hrefOf(position)} />
                           </span>
                           <span className="investment-quiet">
-                            {[position.ticker, quantityLabel(position)].filter(Boolean).join(" · ")}
+                            {[position.ticker, quantityLabel(position, language)].filter(Boolean).join(" · ")}
                           </span>
                           <span className="investment-row-badges">
                             <PositionBadges position={position} />
@@ -467,8 +469,8 @@ export function InvestmentPositionsPeriod({
                       {showClass && (
                         <td>
                           <div className="investment-cell">
-                            <span className="investment-nowrap">{investmentAssetClassLabel[position.asset_class]}</span>
-                            <span className="investment-quiet">{typeLabel(position)}</span>
+                            <span className="investment-nowrap">{investmentClassName(position.asset_class, language)}</span>
+                            <span className="investment-quiet">{typeLabel(position, language)}</span>
                           </div>
                         </td>
                       )}
@@ -476,7 +478,7 @@ export function InvestmentPositionsPeriod({
                       <td className="investment-col-end">
                         <div className="investment-cell investment-cell-end">
                           <span className="investment-cell-value">
-                            {position.end_value === null ? dash : <Money value={position.end_value} tone="balance" />}
+                            {position.end_value === null ? <Dash /> : <Money value={position.end_value} tone="balance" />}
                           </span>
                           <NativeValue position={position} data={data} />
                         </div>
@@ -484,15 +486,15 @@ export function InvestmentPositionsPeriod({
                       <td className="investment-col-end"><InvestedValue position={position} /></td>
                       <td className="investment-col-end"><YieldFigure position={position} /></td>
                       <td className="investment-col-end">
-                        {position.share === null ? dash : formatRatioPercent(position.share)}
+                        {position.share === null ? <Dash /> : formatRatioPercent(position.share, { language })}
                       </td>
-                      <td className="investment-col-menu">{menu(positionMenu(position), `Ações de ${position.name}`)}</td>
+                      <td className="investment-col-menu">{menu(positionMenu(position), t("actionsFor", { name: position.name }))}</td>
                     </tr>
                   ))}
                 {open && rows.length === 0 && (
                   <tr>
                     <td colSpan={columns} className="investment-quiet investment-group-empty">
-                      Nenhuma posição visível neste grupo.
+                      {t("noVisiblePositions")}
                     </td>
                   </tr>
                 )}

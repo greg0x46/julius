@@ -1,3 +1,4 @@
+import { useTranslation } from "../../i18n/context";
 import { isPositiveDecimal } from "../../presentation/decimal";
 import { CloseOutlined } from "../ui/icons";
 import { Alert, Button, DatePicker, Drawer, Input, Select, Skeleton, Switch } from "../ui";
@@ -10,7 +11,7 @@ import { useQuery } from "@tanstack/react-query";
 import type { Scenario, ScenarioTransaction, ScenarioTransactionWrite } from "../../api/contracts";
 import { getScenario, listScenarioPlannedTransactions } from "../../api/scenarios";
 import { errorMessage } from "../../presentation/errors";
-import { scenarioKindLabel } from "../../presentation/scenarioLabels";
+import { scenarioKindName } from "../../presentation/scenarioLabels";
 import { MoneyInput } from "../forms/MoneyInput";
 import { FormField } from "../forms/FormField";
 import { DataCard, EmptyState, ResponsiveList } from "../layout";
@@ -29,9 +30,6 @@ function formatProjectedAt(value: string): string {
   return `${day}/${month}/${year}`;
 }
 
-const originLabel = (scenario: Scenario) => (scenario.is_accounting_source ? "Contábil" : "Simulação");
-
-const deleteScenarioDescription = "As projeções deste cenário também serão excluídas.";
 
 /**
  * The form that adds one hypothetical transaction. Its submit button is either
@@ -54,6 +52,7 @@ function NewTransactionForm({
   /** Why the last write failed, shown with the fields. */
   error: string | null;
 }) {
+  const { t } = useTranslation();
   const id = useId();
   const [description, setDescription] = useState("");
   const [kind, setKind] = useState<"income" | "expense">("expense");
@@ -67,11 +66,11 @@ function NewTransactionForm({
   const submit = async () => {
     if (inFlight.current || submitting) return;
     if (description.trim() === "") {
-      setError("Informe uma descrição.");
+      setError(t("descriptionRequired"));
       return;
     }
     if (amount === null || !isPositiveDecimal(amount)) {
-      setError("Informe um valor maior que zero.");
+      setError(t("positiveAmountRequired"));
       return;
     }
     setError(null);
@@ -98,7 +97,7 @@ function NewTransactionForm({
     <form
       id={formId}
       className="scenario-new-transaction"
-      aria-label="Nova transação hipotética"
+      aria-label={t("newHypotheticalTransaction")}
       onSubmit={(event) => {
         event.preventDefault();
         void submit();
@@ -115,32 +114,31 @@ function NewTransactionForm({
         />
       )}
       <div className="scenario-new-transaction-fields">
-        <FormField label="Descrição" htmlFor={`${id}-description`}>
+        <FormField label={t("description")} htmlFor={`${id}-description`}>
           <Input
             id={`${id}-description`}
-            placeholder="Ex.: Passagem aérea"
+            placeholder={t("exampleFlight")}
             value={description}
             onChange={(event) => setDescription(event.target.value)}
           />
         </FormField>
-        <FormField label="Tipo" htmlFor={`${id}-kind`}>
+        <FormField label={t("type")} htmlFor={`${id}-kind`}>
           <Select
             id={`${id}-kind`}
             value={kind}
             options={[
-              { value: "expense", label: "Despesa" },
-              { value: "income", label: "Receita" },
+              { value: "expense", label: t("expenseLabel") },
+              { value: "income", label: t("incomeLabel") },
             ]}
             onChange={setKind}
           />
         </FormField>
-        <FormField label="Valor" htmlFor={`${id}-amount`}>
+        <FormField label={t("amount")} htmlFor={`${id}-amount`}>
           <MoneyInput id={`${id}-amount`} min="0" value={amount} onChange={setAmount} />
         </FormField>
-        <FormField label="Data prevista" htmlFor={`${id}-date`}>
+        <FormField label={t("plannedDate")} htmlFor={`${id}-date`}>
           <DatePicker
             id={`${id}-date`}
-            format="DD/MM/YYYY"
             value={projectedAt}
             allowClear={false}
             onChange={(value) => value && setProjectedAt(value)}
@@ -149,7 +147,7 @@ function NewTransactionForm({
       </div>
       {formId === undefined && (
         <Button htmlType="submit" loading={submitting}>
-          Adicionar transação
+          {t("addTransaction")}
         </Button>
       )}
     </form>
@@ -182,6 +180,7 @@ function ScenarioTransactionsPanel({
   /** Tells the sheet when the add is in flight, for its footer button. */
   onSubmittingChange?: (submitting: boolean) => void;
 }) {
+  const { t } = useTranslation();
   const compact = useCompactScreen();
   const feedback = useFeedback();
   const confirm = useConfirm();
@@ -207,9 +206,9 @@ function ScenarioTransactionsPanel({
     setAdding(true);
     try {
       await onAddTransaction(scenario.id, write);
-      feedback.success("Transação hipotética adicionada");
+      feedback.success(t("hypotheticalAdded"));
     } catch (error) {
-      setAddError(errorMessage(error, "Não foi possível adicionar a transação."));
+      setAddError(errorMessage(error, t("hypotheticalAddError")));
       return false;
     } finally {
       setAdding(false);
@@ -223,9 +222,9 @@ function ScenarioTransactionsPanel({
     setDeleteError(null);
     try {
       await onDeleteTransaction(scenario.id, transactionId);
-      feedback.success("Transação hipotética excluída");
+      feedback.success(t("hypotheticalDeleted"));
     } catch (error) {
-      const message = errorMessage(error, "Não foi possível excluir a transação.");
+      const message = errorMessage(error, t("hypotheticalDeleteError"));
       setDeleteError(message);
       feedback.error(message);
       return;
@@ -235,15 +234,15 @@ function ScenarioTransactionsPanel({
 
   const transactionMenu = (transaction: ScenarioTransaction) => (
     <RecordMenu
-      label={`Ações de ${transaction.description}`}
+      label={t("actionsFor", { name: transaction.description })}
       items={[
         {
           key: "delete",
-          label: "Excluir",
+          label: t("delete"),
           danger: true,
           onClick: () =>
             confirm({
-              title: "Excluir transação hipotética",
+              title: t("deleteHypothetical"),
               onConfirm: () => remove(transaction.id),
             }),
         },
@@ -252,20 +251,20 @@ function ScenarioTransactionsPanel({
   );
 
   const columns: Column<ScenarioTransaction>[] = [
-    { title: "Descrição", dataIndex: "description" },
+    { title: t("description"), dataIndex: "description" },
     {
-      title: "Valor",
+      title: t("amount"),
       dataIndex: "amount",
       align: "right",
       render: (_, transaction) => <Money value={transaction.amount} tone="flow" />,
     },
     {
-      title: "Data prevista",
+      title: t("plannedDate"),
       dataIndex: "projected_at",
       render: (_, transaction) => formatProjectedAt(transaction.projected_at),
     },
     {
-      title: <span className="visually-hidden">Ações da transação</span>,
+      title: <span className="visually-hidden">{t("transactionActions")}</span>,
       key: "options",
       width: 56,
       render: (_, transaction) => transactionMenu(transaction),
@@ -285,16 +284,16 @@ function ScenarioTransactionsPanel({
         <Alert
           type="error"
           showIcon
-          message="Não foi possível carregar as transações deste cenário"
-          action={<Button onClick={() => void detailQuery.refetch()}>Tentar novamente</Button>}
+          message={t("scenarioTransactionsLoadError")}
+          action={<Button onClick={() => void detailQuery.refetch()}>{t("retry")}</Button>}
         />
       ) : compact ? (
         detailQuery.isLoading ? (
           <Skeleton active paragraph={{ rows: 2 }} />
         ) : transactions.length === 0 ? (
-          <p className="scenario-panel-empty">Nenhuma transação hipotética ainda.</p>
+          <p className="scenario-panel-empty">{t("noHypotheticalYet")}</p>
         ) : (
-          <ul className="list-rows" aria-label={`Transações hipotéticas de ${scenario.name}`}>
+          <ul className="list-rows" aria-label={t("hypotheticalsOf", { name: scenario.name })}>
             {transactions.map((transaction) => (
               <li key={transaction.id} className="list-row-item scenario-tx-row">
                 <span className="list-row-text">
@@ -311,20 +310,20 @@ function ScenarioTransactionsPanel({
         )
       ) : (
         <Table<ScenarioTransaction>
-          aria-label={`Transações hipotéticas de ${scenario.name}`}
+          aria-label={t("hypotheticalsOf", { name: scenario.name })}
           columns={columns}
           dataSource={transactions}
           loading={detailQuery.isLoading}
           rowKey="id"
           pagination={false}
           size="small"
-          locale={{ emptyText: "Nenhuma transação hipotética ainda." }}
+          locale={{ emptyText: t("noHypotheticalYet") }}
         />
       )}
       <div className="scenario-panel-counts">
-        Eventos realizados: {realized}
+        {t("realizedEvents", { count: realized })}
         {" · "}
-        Eventos pendentes: {pending}
+        {t("pendingEvents", { count: pending })}
       </div>
       {scenario.kind === "standalone" && (
         <NewTransactionForm onAdd={add} submitting={adding} formId={formId} error={addError} />
@@ -345,6 +344,7 @@ function ProjectionSwitch({
   /** Where the failure shows: the page for the table, the sheet itself on a phone. */
   onError: (message: string) => void;
 }) {
+  const { t } = useTranslation();
   const [busy, setBusy] = useState(false);
   const change = async (checked: boolean) => {
     setBusy(true);
@@ -357,7 +357,7 @@ function ProjectionSwitch({
   };
   return (
     <Switch
-      aria-label={`Incluir na projeção: ${scenario.name}`}
+      aria-label={t("includeInProjectionOf", { name: scenario.name })}
       checked={scenario.is_active !== false}
       loading={busy}
       onChange={(checked) => void change(checked)}
@@ -387,6 +387,8 @@ function ScenarioSheet({
   onDeleteTransaction: (scenarioId: string, transactionId: string) => Promise<void>;
   onToggleScenario?: (scenario: Scenario, isActive: boolean) => Promise<string | null>;
 }) {
+  const { t, language } = useTranslation();
+  const originLabel = (item: Scenario) => (item.is_accounting_source ? t("scenarioAccounting") : t("scenarioSimulation"));
   const confirm = useConfirm();
   const formId = useId();
   const [error, setError] = useState<string | null>(null);
@@ -413,16 +415,16 @@ function ScenarioSheet({
         scenario && (
           <span className="scenario-sheet-actions">
             <RecordMenu
-              label={`Ações de ${scenario.name}`}
+              label={t("actionsFor", { name: scenario.name })}
               items={[
                 {
                   key: "delete",
-                  label: "Excluir cenário",
+                  label: t("deleteScenario"),
                   danger: true,
                   onClick: () =>
                     confirm({
-                      title: "Excluir cenário",
-                      description: deleteScenarioDescription,
+                      title: t("deleteScenario"),
+                      description: t("scenarioDeleteDescription"),
                       onConfirm: async () => {
                         setError(null);
                         const message = await onDeleteScenario(scenario);
@@ -437,7 +439,7 @@ function ScenarioSheet({
               type="text"
               className="form-drawer-close"
               icon={<CloseOutlined />}
-              aria-label="Fechar"
+              aria-label={t("close")}
               onClick={onClose}
             />
           </span>
@@ -447,11 +449,11 @@ function ScenarioSheet({
         <div className="form-drawer-footer">
           {standalone ? (
             <Button type="primary" htmlType="submit" form={formId} size="large" loading={adding}>
-              Adicionar transação
+              {t("addTransaction")}
             </Button>
           ) : (
             <Button size="large" onClick={onClose}>
-              Fechar
+              {t("close")}
             </Button>
           )}
         </div>
@@ -461,15 +463,13 @@ function ScenarioSheet({
         <div className="scenario-sheet">
           {error && <Alert type="error" showIcon message={error} closable onClose={() => setError(null)} />}
           <p className="scenario-sheet-meta">
-            {scenarioKindLabel[scenario.kind]} · {originLabel(scenario)}
+            {scenarioKindName(scenario.kind, language)} · {originLabel(scenario)}
           </p>
           {onToggleScenario && (
             <div className="scenario-sheet-switch">
               <span>
-                <span className="form-field-label">Incluir na projeção</span>
-                <span className="form-field-hint">
-                  Quando ligado, as transações deste cenário entram na projeção de saldo.
-                </span>
+                <span className="form-field-label">{t("includeInProjection")}</span>
+                <span className="form-field-hint">{t("includeInProjectionHint")}</span>
               </span>
               <ProjectionSwitch scenario={scenario} onToggleScenario={onToggleScenario} onError={setError} />
             </div>
@@ -517,6 +517,8 @@ export function StandaloneScenarioList({
   /** A failure raised from the table (not from inside the sheet): shown on the page. */
   onActionError: (message: string) => void;
 }) {
+  const { t, language } = useTranslation();
+  const originLabel = (item: Scenario) => (item.is_accounting_source ? t("scenarioAccounting") : t("scenarioSimulation"));
   const confirm = useConfirm();
   const [openId, setOpenId] = useState<string | null>(null);
 
@@ -526,19 +528,19 @@ export function StandaloneScenarioList({
   };
 
   const columns: Column<Scenario>[] = [
-    { title: "Nome", dataIndex: "name" },
+    { title: t("name"), dataIndex: "name" },
     {
-      title: "Tipo",
+      title: t("type"),
       dataIndex: "kind",
-      render: (_, scenario) => scenarioKindLabel[scenario.kind],
+      render: (_, scenario) => scenarioKindName(scenario.kind, language),
     },
     {
-      title: "Origem",
+      title: t("origin"),
       dataIndex: "is_accounting_source",
       render: (_, scenario) => originLabel(scenario),
     },
     {
-      title: "Incluir na projeção",
+      title: t("includeInProjection"),
       dataIndex: "is_active",
       render: (_, scenario) =>
         onToggleScenario ? (
@@ -548,22 +550,22 @@ export function StandaloneScenarioList({
         ) : null,
     },
     {
-      title: <span className="visually-hidden">Ações do cenário</span>,
+      title: <span className="visually-hidden">{t("scenarioActions")}</span>,
       key: "options",
       width: 56,
       render: (_, scenario) => (
         <span onClick={(event) => event.stopPropagation()}>
           <RecordMenu
-            label={`Ações de ${scenario.name}`}
+            label={t("actionsFor", { name: scenario.name })}
             items={[
               {
                 key: "delete",
-                label: "Excluir",
+                label: t("delete"),
                 danger: true,
                 onClick: () =>
                   confirm({
-                    title: "Excluir cenário",
-                    description: deleteScenarioDescription,
+                    title: t("deleteScenario"),
+                    description: t("scenarioDeleteDescription"),
                     onConfirm: () => deleteFromTable(scenario),
                   }),
               },
@@ -577,31 +579,31 @@ export function StandaloneScenarioList({
   return (
     <DataCard flush className="settings-list-card">
       <ResponsiveList<Scenario>
-        label="Cenários"
+        label={t("scenarios")}
         items={scenarios}
         getKey={(scenario) => scenario.id}
         isLoading={isLoading}
         loading={<Skeleton active paragraph={{ rows: 4 }} />}
         empty={
           isFiltered ? (
-            <EmptyState title="Nenhum cenário encontrado" hint="Ajuste a busca ou o tipo para ver outros cenários." />
+            <EmptyState title={t("noScenarioFound")} hint={t("noScenarioFoundHint")} />
           ) : (
             <EmptyState
-              title="Nenhum cenário ainda"
-              hint="Crie um cenário, como uma viagem ou uma troca de emprego, com transações hipotéticas."
+              title={t("noScenariosYet")}
+              hint={t("noScenariosYetHint")}
             />
           )
         }
         row={(scenario) => ({
           title: scenario.name,
-          meta: `${scenarioKindLabel[scenario.kind]} · ${originLabel(scenario)}`,
-          status: scenario.is_active === false ? <StatusTag tone="neutral">Fora da projeção</StatusTag> : undefined,
+          meta: `${scenarioKindName(scenario.kind, language)} · ${originLabel(scenario)}`,
+          status: scenario.is_active === false ? <StatusTag tone="neutral">{t("outsideProjection")}</StatusTag> : undefined,
           onClick: () => setOpenId(scenario.id),
-          ariaLabel: `Abrir cenário ${scenario.name}`,
+          ariaLabel: t("openScenario", { name: scenario.name }),
         })}
         wide={
           <Table<Scenario>
-            aria-label="Cenários"
+            aria-label={t("scenarios")}
             columns={columns}
             dataSource={scenarios}
             rowKey="id"
@@ -609,7 +611,7 @@ export function StandaloneScenarioList({
             expandable={{
               expandRowByClick: true,
               // The expand column has no header text; say what it does.
-              columnTitle: <span className="visually-hidden">Transações hipotéticas</span>,
+              columnTitle: <span className="visually-hidden">{t("hypotheticalTransactionsHeader")}</span>,
               expandedRowRender: (scenario) => (
                 <ScenarioTransactionsPanel
                   scenario={scenario}

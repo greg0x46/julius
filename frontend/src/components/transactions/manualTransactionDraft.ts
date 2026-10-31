@@ -1,3 +1,4 @@
+import { translate, type Language } from "../../i18n/messages";
 import { isPositiveDecimal, sumDecimals } from "../../presentation/decimal";
 import { calendar, type CalendarDate } from "../../presentation/calendar";
 
@@ -37,11 +38,11 @@ export function manualDraftFrom(transaction: TransactionItem | null, defaultAcco
 export type ManualField = "account" | "description" | "amount";
 
 /** The first thing wrong with the draft: which field, and the message to show. Null when it can be saved. */
-export function manualDraftIssue(draft: ManualDraft): { field: ManualField; message: string } | null {
-  if (draft.accountId === "") return { field: "account", message: "Selecione uma conta." };
-  if (draft.description.trim() === "") return { field: "description", message: "Informe uma descrição." };
+export function manualDraftIssue(draft: ManualDraft, language: Language = "pt-BR"): { field: ManualField; message: string } | null {
+  if (draft.accountId === "") return { field: "account", message: translate(language, "selectAccountRequired") };
+  if (draft.description.trim() === "") return { field: "description", message: translate(language, "descriptionRequired") };
   if (draft.amount === null || !isPositiveDecimal(draft.amount)) {
-    return { field: "amount", message: "Informe um valor maior que zero." };
+    return { field: "amount", message: translate(language, "positiveAmountRequired") };
   }
   return null;
 }

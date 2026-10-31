@@ -1,3 +1,4 @@
+import { apiMessage } from "../i18n/apiMessage";
 import { useQuery } from "@tanstack/react-query";
 
 import { getSpendingByCategory } from "../api/transactions";
@@ -18,7 +19,7 @@ export function useSpendingByCategory() {
   return {
     spending: query.data,
     isLoading: timezone !== null && query.isLoading,
-    error: timezone === null ? new Error("Fuso horário indisponível.") : query.error,
+    error: timezone === null ? new Error(apiMessage("apiTimezoneUnavailable")) : query.error,
     refetch: () => query.refetch(),
   };
 }

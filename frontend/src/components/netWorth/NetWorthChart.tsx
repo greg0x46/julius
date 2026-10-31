@@ -1,3 +1,6 @@
+import { dateFormatter } from "../../i18n/dateFormats";
+import { useTranslation } from "../../i18n/context";
+import type { Language } from "../../i18n/messages";
 import type { ReactNode } from "react";
 import { LinePlot } from "../ui/LinePlot";
 
@@ -10,14 +13,10 @@ import { useCompactScreen } from "../shared/useCompactScreen";
 type ChartPoint = { date: string; netWorth: string | null };
 
 // date is a calendar day at midnight UTC; local time would slide it back a day.
-function dateLabel(value: string): string {
+function dateLabel(value: string, language: Language): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleDateString("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    timeZone: "UTC",
-  });
+  return dateFormatter(language, { day: "2-digit", month: "2-digit", timeZone: "UTC" }).format(date);
 }
 
 function toChartData(points: NetWorthPoint[]): ChartPoint[] {
@@ -37,12 +36,13 @@ function TooltipContent({
   payload?: { value: string }[];
   label?: string;
 }) {
+  const { t } = useTranslation();
   const format = useReportFormat();
   if (!active || !payload || payload.length === 0) return null;
   return (
     <div className="timeline-chart-tooltip">
       <strong>{label}</strong>
-      <div>Patrimônio: {format(payload[0].value)}</div>
+      <div>{t("netWorthTooltip", { value: format(payload[0].value) })}</div>
     </div>
   );
 }
@@ -60,26 +60,28 @@ export function NetWorthChart({
   points: NetWorthPoint[];
   footnote?: ReactNode;
 }) {
+  const { t, language } = useTranslation();
   const compact = useCompactScreen();
   const data = toChartData(points);
-  const first = data[0] ? dateLabel(data[0].date) : "";
-  const last = data.length ? dateLabel(data[data.length - 1].date) : "";
+  const first = data[0] ? dateLabel(data[0].date, language) : "";
+  const last = data.length ? dateLabel(data[data.length - 1].date, language) : "";
+  const rangeLabel = t("netWorthEvolutionRange", { first, last });
   return (
-    <Section title="Evolução do patrimônio">
+    <Section title={t("netWorthEvolution")}>
       <div
         className="timeline-chart"
         role="group"
-        aria-label={`Evolução do patrimônio, de ${first} a ${last}, com lacunas nos dias sem avaliação disponível`}
+        aria-label={rangeLabel}
       >
         <LinePlot
           dates={data.map((row) => row.date)}
           height={compact ? 240 : 320}
-          label={`Evolução do patrimônio, de ${first} a ${last}, com lacunas nos dias sem avaliação disponível`}
-          formatDate={dateLabel}
+          label={rangeLabel}
+          formatDate={(value) => dateLabel(value, language)}
           series={[
             {
               key: "netWorth",
-              label: "Patrimônio",
+              label: t("netWorthLabel"),
               color: balanceChartColor.realized,
               values: data.map((row) => row.netWorth),
             },
@@ -87,7 +89,7 @@ export function NetWorthChart({
           tooltip={(index) => (
             <TooltipContent
               active
-              label={dateLabel(data[index].date)}
+              label={dateLabel(data[index].date, language)}
               payload={
                 data[index].netWorth !== null
                   ? [{ value: data[index].netWorth! }]

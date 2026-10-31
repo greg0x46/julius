@@ -1,3 +1,4 @@
+import { useTranslation } from "../i18n/context";
 import { Alert, Button, Flex } from "./ui";
 import { SyncOutlined } from "./ui/icons";
 import { useEffect } from "react";
@@ -19,11 +20,12 @@ type Sync = ReturnType<typeof useCreateSyncRun>;
  * single button.
  */
 export function SyncNowAction({ sync }: { sync: Sync }) {
+  const { t } = useTranslation();
   return (
     <PageAction
       icon={<SyncOutlined aria-hidden />}
-      label="Sincronizar agora"
-      shortLabel="Sincronizar"
+      label={t("syncNow")}
+      shortLabel={t("syncAction")}
       loading={sync.state.kind === "submitting"}
       onClick={() => void sync.submit()}
     />
@@ -32,6 +34,7 @@ export function SyncNowAction({ sync }: { sync: Sync }) {
 
 /** What the last sync request did — started, already running, or not confirmed. Renders nothing while idle. */
 export function SyncRunNotice({ sync }: { sync: Sync }) {
+  const { t } = useTranslation();
   const { state, reset } = sync;
   const feedback = useFeedback();
 
@@ -40,14 +43,14 @@ export function SyncRunNotice({ sync }: { sync: Sync }) {
   useEffect(() => {
     if (state.kind === "started") {
       feedback.success(
-        state.runs.length < state.requested ? "Sincronização iniciada em parte das conexões" : "Sincronização iniciada",
+        state.runs.length < state.requested ? t("syncStartedPart") : t("syncStarted"),
       );
     } else if (state.kind === "conflict") {
       feedback.info(
-        state.scope === "one" ? "Essa conexão já está sincronizando" : "Já há uma sincronização em andamento",
+        state.scope === "one" ? t("connectionAlreadySyncing") : t("syncAlreadyRunning"),
       );
     } else if (state.kind === "uncertain") {
-      feedback.error("Não foi possível confirmar se a sincronização começou");
+      feedback.error(t("syncUncertain"));
     }
     // Only a change of state is worth a toast, not a new `state` object of the same kind.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -55,28 +58,28 @@ export function SyncRunNotice({ sync }: { sync: Sync }) {
 
   return (
     <div aria-live="polite" aria-atomic="true">
-      {state.kind === "submitting" && <p role="status">Solicitando a sincronização…</p>}
+      {state.kind === "submitting" && <p role="status">{t("syncRequesting")}</p>}
       {state.kind === "started" && (
         <Alert
           type={state.runs.length < state.requested ? "warning" : "success"}
           showIcon
           message={
             state.runs.length < state.requested
-              ? `Sincronização iniciada em ${state.runs.length} de ${state.requested} conexões.`
-              : `Sincronização iniciada em ${state.runs.length} conexões.`
+              ? t("syncStartedPartialCount").replace("{started}", String(state.runs.length)).replace("{requested}", String(state.requested))
+              : t("syncStartedCount").replace("{started}", String(state.runs.length))
           }
           description={
             <Flex vertical align="start" gap="small">
               {state.runs.length < state.requested && (
-                <span>Uma ou mais conexões não iniciaram a sincronização. Tente novamente em instantes.</span>
+                <span>{t("syncSomeNotStarted")}</span>
               )}
               {state.runs.map((run) => (
                 <Link key={run.id} to={`/configuracoes/open-banking/sync-runs/${run.id}`}>
-                  Acompanhar {run.source_name}
+                  {t("followConnection", { name: run.source_name })}
                 </Link>
               ))}
               <Button type="link" onClick={reset}>
-                Fechar aviso
+                {t("closeNotice")}
               </Button>
             </Flex>
           }
@@ -88,18 +91,18 @@ export function SyncRunNotice({ sync }: { sync: Sync }) {
           showIcon
           message={
             state.scope === "one"
-              ? "Essa conexão já está sincronizando."
-              : "Todas as conexões já estão sincronizando."
+              ? t("connectionAlreadySyncingFull")
+              : t("allConnectionsSyncing")
           }
           description={
             <Flex vertical align="start" gap="small">
               {state.activeRunId !== null && (
                 <Link to={`/configuracoes/open-banking/sync-runs/${state.activeRunId}`}>
-                  Acompanhar sincronização ativa
+                  {t("followActiveSync")}
                 </Link>
               )}
               <Button type="link" onClick={reset}>
-                Fechar aviso
+                {t("closeNotice")}
               </Button>
             </Flex>
           }
@@ -109,11 +112,11 @@ export function SyncRunNotice({ sync }: { sync: Sync }) {
         <Alert
           type="error"
           showIcon
-          message="Não foi possível confirmar se a sincronização começou."
+          message={t("syncUncertainFull")}
           description={
             <Flex vertical align="start" gap="small">
-              <span>Consulte o histórico antes de tentar novamente.</span>
-              <Button onClick={reset}>Tentar novamente</Button>
+              <span>{t("checkHistoryBeforeRetry")}</span>
+              <Button onClick={reset}>{t("retry")}</Button>
             </Flex>
           }
         />

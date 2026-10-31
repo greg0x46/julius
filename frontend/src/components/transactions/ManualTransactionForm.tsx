@@ -1,8 +1,10 @@
+import { useTranslation } from "../../i18n/context";
+import type { Language } from "../../i18n/messages";
 import { DatePicker, Input, Segmented, Select } from "../ui";
 import { useEffect, useState } from "react";
 
 import type { Account, Category, ManualTransactionWrite } from "../../api/contracts";
-import { categoryKindLabel, renderCategoryIcon } from "../../presentation/categoryLabels";
+import { categoryKindName, renderCategoryIcon } from "../../presentation/categoryLabels";
 import { useAccounts } from "../../hooks/useAccounts";
 import { AccountSelect } from "../forms/AccountSelect";
 import { FormDrawer } from "../forms/FormDrawer";
@@ -40,7 +42,7 @@ function useFocusIssue(issue: ManualIssue | null) {
 }
 
 
-function categoryOptions(categories: Category[], direction: Direction) {
+function categoryOptions(categories: Category[], direction: Direction, language: Language) {
   const kindOrder = ["expense", "income", "transfer"] as const;
   return categories
     .filter((category) => category.is_active && matchesDirection(category.kind, direction))
@@ -50,7 +52,7 @@ function categoryOptions(categories: Category[], direction: Direction) {
     })
     .map((category) => ({
       value: category.id,
-      label: `${categoryKindLabel[category.kind]}: ${category.name}`,
+      label: `${categoryKindName(category.kind, language)}: ${category.name}`,
       icon: category.icon,
       color: category.color,
     }));
@@ -77,6 +79,7 @@ export function ManualTransactionFields({
   /** The validation problem of the last submit: marks its field and says why under it. */
   issue?: ManualIssue | null;
 }) {
+  const { t, language } = useTranslation();
   const { accounts } = useAccounts();
   const account = accounts.find((item) => item.id === draft.accountId);
   useFocusIssue(issue);
@@ -88,10 +91,10 @@ export function ManualTransactionFields({
   return (
     <>
       <FormField
-        label="Conta"
+        label={t("account")}
         htmlFor={manualFieldId("account")}
         error={messageFor("account")}
-        hint={account?.origin === "manual" ? "Transações efetivadas alteram o saldo desta conta na moeda selecionada." : "Não altera o saldo da conta, que vem do banco: só entra no extrato e nos totais."}
+        hint={account?.origin === "manual" ? t("manualAccountTransactionHint") : t("syncedAccountTransactionHint")}
       >
         <AccountSelect
           id={manualFieldId("account")}
@@ -101,7 +104,7 @@ export function ManualTransactionFields({
         />
       </FormField>
 
-      <FormField label="Descrição" htmlFor={manualFieldId("description")} error={messageFor("description")}>
+      <FormField label={t("description")} htmlFor={manualFieldId("description")} error={messageFor("description")}>
         <Input
           id={manualFieldId("description")}
           aria-invalid={invalid("description")}
@@ -109,18 +112,18 @@ export function ManualTransactionFields({
           status={invalid("description") ? "error" : undefined}
           value={draft.description}
           onChange={(event) => set("description", event.target.value)}
-          placeholder="Ex.: Almoço em dinheiro"
+          placeholder={t("manualDescriptionExample")}
         />
       </FormField>
 
-      <FormField label="Tipo" labelId="manual-transaction-direction-label">
+      <FormField label={t("type")} labelId="manual-transaction-direction-label">
         <Segmented
           block
           aria-labelledby="manual-transaction-direction-label"
           value={draft.direction}
           options={[
-            { value: "outflow", label: "Saída" },
-            { value: "inflow", label: "Entrada" },
+            { value: "outflow", label: t("expenseSingular") },
+            { value: "inflow", label: t("incomeSingular") },
           ]}
           onChange={(value) => {
             const direction = value as Direction;
@@ -133,7 +136,7 @@ export function ManualTransactionFields({
         />
       </FormField>
 
-      <FormField label="Valor" htmlFor={manualFieldId("amount")} error={messageFor("amount")}>
+      <FormField label={t("amount")} htmlFor={manualFieldId("amount")} error={messageFor("amount")}>
         <MoneyInput
           currencyCode={account?.currency_code ?? "BRL"}
           id={manualFieldId("amount")}
@@ -146,25 +149,24 @@ export function ManualTransactionFields({
         />
       </FormField>
 
-      <FormField label="Data" htmlFor="manual-transaction-date">
+      <FormField label={t("date")} htmlFor="manual-transaction-date">
         <DatePicker
           id="manual-transaction-date"
-          format="DD/MM/YYYY"
           value={draft.date}
           onChange={(value) => value && set("date", value)}
           allowClear={false}
         />
       </FormField>
 
-      <FormField label="Categoria (opcional)" htmlFor="manual-transaction-category">
+      <FormField label={t("optionalCategory")} htmlFor="manual-transaction-category">
         <Select
           id="manual-transaction-category"
           value={draft.categoryId ?? undefined}
-          options={categoryOptions(categories, draft.direction)}
+          options={categoryOptions(categories, draft.direction, language)}
           allowClear={!isEditing}
           showSearch
           optionFilterProp="label"
-          placeholder="Sem categoria"
+          placeholder={t("uncategorized")}
           optionRender={(option) => (
             <span>
               <span style={{ color: option.data.color }} aria-hidden="true">
@@ -198,6 +200,7 @@ export function ManualTransactionForm({
   onSubmit: (write: ManualTransactionWrite) => void;
   onCancel: () => void;
 }) {
+  const { t, language } = useTranslation();
   const defaultAccountId = accounts.find((account) => !account.archived_at)?.id ?? "";
   const [draft, setDraft] = useState<ManualDraft>(() => blankManualDraft(defaultAccountId));
   const [issue, setIssue] = useState<ManualIssue | null>(null);
@@ -219,14 +222,14 @@ export function ManualTransactionForm({
   }, [open, defaultAccountId]);
 
   const submit = () => {
-    const problem = manualDraftIssue(draft);
+    const problem = manualDraftIssue(draft, language);
     setIssue((previous) => nextIssue(previous, problem));
     if (problem === null) onSubmit(manualDraftToWrite(draft));
   };
 
   return (
     <FormDrawer
-      title="Nova transação"
+      title={t("newTransaction")}
       open={open}
       onClose={onCancel}
       onSubmit={submit}

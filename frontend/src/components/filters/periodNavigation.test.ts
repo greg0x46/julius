@@ -14,6 +14,14 @@ describe("periodNavigation", () => {
     expect(periodNavigation(nextFrom, nextTo)?.previous).toEqual([from, to]);
   });
 
+  it("localizes period labels without changing the date range", () => {
+    const period = periodNavigation("2024-01-01", "2024-01-31", "en");
+    expect(period?.label).toBe("January 2024");
+    expect(period?.previousLabel).toBe("Previous month");
+    expect(period?.nextLabel).toBe("Next month");
+    expect(period?.next).toEqual(["2024-02-01", "2024-02-29"]);
+  });
+
   it("rejects incomplete, invalid and reversed dates and respects date limits", () => {
     expect(periodNavigation(null, "2026-01-01")).toBeNull();
     expect(periodNavigation("2026-02-30", "2026-03-01")).toBeNull();

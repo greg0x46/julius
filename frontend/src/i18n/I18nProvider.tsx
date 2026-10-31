@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { I18nContext, languageStorageKey, storedLanguage } from "./context";
+import { I18nContext, languageStorageKey, rememberLanguage, storedLanguage } from "./context";
 import type { Language } from "./messages";
 
 export function I18nProvider({ children }: { children: ReactNode }) {
   const [language, setLanguageState] = useState(storedLanguage);
   const setLanguage = useCallback((next: Language) => {
     setLanguageState(next);
+    rememberLanguage(next);
     try {
       localStorage.setItem(languageStorageKey, next);
     } catch {

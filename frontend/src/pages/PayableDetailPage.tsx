@@ -1,8 +1,9 @@
+import { useTranslation } from "../i18n/context";
 import { Alert } from "../components/ui";
 import { useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 
-import { isUuid, type Payable, type PayableKind } from "../api/contracts";
+import { isUuid, type PayableKind } from "../api/contracts";
 import { DetailPage, InvalidDetailPage } from "../components/layout";
 import { PayableForm } from "../components/payables/PayableForm";
 import { PayableHeader } from "../components/payables/PayableHeader";
@@ -13,21 +14,14 @@ import { useFeedback } from "../components/shared/useFeedback";
 import { usePayableDetail } from "../hooks/usePayableDetail";
 import { usePayables } from "../hooks/usePayables";
 import { errorMessage } from "../presentation/errors";
-import { payableVocabulary } from "../presentation/payableLabels";
+import { getPayableVocabulary } from "../presentation/payableLabels";
 
-const pageTitle = "Pendência";
 const backTo = "/pendencias";
-const backLabel = "Voltar para pendências";
 
-function deleteDescription(payable: Payable): string {
-  if (payable.link_count === 0) return "Esta ação não pode ser desfeita.";
-  const plural = payable.link_count > 1;
-  return `${payable.link_count} transação${plural ? "ões" : ""} vinculada${plural ? "s" : ""} ${
-    plural ? "serão desfeitas" : "será desfeita"
-  }; as transações em si permanecem inalteradas.`;
-}
+
 
 function ValidPayableDetail({ id, requestedKind }: { id: string; requestedKind: PayableKind }) {
+  const { t, language } = useTranslation();
   const payable = usePayableDetail(id, requestedKind);
   const { kind } = payable;
   const payables = usePayables(kind);
@@ -37,7 +31,7 @@ function ValidPayableDetail({ id, requestedKind }: { id: string; requestedKind: 
   const [saveError, setSaveError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const confirm = useConfirm();
-  const vocab = payableVocabulary[kind];
+  const vocab = getPayableVocabulary(kind, language);
 
   const submitEdit = async (write: { name: string; total_amount: string }) => {
     setSaveError(null);
@@ -47,9 +41,9 @@ function ValidPayableDetail({ id, requestedKind }: { id: string; requestedKind: 
         write: { name: write.name, total_amount: write.total_amount },
       });
       setFormOpen(false);
-      feedback.success("Salvo");
+      feedback.success(t("saved"));
     } catch (error) {
-      setSaveError(errorMessage(error, "Não foi possível salvar a pendência."));
+      setSaveError(errorMessage(error, t("payableSaveError")));
     }
   };
 
@@ -57,12 +51,12 @@ function ValidPayableDetail({ id, requestedKind }: { id: string; requestedKind: 
     setDeleteError(null);
     try {
       await payables.deletePayable(id);
-      feedback.success("Excluído");
+      feedback.success(t("deleted"));
       navigate(backTo);
     } catch (error) {
       // The Alert sits at the top of the page; the confirm that started this
       // is long gone, so a toast tells the user where they are.
-      const message = errorMessage(error, "Não foi possível excluir a pendência.");
+      const message = errorMessage(error, t("payableDeleteError"));
       setDeleteError(message);
       feedback.error(message);
     }
@@ -71,11 +65,11 @@ function ValidPayableDetail({ id, requestedKind }: { id: string; requestedKind: 
   const snapshot = payable.state.snapshot;
   const actions = (
     <RecordMenu
-      label="Mais ações"
+      label={t("moreActions")}
       items={[
         {
           key: "edit",
-          label: "Editar",
+          label: t("edit"),
           onClick: () => {
             setSaveError(null);
             setFormOpen(true);
@@ -83,11 +77,11 @@ function ValidPayableDetail({ id, requestedKind }: { id: string; requestedKind: 
         },
         {
           key: "delete",
-          label: "Excluir",
+          label: t("delete"),
           danger: true,
           onClick: () => {
             if (snapshot === null) return;
-            confirm({ title: vocab.deleteTitle, description: deleteDescription(snapshot), onConfirm: submitDelete });
+            confirm({ title: vocab.deleteTitle, description: snapshot.link_count === 0 ? t("irreversibleAction") : t(snapshot.link_count === 1 ? "deleteLinkedOne" : "deleteLinkedMany", { count: snapshot.link_count }), onConfirm: submitDelete });
           },
         },
       ]}
@@ -96,17 +90,17 @@ function ValidPayableDetail({ id, requestedKind }: { id: string; requestedKind: 
 
   return (
     <DetailPage
-      title={pageTitle}
+      title={t("payable")}
       backTo={backTo}
-      backLabel={backLabel}
+      backLabel={t("backToPayables")}
       width="narrow"
       state={payable.state}
       retry={payable.retry}
       recordTitle={(record) => record.name}
-      loadingLabel="Carregando…"
-      notFoundMessage="Não encontrada"
-      notFoundDescription="Não existe uma dívida ou conta a receber com este identificador."
-      unavailableMessage="Não foi possível consultar esta pendência agora."
+      loadingLabel={t("loading")}
+      notFoundMessage={t("notFoundFeminine")}
+      notFoundDescription={t("payableNotFoundDescription")}
+      unavailableMessage={t("payableUnavailable")}
       actions={actions}
     >
       {(record) => (
@@ -146,6 +140,7 @@ function ValidPayableDetail({ id, requestedKind }: { id: string; requestedKind: 
 }
 
 export function PayableDetailPage() {
+  const { t } = useTranslation();
   const { id = "" } = useParams();
   const [searchParams] = useSearchParams();
   const kindParam = searchParams.get("kind");
@@ -153,6 +148,6 @@ export function PayableDetailPage() {
   return isUuid(id) ? (
     <ValidPayableDetail id={id} requestedKind={requestedKind} />
   ) : (
-    <InvalidDetailPage title={pageTitle} backTo={backTo} backLabel={backLabel} invalidTitle="Endereço inválido" />
+    <InvalidDetailPage title={t("payable")} backTo={backTo} backLabel={t("backToPayables")} invalidTitle={t("invalidAddress")} />
   );
 }

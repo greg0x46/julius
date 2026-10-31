@@ -1,15 +1,17 @@
+import { useTranslation } from "../i18n/context";
+import type { MessageKey } from "../i18n/messages";
 import { RightOutlined } from "../components/ui/icons";
 
 import { ListRow, Page, Section } from "../components/layout";
 
 interface SettingsEntry {
   path: string;
-  title: string;
-  description: string;
+  title: MessageKey;
+  description: MessageKey;
 }
 
 interface SettingsGroup {
-  title: string;
+  title: MessageKey;
   entries: SettingsEntry[];
 }
 
@@ -17,29 +19,29 @@ interface SettingsGroup {
 // the order the screens were built in.
 const groups: SettingsGroup[] = [
   {
-    title: "Organização",
+    title: "organization",
     entries: [
-      { path: "categorias", title: "Categorias", description: "Organize as categorias das suas receitas e despesas." },
-      { path: "automacoes", title: "Automações", description: "Regras para organizar suas transações." },
-      { path: "cenarios", title: "Cenários", description: "Simule decisões hipotéticas no seu planejamento." },
+      { path: "categorias", title: "categories", description: "categoriesDescription" },
+      { path: "automacoes", title: "automation", description: "automationDescription" },
+      { path: "cenarios", title: "scenarios", description: "scenariosDescription" },
     ],
   },
   {
-    title: "Dados",
+    title: "data",
     entries: [
-      { path: "open-banking", title: "Open Banking", description: "Conexões, sincronizações e credenciais." },
+      { path: "open-banking", title: "openBanking", description: "openBankingDescription" },
       {
         path: "ativos-de-investimento",
-        title: "Ativos de investimento",
-        description: "Cadastre e edite os ativos dos seus investimentos.",
+        title: "investmentAssets",
+        description: "investmentAssetsDescription",
       },
     ],
   },
   {
-    title: "Conta",
+    title: "account",
     entries: [
-      { path: "geral", title: "Geral", description: "Moeda dos relatórios e mês das compras no cartão." },
-      { path: "seguranca", title: "Segurança", description: "Senha e acesso à sua conta." },
+      { path: "geral", title: "general", description: "generalDescription" },
+      { path: "seguranca", title: "security", description: "securityDescription" },
     ],
   },
 ];
@@ -50,19 +52,20 @@ const groups: SettingsGroup[] = [
  * navigates"), not cards with icons.
  */
 export function SettingsPage() {
+  const { t } = useTranslation();
   return (
-    <Page title="Configurações" compactMobileHeader width="narrow">
+    <Page title={t("settings")} compactMobileHeader width="narrow">
       {groups.map((group) => (
-        <Section key={group.title} title={group.title} className="settings-group">
-          <ul className="list-rows" aria-label={group.title}>
+        <Section key={group.title} title={t(group.title)} className="settings-group">
+          <ul className="list-rows" aria-label={t(group.title)}>
             {group.entries.map((entry) => (
               <ListRow
                 key={entry.path}
-                title={entry.title}
-                meta={entry.description}
+                title={t(entry.title)}
+                meta={t(entry.description)}
                 trailing={<RightOutlined className="settings-row-chevron" aria-hidden="true" />}
                 href={`/configuracoes/${entry.path}`}
-                ariaLabel={`Abrir ${entry.title}`}
+                ariaLabel={`${t("openItem")} ${t(entry.title)}`}
               />
             ))}
           </ul>
