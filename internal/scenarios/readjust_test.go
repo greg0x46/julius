@@ -2,7 +2,9 @@ package scenarios_test
 
 import (
 	"context"
+	"database/sql"
 	"errors"
+	"strconv"
 	"testing"
 
 	"github.com/greg0x46/julius/internal/scenarios"
@@ -233,6 +235,158 @@ func TestReadjustFailsWhenNothingLeftToRedistribute(t *testing.T) {
 
 	if _, err := scenarios.Readjust(ctx, conn, s.ID, dec(t, "0.00"), scenarios.StrategyRedistribute); !errors.Is(err, scenarios.ErrNothingToRedistribute) {
 		t.Errorf("Readjust: err = %v, want ErrNothingToRedistribute", err)
+	}
+}
+
+// realizeInstallments fully allocates the installments at the given indexes of
+// list, so Readjust leaves them alone.
+func realizeInstallments(t *testing.T, conn *sql.DB, debtID string, list []scenarios.ScenarioTransaction, indexes ...int) {
+	t.Helper()
+	for _, i := range indexes {
+		link := linkFixture(t, conn, debtID, list[i].Amount.Neg().String())
+		if _, err := scenarios.CreateRealization(context.Background(), conn, list[i].ID, &link.ID, list[i].Amount); err != nil {
+			t.Fatalf("CreateRealization(%d): %v", i, err)
+		}
+	}
+}
+
+// TestReadjustReduceTermKeepsTheMonthEndAnchorOfAClampedInstallment pins that
+// readjusting does not re-anchor on a clamped date: a plan generated from Jan 31
+// whose first affected installment is a short month's last day keeps landing on
+// the 31st (or the month's last day) afterwards, not on the 28th/30th.
+func TestReadjustReduceTermKeepsTheMonthEndAnchorOfAClampedInstallment(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		realized []int // installments paid before readjusting
+		want     []string
+	}{
+		{"first affected is Feb 28", []int{0}, []string{"2026-02-28", "2026-03-31", "2026-04-30", "2026-05-31", "2026-06-30"}},
+		{"first affected is Mar 31", []int{0, 1}, []string{"2026-03-31", "2026-04-30", "2026-05-31", "2026-06-30"}},
+		{"first affected is Apr 30", []int{0, 1, 2}, []string{"2026-04-30", "2026-05-31", "2026-06-30"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			conn := newTestDB(t)
+			ctx := context.Background()
+			d := newDebt(t, conn)
+			s, _ := scenarios.CreateScenario(ctx, conn, scenarios.KindDebtPlan, "Plano", &d.ID)
+
+			// Six 200.00 installments: Jan 31, Feb 28, Mar 31, Apr 30, May 31, Jun 30.
+			drafts, _ := scenarios.GenerateInstallments(dec(t, "1200.00"), 6, date(t, "2026-01-31"), scenarios.CadenceMonthly)
+			if _, err := scenarios.CreateGeneratedInstallments(ctx, conn, s.ID, drafts); err != nil {
+				t.Fatalf("CreateGeneratedInstallments: %v", err)
+			}
+			list, err := scenarios.ListScenarioTransactions(ctx, conn, s.ID)
+			if err != nil {
+				t.Fatalf("ListScenarioTransactions: %v", err)
+			}
+			realizeInstallments(t, conn, d.ID, list, tc.realized...)
+
+			// The unpaid installments keep their 200.00 value, so the count stays.
+			remaining := dec(t, strconv.Itoa(200*len(tc.want)))
+			created, err := scenarios.Readjust(ctx, conn, s.ID, remaining, scenarios.StrategyReduceTerm)
+			if err != nil {
+				t.Fatalf("Readjust: %v", err)
+			}
+			if len(created) != len(tc.want) {
+				t.Fatalf("len(created) = %d, want %d", len(created), len(tc.want))
+			}
+			for i, ins := range created {
+				if got := ins.ProjectedAt.Format("2006-01-02"); got != tc.want[i] {
+					t.Errorf("installment[%d] date = %s, want %s", i, got, tc.want[i])
+				}
+			}
+		})
+	}
+}
+
+// TestReadjustReduceTermExtendsAClampedPlanOnItsAnchorDay pins the same anchor
+// when the term grows: a longer balance runs past the original last
+// installment and still lands on the 31st or the month's last day.
+func TestReadjustReduceTermExtendsAClampedPlanOnItsAnchorDay(t *testing.T) {
+	conn := newTestDB(t)
+	ctx := context.Background()
+	d := newDebt(t, conn)
+	s, _ := scenarios.CreateScenario(ctx, conn, scenarios.KindDebtPlan, "Plano", &d.ID)
+
+	drafts, _ := scenarios.GenerateInstallments(dec(t, "800.00"), 4, date(t, "2026-01-31"), scenarios.CadenceMonthly)
+	if _, err := scenarios.CreateGeneratedInstallments(ctx, conn, s.ID, drafts); err != nil {
+		t.Fatalf("CreateGeneratedInstallments: %v", err)
+	}
+	list, _ := scenarios.ListScenarioTransactions(ctx, conn, s.ID)
+	realizeInstallments(t, conn, d.ID, list, 0)
+
+	// 800.00 left at 200.00 each: four installments from Feb 28 instead of three.
+	created, err := scenarios.Readjust(ctx, conn, s.ID, dec(t, "800.00"), scenarios.StrategyReduceTerm)
+	if err != nil {
+		t.Fatalf("Readjust: %v", err)
+	}
+	wantDates := []string{"2026-02-28", "2026-03-31", "2026-04-30", "2026-05-31"}
+	if len(created) != len(wantDates) {
+		t.Fatalf("len(created) = %d, want %d", len(created), len(wantDates))
+	}
+	for i, ins := range created {
+		if got := ins.ProjectedAt.Format("2006-01-02"); got != wantDates[i] {
+			t.Errorf("installment[%d] date = %s, want %s", i, got, wantDates[i])
+		}
+	}
+}
+
+// TestReadjustReduceTermKeepsTheDayOfAnUnclampedStart pins that the anchor is
+// only recovered when the first affected installment sits on its month's last
+// day: dates set by hand keep the day of the first affected installment.
+func TestReadjustReduceTermKeepsTheDayOfAnUnclampedStart(t *testing.T) {
+	conn := newTestDB(t)
+	ctx := context.Background()
+	d := newDebt(t, conn)
+	s, _ := scenarios.CreateScenario(ctx, conn, scenarios.KindDebtPlan, "Plano", &d.ID)
+
+	for i, day := range []string{"2026-03-10", "2026-04-10", "2026-05-31"} {
+		if _, err := scenarios.CreateScenarioTransaction(ctx, conn, s.ID, "Parcela "+strconv.Itoa(i+1), dec(t, "100.00"), date(t, day), nil); err != nil {
+			t.Fatalf("CreateScenarioTransaction: %v", err)
+		}
+	}
+
+	created, err := scenarios.Readjust(ctx, conn, s.ID, dec(t, "300.00"), scenarios.StrategyReduceTerm)
+	if err != nil {
+		t.Fatalf("Readjust: %v", err)
+	}
+	wantDates := []string{"2026-03-10", "2026-04-10", "2026-05-10"}
+	if len(created) != len(wantDates) {
+		t.Fatalf("len(created) = %d, want %d", len(created), len(wantDates))
+	}
+	for i, ins := range created {
+		if got := ins.ProjectedAt.Format("2006-01-02"); got != wantDates[i] {
+			t.Errorf("installment[%d] date = %s, want %s", i, got, wantDates[i])
+		}
+	}
+}
+
+// TestReadjustReduceTermWeeklyPlanStepsByDaysFromAMonthEnd pins that a weekly
+// plan whose first affected installment is on a month's last day is not
+// affected by the monthly anchor.
+func TestReadjustReduceTermWeeklyPlanStepsByDaysFromAMonthEnd(t *testing.T) {
+	conn := newTestDB(t)
+	ctx := context.Background()
+	d := newDebt(t, conn)
+	s, _ := scenarios.CreateScenario(ctx, conn, scenarios.KindDebtPlan, "Plano", &d.ID)
+
+	drafts, _ := scenarios.GenerateInstallments(dec(t, "300.00"), 3, date(t, "2026-01-31"), scenarios.CadenceWeekly)
+	if _, err := scenarios.CreateGeneratedInstallments(ctx, conn, s.ID, drafts); err != nil {
+		t.Fatalf("CreateGeneratedInstallments: %v", err)
+	}
+
+	created, err := scenarios.Readjust(ctx, conn, s.ID, dec(t, "300.00"), scenarios.StrategyReduceTerm)
+	if err != nil {
+		t.Fatalf("Readjust: %v", err)
+	}
+	wantDates := []string{"2026-01-31", "2026-02-07", "2026-02-14"}
+	if len(created) != len(wantDates) {
+		t.Fatalf("len(created) = %d, want %d", len(created), len(wantDates))
+	}
+	for i, ins := range created {
+		if got := ins.ProjectedAt.Format("2006-01-02"); got != wantDates[i] {
+			t.Errorf("installment[%d] date = %s, want %s", i, got, wantDates[i])
+		}
 	}
 }
 

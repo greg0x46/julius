@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/shopspring/decimal"
+
+	"github.com/greg0x46/julius/internal/dates"
 )
 
 // ErrInvalidInstallmentPlan is returned by GenerateInstallments when
@@ -46,7 +48,10 @@ func (c Cadence) IsValid() bool {
 	}
 }
 
-// step advances t by n cadence periods (n=0 returns t unchanged).
+// step advances t by n cadence periods (n=0 returns t unchanged). Monthly
+// steps keep t's day of the month and clamp to the last day of a shorter one
+// (Jan 31 → Feb 28 → Mar 31), each computed from t, never from the previous
+// step.
 func (c Cadence) step(t time.Time, n int) time.Time {
 	switch c {
 	case CadenceWeekly:
@@ -54,7 +59,7 @@ func (c Cadence) step(t time.Time, n int) time.Time {
 	case CadenceBiweekly:
 		return t.AddDate(0, 0, 14*n)
 	default: // CadenceMonthly
-		return t.AddDate(0, n, 0)
+		return dates.AddMonths(t, n)
 	}
 }
 

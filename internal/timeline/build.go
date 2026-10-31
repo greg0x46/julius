@@ -292,7 +292,7 @@ func BuildSeries(ctx context.Context, q Querier, params BuildParams) (Series, er
 	// re-dated purchases are dropped from the walk by cashEntries either way.
 	// The two months stay because they cost one wider query and nothing else,
 	// and because the entries they bring in still belong in Series.Entries.
-	items, err := eligibleRealItems(ctx, q, from.AddDate(0, -2, 0), to, params.AccountIDs, params.CategoryIDs, params.CardNumbers, timezone)
+	items, err := eligibleRealItems(ctx, q, dates.AddMonths(from, -2), to, params.AccountIDs, params.CategoryIDs, params.CardNumbers, timezone)
 	if err != nil {
 		return Series{}, err
 	}

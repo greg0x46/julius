@@ -37,8 +37,9 @@ func TestMonthsUntilCountsAPartialMonthAsAMonth(t *testing.T) {
 			t.Errorf("monthsUntil(%s) = %d, want %d", target.Format("2006-01-02"), got, want)
 		}
 	}
-	if got := addMonths(utc(2026, 1, 31), 1); !got.Equal(utc(2026, 2, 28)) {
-		t.Errorf("Jan 31 + 1 month = %s, want Feb 28", got.Format("2006-01-02"))
+	// From the 31st, the first step is the clamped Feb 28, not Mar 3.
+	if got := monthsUntil(utc(2026, 1, 31), utc(2026, 3, 1)); got != 2 {
+		t.Errorf("monthsUntil(Jan 31 → Mar 1) = %d, want 2", got)
 	}
 }
 

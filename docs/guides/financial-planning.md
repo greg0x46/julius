@@ -44,7 +44,9 @@ Credit-card bills are tracked separately; the total-owed figure also includes
 open card debt. Avoid registering the same card debt again as a separate payable.
 
 In the detail timeline, create a payment/receipt plan and generate installments
-by cadence, start date and count or fixed amount. Link actual payments and
+by cadence, start date and count or fixed amount. Monthly installments keep the
+start day and fall on the last day of shorter months (a plan starting on the 31st
+pays on Feb 28, Mar 31, Apr 30). Link actual payments and
 allocate them to installments to reflect realization. Review deviations and
 readjust the plan when needed. Unrealized installments remain projected;
 a planned payment alone never settles the obligation or changes today's cash.
