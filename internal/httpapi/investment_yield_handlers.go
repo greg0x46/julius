@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/greg0x46/julius/internal/dates"
 	"github.com/greg0x46/julius/internal/investments"
 	"github.com/greg0x46/julius/internal/money"
 )
@@ -67,6 +68,10 @@ func handleGetInvestmentPositionYield(conn *sql.DB) http.HandlerFunc {
 			writeInvestmentInvalid(w, "from não pode ser posterior a to.")
 			return
 		}
+		if from != nil && dates.ExceedsMaxSpan(*from, to) {
+			writeInvestmentRangeTooLong(w)
+			return
+		}
 
 		id := r.PathValue("id")
 		dto := investmentYieldDTO{PositionID: id, To: to.Format(investments.DateLayout)}
@@ -87,6 +92,11 @@ func handleGetInvestmentPositionYield(conn *sql.DB) http.HandlerFunc {
 		}
 
 		if granularity == "day" && dto.From != nil {
+			// Without from, the series starts at the holding's inception.
+			if dates.ExceedsMaxSpan(result.From, to) {
+				writeInvestmentRangeTooLong(w)
+				return
+			}
 			days, err := investments.DailyYield(r.Context(), conn, id, result.From, to)
 			if err != nil {
 				writeInvestmentProblem(w, err)

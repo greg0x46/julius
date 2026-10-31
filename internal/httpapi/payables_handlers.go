@@ -190,6 +190,15 @@ func invalidPayableProblem(w http.ResponseWriter) {
 	writeProblem(w, 422, "invalid-payable", "Pendência inválida", "Revise os campos enviados.")
 }
 
+func invalidPayableAmountProblem(w http.ResponseWriter) {
+	writeProblem(w, 422, "invalid-payable", "Pendência inválida", invalidAmountDetail)
+}
+
+// validAmounts applies the shared money limits to every amount of the request.
+func (req payableCreateRequest) validAmounts() bool {
+	return validMoneyAmount(req.TotalAmount) && (req.InitialRemainingAmount == nil || validMoneyAmount(*req.InitialRemainingAmount))
+}
+
 func handleCreatePayable(conn *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req payableCreateRequest
@@ -200,6 +209,10 @@ func handleCreatePayable(conn *sql.DB) http.HandlerFunc {
 		kind := payables.Kind(req.Kind)
 		if (kind != payables.KindDebt && kind != payables.KindReceivable) || req.Name == "" || !req.TotalAmount.IsPositive() {
 			invalidPayableProblem(w)
+			return
+		}
+		if !req.validAmounts() {
+			invalidPayableAmountProblem(w)
 			return
 		}
 		initial := req.TotalAmount
@@ -336,6 +349,10 @@ func handleUpdatePayable(conn *sql.DB) http.HandlerFunc {
 		}
 		if req.Name == "" || !req.TotalAmount.IsPositive() {
 			invalidPayableProblem(w)
+			return
+		}
+		if !validMoneyAmount(req.TotalAmount) {
+			invalidPayableAmountProblem(w)
 			return
 		}
 		p, err := payables.Update(r.Context(), conn, id, req.Name, req.TotalAmount)

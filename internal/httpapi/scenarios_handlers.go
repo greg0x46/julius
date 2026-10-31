@@ -330,7 +330,7 @@ func (req scenarioTransactionWriteRequest) validate() (time.Time, bool) {
 		return time.Time{}, false
 	}
 	projectedAt, err := time.Parse(dateOnlyLayout, req.ProjectedAt)
-	return projectedAt, err == nil
+	return projectedAt, err == nil && validInputDate(projectedAt) && validMoneyAmount(req.Amount)
 }
 
 func handleCreateScenarioTransaction(conn *sql.DB) http.HandlerFunc {
@@ -351,7 +351,7 @@ func handleCreateScenarioTransaction(conn *sql.DB) http.HandlerFunc {
 		}
 		projectedAt, ok := req.validate()
 		if !ok {
-			invalidScenarioTransactionProblem(w, "Revise os campos enviados.")
+			invalidScenarioTransactionProblem(w, "Revise os campos enviados. "+invalidAmountDetail+" "+invalidDateDetail)
 			return
 		}
 
@@ -403,7 +403,7 @@ func handleUpdateScenarioTransaction(conn *sql.DB) http.HandlerFunc {
 		}
 		projectedAt, ok := req.validate()
 		if !ok {
-			invalidScenarioTransactionProblem(w, "Revise os campos enviados.")
+			invalidScenarioTransactionProblem(w, "Revise os campos enviados. "+invalidAmountDetail+" "+invalidDateDetail)
 			return
 		}
 
@@ -485,11 +485,15 @@ func handleGenerateInstallments(conn *sql.DB) http.HandlerFunc {
 			invalidScenarioTransactionProblem(w, "Informe o número de parcelas OU o valor de cada parcela — não os dois, nem nenhum.")
 			return
 		}
+		if hasAmount && !validMoneyAmount(*req.InstallmentAmount) {
+			invalidScenarioTransactionProblem(w, "Valor da parcela inválido. "+invalidAmountDetail)
+			return
+		}
 		startDate := time.Now().UTC()
 		if req.StartDate != nil {
 			parsed, err := time.Parse(dateOnlyLayout, *req.StartDate)
-			if err != nil {
-				invalidScenarioTransactionProblem(w, "Data inicial inválida.")
+			if err != nil || !validInputDate(parsed) {
+				invalidScenarioTransactionProblem(w, "Data inicial inválida. "+invalidDateDetail)
 				return
 			}
 			startDate = parsed
@@ -512,6 +516,10 @@ func handleGenerateInstallments(conn *sql.DB) http.HandlerFunc {
 		}
 		if err != nil {
 			invalidScenarioTransactionProblem(w, "A dívida/conta a receber não possui valor restante para gerar parcelas.")
+			return
+		}
+		if len(drafts) > 0 && !validInputDate(drafts[len(drafts)-1].ProjectedAt) {
+			invalidScenarioTransactionProblem(w, "As parcelas geradas passariam de 2100. Reduza o número de parcelas ou antecipe a data inicial.")
 			return
 		}
 		created, err := scenarios.CreateGeneratedInstallments(r.Context(), conn, scenarioID, drafts)
@@ -686,6 +694,10 @@ func handleCreateRealization(conn *sql.DB) http.HandlerFunc {
 		var req realizationCreateRequest
 		if err := decodeStrict(r, &req); err != nil || req.PayableLinkID == "" || !req.AllocatedAmount.IsPositive() {
 			invalidScenarioTransactionProblem(w, "Informe um vínculo e um valor alocado válido (> 0).")
+			return
+		}
+		if !validMoneyAmount(req.AllocatedAmount) {
+			invalidScenarioTransactionProblem(w, "Valor alocado inválido. "+invalidAmountDetail)
 			return
 		}
 		if s.PayableID == nil {

@@ -756,6 +756,9 @@ type manualTransactionRequest struct {
 }
 
 func (req manualTransactionRequest) toManualInput() (transactions.ManualInput, bool) {
+	if !req.withinInputLimits() {
+		return transactions.ManualInput{}, false
+	}
 	if req.AccountID == "" || req.Description == "" || req.Amount.IsZero() {
 		return transactions.ManualInput{}, false
 	}
@@ -780,7 +783,7 @@ func (req manualTransactionRequest) toManualInput() (transactions.ManualInput, b
 
 func invalidManualTransactionProblem(w http.ResponseWriter) {
 	writeProblem(w, 422, "invalid-manual-transaction", "Lançamento manual inválido",
-		"Informe conta, descrição, um valor diferente de zero e uma data válida.")
+		"Informe conta, descrição, um valor diferente de zero e uma data válida. "+invalidAmountDetail+" "+invalidDateDetail)
 }
 
 func manualTransactionUnavailableProblem(w http.ResponseWriter) {

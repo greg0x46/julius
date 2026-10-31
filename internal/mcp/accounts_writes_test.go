@@ -24,7 +24,7 @@ func TestMCPAccountsToolsLifecycleAndApprovalReplay(t *testing.T) {
 				counts := map[string]int{}
 				switch family {
 				case "account":
-					data := map[string]any{"name": "Synthetic dollars", "currency_code": "USD", "opening_balance": "100.0000000000000000001", "archived": false}
+					data := map[string]any{"name": "Synthetic dollars", "currency_code": "USD", "opening_balance": "100.0001", "archived": false}
 					pending := f.call(t, "create_manual_account", map[string]any{"data": data})
 					var count int
 					if err := conn.QueryRow(`SELECT COUNT(*) FROM financial_accounts`).Scan(&count); err != nil || count != 1 {
@@ -38,9 +38,9 @@ func TestMCPAccountsToolsLifecycleAndApprovalReplay(t *testing.T) {
 					}
 					data["name"] = "Synthetic foreign cash"
 					f.applyPlanning(t, "update_manual_account", map[string]any{"id": account.ID, "data": data})
-					f.applyPlanning(t, "adjust_manual_account", map[string]any{"id": account.ID, "data": map[string]any{"amount": "0.0000000000000000001", "description": "Synthetic adjustment"}})
+					f.applyPlanning(t, "adjust_manual_account", map[string]any{"id": account.ID, "data": map[string]any{"amount": "0.0001", "description": "Synthetic adjustment"}})
 					balance, err := transactions.AccountBalance(context.Background(), conn, account.ID)
-					if err != nil || balance == nil || *balance != "100.0000000000000000002" {
+					if err != nil || balance == nil || *balance != "100.0002" {
 						t.Fatalf("precision: %v %v", balance, err)
 					}
 					counts = map[string]int{"financial_accounts": 2, "account_balance_adjustments": 1, "financial_transactions": 0}
@@ -53,8 +53,8 @@ func TestMCPAccountsToolsLifecycleAndApprovalReplay(t *testing.T) {
 					f.applyPlanning(t, "delete_transfer", map[string]any{"id": transferID, "data": map[string]any{}})
 					counts = map[string]int{"financial_transactions": 3, "transfer_links": 0, "transfer_transaction_links": 0}
 				case "payable":
-					payableID := f.applyPlanning(t, "create_payable", map[string]any{"data": map[string]any{"kind": "debt", "name": "Synthetic obligation", "total_amount": "70.0000000000000000001"}})
-					f.applyPlanning(t, "update_payable", map[string]any{"id": payableID, "data": map[string]any{"name": "Synthetic updated", "total_amount": "80.0000000000000000001"}})
+					payableID := f.applyPlanning(t, "create_payable", map[string]any{"data": map[string]any{"kind": "debt", "name": "Synthetic obligation", "total_amount": "70.0001"}})
+					f.applyPlanning(t, "update_payable", map[string]any{"id": payableID, "data": map[string]any{"name": "Synthetic updated", "total_amount": "80.0001"}})
 					payment, err := transactions.CreateManual(context.Background(), conn, transactions.ManualInput{AccountID: f.account, Description: "Synthetic payment", Amount: decimal.NewFromInt(-50), OccurredAt: time.Now()})
 					if err != nil {
 						t.Fatal(err)

@@ -204,6 +204,9 @@ func occurrenceWindow(r *http.Request) (from, to time.Time, err error) {
 			return time.Time{}, time.Time{}, errors.New("to inválido")
 		}
 	}
+	if dates.ExceedsMaxSpan(from, to) {
+		return time.Time{}, time.Time{}, errRangeTooLong
+	}
 	if to.Before(from) {
 		return time.Time{}, time.Time{}, errors.New("to não pode ser anterior a from")
 	}

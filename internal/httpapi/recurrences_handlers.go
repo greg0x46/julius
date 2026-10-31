@@ -76,6 +76,12 @@ func (req recurringCommitmentWriteRequest) toWrite() (recurrences.Write, error) 
 		}
 		endDate = &d
 	}
+	if !validMoneyAmount(amount) {
+		return recurrences.Write{}, errInvalidAmount
+	}
+	if !validInputDate(startDate) || (endDate != nil && !validInputDate(*endDate)) {
+		return recurrences.Write{}, errInvalidDate
+	}
 	write := recurrences.Write{
 		Name: req.Name, Kind: recurrences.Kind(req.Kind), Amount: amount,
 		CategoryID: req.CategoryID, AccountID: req.AccountID, Cadence: recurrences.Cadence(req.Cadence),
