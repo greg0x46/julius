@@ -4,6 +4,12 @@ Notable changes per release. A section is added by `scripts/update-changelog.sh`
 only when a release is prepared, and the release job publishes that same text as
 the GitHub release notes. Newest release first.
 
+## v0.18.0 — 2026-10-31
+
+### Features
+
+- **settings:** Add configurable timezone and harden auth, input limits and headers ([#216](https://github.com/greg0x46/julius/pull/216))
+
 ## v0.17.3 — 2026-10-30
 
 ### Fixes
