@@ -8,12 +8,14 @@ import (
 	"net/http"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/greg0x46/julius/internal/automation"
 	"github.com/greg0x46/julius/internal/ledger"
 	"github.com/greg0x46/julius/internal/money"
 	"github.com/greg0x46/julius/internal/payables"
 	"github.com/greg0x46/julius/internal/scenarios"
+	"github.com/greg0x46/julius/internal/settings"
 	"github.com/greg0x46/julius/internal/transactions"
 	"github.com/shopspring/decimal"
 )
@@ -70,7 +72,7 @@ func mcpManualAccountInput(data json.RawMessage) (transactions.ManualAccountInpu
 		req.OpeningBalance = "0"
 	}
 	opening, err := decimal.NewFromString(req.OpeningBalance)
-	if err != nil || len(req.OpeningBalance) > 64 || !plainWriteDecimal.MatchString(req.OpeningBalance) || strings.TrimSpace(req.Name) == "" || len(req.Name) > 200 || !validManualAccountCurrency(req.CurrencyCode) {
+	if err != nil || len(req.OpeningBalance) > 64 || !plainWriteDecimal.MatchString(req.OpeningBalance) || !validMoneyAmount(opening) || strings.TrimSpace(req.Name) == "" || len(req.Name) > 200 || !validManualAccountCurrency(req.CurrencyCode) {
 		return transactions.ManualAccountInput{}, errMCPWriteInput
 	}
 	return transactions.ManualAccountInput{Name: strings.TrimSpace(req.Name), CurrencyCode: req.CurrencyCode, OpeningBalance: opening, Archived: req.Archived}, nil
@@ -223,7 +225,7 @@ func previewMCPAccountsWrite(ctx context.Context, q transactions.Querier, p MCPW
 			return p, err
 		}
 		amount, err := decimal.NewFromString(req.Amount)
-		if err != nil || !planningWriteAmount(in.Data, "amount") || amount.IsZero() || strings.TrimSpace(req.Description) == "" || len(req.Description) > 200 {
+		if err != nil || !planningWriteAmount(in.Data, "amount") || amount.IsZero() || !validMoneyAmount(amount) || strings.TrimSpace(req.Description) == "" || len(req.Description) > 200 {
 			return p, errMCPWriteInput
 		}
 		if _, err = account(in.ID, true, true); err != nil {
@@ -249,7 +251,7 @@ func previewMCPAccountsWrite(ctx context.Context, q transactions.Querier, p MCPW
 			_ = json.Unmarshal(in.Data, &fields)
 			for i, input := range inputs {
 				raw := fields[[]string{"source", "destination", "fee"}[i]]
-				if _, ok := input.toManualInput(); !ok || !planningWriteAmount(raw, "amount") || input.CategoryID != nil || len(input.Description) > 1000 {
+				if _, ok := input.toManualInput(time.UTC); !ok || !planningWriteAmount(raw, "amount") || input.CategoryID != nil || len(input.Description) > 1000 {
 					return p, errMCPWriteInput
 				}
 				d, err := account(input.AccountID, true, true)
@@ -329,7 +331,7 @@ func previewMCPAccountsWrite(ctx context.Context, q transactions.Querier, p MCPW
 				}
 				req.Name, req.TotalAmount = update.Name, update.TotalAmount
 			}
-			if !planningWriteAmount(in.Data, "total_amount") || !req.TotalAmount.IsPositive() || strings.TrimSpace(req.Name) == "" || len(req.Name) > 200 {
+			if !planningWriteAmount(in.Data, "total_amount") || !req.TotalAmount.IsPositive() || !req.validAmounts() || strings.TrimSpace(req.Name) == "" || len(req.Name) > 200 {
 				return p, errMCPWriteInput
 			}
 			if req.InitialRemainingAmount != nil && (!planningWriteAmount(in.Data, "initial_remaining_amount") || req.InitialRemainingAmount.IsNegative() || req.InitialRemainingAmount.GreaterThan(req.TotalAmount)) {
@@ -446,11 +448,15 @@ func executeMCPAccountsWrite(ctx context.Context, conn *sql.DB, approved MCPWrit
 		var req transferWriteRequest
 		_ = json.Unmarshal(in.Data, &req)
 		if req.Source != nil {
-			source, _ := req.Source.toManualInput()
-			destination, _ := req.Destination.toManualInput()
+			var loc *time.Location
+			if loc, err = settings.Location(ctx, tx); err != nil {
+				break
+			}
+			source, _ := req.Source.toManualInput(loc)
+			destination, _ := req.Destination.toManualInput(loc)
 			var fee *transactions.ManualInput
 			if req.Fee != nil {
-				f, _ := req.Fee.toManualInput()
+				f, _ := req.Fee.toManualInput(loc)
 				fee = &f
 			}
 			value, err = ledger.CreateManualTransferWithQuerier(ctx, tx, source, destination, fee, ledger.OnIgnored)

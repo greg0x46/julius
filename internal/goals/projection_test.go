@@ -37,8 +37,9 @@ func TestMonthsUntilCountsAPartialMonthAsAMonth(t *testing.T) {
 			t.Errorf("monthsUntil(%s) = %d, want %d", target.Format("2006-01-02"), got, want)
 		}
 	}
-	if got := addMonths(utc(2026, 1, 31), 1); !got.Equal(utc(2026, 2, 28)) {
-		t.Errorf("Jan 31 + 1 month = %s, want Feb 28", got.Format("2006-01-02"))
+	// From the 31st, the first step is the clamped Feb 28, not Mar 3.
+	if got := monthsUntil(utc(2026, 1, 31), utc(2026, 3, 1)); got != 2 {
+		t.Errorf("monthsUntil(Jan 31 → Mar 1) = %d, want 2", got)
 	}
 }
 
@@ -130,7 +131,7 @@ func TestProjectionFollowsTheMeasuredReturn(t *testing.T) {
 	}
 
 	date := utc(2027, 10, 18)
-	goal, err := Create(ctx, conn, Input{Name: "Reserva", Metric: MetricInvestedValue, TargetAmount: d("3000"), TargetDate: &date})
+	goal, err := Create(ctx, conn, Input{Name: "Reserva", Metric: MetricInvestedValue, TargetAmount: d("3000"), TargetDate: &date}, time.UTC)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -154,11 +155,11 @@ func TestProjectionFollowsTheMeasuredReturn(t *testing.T) {
 	near(t, "replayed value", value.String(), "3000", "0.01")
 
 	// No date, no projection; a past date has nothing left to project.
-	if g, err := Create(ctx, conn, Input{Name: "Sem data", Metric: MetricInvestedValue, TargetAmount: d("3000")}); err != nil || g.Projection != nil {
+	if g, err := Create(ctx, conn, Input{Name: "Sem data", Metric: MetricInvestedValue, TargetAmount: d("3000")}, time.UTC); err != nil || g.Projection != nil {
 		t.Fatalf("undated = %+v, %v", g.Projection, err)
 	}
 	past := utc(2026, 9, 1)
-	if g, err := Create(ctx, conn, Input{Name: "Vencida", Metric: MetricInvestedValue, TargetAmount: d("3000"), TargetDate: &past}); err != nil || g.Projection != nil {
+	if g, err := Create(ctx, conn, Input{Name: "Vencida", Metric: MetricInvestedValue, TargetAmount: d("3000"), TargetDate: &past}, time.UTC); err != nil || g.Projection != nil {
 		t.Fatalf("past = %+v, %v", g.Projection, err)
 	}
 }
@@ -170,12 +171,45 @@ func TestProjectionAssumesNoAppreciationWithoutHistory(t *testing.T) {
 	t.Cleanup(func() { now = time.Now })
 
 	date := utc(2027, 10, 18)
-	goal, err := Create(ctx, conn, Input{Name: "Reserva", Metric: MetricInvestedValue, TargetAmount: d("1200"), TargetDate: &date})
+	goal, err := Create(ctx, conn, Input{Name: "Reserva", Metric: MetricInvestedValue, TargetAmount: d("1200"), TargetDate: &date}, time.UTC)
 	if err != nil {
 		t.Fatal(err)
 	}
 	p := goal.Projection
 	if p == nil || p.MonthlyReturn != nil || p.ReturnFrom != nil || p.RequiredMonthlyContribution.String() != "100" {
 		t.Fatalf("projection = %+v", p)
+	}
+}
+
+// "Today" is the calendar day in the caller's zone, not in the process zone:
+// at 23:30 in Sao Paulo it is already the next day in UTC.
+func TestProjectionTodayFollowsTheCalendarZone(t *testing.T) {
+	conn := dbtest.OpenSQLite(t)
+	ctx := context.Background()
+	now = func() time.Time { return time.Date(2026, 10, 18, 2, 30, 0, 0, time.UTC) }
+	t.Cleanup(func() { now = time.Now })
+	sao, err := time.LoadLocation("America/Sao_Paulo")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	date := utc(2026, 10, 18)
+	for _, tc := range []struct {
+		loc    *time.Location
+		months int // 0 means the target is today: nothing left to project
+	}{{sao, 1}, {time.UTC, 0}} {
+		goal, err := Create(ctx, conn, Input{Name: "Reserva " + tc.loc.String(), Metric: MetricInvestedValue, TargetAmount: d("1200"), TargetDate: &date}, tc.loc)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if tc.months == 0 {
+			if goal.Projection != nil {
+				t.Errorf("%s: projection = %+v, want none", tc.loc, goal.Projection)
+			}
+			continue
+		}
+		if goal.Projection == nil || goal.Projection.MonthsRemaining != tc.months {
+			t.Errorf("%s: projection = %+v, want %d month", tc.loc, goal.Projection, tc.months)
+		}
 	}
 }

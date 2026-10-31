@@ -215,7 +215,7 @@ func TestConversionKindsCoverBaseline(t *testing.T) {
 		if err := rows.Scan(&table, &col, &kind); err != nil {
 			t.Fatal(err)
 		}
-		if expected := kinds[kind]; expected != "" && table != "goose_db_version" && table != "goals" && table != "oauth_grants" && table != "mcp_authorizations" {
+		if expected := kinds[kind]; expected != "" && table != "goose_db_version" && table != "goals" && table != "oauth_clients" && table != "oauth_grants" && table != "mcp_authorizations" {
 			key := table + "." + col
 			seen[key] = true
 			if columnKinds[key] != expected {

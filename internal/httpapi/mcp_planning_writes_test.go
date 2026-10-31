@@ -59,10 +59,10 @@ func TestMCPPlanningWriteScenarioLifecycle(t *testing.T) {
 		if _, err = httpapi.ExecuteMCPWrite(ctx, conn, p); !errors.Is(err, httpapi.ErrMCPWriteConflict) {
 			t.Fatalf("stale rename: %v", err)
 		}
-		data := map[string]any{"description": "Synthetic purchase", "amount": "-20000.1234567890123456789", "projected_at": "2026-11-10"}
+		data := map[string]any{"description": "Synthetic purchase", "amount": "-20000.1234", "projected_at": "2026-11-10"}
 		result = applyWrite(t, conn, plannedPreview(t, conn, "create_planned_transaction", id, "", data))
 		plannedID := planningResultID(t, result)
-		data["amount"] = "-25000.1234567890123456789"
+		data["amount"] = "-25000.1234"
 		applyWrite(t, conn, plannedPreview(t, conn, "update_planned_transaction", id, plannedID, data))
 		session := planningSession(t, conn)
 		query := map[string]any{"from": "2026-11-01", "to": "2026-11-30", "reference_date": "2026-11-01"}
@@ -76,11 +76,11 @@ func TestMCPPlanningWriteScenarioLifecycle(t *testing.T) {
 		if err != nil || balance == nil || *balance != "100000" {
 			t.Fatalf("simulation moved cash: %v %v", balance, err)
 		}
-		realID, err := transactions.CreateManual(ctx, conn, transactions.ManualInput{AccountID: account, Description: "Synthetic real purchase", Amount: decimal.RequireFromString("-25000.1234567890123456789"), OccurredAt: time.Date(2026, 11, 10, 12, 0, 0, 0, time.UTC)})
+		realID, err := transactions.CreateManual(ctx, conn, transactions.ManualInput{AccountID: account, Description: "Synthetic real purchase", Amount: decimal.RequireFromString("-25000.1234"), OccurredAt: time.Date(2026, 11, 10, 12, 0, 0, 0, time.UTC)})
 		if err != nil {
 			t.Fatal(err)
 		}
-		_, err = scenarios.RealizeEvent(ctx, conn, id, "scenario:"+id+":transaction:"+plannedID, scenarios.RealizationWrite{State: "linked", TransactionID: &realID, AllocatedAmount: decimal.RequireFromString("25000.1234567890123456789")})
+		_, err = scenarios.RealizeEvent(ctx, conn, id, "scenario:"+id+":transaction:"+plannedID, scenarios.RealizationWrite{State: "linked", TransactionID: &realID, AllocatedAmount: decimal.RequireFromString("25000.1234")})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -93,7 +93,7 @@ func TestMCPPlanningWriteScenarioLifecycle(t *testing.T) {
 			t.Fatalf("planned transaction survived: %v", err)
 		}
 		real, found, err := transactions.GetItem(ctx, conn, realID)
-		if err != nil || !found || (real.Amount == nil || *real.Amount != "-25000.1234567890123456789") {
+		if err != nil || !found || (real.Amount == nil || *real.Amount != "-25000.1234") {
 			t.Fatalf("real transaction altered: %+v %v", real, err)
 		}
 		// Individual deletes use the same parent ownership checks.
@@ -108,11 +108,11 @@ func TestMCPPlanningWriteScenarioLifecycle(t *testing.T) {
 func TestMCPPlanningWriteGoalsAndRecurrences(t *testing.T) {
 	dbtest.Each(t, func(t *testing.T, conn *sql.DB) {
 		ctx := context.Background()
-		data := map[string]any{"name": "Synthetic retirement", "metric": "invested_value", "target_amount": "50000.1234567890123456789", "target_date": time.Now().AddDate(2, 0, 0).Format(time.DateOnly)}
+		data := map[string]any{"name": "Synthetic retirement", "metric": "invested_value", "target_amount": "50000.1234", "target_date": time.Now().AddDate(2, 0, 0).Format(time.DateOnly)}
 		id := planningResultID(t, applyWrite(t, conn, writePreview(t, conn, "create_goal", "", data)))
-		data["target_amount"] = "75000.1234567890123456789"
+		data["target_amount"] = "75000.1234"
 		result := applyWrite(t, conn, writePreview(t, conn, "update_goal", id, data))
-		g, err := goals.Get(ctx, conn, id)
+		g, err := goals.Get(ctx, conn, id, time.UTC)
 		if err != nil || !g.TargetAmount.Equal(decimal.RequireFromString(data["target_amount"].(string))) || g.Projection == nil {
 			t.Fatalf("goal: %+v %v", g, err)
 		}
@@ -122,14 +122,14 @@ func TestMCPPlanningWriteGoalsAndRecurrences(t *testing.T) {
 			t.Fatalf("goal derived values differ: %s", result.Data)
 		}
 		applyWrite(t, conn, writePreview(t, conn, "delete_goal", id, map[string]any{}))
-		if _, err = goals.Get(ctx, conn, id); !errors.Is(err, goals.ErrNotFound) {
+		if _, err = goals.Get(ctx, conn, id, time.UTC); !errors.Is(err, goals.ErrNotFound) {
 			t.Fatal("goal survived")
 		}
 		cat, err := categories.Create(ctx, conn, "Synthetic rent", money.Expense, "coffee", "#2a78d6")
 		if err != nil {
 			t.Fatal(err)
 		}
-		data = map[string]any{"name": "Synthetic rent", "kind": "expense", "amount": "1500.1234567890123456789", "category_id": cat.ID, "cadence": "monthly", "day_of_month": 31, "start_date": "2026-01-01", "is_active": true}
+		data = map[string]any{"name": "Synthetic rent", "kind": "expense", "amount": "1500.1234", "category_id": cat.ID, "cadence": "monthly", "day_of_month": 31, "start_date": "2026-01-01", "is_active": true}
 		id = planningResultID(t, applyWrite(t, conn, writePreview(t, conn, "create_recurring_commitment", "", data)))
 		c, err := recurrences.Get(ctx, conn, id)
 		feb := time.Date(2026, 2, 1, 0, 0, 0, 0, time.UTC)

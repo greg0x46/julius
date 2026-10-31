@@ -19,6 +19,7 @@ import (
 	"github.com/greg0x46/julius/internal/projections"
 	"github.com/greg0x46/julius/internal/reporting"
 	"github.com/greg0x46/julius/internal/scenarios"
+	"github.com/greg0x46/julius/internal/settings"
 	"github.com/greg0x46/julius/internal/transactions"
 )
 
@@ -72,7 +73,8 @@ func anyOfSet(single *string, many []string) []string {
 }
 
 type transactionQueryRequest struct {
-	Timezone string                    `json:"timezone"`
+	// Timezone is optional; the configured timezone applies when omitted.
+	Timezone string                    `json:"timezone,omitempty"`
 	GroupBy  string                    `json:"group_by,omitempty"`
 	Page     int                       `json:"page,omitempty"`
 	PageSize int                       `json:"page_size,omitempty"`
@@ -450,13 +452,14 @@ func handleQueryTransactions(db *sql.DB) http.HandlerFunc {
 			writeProblem(w, problem.Status, problem.Type[len("/problems/"):], problem.Title, problem.Detail)
 			return
 		}
-		if _, err := time.LoadLocation(req.Timezone); err != nil || req.Timezone == "" {
-			writeProblem(w, 400, "invalid-timezone", "Fuso horário inválido", "Informe um nome de fuso IANA reconhecido.")
+		timezone, err := resolveTimezone(r.Context(), db, req.Timezone)
+		if err != nil {
+			writeTimezoneProblem(w, err)
 			return
 		}
 
 		result, err := transactions.Query(r.Context(), db, transactions.QueryRequest{
-			Timezone: req.Timezone,
+			Timezone: timezone,
 			GroupBy:  money.GroupBy(req.GroupBy),
 			Page:     req.Page,
 			PageSize: req.PageSize,
@@ -552,12 +555,12 @@ func projectedSpendingByCategory(ctx context.Context, db *sql.DB, scenarioID str
 // never merged into the real totals.
 func handleSpendingByCategory(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		timezone := r.URL.Query().Get("timezone")
-		loc, err := time.LoadLocation(timezone)
-		if timezone == "" || err != nil {
-			writeProblem(w, 400, "invalid-timezone", "Fuso horário inválido", "Informe um nome de fuso IANA reconhecido.")
+		timezone, err := resolveTimezone(r.Context(), db, r.URL.Query().Get("timezone"))
+		if err != nil {
+			writeTimezoneProblem(w, err)
 			return
 		}
+		loc, _ := settings.LoadTimezone(timezone)
 
 		now := time.Now().In(loc)
 		year, month, _ := now.Date()
@@ -755,7 +758,10 @@ type manualTransactionRequest struct {
 	CategoryID  *string         `json:"category_id"`
 }
 
-func (req manualTransactionRequest) toManualInput() (transactions.ManualInput, bool) {
+func (req manualTransactionRequest) toManualInput(loc *time.Location) (transactions.ManualInput, bool) {
+	if !req.withinInputLimits() {
+		return transactions.ManualInput{}, false
+	}
 	if req.AccountID == "" || req.Description == "" || req.Amount.IsZero() {
 		return transactions.ManualInput{}, false
 	}
@@ -763,13 +769,13 @@ func (req manualTransactionRequest) toManualInput() (transactions.ManualInput, b
 	if err != nil {
 		return transactions.ManualInput{}, false
 	}
-	// Anchored at local noon, not UTC midnight: the user picked a calendar
-	// day with no time-of-day, and occurred_at is stored and later rendered
-	// as an instant (see presentation/dates.ts's formatLocalDay). A UTC
-	// midnight stamp reads as the previous day everywhere west of Greenwich
-	// — the same failure mode the card cycle math works around by anchoring
-	// on time.Local noon instead.
-	occurredAt := time.Date(day.Year(), day.Month(), day.Day(), 12, 0, 0, 0, time.Local)
+	// Anchored at noon in the configured zone, not UTC midnight: the user
+	// picked a calendar day with no time-of-day, and occurred_at is stored and
+	// later rendered as an instant (see presentation/dates.ts's
+	// formatLocalDay). A UTC midnight stamp reads as the previous day
+	// everywhere west of Greenwich, and the process zone would make the day
+	// depend on the host.
+	occurredAt := time.Date(day.Year(), day.Month(), day.Day(), 12, 0, 0, 0, loc)
 	return transactions.ManualInput{
 		AccountID:   req.AccountID,
 		Description: req.Description,
@@ -780,7 +786,7 @@ func (req manualTransactionRequest) toManualInput() (transactions.ManualInput, b
 
 func invalidManualTransactionProblem(w http.ResponseWriter) {
 	writeProblem(w, 422, "invalid-manual-transaction", "Lançamento manual inválido",
-		"Informe conta, descrição, um valor diferente de zero e uma data válida.")
+		"Informe conta, descrição, um valor diferente de zero e uma data válida. "+invalidAmountDetail+" "+invalidDateDetail)
 }
 
 func manualTransactionUnavailableProblem(w http.ResponseWriter) {
@@ -840,7 +846,11 @@ func handleCreateManualTransaction(svc *ledger.Service) http.HandlerFunc {
 			invalidManualTransactionProblem(w)
 			return
 		}
-		input, ok := req.toManualInput()
+		loc, ok := configuredZone(w, r, svc.DB)
+		if !ok {
+			return
+		}
+		input, ok := req.toManualInput(loc)
 		if !ok {
 			invalidManualTransactionProblem(w)
 			return
@@ -881,7 +891,11 @@ func handleUpdateManualTransaction(svc *ledger.Service) http.HandlerFunc {
 			invalidManualTransactionProblem(w)
 			return
 		}
-		input, ok := req.toManualInput()
+		loc, ok := configuredZone(w, r, svc.DB)
+		if !ok {
+			return
+		}
+		input, ok := req.toManualInput(loc)
 		if !ok {
 			invalidManualTransactionProblem(w)
 			return
@@ -917,12 +931,12 @@ func handleDeleteManualTransaction(svc *ledger.Service) http.HandlerFunc {
 func handleCategoryBreakdown(db *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		params := r.URL.Query()
-		timezone := params.Get("timezone")
-		loc, err := time.LoadLocation(timezone)
-		if timezone == "" || err != nil {
-			writeProblem(w, 400, "invalid-timezone", "Fuso horário inválido", "Informe um nome de fuso IANA reconhecido.")
+		timezone, err := resolveTimezone(r.Context(), db, params.Get("timezone"))
+		if err != nil {
+			writeTimezoneProblem(w, err)
 			return
 		}
+		loc, _ := settings.LoadTimezone(timezone)
 		var filters transactions.Filters
 		var monthLabel string
 		var dateFrom, dateTo *string

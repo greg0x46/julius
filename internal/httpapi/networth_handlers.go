@@ -64,7 +64,11 @@ func netWorthUnavailableProblem(w http.ResponseWriter) {
 func handleGetNetWorth(conn *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		ctx := r.Context()
-		points, err := networth.Series(ctx, conn, time.Now())
+		loc, ok := configuredZone(w, r, conn)
+		if !ok {
+			return
+		}
+		points, err := networth.Series(ctx, conn, time.Now().In(loc))
 		if errors.Is(err, valuation.ErrMissingRate) {
 			writeProblem(w, 503, "exchange-unavailable", "Cotação indisponível", "Falta a cotação de uma moeda para valorar o patrimônio em reais. Nenhum saldo foi ignorado.")
 			return

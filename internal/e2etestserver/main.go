@@ -44,7 +44,9 @@ func main() {
 	if err := config.Validate(); err != nil {
 		log.Fatal(err)
 	}
-	server := &http.Server{Handler: httpapi.NewServer(conn, os.DirFS(*frontend), settings.NewSecrets(master), config, nil), ReadHeaderTimeout: 10 * time.Second}
+	// Same header policy as the real binary, so the journeys run under the CSP.
+	handler := httpapi.SecurityHeaders(config)(httpapi.NewServer(conn, os.DirFS(*frontend), settings.NewSecrets(master), config, nil))
+	server := &http.Server{Handler: handler, ReadHeaderTimeout: 10 * time.Second}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	go func() {

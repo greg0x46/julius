@@ -44,9 +44,8 @@ func plannedTransactionToDTO(event projections.PlannedTransaction) plannedTransa
 	}
 }
 
-func plannedWindow(r *http.Request) (time.Time, time.Time, error) {
-	today := dates.Day(time.Now().UTC())
-	from, to := today, today.AddDate(1, 0, 0)
+func plannedWindow(r *http.Request, today time.Time) (time.Time, time.Time, error) {
+	from, to := today, dates.AddMonths(today, 12)
 	var err error
 	if raw := r.URL.Query().Get("from"); raw != "" {
 		from, err = time.Parse(dateOnlyLayout, raw)
@@ -60,6 +59,9 @@ func plannedWindow(r *http.Request) (time.Time, time.Time, error) {
 			return time.Time{}, time.Time{}, err
 		}
 	}
+	if dates.ExceedsMaxSpan(from, to) {
+		return time.Time{}, time.Time{}, errRangeTooLong
+	}
 	if to.Before(from) {
 		return time.Time{}, time.Time{}, errors.New("to não pode ser anterior a from")
 	}
@@ -68,7 +70,15 @@ func plannedWindow(r *http.Request) (time.Time, time.Time, error) {
 
 func handleListScenarioPlannedTransactions(conn *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		from, to, err := plannedWindow(r)
+		loc, ok := configuredZone(w, r, conn)
+		if !ok {
+			return
+		}
+		from, to, err := plannedWindow(r, dayIn(time.Now(), loc))
+		if errors.Is(err, errRangeTooLong) {
+			invalidScenarioProblem(w, rangeTooLongDetail)
+			return
+		}
 		if err != nil {
 			invalidScenarioProblem(w, "Período inválido.")
 			return
@@ -182,6 +192,10 @@ func handlePutScenarioPlannedRealization(conn *sql.DB) http.HandlerFunc {
 		amount := decimal.Zero
 		if request.AllocatedAmount != nil {
 			amount = *request.AllocatedAmount
+		}
+		if !validMoneyAmount(amount) {
+			invalidScenarioProblem(w, "Valor alocado inválido. "+invalidAmountDetail)
+			return
 		}
 		value, err := scenarios.RealizeEvent(r.Context(), conn, r.PathValue("id"), r.PathValue("eventKey"), scenarios.RealizationWrite{
 			State: state, TransactionID: request.TransactionID, AllocatedAmount: amount, Origin: "manual",

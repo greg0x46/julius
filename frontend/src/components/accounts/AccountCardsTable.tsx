@@ -1,6 +1,7 @@
 import { Alert, Skeleton } from "../ui";
 
 import type { AccountCard } from "../../api/contracts";
+import { useTimezone } from "../../hooks/useTimezone";
 import { formatOptionalLocalDay } from "../../presentation/dates";
 import { maskedCardNumber } from "../../presentation/accountLabels";
 import { EmptyState, ListRow, Section } from "../layout";
@@ -20,6 +21,7 @@ export function AccountCardsTable({
   isLoading: boolean;
   error: unknown;
 }) {
+  const timezone = useTimezone();
   // One physical card is a fact about the account, not a list: a titled
   // section for a single row is more frame than content, so it is one quiet row.
   if (cards.length === 1 && !isLoading && (error === null || error === undefined)) {
@@ -29,7 +31,7 @@ export function AccountCardsTable({
         <ul className="list-rows">
           <ListRow
             title={`Cartão ${maskedCardNumber(card.card_number)}`}
-            meta={`${card.transaction_count} ${card.transaction_count === 1 ? "transação" : "transações"} · Último uso ${formatOptionalLocalDay(card.last_transaction_at)}`}
+            meta={`${card.transaction_count} ${card.transaction_count === 1 ? "transação" : "transações"} · Último uso ${formatOptionalLocalDay(card.last_transaction_at, timezone)}`}
           />
         </ul>
       </section>
@@ -59,7 +61,7 @@ export function AccountCardsTable({
             <ListRow
               key={card.card_number}
               title={maskedCardNumber(card.card_number)}
-              meta={`${card.transaction_count} ${card.transaction_count === 1 ? "transação" : "transações"} · Último uso ${formatOptionalLocalDay(card.last_transaction_at)}`}
+              meta={`${card.transaction_count} ${card.transaction_count === 1 ? "transação" : "transações"} · Último uso ${formatOptionalLocalDay(card.last_transaction_at, timezone)}`}
             />
           ))}
         </ul>

@@ -80,7 +80,7 @@ func (f *writeFixture) call(t *testing.T, tool string, args any) writeToolOutput
 	return out
 }
 func (f *writeFixture) manual() map[string]any {
-	return map[string]any{"account_id": f.account, "description": "Synthetic feira <script>", "amount": "-12.34567890123456789", "occurred_at": "2026-10-01"}
+	return map[string]any{"account_id": f.account, "description": "Synthetic feira <script>", "amount": "-12.3457", "occurred_at": "2026-10-01"}
 }
 func (f *writeFixture) approve(t *testing.T, out writeToolOutput) *httptest.ResponseRecorder {
 	t.Helper()
@@ -132,7 +132,7 @@ func TestMCPWriteManualLifecycle(t *testing.T) {
 		}
 		var item struct{ ID, Amount string }
 		_ = json.Unmarshal(result.Result.Data, &item)
-		if item.Amount != "-12.34567890123456789" {
+		if item.Amount != "-12.3457" {
 			t.Fatalf("amount rounded: %s", item.Amount)
 		}
 		out = f.call(t, "create_manual_transaction", args)
@@ -148,11 +148,11 @@ func TestMCPWriteManualLifecycle(t *testing.T) {
 			t.Fatalf("category not applied: %+v %v", current, err)
 		}
 		data := f.manual()
-		data["amount"] = "-15.000000001"
+		data["amount"] = "-15.0001"
 		out = f.call(t, "update_manual_transaction", map[string]any{"id": item.ID, "data": data})
 		f.approve(t, out)
 		balance, err := transactions.AccountBalance(context.Background(), conn, f.account)
-		if err != nil || balance == nil || *balance != "84.999999999" {
+		if err != nil || balance == nil || *balance != "84.9999" {
 			t.Fatalf("balance: %v %v", balance, err)
 		}
 		out = f.call(t, "delete_manual_transaction", map[string]any{"id": item.ID, "data": map[string]any{}})

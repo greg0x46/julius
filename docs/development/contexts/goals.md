@@ -62,7 +62,8 @@ and assumes no new contributions other than the one it solves for.
   appreciation (the contribution is the gap split evenly) and the UI says so.
   `return_partial` flags positions left out of the return as unavailable.
 - **Horizon.** `months_remaining` counts calendar months from today to the
-  target date, a partial last month counting as one; horizons over 1200 months
+  target date (`dates.AddMonths`, clamping a start on the 29th-31st to a
+  shorter month's last day), a partial last month counting as one; horizons over 1200 months
   yield no projection.
 - **Projected value** = `current_value × (1 + r)^n`; `projected_progress` is it
   over the target (it may exceed 1).

@@ -19,6 +19,7 @@ it("saves the currency with the existing preference and discards old report cach
     return json({
       transactions_period_basis: "occurred_at",
       reference_currency: "BRL",
+      timezone: "America/Sao_Paulo",
     });
   });
   vi.stubGlobal("fetch", fetch);
@@ -50,10 +51,51 @@ it("saves the currency with the existing preference and discards old report cach
         body: JSON.stringify({
           transactions_period_basis: "occurred_at",
           reference_currency: "USD",
+          timezone: "America/Sao_Paulo",
         }),
       }),
     ),
   );
   await waitFor(() => expect(client.getQueryData(queryKeys.timeline)).toBeUndefined());
+  client.clear();
+});
+
+it("saves a new timezone and drops every cache that depends on the zone", async () => {
+  const fetch = vi.fn<typeof globalThis.fetch>().mockImplementation(async (url, init) => {
+    if (String(url).endsWith("/accounts/currencies")) return json({ currencies: [{ code: "BRL" }], status: "complete", source: "frankfurter" });
+    if (init?.method === "PUT") return json(JSON.parse(String(init.body)));
+    return json({ transactions_period_basis: "occurred_at", reference_currency: "BRL", timezone: "America/Sao_Paulo" });
+  });
+  vi.stubGlobal("fetch", fetch);
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  client.setQueryData(queryKeys.spendingByCategory("America/Sao_Paulo"), { items: [] });
+  render(
+    <QueryClientProvider client={client}>
+      <MemoryRouter>
+        <GeneralSettingsPage />
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+  const select = await screen.findByRole("combobox", { name: "Fuso horário" });
+  expect(screen.getByText("America/Sao_Paulo")).toBeInTheDocument();
+  await userEvent.click(select);
+  await userEvent.click(await screen.findByText("Asia/Tokyo"));
+  await userEvent.click(screen.getByRole("button", { name: "Salvar" }));
+  await waitFor(() =>
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/preferences",
+      expect.objectContaining({
+        method: "PUT",
+        body: JSON.stringify({
+          transactions_period_basis: "occurred_at",
+          reference_currency: "BRL",
+          timezone: "Asia/Tokyo",
+        }),
+      }),
+    ),
+  );
+  await waitFor(() => expect(client.getQueryData(queryKeys.spendingByCategory("America/Sao_Paulo"))).toBeUndefined());
+  // The preferences themselves stay, now with the saved zone.
+  expect(client.getQueryData(queryKeys.preferences)).toMatchObject({ timezone: "Asia/Tokyo" });
   client.clear();
 });

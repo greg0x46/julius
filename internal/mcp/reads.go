@@ -42,7 +42,7 @@ type billsInput struct {
 
 type spendingInput struct {
 	readPage
-	Timezone       string `json:"timezone" jsonschema:"IANA timezone, for example America/Sao_Paulo."`
+	Timezone       string `json:"timezone,omitempty" jsonschema:"Optional IANA timezone, for example America/Sao_Paulo; default is the configured timezone."`
 	Month          string `json:"month,omitempty" jsonschema:"YYYY-MM; choose month, a date range, or period=all."`
 	DateFrom       string `json:"date_from,omitempty" jsonschema:"Inclusive calendar day YYYY-MM-DD; requires date_to."`
 	DateTo         string `json:"date_to,omitempty" jsonschema:"Inclusive calendar day YYYY-MM-DD; requires date_from."`
@@ -89,7 +89,7 @@ func registerReadTools(server *sdk.Server, conn *sql.DB) {
 		}
 		return runRead(ctx, handlers["list_card_bills"], "GET", nil, nil, input.AccountID, &input.readPage, false)
 	})
-	sdk.AddTool(server, tool("search_transactions", "Search transactions using the REST query filters. timezone is required; group_by is none, day, week, month or year. Date ranges are inclusive YYYY-MM-DD pairs. Defaults: page=1, page_size=50, group_by=none. Includes ignored, pending and unclassified rows with explicit eligibility; totals cover all matching rows, not just the page. Native currency totals and consolidated reporting coverage/FX are retained."), func(ctx context.Context, _ *sdk.CallToolRequest, input httpapi.TransactionReadQuery) (*sdk.CallToolResult, readResult, error) {
+	sdk.AddTool(server, tool("search_transactions", "Search transactions using the REST query filters. timezone is optional and defaults to the configured timezone; group_by is none, day, week, month or year. Date ranges are inclusive YYYY-MM-DD pairs. Defaults: page=1, page_size=50, group_by=none. Includes ignored, pending and unclassified rows with explicit eligibility; totals cover all matching rows, not just the page. Native currency totals and consolidated reporting coverage/FX are retained."), func(ctx context.Context, _ *sdk.CallToolRequest, input httpapi.TransactionReadQuery) (*sdk.CallToolResult, readResult, error) {
 		page := readPage{Page: input.Page, PageSize: input.PageSize}
 		if err := page.validate(); err != nil {
 			return nil, readResult{}, err
@@ -113,8 +113,8 @@ func registerReadTools(server *sdk.Server, conn *sql.DB) {
 		if err := input.validate(); err != nil {
 			return nil, readResult{}, err
 		}
-		params := url.Values{"timezone": {input.Timezone}, "classification": {input.Classification}}
-		for key, value := range map[string]string{"month": input.Month, "date_from": input.DateFrom, "date_to": input.DateTo, "period": input.Period} {
+		params := url.Values{"classification": {input.Classification}}
+		for key, value := range map[string]string{"timezone": input.Timezone, "month": input.Month, "date_from": input.DateFrom, "date_to": input.DateTo, "period": input.Period} {
 			if value != "" {
 				params.Set(key, value)
 			}

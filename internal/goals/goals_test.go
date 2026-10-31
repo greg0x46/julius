@@ -47,7 +47,7 @@ func TestProgressFollowsInvestedValueRecomputedOnRead(t *testing.T) {
 	in := input("1000")
 	in.TargetDate, in.Notes = &day, &notes
 
-	created, err := goals.Create(ctx, conn, in)
+	created, err := goals.Create(ctx, conn, in, time.UTC)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +60,7 @@ func TestProgressFollowsInvestedValueRecomputedOnRead(t *testing.T) {
 	}
 
 	invest(t, conn, "CDB", "250")
-	got, err := goals.Get(ctx, conn, created.ID)
+	got, err := goals.Get(ctx, conn, created.ID, time.UTC)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -70,7 +70,7 @@ func TestProgressFollowsInvestedValueRecomputedOnRead(t *testing.T) {
 
 	// Progress is not capped: a reached goal reports more than 100%.
 	invest(t, conn, "Tesouro", "1750")
-	got, err = goals.Get(ctx, conn, created.ID)
+	got, err = goals.Get(ctx, conn, created.ID, time.UTC)
 	if err != nil || got.CurrentValue.String() != "2000" || got.Progress.String() != "2" {
 		t.Fatalf("beyond target = %+v, %v", got, err)
 	}
@@ -85,19 +85,19 @@ func TestProgressFollowsInvestedValueRecomputedOnRead(t *testing.T) {
 func TestListUpdateDelete(t *testing.T) {
 	conn := dbtest.OpenSQLite(t)
 	ctx := context.Background()
-	if list, err := goals.List(ctx, conn); err != nil || list == nil || len(list) != 0 {
+	if list, err := goals.List(ctx, conn, time.UTC); err != nil || list == nil || len(list) != 0 {
 		t.Fatalf("empty list = %#v, %v", list, err)
 	}
 	invest(t, conn, "CDB", "500")
-	first, err := goals.Create(ctx, conn, input("1000"))
+	first, err := goals.Create(ctx, conn, input("1000"), time.UTC)
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := goals.Create(ctx, conn, goals.Input{Name: "Viagem", Metric: goals.MetricInvestedValue, TargetAmount: dec("4000")})
+	second, err := goals.Create(ctx, conn, goals.Input{Name: "Viagem", Metric: goals.MetricInvestedValue, TargetAmount: dec("4000")}, time.UTC)
 	if err != nil {
 		t.Fatal(err)
 	}
-	list, err := goals.List(ctx, conn)
+	list, err := goals.List(ctx, conn, time.UTC)
 	if err != nil || len(list) != 2 || list[0].ID != first.ID || list[1].ID != second.ID {
 		t.Fatalf("list = %+v, %v", list, err)
 	}
@@ -108,7 +108,7 @@ func TestListUpdateDelete(t *testing.T) {
 	day := time.Date(2028, 1, 15, 0, 0, 0, 0, time.UTC)
 	updated, err := goals.Update(ctx, conn, first.ID, goals.Input{
 		Name: "  Reserva  ", Metric: goals.MetricInvestedValue, TargetAmount: dec("2000"), TargetDate: &day,
-	})
+	}, time.UTC)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -120,7 +120,7 @@ func TestListUpdateDelete(t *testing.T) {
 	if err := goals.Delete(ctx, conn, first.ID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := goals.Get(ctx, conn, first.ID); !errors.Is(err, goals.ErrNotFound) {
+	if _, err := goals.Get(ctx, conn, first.ID, time.UTC); !errors.Is(err, goals.ErrNotFound) {
 		t.Fatalf("get after delete = %v", err)
 	}
 	if err := goals.Delete(ctx, conn, first.ID); !errors.Is(err, goals.ErrNotFound) {
@@ -135,7 +135,7 @@ func TestListUpdateDelete(t *testing.T) {
 func TestRejectsInvalidInput(t *testing.T) {
 	conn := dbtest.OpenSQLite(t)
 	ctx := context.Background()
-	existing, err := goals.Create(ctx, conn, input("1000"))
+	existing, err := goals.Create(ctx, conn, input("1000"), time.UTC)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -150,15 +150,15 @@ func TestRejectsInvalidInput(t *testing.T) {
 	}
 	for name, in := range cases {
 		t.Run(name, func(t *testing.T) {
-			if _, err := goals.Create(ctx, conn, in); !errors.Is(err, goals.ErrInvalidInput) {
+			if _, err := goals.Create(ctx, conn, in, time.UTC); !errors.Is(err, goals.ErrInvalidInput) {
 				t.Errorf("Create = %v, want ErrInvalidInput", err)
 			}
-			if _, err := goals.Update(ctx, conn, existing.ID, in); !errors.Is(err, goals.ErrInvalidInput) {
+			if _, err := goals.Update(ctx, conn, existing.ID, in, time.UTC); !errors.Is(err, goals.ErrInvalidInput) {
 				t.Errorf("Update = %v, want ErrInvalidInput", err)
 			}
 		})
 	}
-	if list, err := goals.List(ctx, conn); err != nil || len(list) != 1 {
+	if list, err := goals.List(ctx, conn, time.UTC); err != nil || len(list) != 1 {
 		t.Fatalf("rejected input persisted: %+v, %v", list, err)
 	}
 }
@@ -167,10 +167,10 @@ func TestMissingGoal(t *testing.T) {
 	conn := dbtest.OpenSQLite(t)
 	ctx := context.Background()
 	const id = "11111111-1111-4111-8111-111111111111"
-	if _, err := goals.Get(ctx, conn, id); !errors.Is(err, goals.ErrNotFound) {
+	if _, err := goals.Get(ctx, conn, id, time.UTC); !errors.Is(err, goals.ErrNotFound) {
 		t.Errorf("Get = %v", err)
 	}
-	if _, err := goals.Update(ctx, conn, id, input("10")); !errors.Is(err, goals.ErrNotFound) {
+	if _, err := goals.Update(ctx, conn, id, input("10"), time.UTC); !errors.Is(err, goals.ErrNotFound) {
 		t.Errorf("Update = %v", err)
 	}
 	if err := goals.Delete(ctx, conn, id); !errors.Is(err, goals.ErrNotFound) {
@@ -181,7 +181,7 @@ func TestMissingGoal(t *testing.T) {
 func TestWritesRollBackWhenProgressCannotBeValued(t *testing.T) {
 	dbtest.Each(t, func(t *testing.T, conn *sql.DB) {
 		ctx := context.Background()
-		existing, err := goals.Create(ctx, conn, input("1000"))
+		existing, err := goals.Create(ctx, conn, input("1000"), time.UTC)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -191,12 +191,12 @@ func TestWritesRollBackWhenProgressCannotBeValued(t *testing.T) {
 		if _, err := conn.Exec(`ALTER TABLE exchange_rates RENAME TO unavailable_exchange_rates`); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := goals.Create(ctx, conn, input("2000")); err == nil {
+		if _, err := goals.Create(ctx, conn, input("2000"), time.UTC); err == nil {
 			t.Fatal("Create succeeded despite failed valuation query")
 		}
 		changed := input("3000")
 		changed.Name = "Changed name"
-		if _, err := goals.Update(ctx, conn, existing.ID, changed); err == nil {
+		if _, err := goals.Update(ctx, conn, existing.ID, changed, time.UTC); err == nil {
 			t.Fatal("Update succeeded despite failed valuation query")
 		}
 
@@ -207,7 +207,7 @@ func TestWritesRollBackWhenProgressCannotBeValued(t *testing.T) {
 		if _, err := conn.Exec(`DELETE FROM financial_investments WHERE id = ?`, investmentID); err != nil {
 			t.Fatal(err)
 		}
-		list, err := goals.List(ctx, conn)
+		list, err := goals.List(ctx, conn, time.UTC)
 		if err != nil || len(list) != 1 {
 			t.Fatalf("goals after failed writes = %+v, %v", list, err)
 		}

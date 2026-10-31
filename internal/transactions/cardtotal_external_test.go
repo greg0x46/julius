@@ -7,6 +7,7 @@ import (
 
 	"github.com/shopspring/decimal"
 
+	"github.com/greg0x46/julius/internal/money"
 	"github.com/greg0x46/julius/internal/transactions"
 )
 
@@ -168,5 +169,85 @@ func TestCreditCardTotalExcludesDeletedManualTransaction(t *testing.T) {
 	}
 	if !total.IsZero() {
 		t.Errorf("total = %s, want 0 after deleting the manual transaction", total)
+	}
+}
+
+// The cycle flips on the calendar zone's midnight, not on UTC's: at 23:30 in
+// Sao Paulo (02:30Z) a bill that closes tomorrow there is still open.
+func TestCreditCardTotalCycleFollowsTheCalendarZone(t *testing.T) {
+	sao, err := time.LoadLocation("America/Sao_Paulo")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := newFixture(t)
+	now := time.Date(2026, 8, 2, 2, 30, 0, 0, time.UTC) // Aug 1, 23:30 in Sao Paulo
+	card := f.addAccount(account{CurrencyCode: strp("BRL"), AccountType: strp("CREDIT")})
+	f.addBill(bill{AccountID: card, ExternalID: "bill-june", DueDate: time.Date(2026, 6, 10, 0, 0, 0, 0, time.UTC), ClosingDate: time.Date(2026, 6, 2, 0, 0, 0, 0, time.UTC)})
+	f.addBill(bill{AccountID: card, ExternalID: "bill-july", DueDate: time.Date(2026, 7, 10, 0, 0, 0, 0, time.UTC), ClosingDate: time.Date(2026, 7, 2, 0, 0, 0, 0, time.UTC)})
+	f.addBill(bill{AccountID: card, ExternalID: "bill-august", DueDate: time.Date(2026, 8, 10, 0, 0, 0, 0, time.UTC), ClosingDate: time.Date(2026, 8, 2, 0, 0, 0, 0, time.UTC)})
+	purchasedAt := time.Date(2026, 7, 20, 15, 0, 0, 0, time.UTC)
+	f.addTransaction(txn{
+		AccountID: card, Description: strp("Compra"), Amount: strp("-50.00"),
+		AmountInAccountCurrency: strp("-50.00"), CurrencyCode: strp("BRL"),
+		OccurredAt: &purchasedAt, ProviderStatus: strp("POSTED"), MovementType: strp("DEBIT"),
+	})
+
+	for _, tc := range []struct {
+		loc  *time.Location
+		want string
+	}{
+		{sao, "50"},     // Aug 1: the July 2 - Aug 2 cycle still holds the purchase
+		{time.UTC, "0"}, // Aug 2: that cycle closed and the purchase is on a closed bill
+	} {
+		total, err := transactions.CreditCardTransactionTotalAt(context.Background(), f.conn, "BRL", now, tc.loc)
+		if err != nil {
+			t.Fatalf("%s: %v", tc.loc, err)
+		}
+		if total.String() != tc.want {
+			t.Errorf("%s: total = %s, want %s", tc.loc, total, tc.want)
+		}
+	}
+}
+
+// The card_balance filter picks the same cycle as the total, in the request's
+// zone. Kiritimati (UTC+14) and Pago Pago (UTC-11) are always on different
+// calendar days, so the answer differs whatever time the test runs.
+func TestCardBalanceFilterUsesTheRequestTimezone(t *testing.T) {
+	f := newFixture(t)
+	today := func(zone string) time.Time {
+		loc, err := time.LoadLocation(zone)
+		if err != nil {
+			t.Fatal(err)
+		}
+		y, m, d := time.Now().In(loc).Date()
+		return time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
+	}
+	ahead := today("Pacific/Kiritimati")
+	card := f.addAccount(account{CurrencyCode: strp("BRL"), AccountType: strp("CREDIT")})
+	f.addBill(bill{AccountID: card, ExternalID: "bill-previous", DueDate: ahead.AddDate(0, 0, -20), ClosingDate: ahead.AddDate(0, 0, -28)})
+	f.addBill(bill{AccountID: card, ExternalID: "bill-closing-ahead-today", DueDate: ahead.AddDate(0, 0, 8), ClosingDate: ahead})
+	purchasedAt := ahead.AddDate(0, 0, -10).Add(12 * time.Hour)
+	f.addTransaction(txn{
+		AccountID: card, Description: strp("Compra"), Amount: strp("-50.00"),
+		AmountInAccountCurrency: strp("-50.00"), CurrencyCode: strp("BRL"),
+		OccurredAt: &purchasedAt, ProviderStatus: strp("POSTED"), MovementType: strp("DEBIT"),
+	})
+
+	for _, tc := range []struct {
+		zone  string
+		items int
+	}{
+		{"Pacific/Kiritimati", 0}, // the bill already closed on its today
+		{"Pacific/Pago_Pago", 1},  // still the day before the closing
+	} {
+		result, err := transactions.Query(context.Background(), f.conn, transactions.QueryRequest{
+			Timezone: tc.zone, GroupBy: money.GroupNone, Filters: transactions.Filters{CardBalance: true},
+		})
+		if err != nil {
+			t.Fatalf("%s: %v", tc.zone, err)
+		}
+		if len(result.Items) != tc.items {
+			t.Errorf("%s: %d items, want %d", tc.zone, len(result.Items), tc.items)
+		}
 	}
 }

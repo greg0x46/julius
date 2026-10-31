@@ -53,15 +53,15 @@ func mcpRejected(t *testing.T, conn *sql.DB, op, id string, data any) {
 func TestMCPAccountsNativeBalancesAndOwnership(t *testing.T) {
 	dbtest.Each(t, func(t *testing.T, conn *sql.DB) {
 		ctx := context.Background()
-		data := mcpAccountData("USD", "100.1234567890123456789")
+		data := mcpAccountData("USD", "100.1234")
 		id := planningResultID(t, applyWrite(t, conn, writePreview(t, conn, "create_manual_account", "", data)))
 		data["name"] = "Synthetic dollars"
 		applyWrite(t, conn, writePreview(t, conn, "update_manual_account", id, data))
-		mcpBalance(t, conn, id, "100.1234567890123456789")
+		mcpBalance(t, conn, id, "100.1234")
 		mcpRejected(t, conn, "update_manual_account", id, map[string]any{"name": "Synthetic rename"})
-		p := writePreview(t, conn, "adjust_manual_account", id, map[string]any{"amount": "-0.0000000000000000001", "description": "Synthetic correction"})
+		p := writePreview(t, conn, "adjust_manual_account", id, map[string]any{"amount": "-0.0001", "description": "Synthetic correction"})
 		applyWrite(t, conn, p)
-		mcpBalance(t, conn, id, "100.1234567890123456788")
+		mcpBalance(t, conn, id, "100.1233")
 		if _, err := httpapi.ExecuteMCPWrite(ctx, conn, p); !errors.Is(err, httpapi.ErrMCPWriteConflict) {
 			t.Fatalf("replayed adjustment: %v", err)
 		}
@@ -71,13 +71,13 @@ func TestMCPAccountsNativeBalancesAndOwnership(t *testing.T) {
 		data["currency_code"] = "USD"
 		data["opening_balance"] = "0"
 		mcpRejected(t, conn, "update_manual_account", id, data)
-		data["opening_balance"] = "100.1234567890123456789"
+		data["opening_balance"] = "100.1234"
 		data["archived"] = true
 		applyWrite(t, conn, writePreview(t, conn, "update_manual_account", id, data))
 		mcpRejected(t, conn, "adjust_manual_account", id, map[string]any{"amount": "1", "description": "Synthetic"})
 		data["archived"] = false
 		applyWrite(t, conn, writePreview(t, conn, "update_manual_account", id, data))
-		mcpBalance(t, conn, id, "100.1234567890123456788")
+		mcpBalance(t, conn, id, "100.1233")
 		// Provider balances remain authoritative and cannot be adjusted or edited.
 		synced := mcpSyncedAccount(t, conn, "777")
 		id = synced
@@ -109,7 +109,7 @@ func TestMCPTransfersPreserveCashAndReportOnlyFees(t *testing.T) {
 		ctx := context.Background()
 		source := planningResultID(t, applyWrite(t, conn, writePreview(t, conn, "create_manual_account", "", mcpAccountData("BRL", "1000"))))
 		dest := planningResultID(t, applyWrite(t, conn, writePreview(t, conn, "create_manual_account", "", mcpAccountData("USD", "0"))))
-		data := map[string]any{"source": mcpMovement(source, "-540.1234567890123456789"), "destination": mcpMovement(dest, "100.1234567890123456789"), "fee": mcpMovement(source, "-2.0000000000000000001")}
+		data := map[string]any{"source": mcpMovement(source, "-540.1234"), "destination": mcpMovement(dest, "100.1234"), "fee": mcpMovement(source, "-2.0001")}
 		p := writePreview(t, conn, "create_transfer", "", data)
 		if p.AffectedCount != 6 {
 			t.Fatalf("missing transfer effects: %+v", p)
@@ -121,8 +121,8 @@ func TestMCPTransfersPreserveCashAndReportOnlyFees(t *testing.T) {
 		if err := json.Unmarshal(result.Data, &transfer); err != nil || transfer.Fee == nil {
 			t.Fatalf("transfer: %s %v", result.Data, err)
 		}
-		mcpBalance(t, conn, source, "457.8765432109876543210")
-		mcpBalance(t, conn, dest, "100.1234567890123456789")
+		mcpBalance(t, conn, source, "457.8765")
+		mcpBalance(t, conn, dest, "100.1234")
 		for _, id := range []string{transfer.Source.TransactionID, transfer.Destination.TransactionID} {
 			item, found, err := transactions.GetItem(ctx, conn, id)
 			if err != nil || !found || item.TotalsEligibility.Included || item.TotalsEligibility.Reason == nil || *item.TotalsEligibility.Reason != "linked_transfer" {
@@ -130,12 +130,12 @@ func TestMCPTransfersPreserveCashAndReportOnlyFees(t *testing.T) {
 			}
 		}
 		fee, found, err := transactions.GetItem(ctx, conn, transfer.Fee.TransactionID)
-		if err != nil || !found || !fee.TotalsEligibility.Included || fee.Amount == nil || *fee.Amount != "-2.0000000000000000001" {
+		if err != nil || !found || !fee.TotalsEligibility.Included || fee.Amount == nil || *fee.Amount != "-2.0001" {
 			t.Fatalf("fee: %+v %v", fee, err)
 		}
 
 		report, err := transactions.Query(ctx, conn, transactions.QueryRequest{Timezone: "UTC", GroupBy: money.GroupNone, Page: 1, PageSize: 20})
-		if err != nil || len(report.Totals) != 1 || report.Totals[0].CurrencyCode != "BRL" || !decimal.RequireFromString(report.Totals[0].Inflow).IsZero() || report.Totals[0].Outflow != "2.0000000000000000001" {
+		if err != nil || len(report.Totals) != 1 || report.Totals[0].CurrencyCode != "BRL" || !decimal.RequireFromString(report.Totals[0].Inflow).IsZero() || report.Totals[0].Outflow != "2.0001" {
 			t.Fatalf("principal leaked into reporting: %+v %v", report.Totals, err)
 		}
 		if _, err = httpapi.ExecuteMCPWrite(ctx, conn, p); !errors.Is(err, httpapi.ErrMCPWriteConflict) {
@@ -147,7 +147,7 @@ func TestMCPTransfersPreserveCashAndReportOnlyFees(t *testing.T) {
 		applyWrite(t, conn, writePreview(t, conn, "delete_transfer", transfer.ID, map[string]any{}))
 		mcpCount(t, conn, "transfer_links", 0)
 		mcpCount(t, conn, "financial_transactions", 3)
-		mcpBalance(t, conn, source, "457.8765432109876543210")
+		mcpBalance(t, conn, source, "457.8765")
 		fee, _, err = transactions.GetItem(ctx, conn, transfer.Source.TransactionID)
 		if err != nil || !fee.TotalsEligibility.Included {
 			t.Fatalf("unlink failed to restore reporting: %+v %v", fee, err)
@@ -167,10 +167,10 @@ func TestMCPPayablesLinksAndPlanCleanup(t *testing.T) {
 		ctx := context.Background()
 		account := planningCash(t, conn, "BRL", "100")
 		for _, kind := range []payables.Kind{payables.KindDebt, payables.KindReceivable} {
-			data := map[string]any{"name": "Synthetic obligation", "kind": string(kind), "total_amount": "50.1234567890123456789", "initial_remaining_amount": "40.1234567890123456789"}
+			data := map[string]any{"name": "Synthetic obligation", "kind": string(kind), "total_amount": "50.1234", "initial_remaining_amount": "40.1234"}
 			id := planningResultID(t, applyWrite(t, conn, writePreview(t, conn, "create_payable", "", data)))
 			planKind := scenarios.KindDebtPlan
-			amount := decimal.RequireFromString("-10.1234567890123456789")
+			amount := decimal.RequireFromString("-10.1234")
 			if kind == payables.KindReceivable {
 				planKind = scenarios.KindReceivablePlan
 				amount = amount.Neg()
@@ -192,14 +192,14 @@ func TestMCPPayablesLinksAndPlanCleanup(t *testing.T) {
 				t.Fatal(err)
 			}
 			summary, err := payables.Summarize(ctx, conn, item)
-			if err != nil || summary.Settled.String() != "20.1234567890123456789" || summary.Remaining.String() != "30" {
+			if err != nil || summary.Settled.String() != "20.1234" || summary.Remaining.String() != "30" {
 				t.Fatalf("summary: %+v %v", summary, err)
 			}
 			links, err := scenarios.ListRealizations(ctx, conn, plan.ID)
 			if err != nil || len(links) != 1 {
 				t.Fatalf("settlement missing: %+v %v", links, err)
 			}
-			applyWrite(t, conn, writePreview(t, conn, "update_payable", id, map[string]any{"name": "Synthetic updated", "total_amount": "60.1234567890123456789"}))
+			applyWrite(t, conn, writePreview(t, conn, "update_payable", id, map[string]any{"name": "Synthetic updated", "total_amount": "60.1234"}))
 			applyWrite(t, conn, writePreview(t, conn, "delete_payable_link", linkID, map[string]any{"payable_id": id}))
 			links, err = scenarios.ListRealizations(ctx, conn, plan.ID)
 			if err != nil || len(links) != 0 {

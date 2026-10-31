@@ -26,6 +26,7 @@ const roots = {
   investmentWorkspace: ["investmentWorkspace"],
   netWorth: ["netWorth"],
   payables: ["payables"],
+  preferences: ["preferences"],
   recurringCommitments: ["recurringCommitments"],
   scenarios: ["scenarios"],
   statementImports: ["statement-imports"],
@@ -88,12 +89,9 @@ export const queryKeys = {
   timelineFor: (params: TimelineParams) => [...roots.timeline, params] as const,
   transactionTransfer: (id: string) => [...roots.transactionTransfers, id] as const,
   transactionsFor: (query: TransactionQuery) => [...roots.transactions, query] as const,
-  transactionsInvalidTimezone: [...roots.transactions, "invalid-timezone"] as const,
-  transactionsInvalidTimezoneFor: (accountId: string) =>
-    [...roots.transactions, "invalid-timezone", accountId] as const,
-  categoryBreakdown: (timezone: string | null, period: unknown, classification: unknown) =>
+  categoryBreakdown: (timezone: string, period: unknown, classification: unknown) =>
     [...roots.transactions, "category-breakdown", timezone, period, classification] as const,
-  spendingByCategory: (timezone: string | null) =>
+  spendingByCategory: (timezone: string) =>
     [...roots.transactions, "spending-by-category", timezone] as const,
   transactionReconciliationOf: (transactionId: string) =>
     [...roots.transactionReconciliation, transactionId] as const,
@@ -269,3 +267,20 @@ export const invalidateCategories = (client: Client) =>
     markTransactionsStale(client),
   ]);
 export const invalidateAuthSession = (client: Client) => invalidate(client, roots.authSession);
+
+// Not affected by the timezone: the session, the preferences and the currency list.
+const timezoneNeutralRoots = new Set([roots.authSession[0], roots.preferences[0], "account-currencies"]);
+
+/**
+ * The timezone moves "today" and every day or month boundary, on the server as
+ * well, so anything but the session, the preferences and the currency list may
+ * answer differently. Dropped rather than refetched: a screen opened later
+ * must not flash numbers for the old zone.
+ */
+export async function discardAfterTimezoneChange(
+  client: Pick<QueryClient, "cancelQueries" | "removeQueries">,
+) {
+  const predicate = (query: { queryKey: QueryKey }) => !timezoneNeutralRoots.has(query.queryKey[0] as string);
+  await client.cancelQueries({ predicate });
+  client.removeQueries({ predicate });
+}

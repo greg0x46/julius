@@ -1,33 +1,34 @@
-const formatter = new Intl.DateTimeFormat("pt-BR", {
-  dateStyle: "short",
-  timeStyle: "medium",
-});
+import { zonedDay, zonedFormatter, zonedToday } from "./timezone";
 
-export function formatDate(value: string): string {
+// An instant (a sync run, a token's creation) is read in the app's configured
+// timezone, which every caller passes in (see useTimezone) — never in whatever
+// zone the machine happens to be in.
+export function formatDate(value: string, timezone: string): string {
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "Data inválida" : formatter.format(date);
+  return Number.isNaN(date.getTime())
+    ? "Data inválida"
+    : zonedFormatter(timezone, { dateStyle: "short", timeStyle: "medium" }).format(date);
 }
 
-export function formatOptionalDate(value: string | null): string {
-  return value === null ? "Ainda não disponível" : formatDate(value);
+export function formatOptionalDate(value: string | null, timezone: string): string {
+  return value === null ? "Ainda não disponível" : formatDate(value, timezone);
 }
-
-const shortDateFormatter = new Intl.DateTimeFormat("pt-BR", { dateStyle: "short" });
-const shortTimeFormatter = new Intl.DateTimeFormat("pt-BR", { timeStyle: "short" });
 
 /** "22/09/2026 às 06:00" — the same instant as formatDate, without seconds
  *  and read as a sentence, for a place like "Atualizado em ..." rather than
  *  a data table. */
-export function formatOptionalDateTime(value: string | null): string {
+export function formatOptionalDateTime(value: string | null, timezone: string): string {
   if (value === null) return "Ainda não disponível";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "Data inválida";
-  return `${shortDateFormatter.format(date)} às ${shortTimeFormatter.format(date)}`;
+  const day = zonedFormatter(timezone, { dateStyle: "short" }).format(date);
+  const time = zonedFormatter(timezone, { timeStyle: "short" }).format(date);
+  return `${day} às ${time}`;
 }
 
 // Bill and card-limit dates are calendar days anchored at midnight UTC, so
 // rendering them with formatDate would tack on a meaningless "00:00:00" — and
-// reading them in the local timezone would slide them a day backwards.
+// reading them in any other timezone would slide them a day backwards.
 const dayFormatter = new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeZone: "UTC" });
 
 export function formatDay(value: string): string {
@@ -40,19 +41,19 @@ export function formatOptionalDay(value: string | null): string {
 }
 
 // An instant — a transaction's occurred_at, a card's last use — is a point in
-// time, not a calendar day, and belongs in the reader's own timezone: that's
-// how the transactions screen renders it, and the two screens show the same
-// rows. Pinning it to UTC like formatDay would push anything after 21:00 in
-// Brazil onto the next day, so the same purchase would carry two dates.
-const localDayFormatter = new Intl.DateTimeFormat("pt-BR", { dateStyle: "short" });
-
-export function formatLocalDay(value: string): string {
+// time, not a calendar day, and belongs in the app's configured timezone:
+// that's how the transactions screen groups it, and the two screens show the
+// same rows. Pinning it to UTC like formatDay would push anything after 21:00
+// in Brazil onto the next day, so the same purchase would carry two dates.
+export function formatLocalDay(value: string, timezone: string): string {
   const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? "Data inválida" : localDayFormatter.format(date);
+  return Number.isNaN(date.getTime())
+    ? "Data inválida"
+    : zonedFormatter(timezone, { dateStyle: "short" }).format(date);
 }
 
-export function formatOptionalLocalDay(value: string | null): string {
-  return value === null ? "—" : formatLocalDay(value);
+export function formatOptionalLocalDay(value: string | null, timezone: string): string {
+  return value === null ? "—" : formatLocalDay(value, timezone);
 }
 
 // A plain "YYYY-MM-DD" from the timeline API is a calendar day with no
@@ -73,28 +74,28 @@ const dateOnlyPattern = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
  * The calendar parts of either kind of date the API sends: a plain
- * "YYYY-MM-DD" is taken as written, an instant is read in the local zone
+ * "YYYY-MM-DD" is taken as written, an instant is read in `timezone`
  * (see formatLocalDay). Null when the value can't be parsed.
  */
-export function calendarParts(value: string): { day: number; month: number; year: number } | null {
-  if (dateOnlyPattern.test(value)) {
-    const [year, month, day] = value.split("-").map(Number);
-    return { day, month, year };
-  }
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return null;
-  return { day: date.getDate(), month: date.getMonth() + 1, year: date.getFullYear() };
+export function calendarParts(
+  value: string,
+  timezone: string,
+): { day: number; month: number; year: number } | null {
+  const text = dateOnlyPattern.test(value) ? value : zonedDay(value, timezone);
+  if (text === null) return null;
+  const [year, month, day] = text.split("-").map(Number);
+  return { day, month, year };
 }
 
 const shortMonths = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
 
 /**
  * "13 set." — the shortest date that still tells rows apart in a dense list;
- * the year is appended only when it isn't the current one.
+ * the year is appended only when it isn't the current one in `timezone`.
  */
-export function formatCompactDay(value: string): string {
-  const parts = calendarParts(value);
+export function formatCompactDay(value: string, timezone: string, now: Date = new Date()): string {
+  const parts = calendarParts(value, timezone);
   if (parts === null) return "Data inválida";
   const label = `${String(parts.day).padStart(2, "0")} ${shortMonths[parts.month - 1]}.`;
-  return parts.year === new Date().getFullYear() ? label : `${label} ${parts.year}`;
+  return parts.year === Number(zonedToday(timezone, now).slice(0, 4)) ? label : `${label} ${parts.year}`;
 }

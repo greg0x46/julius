@@ -44,3 +44,27 @@ func DaysInMonth(year int, month time.Month) int {
 	// Day zero of the next month is the last day of this one.
 	return time.Date(year, month+1, 0, 0, 0, 0, 0, time.UTC).Day()
 }
+
+// AddMonths is day moved by n months (negative goes back) on the same day of
+// the month, clamped to the last day of a shorter month: Jan 31 + 1 is Feb
+// 28 (29 in a leap year), Jan 31 + 2 is Mar 31. Time.AddDate would normalize
+// the overflow instead (Jan 31 + 1 → Mar 3).
+//
+// Every result is computed from day alone, never from a previous result, so
+// stepping n = 0, 1, 2… keeps the original day instead of drifting to the 28th
+// after the first short month. Like Day, the result is midnight UTC.
+func AddMonths(day time.Time, n int) time.Time {
+	return AddMonthsOnDay(day, day.Day(), n)
+}
+
+// AddMonthsOnDay is AddMonths landing on anchorDay rather than day's own day
+// of the month, still clamped to the target month's length. A caller holding
+// an already clamped date (Feb 28) uses it to keep stepping from the day the
+// series was anchored on (31): n = 0 → Feb 28, n = 1 → Mar 31.
+func AddMonthsOnDay(day time.Time, anchorDay, n int) time.Time {
+	// time.Date normalizes the month, which also covers a negative n and a
+	// December rollover; the day is fixed once the target month is known.
+	first := time.Date(day.Year(), day.Month()+time.Month(n), 1, 0, 0, 0, 0, time.UTC)
+	year, month := first.Year(), first.Month()
+	return time.Date(year, month, min(anchorDay, DaysInMonth(year, month)), 0, 0, 0, 0, time.UTC)
+}
