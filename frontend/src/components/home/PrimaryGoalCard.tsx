@@ -1,3 +1,4 @@
+import { useTranslation } from "../../i18n/context";
 import { Skeleton } from "../ui";
 import { Link } from "react-router-dom";
 
@@ -15,19 +16,20 @@ const route = "/metas";
 
 /** Where the goal stands against its date, in a sentence; the server's projection, shown as it comes. */
 function ProjectionLine({ goal }: { goal: Goal }) {
-  if (compareDecimals(goal.progress, "1") >= 0) return <>Meta atingida</>;
-  if (goal.projection === null || goal.target_date === null) return <>Sem data-alvo definida</>;
-  const date = formatDateOnly(goal.target_date);
+  const { t, language } = useTranslation();
+  if (compareDecimals(goal.progress, "1") >= 0) return <>{t("goalReached")}</>;
+  if (goal.projection === null || goal.target_date === null) return <>{t("noTargetDate")}</>;
+  const date = formatDateOnly(goal.target_date, language);
   if (goal.projection.status === "behind") {
     return (
       <>
-        Atrás do ritmo para {date}: aporte de{" "}
+        {t("behindGoalPace").replace("{date}", date)}{" "}
         <Money currencyCode={goal.currency_code} value={goal.projection.required_monthly_contribution} tone="neutral" />{" "}
-        por mês
+        {t("perMonth")}
       </>
     );
   }
-  return <>No ritmo para {date}</>;
+  return <>{t("onGoalPace").replace("{date}", date)}</>;
 }
 
 /**
@@ -37,12 +39,13 @@ function ProjectionLine({ goal }: { goal: Goal }) {
  * goals it is a quiet invitation to create one rather than an empty card.
  */
 export function PrimaryGoalCard() {
+  const { t } = useTranslation();
   const goals = useGoals();
 
   if (goals.isLoading) {
     return (
-      <HomeTile label="Meta">
-        <div role="status" aria-label="Carregando a meta">
+      <HomeTile label={t("goal")}>
+        <div role="status" aria-label={t("loadingGoal")}>
           <Skeleton active title={false} paragraph={{ rows: 2 }} />
         </div>
       </HomeTile>
@@ -50,20 +53,20 @@ export function PrimaryGoalCard() {
   }
   if (goals.error && goals.goals.length === 0) {
     return (
-      <HomeTile label="Meta">
+      <HomeTile label={t("goal")}>
         <UnavailableState onRetry={() => goals.refetch()}>
-          {problemMessage(goals.error) ?? "Não foi possível carregar as metas."}
+          {problemMessage(goals.error) ?? t("goalsLoadError")}
         </UnavailableState>
       </HomeTile>
     );
   }
   if (goals.goals.length === 0) {
     return (
-      <HomeTile label="Meta">
+      <HomeTile label={t("goal")}>
         <span className="home-tile-line is-inline">
-          <span className="home-tile-note">Você ainda não tem metas.</span>
+          <span className="home-tile-note">{t("noGoalsYet")}</span>
           <Link className="home-tile-action" to={route}>
-            Criar meta
+            {t("createGoal")}
           </Link>
         </span>
       </HomeTile>
@@ -74,13 +77,13 @@ export function PrimaryGoalCard() {
   const percent = goalPercent(goal.progress);
 
   return (
-    <HomeTile label={`Meta · ${goal.name}`} to={route}>
+    <HomeTile label={`${t("goal")} · ${goal.name}`} to={route}>
       <span className="home-tile-line">
         <span className="home-tile-figure">{percent}%</span>
         <span
           className="home-meter"
           role="progressbar"
-          aria-label={`Progresso de ${goal.name}`}
+          aria-label={t("goalProgress", { name: goal.name })}
           aria-valuemin={0}
           aria-valuemax={100}
           aria-valuenow={Math.min(percent, 100)}
@@ -88,12 +91,12 @@ export function PrimaryGoalCard() {
           <span className="home-meter-fill" style={{ width: `${Math.min(percent, 100)}%` }} />
         </span>
         <span className="home-tile-note is-optional">
-          <Money currencyCode={goal.currency_code} value={goal.current_value} tone="neutral" /> de{" "}
+          <Money currencyCode={goal.currency_code} value={goal.current_value} tone="neutral" /> {t("of")}{" "}
           <Money currencyCode={goal.currency_code} value={goal.target_amount} tone="neutral" />
         </span>
         <span className="home-tile-note home-goal-projection">
           <ProjectionLine goal={goal} />
-          {others.length > 0 && ` · mais ${others.length} ${others.length === 1 ? "meta" : "metas"}`}
+          {others.length > 0 && t(others.length === 1 ? "moreGoal" : "moreGoals").replace("{count}", String(others.length))}
         </span>
       </span>
     </HomeTile>

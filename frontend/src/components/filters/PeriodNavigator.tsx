@@ -1,3 +1,4 @@
+import { useTranslation } from "../../i18n/context";
 import { CalendarOutlined, CaretDownFilled, LeftOutlined, RightOutlined } from "../ui/icons";
 import { Button, Input, Popover } from "../ui";
 import { useState } from "react";
@@ -22,7 +23,6 @@ type Props = {
   id?: string;
 };
 
-const defaultReset = { preset: "this-month", label: "Mês atual" };
 
 /**
  * The period control shared by the transactions filter bar and the Home
@@ -34,17 +34,18 @@ const defaultReset = { preset: "this-month", label: "Mês atual" };
  * in localStorage, whichever fits the screen.
  */
 export function PeriodNavigator({ value, presets, onChange, reset, bare, id = "filter-period" }: Props) {
+  const { t, language } = useTranslation();
   const [open, setOpen] = useState(false);
   const [customDates, setCustomDates] = useState<[string, string]>(["", ""]);
   const [error, setError] = useState<string | null>(null);
   const [from, to] = value;
 
-  const navigation = periodNavigation(from, to);
+  const navigation = periodNavigation(from, to, language);
   const selectedPreset = presets.find((preset) => {
     const [presetFrom, presetTo] = preset.range();
     return from === presetFrom && to === presetTo;
   });
-  const resetTo = reset ?? defaultReset;
+  const resetTo = reset ?? { preset: "this-month", label: t("currentMonth") };
   const resetRange = presets.find((preset) => preset.value === resetTo.preset)?.range();
 
   const commit = (nextFrom: string | null, nextTo: string | null) => {
@@ -55,11 +56,11 @@ export function PeriodNavigator({ value, presets, onChange, reset, bare, id = "f
   const confirmCustom = () => {
     const [customFrom, customTo] = customDates;
     if (customFrom === "" !== (customTo === "")) {
-      setError("Preencha os dois campos de período.");
+      setError(t("periodBothDates"));
       return;
     }
     if (customFrom !== "" && customTo !== "" && customFrom > customTo) {
-      setError("A data inicial não pode ser posterior à data final.");
+      setError(t("periodInvalidDates"));
       return;
     }
     setError(null);
@@ -70,12 +71,12 @@ export function PeriodNavigator({ value, presets, onChange, reset, bare, id = "f
     <div
       className={`filter-period-navigation${bare ? " filter-period-navigation-bare" : ""}`}
       role="group"
-      aria-label="Navegar entre períodos"
+      aria-label={t("periodNavigation")}
     >
       <Button
         className="filter-period-arrow"
-        aria-label={navigation?.previousLabel ?? "Período anterior"}
-        title={navigation?.previousLabel ?? "Período anterior"}
+        aria-label={navigation?.previousLabel ?? t("previousPeriod")}
+        title={navigation?.previousLabel ?? t("previousPeriod")}
         icon={<LeftOutlined aria-hidden="true" />}
         disabled={!navigation?.previous}
         onClick={() => {
@@ -83,7 +84,7 @@ export function PeriodNavigator({ value, presets, onChange, reset, bare, id = "f
         }}
       />
       <Popover
-        title="Selecionar período"
+        title={t("selectPeriod")}
         trigger="click"
         open={open}
         onOpenChange={(next) => {
@@ -105,14 +106,14 @@ export function PeriodNavigator({ value, presets, onChange, reset, bare, id = "f
               ))}
             </div>
             <div className="filter-date-panel">
-              <label htmlFor={`${id}-from`}>Data inicial</label>
+              <label htmlFor={`${id}-from`}>{t("startDate")}</label>
               <Input
                 id={`${id}-from`}
                 type="date"
                 value={customDates[0]}
                 onChange={(event) => setCustomDates((current) => [event.target.value, current[1]])}
               />
-              <label htmlFor={`${id}-to`}>Data final</label>
+              <label htmlFor={`${id}-to`}>{t("endDate")}</label>
               <Input
                 id={`${id}-to`}
                 type="date"
@@ -121,24 +122,24 @@ export function PeriodNavigator({ value, presets, onChange, reset, bare, id = "f
               />
               {error && <p role="alert">{error}</p>}
               <Button type="primary" onClick={confirmCustom}>
-                Confirmar período
+                {t("confirmPeriod")}
               </Button>
             </div>
           </>
         }
       >
-        <Button className="filter-period-heading" aria-label="Selecionar período" aria-expanded={open}>
+        <Button className="filter-period-heading" aria-label={t("selectPeriod")} aria-expanded={open}>
           <CalendarOutlined className="filter-period-heading-icon" aria-hidden="true" />
           <span aria-live="polite" aria-atomic="true">
-            {navigation?.label ?? (from === null && to === null ? "Todo o período" : "Selecione um período")}
+            {navigation?.label ?? (from === null && to === null ? t("allTime") : t("choosePeriod"))}
           </span>
           <CaretDownFilled className="filter-period-heading-caret" aria-hidden="true" />
         </Button>
       </Popover>
       <Button
         className="filter-period-arrow"
-        aria-label={navigation?.nextLabel ?? "Próximo período"}
-        title={navigation?.nextLabel ?? "Próximo período"}
+        aria-label={navigation?.nextLabel ?? t("nextPeriod")}
+        title={navigation?.nextLabel ?? t("nextPeriod")}
         icon={<RightOutlined aria-hidden="true" />}
         disabled={!navigation?.next}
         onClick={() => {

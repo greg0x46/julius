@@ -1,3 +1,4 @@
+import { useTranslation } from "../../i18n/context";
 import { DownOutlined } from "../ui/icons";
 import { useId, useState } from "react";
 
@@ -31,6 +32,7 @@ export function TransactionSummaryBar({
   totalItems: number;
   busy?: boolean;
 }) {
+  const { t, language } = useTranslation();
   const compact = useCompactScreen();
   const [expanded, setExpanded] = useState(false);
   const brl = reportingTotals(reporting, totals);
@@ -39,27 +41,27 @@ export function TransactionSummaryBar({
 
   return (
     <DataCardSummary
-      label="Resumo financeiro"
+      label={t("financialSummary")}
       busy={busy}
-      note={showDetails ? "Totais dos filtros aplicados, sem transações ignoradas." : undefined}
+      note={showDetails ? t("financialSummaryHint") : undefined}
     >
       <div className={`transaction-summary-bar ${expanded ? "is-expanded" : ""}`}>
         <p className="transaction-summary-line">
           <span className="transaction-summary-count">
-            {totalItems.toLocaleString("pt-BR")} {totalItems === 1 ? "transação" : "transações"}
+            {t(totalItems === 1 ? "transactionCountOne" : "transactionCountMany", { count: totalItems.toLocaleString(language) })}
           </span>
           <span className="transaction-summary-figure transaction-summary-result">
-            <span className="transaction-summary-label">Resultado</span>
-            {brl ? <Money value={brl.balance} currencyCode={brl.currency_code} report tone="result" className="transaction-summary-value" /> : <span role="status">{reporting ? reportingLabel(reporting) : "Total indisponível"}</span>}
+            <span className="transaction-summary-label">{t("result")}</span>
+            {brl ? <Money value={brl.balance} currencyCode={brl.currency_code} report tone="result" className="transaction-summary-value" /> : <span role="status">{reporting ? reportingLabel(reporting, language) : t("totalUnavailable")}</span>}
           </span>
           {!compact && brl && (
             <>
               <span className="transaction-summary-figure">
-                <span className="transaction-summary-label">Entradas</span>
+                <span className="transaction-summary-label">{t("inflows")}</span>
                 <span className="transaction-summary-value">{formatReportMoney(brl.inflow, brl.currency_code)}</span>
               </span>
               <span className="transaction-summary-figure">
-                <span className="transaction-summary-label">Saídas</span>
+                <span className="transaction-summary-label">{t("outflows")}</span>
                 <span className="transaction-summary-value">{formatReportMoney(brl.outflow, brl.currency_code)}</span>
               </span>
             </>
@@ -72,7 +74,7 @@ export function TransactionSummaryBar({
             className="transaction-summary-toggle"
             aria-expanded={expanded}
             aria-controls={expanded ? detailsId : undefined}
-            aria-label={expanded ? "Ocultar resumo" : "Ver resumo"}
+            aria-label={expanded ? t("hideSummary") : t("showSummary")}
             onClick={() => setExpanded((value) => !value)}
           >
             <DownOutlined aria-hidden="true" />
@@ -82,11 +84,11 @@ export function TransactionSummaryBar({
         {compact && expanded && brl && (
           <dl id={detailsId} className="transaction-summary-details">
             <div>
-              <dt>Entradas</dt>
+              <dt>{t("inflows")}</dt>
               <dd>{formatReportMoney(brl.inflow, brl.currency_code)}</dd>
             </div>
             <div>
-              <dt>Saídas</dt>
+              <dt>{t("outflows")}</dt>
               <dd>{formatReportMoney(brl.outflow, brl.currency_code)}</dd>
             </div>
           </dl>

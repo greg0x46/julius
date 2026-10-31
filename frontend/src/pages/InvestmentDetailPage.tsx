@@ -1,3 +1,4 @@
+import { useTranslation } from "../i18n/context";
 import { Skeleton } from "../components/ui";
 import { useParams } from "react-router-dom";
 
@@ -8,14 +9,13 @@ import { InvestmentPositionOperations } from "../components/investments/Investme
 import { InvestmentTimeline } from "../components/investments/InvestmentTimeline";
 import { useInvestmentDetail } from "../hooks/useInvestmentDetail";
 
-const pageTitle = "Investimento";
 const backTo = "/investimentos";
-const backLabel = "Voltar para investimentos";
 
 /** The loaded page's blocks — summary strip, then a list — so nothing jumps when the record arrives. */
 function InvestmentDetailSkeleton() {
+  const { t } = useTranslation();
   return (
-    <div role="status" aria-label="Carregando investimento">
+    <div role="status" aria-label={t("loadingInvestment")}>
       <Skeleton active title={{ width: "35%" }} paragraph={{ rows: 2 }} />
       <Skeleton active title={{ width: "25%" }} paragraph={{ rows: 4 }} />
     </div>
@@ -23,6 +23,9 @@ function InvestmentDetailSkeleton() {
 }
 
 function ValidInvestmentDetail({ id }: { id: string }) {
+  const { t } = useTranslation();
+  const pageTitle = t("investmentTitle");
+  const backLabel = t("backToInvestments");
   const investment = useInvestmentDetail(id);
 
   if (investment.state.freshness === "loading") {
@@ -38,12 +41,12 @@ function ValidInvestmentDetail({ id }: { id: string }) {
       title={pageTitle}
       backTo={backTo}
       backLabel={backLabel}
-      recordTitle={(snapshot) => snapshot.name ?? "Sem nome"}
+      recordTitle={(snapshot) => snapshot.name ?? t("unnamed")}
       state={investment.state}
       retry={investment.retry}
-      notFoundMessage="Investimento não encontrado"
-      notFoundDescription="Não existe um investimento com este identificador."
-      unavailableMessage="Não foi possível consultar este investimento agora."
+      notFoundMessage={t("investmentNotFound")}
+      notFoundDescription={t("investmentNotFoundDescription")}
+      unavailableMessage={t("investmentUnavailable")}
     >
       {(snapshot) => (
         <>
@@ -64,15 +67,16 @@ function ValidInvestmentDetail({ id }: { id: string }) {
 }
 
 export function InvestmentDetailPage() {
+  const { t } = useTranslation();
   const { id = "" } = useParams();
   return isUuid(id) ? (
     <ValidInvestmentDetail id={id} />
   ) : (
     <InvalidDetailPage
-      title={pageTitle}
+      title={t("investmentTitle")}
       backTo={backTo}
-      backLabel={backLabel}
-      invalidTitle="Endereço de investimento inválido"
+      backLabel={t("backToInvestments")}
+      invalidTitle={t("invalidInvestmentAddress")}
     />
   );
 }

@@ -614,6 +614,14 @@ input[type="radio"] {
 .app-header .ui-btn {
   color: white;
 }
+.app-language-select {
+  margin-left: auto;
+  min-width: 0;
+  max-width: 9rem;
+}
+.app-language-select + .app-theme-switch {
+  margin-left: 0;
+}
 .app-theme-switch {
   margin-left: auto;
   flex-shrink: 0;

@@ -1,7 +1,8 @@
+import { useTranslation } from "../i18n/context";
 import { Alert, Button, Input } from "../components/ui";
 import { useState } from "react";
 
-import { login } from "../api/auth";
+import { authErrorMessage, login } from "../api/auth";
 import julius from "../assets/julius.png";
 import { FormField } from "../components/forms/FormField";
 
@@ -13,6 +14,7 @@ import { FormField } from "../components/forms/FormField";
  * collapsing toolbar does not push the button below the fold.
  */
 export function LoginPage({ onDone }: { onDone: () => void }) {
+  const { t, language } = useTranslation();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -25,7 +27,7 @@ export function LoginPage({ onDone }: { onDone: () => void }) {
       setPassword("");
       onDone();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Não foi possível entrar.");
+      setError(authErrorMessage(err, language, t("loginError")));
     } finally {
       setBusy(false);
     }
@@ -36,7 +38,7 @@ export function LoginPage({ onDone }: { onDone: () => void }) {
         <div className="login-brand">
           <img src={julius} alt="" className="login-brand-logo" />
           <h1 className="login-brand-name">Julius</h1>
-          <p className="login-brand-tagline">De graça !?</p>
+          <p className="login-brand-tagline">{t("brandSubtitle")}</p>
         </div>
         <form
           className="login-form"
@@ -46,7 +48,7 @@ export function LoginPage({ onDone }: { onDone: () => void }) {
           }}
         >
           {error && <Alert type="error" showIcon message={error} />}
-          <FormField label="E-mail" htmlFor="login-email">
+          <FormField label={t("email")} htmlFor="login-email">
             <Input
               id="login-email"
               size="large"
@@ -57,7 +59,7 @@ export function LoginPage({ onDone }: { onDone: () => void }) {
               onChange={(e) => setEmail(e.target.value)}
             />
           </FormField>
-          <FormField label="Senha" htmlFor="login-password">
+          <FormField label={t("password")} htmlFor="login-password">
             <Input.Password
               id="login-password"
               size="large"
@@ -68,7 +70,7 @@ export function LoginPage({ onDone }: { onDone: () => void }) {
             />
           </FormField>
           <Button type="primary" htmlType="submit" size="large" block loading={busy}>
-            Entrar
+            {t("signIn")}
           </Button>
         </form>
       </div>

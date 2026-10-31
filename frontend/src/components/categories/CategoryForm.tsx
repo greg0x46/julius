@@ -1,3 +1,4 @@
+import { useTranslation } from "../../i18n/context";
 import { CheckOutlined } from "../ui/icons";
 import { Input, Select, Switch } from "../ui";
 import { readableTextOn } from "../../presentation/readableText";
@@ -7,17 +8,13 @@ import type { Category, CategoryKind } from "../../api/contracts";
 import {
   categoryColorPalette,
   categoryIconRegistry,
-  categoryKindLabel,
+  categoryKindName,
   renderCategoryIcon,
 } from "../../presentation/categoryLabels";
 import { FormDrawer } from "../forms/FormDrawer";
 import { FormField } from "../forms/FormField";
 import { colorLabel, iconLabel } from "./categoryPickerLabels";
 
-const kindOptions = (Object.keys(categoryKindLabel) as CategoryKind[]).map((value) => ({
-  value,
-  label: categoryKindLabel[value],
-}));
 
 const defaultIcon = "ellipsis";
 const defaultColor = categoryColorPalette[0];
@@ -57,6 +54,8 @@ export function CategoryForm({
   onSubmit: (draft: CategoryDraft) => void;
   onCancel: () => void;
 }) {
+  const { t, language } = useTranslation();
+  const kindOptions = (["expense", "income", "transfer"] as CategoryKind[]).map((value) => ({ value, label: categoryKindName(value, language) }));
   const [draft, setDraft] = useState<CategoryDraft>(() => draftFrom(category));
   const [error, setError] = useState<string | null>(null);
 
@@ -69,7 +68,7 @@ export function CategoryForm({
 
   const submit = () => {
     if (draft.name.trim() === "") {
-      setError("Informe um nome para a categoria.");
+      setError(t("categoryNameRequired"));
       return;
     }
     setError(null);
@@ -78,23 +77,23 @@ export function CategoryForm({
 
   return (
     <FormDrawer
-      title={category ? "Editar categoria" : "Nova categoria"}
+      title={category ? t("editCategory") : t("newCategory")}
       open={open}
       onClose={onCancel}
       onSubmit={submit}
       submitting={submitting}
       error={error ?? submitError}
     >
-      <FormField label="Nome" htmlFor="category-name">
+      <FormField label={t("name")} htmlFor="category-name">
         <Input
           id="category-name"
           value={draft.name}
           onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value }))}
-          placeholder="Ex.: Manutenção do Apartamento"
+          placeholder={t("categoryExample")}
         />
       </FormField>
 
-      <FormField label="Tipo" htmlFor="category-kind">
+      <FormField label={t("type")} htmlFor="category-kind">
         <Select
           id="category-kind"
           value={draft.kind}
@@ -106,13 +105,13 @@ export function CategoryForm({
 
       {category && (
         <FormField
-          label="Ativa"
+          label={t("activeFeminine")}
           htmlFor="category-active"
-          hint="Categorias não são excluídas. Desative para deixar de usar."
+          hint={t("categoryActiveHint")}
         >
           <Switch
             id="category-active"
-            aria-label="Categoria ativa"
+            aria-label={t("activeCategory")}
             checked={draft.is_active}
             onChange={(checked) => setDraft((current) => ({ ...current, is_active: checked }))}
             style={{ width: "fit-content" }}
@@ -120,7 +119,7 @@ export function CategoryForm({
         </FormField>
       )}
 
-      <FormField label="Ícone" labelId="category-icon-label">
+      <FormField label={t("icon")} labelId="category-icon-label">
         <div className="category-icon-grid" role="radiogroup" aria-labelledby="category-icon-label">
           {Object.keys(categoryIconRegistry).map((key) => {
             const selected = draft.icon === key;
@@ -130,8 +129,8 @@ export function CategoryForm({
                 type="button"
                 role="radio"
                 aria-checked={selected}
-                aria-label={iconLabel(key)}
-                title={iconLabel(key)}
+                aria-label={iconLabel(key, language)}
+                title={iconLabel(key, language)}
                 className="category-icon-option"
                 onClick={() => setDraft((current) => ({ ...current, icon: key }))}
               >
@@ -142,7 +141,7 @@ export function CategoryForm({
         </div>
       </FormField>
 
-      <FormField label="Cor" labelId="category-color-label">
+      <FormField label={t("color")} labelId="category-color-label">
         <div className="category-color-grid" role="radiogroup" aria-labelledby="category-color-label">
           {categoryColorPalette.map((hex) => {
             const selected = draft.color === hex;
@@ -152,8 +151,8 @@ export function CategoryForm({
                 type="button"
                 role="radio"
                 aria-checked={selected}
-                aria-label={`Cor ${colorLabel(hex)}`}
-                title={colorLabel(hex)}
+                aria-label={t("colorNamed", { name: colorLabel(hex, language) })}
+                title={colorLabel(hex, language)}
                 className="category-color-swatch"
                 style={{ backgroundColor: hex }}
                 onClick={() => setDraft((current) => ({ ...current, color: hex }))}

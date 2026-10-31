@@ -1,3 +1,4 @@
+import { useTranslation } from "../i18n/context";
 import type { SyncRunDetail } from "../api/contracts";
 import { useTimezone } from "../hooks/useTimezone";
 import { formatDate, formatOptionalDate } from "../presentation/dates";
@@ -12,31 +13,32 @@ import { SyncStatusBadge } from "./SyncStatusBadge";
  * definition lists, not cards.
  */
 export function SyncRunOverview({ run }: { run: SyncRunDetail }) {
+  const { t, language } = useTranslation();
   const timezone = useTimezone();
   return (
-    <Section title="Resumo da sincronização" trailing={<SyncStatusBadge status={run.status} />}>
+    <Section title={t("syncOverview")} trailing={<SyncStatusBadge status={run.status} />}>
       <div className="sync-run-overview-body">
         <dl className="sync-run-overview-meta">
           <div>
-            <dt>Início</dt>
+            <dt>{t("start")}</dt>
             <dd>
-              <time dateTime={run.started_at}>{formatDate(run.started_at, timezone)}</time>
+              <time dateTime={run.started_at}>{formatDate(run.started_at, timezone, language)}</time>
             </dd>
           </div>
           <div>
-            <dt>Conclusão</dt>
+            <dt>{t("completion")}</dt>
             <dd>
               {run.finished_at === null ? (
-                formatOptionalDate(null, timezone)
+                formatOptionalDate(null, timezone, language)
               ) : (
-                <time dateTime={run.finished_at}>{formatOptionalDate(run.finished_at, timezone)}</time>
+                <time dateTime={run.finished_at}>{formatOptionalDate(run.finished_at, timezone, language)}</time>
               )}
             </dd>
           </div>
         </dl>
         <SyncRunMetrics run={run} />
         <p className="sync-run-identifier">
-          Identificador: <span>{run.id}</span>
+          {t("identifier")}: <span>{run.id}</span>
         </p>
       </div>
     </Section>

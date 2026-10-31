@@ -1,3 +1,4 @@
+import { useTranslation } from "../../i18n/context";
 import { useNavigate } from "react-router-dom";
 
 import type { InvestmentAccount, InvestmentPosition } from "../../api/contracts";
@@ -20,23 +21,24 @@ export interface InvestmentMenuHandlers {
  * A synced account and a synced position stay read-only.
  */
 export function useInvestmentMenus(handlers: InvestmentMenuHandlers) {
+  const { t } = useTranslation();
   const confirm = useConfirm();
   const navigate = useNavigate();
 
   const accountMenu = (account: InvestmentAccount): RecordMenuItem[] => [
-    { key: "operations", label: "Ver movimentações", onClick: () => handlers.onViewOperations(account) },
+    { key: "operations", label: t("viewOperations"), onClick: () => handlers.onViewOperations(account) },
     ...(account.kind === "manual"
       ? [
-          { key: "edit", label: "Editar conta", onClick: () => handlers.onRename(account) },
+          { key: "edit", label: t("editAccount"), onClick: () => handlers.onRename(account) },
           {
             key: "delete",
-            label: "Excluir conta",
+            label: t("deleteAccount"),
             danger: true,
             disabled: handlers.busy,
             onClick: () =>
               confirm({
-                title: "Excluir conta de investimento",
-                description: "Só é possível excluir uma conta sem posições nem movimentações.",
+                title: t("deleteInvestmentAccount"),
+                description: t("deleteInvestmentAccountHint"),
                 onConfirm: () => handlers.onRemove(account),
               }),
           },
@@ -44,7 +46,7 @@ export function useInvestmentMenus(handlers: InvestmentMenuHandlers) {
       : [
           {
             key: "link",
-            label: account.financial_account_id === null ? "Vincular caixa da corretora" : "Caixa da corretora",
+            label: account.financial_account_id === null ? t("linkBrokerageCash") : t("brokerageCash"),
             onClick: () => handlers.onRename(account),
           },
         ]),
@@ -56,25 +58,25 @@ export function useInvestmentMenus(handlers: InvestmentMenuHandlers) {
     if (position.linked_investment_id) {
       items.push({
         key: "details",
-        label: "Ver detalhes",
+        label: t("viewDetails"),
         onClick: () => navigate(`/investimentos/${position.linked_investment_id}`),
       });
     }
     if (position.source !== "synced") {
       items.push({
         key: "operations",
-        label: "Ver movimentações",
+        label: t("viewOperations"),
         onClick: () => handlers.onViewPositionOperations(position),
       });
-      items.push({ key: "edit", label: "Editar", onClick: () => handlers.onEditPosition(position) });
+      items.push({ key: "edit", label: t("edit"), onClick: () => handlers.onEditPosition(position) });
       items.push({
         key: "delete",
-        label: "Excluir",
+        label: t("delete"),
         danger: true,
         onClick: () =>
           confirm({
-            title: "Excluir posição",
-            description: "Só é possível excluir uma posição sem movimentações.",
+            title: t("deletePosition"),
+            description: t("deletePositionHint"),
             onConfirm: () => handlers.onRemovePosition(position),
           }),
       });

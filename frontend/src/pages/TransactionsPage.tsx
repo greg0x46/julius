@@ -1,3 +1,4 @@
+import { useTranslation } from "../i18n/context";
 import { ReportValuation } from "../components/shared/ReportValuation";
 import { Alert, Button, Skeleton } from "../components/ui";
 import { useEffect, useRef, useState } from "react";
@@ -100,15 +101,17 @@ function initialState(searchParams: URLSearchParams, period: Period, timezone: s
 }
 
 function ResultsSkeleton() {
+  const { t } = useTranslation();
   return (
-    <div className="transaction-results-skeleton" role="status" aria-label="Carregando transações">
+    <div className="transaction-results-skeleton" role="status" aria-label={t("loadingTransactions")}>
       <Skeleton active paragraph={{ rows: 5 }} />
-      <span className="visually-hidden">Carregando transações…</span>
+      <span className="visually-hidden">{t("loadingTransactionsEllipsis")}</span>
     </div>
   );
 }
 
 export function TransactionsPage() {
+  const { t, language } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
   const timezone = useTimezone();
   const { period, setPeriod, presets } = usePeriod(() => periodFromUrl(searchParams));
@@ -151,9 +154,9 @@ export function TransactionsPage() {
     try {
       await manualTransaction.create(write);
       setManualFormOpen(false);
-      feedback.success("Transação criada");
+      feedback.success(t("transactionCreated"));
     } catch (error) {
-      setManualSaveError(manualTransactionErrorMessage(error, "save"));
+      setManualSaveError(manualTransactionErrorMessage(error, "save", language));
     }
   };
   const selectTransaction = (transactionId: string | null) => {
@@ -227,12 +230,12 @@ export function TransactionsPage() {
     ? Math.min(data.page.number * data.page.size, data.page.total_items)
     : 0;
 
-  const createAction = <><PageAction label="Nova transação" shortLabel="Nova" onClick={openManualCreate} /><Button onClick={() => setTransferFormOpen(true)}>{compact ? "Transferir" : "Nova transferência"}</Button></>;
+  const createAction = <><PageAction label={t("newTransaction")} shortLabel={t("newFeminine")} onClick={openManualCreate} /><Button onClick={() => setTransferFormOpen(true)}>{compact ? t("transfer") : t("newTransfer")}</Button></>;
 
   return (
     <Page
-      title="Transações"
-      description="Acompanhe suas entradas, saídas e o resultado do período"
+      title={t("transactions")}
+      description={t("transactionsDescription")}
       className="transactions-page"
       compactMobileHeader
       context={
@@ -241,7 +244,7 @@ export function TransactionsPage() {
           value={[filters.date_from, filters.date_to]}
           presets={presets}
           onChange={applyPeriod}
-          reset={{ preset: "this-month", label: "Este mês" }}
+          reset={{ preset: "this-month", label: t("thisMonth") }}
           bare
         />
       }
@@ -252,12 +255,12 @@ export function TransactionsPage() {
         emptyValues={initialFilters}
         facets={data?.available_filters ?? facets}
         facetsLoading={query.isPending}
-        facetsError={query.isError && !data && !facets ? "Não foi possível carregar as opções." : null}
+        facetsError={query.isError && !data && !facets ? t("filterOptionsError") : null}
         onRetryFacets={() => query.refetch()}
         lookupError={
           categories.error || accounts.error
             ? {
-                message: "Não foi possível carregar todas as contas e categorias.",
+                message: t("accountsCategoriesError"),
                 retry: () => {
                   if (categories.error) void categories.refetch();
                   if (accounts.error) void accounts.refetch();
@@ -272,10 +275,10 @@ export function TransactionsPage() {
             id="transaction-grouping"
             value={groupBy}
             options={[
-              { value: "none", label: "Sem agrupamento" },
-              { value: "day", label: "Dia" },
-              { value: "week", label: "Semana" },
-              { value: "month", label: "Mês" },
+              { value: "none", label: t("noGrouping") },
+              { value: "day", label: t("day") },
+              { value: "week", label: t("week") },
+              { value: "month", label: t("month") },
             ]}
             onChange={(value: VisibleGrouping) => {
               setGroupBy(value);
@@ -297,7 +300,7 @@ export function TransactionsPage() {
               busy={query.isFetching}
             />
           ) : query.isPending ? (
-            <section className="data-card-summary" aria-label="Carregando resumo financeiro" aria-busy="true">
+            <section className="data-card-summary" aria-label={t("loadingFinancialSummary")} aria-busy="true">
               <Skeleton active paragraph={{ rows: 1 }} title={false} />
             </section>
           ) : undefined
@@ -309,16 +312,16 @@ export function TransactionsPage() {
           <Alert
             type="error"
             showIcon
-            message="Não foi possível carregar as transações"
-            description={<Button onClick={() => query.refetch()}>Tentar novamente</Button>}
+            message={t("transactionsLoadError")}
+            description={<Button onClick={() => query.refetch()}>{t("retry")}</Button>}
           />
         )}
         {query.isError && data && (
           <Alert
             type="warning"
             showIcon
-            message="Dados possivelmente desatualizados"
-            description={<Button onClick={() => query.refetch()}>Tentar novamente</Button>}
+            message={t("possiblyStaleData")}
+            description={<Button onClick={() => query.refetch()}>{t("retry")}</Button>}
           />
         )}
         {writes.alerts(selected !== null)}
@@ -328,13 +331,13 @@ export function TransactionsPage() {
             ref={resultsRef}
             tabIndex={-1}
             role="region"
-            aria-label="Resultados"
+            aria-label={t("results")}
             className={`transaction-results ${query.isFetching ? "is-updating" : ""}`}
             aria-busy={query.isFetching}
           >
             {query.isFetching && !query.isPending && (
               <span className="visually-hidden" role="status">
-                Atualizando resultados…
+                {t("updatingResults")}
               </span>
             )}
             {data.page.total_items === 0 ? (
@@ -342,20 +345,20 @@ export function TransactionsPage() {
               // situations and say different things.
               data.stored_total === 0 ? (
                 <EmptyState
-                  title="Nenhuma transação ainda"
-                  hint="Importe um extrato, conecte um banco ou adicione uma transação manual."
-                  action={<Button onClick={openManualCreate}>Adicionar transação</Button>}
+                  title={t("noTransactionsYet")}
+                  hint={t("noTransactionsHint")}
+                  action={<Button onClick={openManualCreate}>{t("addTransaction")}</Button>}
                 />
               ) : hasExtraFilters ? (
                 <EmptyState
-                  title="Nada encontrado para estes filtros"
-                  hint="Tente outros termos ou remova algum filtro."
-                  action={<Button onClick={clear}>Limpar filtros</Button>}
+                  title={t("nothingMatchingFilters")}
+                  hint={t("tryOtherFilters")}
+                  action={<Button onClick={clear}>{t("clearFilters")}</Button>}
                 />
               ) : (
                 <EmptyState
-                  title={isInitialMonth ? "Nenhuma transação neste mês" : "Nenhuma transação neste período"}
-                  hint="Escolha outro período para ver mais."
+                  title={isInitialMonth ? t("noTransactionsThisMonth") : t("noTransactionsPeriod")}
+                  hint={t("chooseAnotherPeriod")}
                 />
               )
             ) : (
@@ -379,25 +382,23 @@ export function TransactionsPage() {
                 </div>
                 <footer className="transaction-pagination">
                   <span>
-                    Exibindo {rangeStart.toLocaleString("pt-BR")}–
-                    {rangeEnd.toLocaleString("pt-BR")} de{" "}
-                    {data.page.total_items.toLocaleString("pt-BR")} transações
+                    {t("transactionsDisplayed", { start: rangeStart.toLocaleString(language), end: rangeEnd.toLocaleString(language), total: data.page.total_items.toLocaleString(language) })}
                   </span>
-                  <nav aria-label="Paginação das transações">
+                  <nav aria-label={t("transactionPagination")}>
                     <Button
                       disabled={data.page.number <= 1}
                       onClick={() => changePage(-1)}
                     >
-                      Anterior
+                      {t("previous")}
                     </Button>
                     <span>
-                      Página {data.page.number} de {data.page.total_pages}
+                      {t("pageOf", { page: data.page.number, total: data.page.total_pages })}
                     </span>
                     <Button
                       disabled={data.page.number >= data.page.total_pages}
                       onClick={() => changePage(1)}
                     >
-                      Próxima
+                      {t("next")}
                     </Button>
                   </nav>
                 </footer>
@@ -412,7 +413,7 @@ export function TransactionsPage() {
         onClose={dismissPanel}
         {...writes.panelProps(selected)}
       />
-      {transferFormOpen && <ManualTransferForm onClose={() => setTransferFormOpen(false)} onCreated={() => { setTransferFormOpen(false); feedback.success("Transferência criada"); }} />}
+      {transferFormOpen && <ManualTransferForm onClose={() => setTransferFormOpen(false)} onCreated={() => { setTransferFormOpen(false); feedback.success(t("transferCreated")); }} />}
       <ManualTransactionForm
         open={manualFormOpen}
         accounts={accounts.accounts}

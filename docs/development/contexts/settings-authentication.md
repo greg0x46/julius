@@ -121,6 +121,10 @@ responses/bodies are discarded after logout. Wrong login or password shows an
 error in the form. Settings contains password change, Sair (log out) and the
 write-only Pluggy form.
 
+The header offers a browser-local language selector for the translated shell.
+See [translation catalogs](../frontend.md#translation-catalogs) for coverage
+and persistence.
+
 ## Validation and limits
 
 Tests cover migration/rollback on both dialects, expiry, revocation, restart,

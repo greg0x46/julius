@@ -1,3 +1,4 @@
+import { useTranslation } from "../../i18n/context";
 import { ExclamationCircleOutlined, InfoCircleOutlined } from "../ui/icons";
 import { useState } from "react";
 
@@ -30,19 +31,20 @@ export function InvestmentPeriodSummary({
   positions: InvestmentPeriodPosition[];
   updating: boolean;
 }) {
+  const { t, language } = useTranslation();
   const [explained, setExplained] = useState(false);
   const { totals } = data;
-  const reasons = partialReasons(positions);
+  const reasons = partialReasons(positions, language);
   const items = [
     {
-      label: "Rendimento",
+      label: t("investmentYield"),
       value:
         totals.yield_rate === null ? (
           <span className="investment-summary-result">
             <InvestmentYieldValue gain={totals.yield} rate={null} />
             <InvestmentHint
-              label="Rentabilidade indisponível: não há capital positivo investido no período."
-              content="Não há capital positivo investido no período para calcular a rentabilidade."
+              label={t("unavailableReturnLabel")}
+              content={t("unavailableReturnHint")}
             >
               <span className="investment-summary-unavailable">—</span>
             </InvestmentHint>
@@ -51,32 +53,32 @@ export function InvestmentPeriodSummary({
           <InvestmentYieldValue gain={totals.yield} rate={totals.yield_rate} />
         ),
     },
-    { label: "Aportes", value: <Money value={totals.contributions} tone="neutral" /> },
-    { label: "Resgates", value: <Money value={totals.withdrawals} tone="neutral" /> },
-    ...(isZeroDecimal(totals.costs) ? [] : [{ label: "Custos", value: <Money value={totals.costs} tone="neutral" /> }]),
+    { label: t("contributions"), value: <Money value={totals.contributions} tone="neutral" /> },
+    { label: t("withdrawals"), value: <Money value={totals.withdrawals} tone="neutral" /> },
+    ...(isZeroDecimal(totals.costs) ? [] : [{ label: t("costs"), value: <Money value={totals.costs} tone="neutral" /> }]),
   ];
 
   const notes = [
-    "O saldo para investir (caixa) das contas não entra nestes valores.",
+    t("investmentCashExcluded"),
     isZeroDecimal(totals.provisioned_taxes)
       ? null
-      : "Em posições sincronizadas o rendimento é antes do IR/IOF provisionado pela instituição, que não é deduzido.",
-    data.to_clamped ? `Período em andamento: considerado até hoje, ${formatDateOnly(data.to)}.` : null,
+      : t("investmentTaxHint"),
+    data.to_clamped ? t("periodClamped", { date: formatDateOnly(data.to, language) }) : null,
     totals.positions_partial_start > 0
-      ? `${totals.positions_partial_start} ${totals.positions_partial_start === 1 ? "posição começa" : "posições começam"} depois do primeiro dia do período, por falta de preço nesse dia.`
+      ? t(totals.positions_partial_start === 1 ? "onePositionPartialStart" : "manyPositionsPartialStart", { count: totals.positions_partial_start })
       : null,
   ].filter((note): note is string => note !== null);
-  const partialTitle = `Parcial: ${totals.positions_unavailable} de ${totals.positions_total} posições sem histórico suficiente`;
+  const partialTitle = t("partialInvestmentSummary", { unavailable: totals.positions_unavailable, total: totals.positions_total });
 
   return (
     <SummaryStrip
       className="investment-period-summary"
-      label={`Carteira em ${formatDateOnly(data.to)}`}
+      label={t("portfolioOn", { date: formatDateOnly(data.to, language) })}
       value={
         <>
           <Money value={totals.end_value} tone="balance" size="hero" />
           <InvestmentHint
-            label={`${totals.partial ? `${partialTitle}. ${reasons.join(", ")}. ` : ""}Sobre estes valores: ${notes.join(" ")}`}
+            label={`${totals.partial ? `${partialTitle}. ${reasons.join(", ")}. ` : ""}${t("aboutValues", { notes: notes.join(" ") })}`}
             content={
               <>
                 {totals.partial && (
@@ -84,7 +86,7 @@ export function InvestmentPeriodSummary({
                     <p>
                       <strong>{partialTitle}</strong>
                     </p>
-                    <p>As posições abaixo ficaram de fora dos valores e da rentabilidade; não foram contadas como zero.</p>
+                    <p>{t("partialPositionsExcluded")}</p>
                     <ul>
                       {reasons.map((reason) => (
                         <li key={reason}>{reason}</li>
@@ -116,46 +118,46 @@ export function InvestmentPeriodSummary({
         open={explained}
         onToggle={(event) => setExplained(event.currentTarget.open)}
       >
-        <summary>Detalhes do cálculo</summary>
+        <summary>{t("calculationDetails")}</summary>
         {explained && (
           <>
             <dl id="investment-reconcile" className="investment-reconcile">
               <div>
                 <dt>
-                  Valor inicial (
-                  {data.from === null ? "início de cada posição" : `antes de ${formatDateOnly(data.from)}`})
+                  {t("startValue")} (
+                  {data.from === null ? t("startEachPosition") : t("beforeDate", { date: formatDateOnly(data.from, language) })})
                 </dt>
                 <dd><Money value={totals.start_value} tone="neutral" /></dd>
               </div>
               <div>
-                <dt>+ Aportes</dt>
+                <dt>+ {t("contributions")}</dt>
                 <dd><Money value={totals.contributions} tone="neutral" /></dd>
               </div>
               <div>
-                <dt>− Resgates</dt>
+                <dt>− {t("withdrawals")}</dt>
                 <dd><Money value={totals.withdrawals} tone="neutral" /></dd>
               </div>
               <div>
-                <dt>+ Rendimento</dt>
+                <dt>+ {t("investmentYield")}</dt>
                 <dd><Money value={totals.yield} tone="result" /></dd>
               </div>
               <div className="investment-reconcile-total">
-                <dt>= Carteira no fim ({formatDateOnly(data.to)})</dt>
+                <dt>= {t("endingPortfolio", { date: formatDateOnly(data.to, language) })}</dt>
                 <dd><Money value={totals.end_value} tone="balance" /></dd>
               </div>
             </dl>
-            <dl className="investment-reconcile" role="group" aria-label="De onde vem o resultado do período">
+            <dl className="investment-reconcile" role="group" aria-label={t("periodResultSource")}>
               <div className="investment-reconcile-total">
-                <dt>Resultado do período = mantidas + encerradas</dt>
+                <dt>{t("periodResultEquation")}</dt>
                 <dd><InvestmentYieldValue gain={totals.yield} rate={totals.yield_rate} /></dd>
               </div>
               <div>
-                <dt>Posições mantidas em {formatDateOnly(data.to)}</dt>
+                <dt>{t("positionsHeldOn", { date: formatDateOnly(data.to, language) })}</dt>
                 <dd><InvestmentYieldValue gain={totals.held.yield} rate={totals.held.yield_rate} /></dd>
               </div>
               {!partIsEmpty(totals.closed) && (
                 <div>
-                  <dt>Encerradas no período (resultado realizado)</dt>
+                  <dt>{t("closedPeriodResult")}</dt>
                   <dd><InvestmentYieldValue gain={totals.closed.yield} rate={totals.closed.yield_rate} /></dd>
                 </div>
               )}

@@ -1,3 +1,4 @@
+import { translate, type Language } from "../../i18n/messages";
 import { calendar, type CalendarDate } from "../../presentation/calendar";
 
 import type { Goal, GoalMetric, GoalWrite } from "../../api/contracts";
@@ -23,10 +24,10 @@ export function draftFromGoal(goal: Goal | null): GoalDraft {
 }
 
 /** The write the API accepts, or the message to show when the draft cannot be saved. */
-export function goalWriteFrom(draft: GoalDraft): { write: GoalWrite } | { error: string } {
-  if (draft.name.trim() === "") return { error: "Informe o nome da meta." };
+export function goalWriteFrom(draft: GoalDraft, language: Language = "pt-BR"): { write: GoalWrite } | { error: string } {
+  if (draft.name.trim() === "") return { error: translate(language, "goalNameRequired") };
   if (draft.targetAmount === null || !isPositiveDecimal(draft.targetAmount)) {
-    return { error: "O valor da meta precisa ser maior que zero." };
+    return { error: translate(language, "goalAmountPositive") };
   }
   return {
     write: {

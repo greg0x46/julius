@@ -1,3 +1,4 @@
+import { useTranslation } from "../../i18n/context";
 import { CheckOutlined, SearchOutlined } from "../ui/icons";
 import { Drawer, Input, Popover } from "../ui";
 import { useMemo, useState, type ReactNode } from "react";
@@ -8,14 +9,15 @@ import { categorySections, type CategorySection } from "./categorySections";
 import { useCompactScreen } from "../shared/useCompactScreen";
 
 export function CategorySearch({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const { t } = useTranslation();
   return (
     <Input
       allowClear
       autoFocus
       className="category-search"
       prefix={<SearchOutlined aria-hidden="true" />}
-      placeholder="Buscar categoria"
-      aria-label="Buscar categoria"
+      placeholder={t("searchCategoryNoEllipsis")}
+      aria-label={t("searchCategoryNoEllipsis")}
       value={value}
       onChange={(event) => onChange(event.target.value)}
     />
@@ -31,6 +33,7 @@ export function CategoryOption({
   selected: boolean;
   onSelect: (id: string) => void;
 }) {
+  const { t } = useTranslation();
   return (
     <li>
       <button
@@ -45,7 +48,7 @@ export function CategoryOption({
         </span>
         <span className="category-option-name">
           {option.name}
-          {!option.isActive && <span className="category-option-note"> (inativa)</span>}
+          {!option.isActive && <span className="category-option-note">{t("inactiveCategory")}</span>}
         </span>
         {selected && <CheckOutlined className="category-option-check" aria-hidden="true" />}
       </button>
@@ -62,11 +65,12 @@ export function CategoryPickerList({
   value: string | null;
   onSelect: (id: string) => void;
 }) {
+  const { t } = useTranslation();
   if (sections.length === 0) {
-    return <p className="category-list-empty">Nenhuma categoria encontrada.</p>;
+    return <p className="category-list-empty">{t("noCategoriesFound")}</p>;
   }
   return (
-    <div className="category-list" role="listbox" aria-label="Categorias">
+    <div className="category-list" role="listbox" aria-label={t("categories")}>
       {sections.map((section) => (
         <section key={section.key} className="category-list-section">
           <h4 className="category-list-title">{section.title}</h4>
@@ -113,12 +117,13 @@ export function CategoryPicker({
   disabled?: boolean;
   children: (props: { open: boolean; toggle: () => void }) => ReactNode;
 }) {
+  const { t, language } = useTranslation();
   const compact = useCompactScreen();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const sections = useMemo(
-    () => categorySections({ options, suggestedId, recentIds, search }),
-    [options, suggestedId, recentIds, search],
+    () => categorySections({ options, suggestedId, recentIds, search, language }),
+    [options, suggestedId, recentIds, search, language],
   );
 
   const close = () => {
@@ -155,7 +160,7 @@ export function CategoryPicker({
           onClose={close}
           placement="bottom"
           height="80vh"
-          title="Selecionar categoria"
+          title={t("selectCategory")}
           className="category-sheet"
           destroyOnHidden
         >

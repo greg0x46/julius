@@ -1,3 +1,4 @@
+import { useTranslation } from "../../i18n/context";
 import type { TransactionInclusionState, TransactionItem } from "../../api/contracts";
 import { RecordMenu, type RecordMenuItem } from "../shared/RecordMenu";
 
@@ -18,13 +19,14 @@ export function TransactionActions({
   onInclusion?: (id: string, state: TransactionInclusionState) => void;
   pending?: boolean;
 }) {
+  const { t } = useTranslation();
   const ignored = item.inclusion.state === "ignored";
-  const name = item.description ?? "transação sem descrição";
+  const name = item.description ?? t("transactionWithoutDescription");
   const items: RecordMenuItem[] = [
-    { key: "details", label: "Ver detalhes", onClick: () => onSelect(item.id) },
+    { key: "details", label: t("viewDetails"), onClick: () => onSelect(item.id) },
     {
       key: "inclusion",
-      label: ignored ? "Considerar nos totais" : "Ignorar",
+      label: ignored ? t("includeInTotals") : t("ignore"),
       disabled: !onInclusion || pending,
       onClick: () => onInclusion?.(item.id, ignored ? "considered" : "ignored"),
     },
@@ -34,7 +36,7 @@ export function TransactionActions({
     <span className="transaction-actions">
       <RecordMenu
         className="transaction-actions-trigger"
-        label={`Ações de ${name}`}
+        label={t("actionsFor", { name })}
         items={items}
         loading={pending}
       />

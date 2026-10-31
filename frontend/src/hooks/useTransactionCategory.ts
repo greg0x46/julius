@@ -1,3 +1,4 @@
+import { useTranslation } from "../i18n/context";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 
@@ -10,8 +11,8 @@ export interface CategoryTarget {
   categoryId: string;
 }
 
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "Não foi possível salvar a categoria.";
+function errorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error ? error.message : fallback;
 }
 
 export interface TransactionWriteCallbacks<Target, Result> {
@@ -22,6 +23,7 @@ export interface TransactionWriteCallbacks<Target, Result> {
 }
 
 export function useTransactionCategory({ onSaved, onFailed }: TransactionWriteCallbacks<CategoryTarget, TransactionCategoryResult> = {}) {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const locked = useRef(false);
   const [pendingTarget, setPendingTarget] = useState<CategoryTarget | null>(null);
@@ -37,10 +39,10 @@ export function useTransactionCategory({ onSaved, onFailed }: TransactionWriteCa
         { queryKey: queryKeys.transactions, type: "active" },
         { throwOnError: true },
       );
-      setAnnouncement("Categoria atualizada. Totais atualizados.");
+      setAnnouncement(t("categoryTotalsUpdated"));
     } catch (error) {
-      setRefreshError(errorMessage(error));
-      setAnnouncement("Categoria salva, atualização dos resultados pendente.");
+      setRefreshError(errorMessage(error, t("categorySaveErrorFull")));
+      setAnnouncement(t("categorySavedResultsPending"));
     }
   };
 
@@ -52,7 +54,7 @@ export function useTransactionCategory({ onSaved, onFailed }: TransactionWriteCa
       setFailedWrite(null);
       setWriteError(null);
       setRefreshError(null);
-      setAnnouncement("Salvando categoria da transação…");
+      setAnnouncement(t("savingTransactionCategory"));
       await queryClient.cancelQueries({ queryKey: queryKeys.transactions });
     },
     onSuccess: async (result, target) => {
@@ -62,9 +64,9 @@ export function useTransactionCategory({ onSaved, onFailed }: TransactionWriteCa
     },
     onError: (error, target) => {
       setFailedWrite(target);
-      setWriteError(errorMessage(error));
-      onFailed?.(target, errorMessage(error));
-      setAnnouncement("Falha ao salvar. A última categoria confirmada foi mantida.");
+      setWriteError(errorMessage(error, t("categorySaveErrorFull")));
+      onFailed?.(target, errorMessage(error, t("categorySaveErrorFull")));
+      setAnnouncement(t("categorySaveFailedRetained"));
     },
     onSettled: () => {
       locked.current = false;

@@ -1,3 +1,4 @@
+import { apiMessage } from "../i18n/apiMessage";
 import { apiFetch } from "./transport";
 import {
   parseEligibleTransactionList,
@@ -15,7 +16,7 @@ import {
 } from "./contracts";
 import { ApiError, isAbortError } from "./problems";
 
-const defaultMessage = "Não foi possível salvar a recorrência.";
+const defaultMessage = () => apiMessage("recurrenceSaveFailed");
 
 async function send<T>(
   input: RequestInfo | URL,
@@ -28,7 +29,7 @@ async function send<T>(
     response = await apiFetch(input, init);
   } catch (error) {
     if (isAbortError(error)) throw error;
-    throw new ApiError("transport", defaultMessage);
+    throw new ApiError("transport", defaultMessage());
   }
 
   const contentType = response.headers.get("content-type")?.split(";")[0].trim();
@@ -44,7 +45,7 @@ async function send<T>(
     }
     throw new ApiError(
       response.status === 404 ? "not_found" : response.status === 409 ? "conflict" : "response",
-      problem?.detail ?? problem?.title ?? defaultMessage,
+      problem?.detail ?? problem?.title ?? defaultMessage(),
       problem,
     );
   }
@@ -53,12 +54,12 @@ async function send<T>(
     return undefined as T;
   }
   if (contentType !== "application/json") {
-    throw new ApiError("response", defaultMessage);
+    throw new ApiError("response", defaultMessage());
   }
   try {
     return parser(await response.json());
   } catch {
-    throw new ApiError("response", defaultMessage);
+    throw new ApiError("response", defaultMessage());
   }
 }
 

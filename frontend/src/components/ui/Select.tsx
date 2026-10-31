@@ -1,3 +1,4 @@
+import { useTranslation } from "../../i18n/context";
 import { useFloatingSurface } from "./useFloatingSurface";
 import {
   useEffect,
@@ -62,7 +63,7 @@ export function Select<T = string, O extends SelectOption = SelectOption>({
   onChange,
   disabled,
   loading,
-  placeholder = "Selecione",
+  placeholder,
   allowClear,
   showSearch,
   optionFilterProp = "label",
@@ -82,7 +83,7 @@ export function Select<T = string, O extends SelectOption = SelectOption>({
   style,
   autoFocus,
   status,
-  notFoundContent = "Nenhuma opção",
+  notFoundContent,
   popupMatchSelectWidth,
   classNames,
   size,
@@ -91,6 +92,7 @@ export function Select<T = string, O extends SelectOption = SelectOption>({
   virtual,
   ...aria
 }: SelectProps<T, O>) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
@@ -218,7 +220,7 @@ export function Select<T = string, O extends SelectOption = SelectOption>({
           disabled={disabled}
           readOnly={!showSearch}
           value={open && showSearch ? search : ""}
-          placeholder={selected.length ? "" : placeholder}
+          placeholder={selected.length ? "" : (placeholder ?? t("select"))}
           onClick={() => {
             if (!open) changeOpen(true);
           }}
@@ -278,14 +280,14 @@ export function Select<T = string, O extends SelectOption = SelectOption>({
         )}
         {selected.length === 0 && !search && (
           <span className="ui-select-selection-placeholder" aria-hidden="true">
-            {placeholder}
+            {placeholder ?? t("select")}
           </span>
         )}
         {allowClear && chosen.length > 0 && !disabled && (
           <button
             type="button"
             className="ui-select-clear"
-            aria-label="Limpar seleção"
+            aria-label={t("clearSelection")}
             onClick={() => {
               onChange?.((mode ? [] : undefined) as T);
               onClear?.();
@@ -330,7 +332,7 @@ export function Select<T = string, O extends SelectOption = SelectOption>({
             ))
           ) : (
             <div className="ui-select-empty">
-              {loading ? "Carregando…" : notFoundContent}
+              {loading ? t("loading") : (notFoundContent ?? t("noOptions"))}
             </div>
           )}
         </div>

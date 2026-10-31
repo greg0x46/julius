@@ -1,3 +1,4 @@
+import { useTranslation } from "../../i18n/context";
 import { Skeleton, Table } from "../ui";
 import type { ColumnsType } from "../ui/Table";
 import type { ReactNode } from "react";
@@ -7,7 +8,7 @@ import type { Payable } from "../../api/contracts";
 import {
   payableDetailPath,
   payableStatusLabel,
-  payableVocabulary,
+  getPayableVocabulary,
   settledPercent,
 } from "../../presentation/payableLabels";
 import { ResponsiveList } from "../layout";
@@ -17,8 +18,9 @@ import { PayableMeter } from "./PayableMeter";
 
 /** Only a settled payable carries a status; "Aberta" is the default and stays unsaid. */
 function SettledTag({ payable }: { payable: Payable }) {
+  const { language } = useTranslation();
   return payable.status === "settled" ? (
-    <StatusTag tone="success">{payableStatusLabel[payable.kind].settled}</StatusTag>
+    <StatusTag tone="success">{payableStatusLabel(payable.kind, "settled", language)}</StatusTag>
   ) : null;
 }
 
@@ -36,11 +38,7 @@ type Props = {
   onOpen: (payable: Payable) => void;
 };
 
-const loading = (
-  <div className="payables-loading" role="status" aria-label="Carregando pendências">
-    <Skeleton active paragraph={{ rows: 3 }} />
-  </div>
-);
+
 
 /**
  * The payables as one list, two shapes: stacked rows below `lg` — the table's
@@ -49,9 +47,11 @@ const loading = (
  * detail page, so a row carries no actions of its own.
  */
 export function PayableList({ payables, isLoading, empty, showKind, onOpen }: Props) {
+  const { t, language } = useTranslation();
+  const loading = <div className="payables-loading" role="status" aria-label={t("loadingPayables")}><Skeleton active paragraph={{ rows: 3 }} /></div>;
   const columns: ColumnsType<Payable> = [
     {
-      title: "Nome",
+      title: t("name"),
       dataIndex: "name",
       render: (_, payable) => (
         <Link
@@ -66,15 +66,15 @@ export function PayableList({ payables, isLoading, empty, showKind, onOpen }: Pr
     ...(showKind
       ? [
           {
-            title: "Tipo",
+            title: t("type"),
             dataIndex: "kind",
             className: "payable-kind-cell",
-            render: (_: unknown, payable: Payable) => payableVocabulary[payable.kind].kindLabel,
+            render: (_: unknown, payable: Payable) => getPayableVocabulary(payable.kind, language).kindLabel,
           },
         ]
       : []),
     {
-      title: "Progresso",
+      title: t("progress"),
       dataIndex: "settled_amount",
       render: (_, payable) => {
         const percent = settledPercent(payable.total_amount, payable.settled_amount);
@@ -82,20 +82,20 @@ export function PayableList({ payables, isLoading, empty, showKind, onOpen }: Pr
           <span className="payable-progress-cell">
             <PayableMeter percent={percent} />
             <span className="payable-progress-label">
-              {payableVocabulary[payable.kind].settledShareLabel} {percent}%
+              {getPayableVocabulary(payable.kind, language).settledShareLabel} {percent}%
             </span>
           </span>
         );
       },
     },
     {
-      title: "Restante",
+      title: t("remaining"),
       dataIndex: "remaining_amount",
       align: "right",
       render: (_, payable) => <Money value={payable.remaining_amount} tone="neutral" size="row" />,
     },
     {
-      title: "Situação",
+      title: t("status"),
       dataIndex: "status",
       render: (_, payable) => <SettledTag payable={payable} />,
     },
@@ -103,7 +103,7 @@ export function PayableList({ payables, isLoading, empty, showKind, onOpen }: Pr
 
   return (
     <ResponsiveList
-      label="Pendências"
+      label={t("payables")}
       items={payables}
       getKey={(payable) => payable.id}
       isLoading={isLoading}
@@ -112,7 +112,7 @@ export function PayableList({ payables, isLoading, empty, showKind, onOpen }: Pr
       stackBelow="xl"
       row={(payable) => {
         const percent = settledPercent(payable.total_amount, payable.settled_amount);
-        const vocab = payableVocabulary[payable.kind];
+        const vocab = getPayableVocabulary(payable.kind, language);
         return {
           title: payable.name,
           meta: (
@@ -127,13 +127,13 @@ export function PayableList({ payables, isLoading, empty, showKind, onOpen }: Pr
           trailing: <Money value={payable.remaining_amount} tone="neutral" />,
           status: payable.status === "settled" ? <SettledTag payable={payable} /> : undefined,
           onClick: () => onOpen(payable),
-          ariaLabel: `Abrir ${payable.name}`,
+          ariaLabel: t("openItem") + " " + payable.name,
         };
       }}
       wide={
         <Table<Payable>
           className="payables-table"
-          aria-label="Pendências"
+          aria-label={t("payables")}
           columns={columns}
           dataSource={payables}
           rowKey="id"

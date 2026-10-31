@@ -1,8 +1,9 @@
+import { apiMessage } from "../i18n/apiMessage";
 import { apiFetch } from "./transport";
 import { parseNetWorthSeries, parseProblem, type NetWorthSeries, type Problem } from "./contracts";
 import { ApiError, isAbortError } from "./problems";
 
-const defaultMessage = "Não foi possível carregar o patrimônio.";
+const defaultMessage = () => apiMessage("wealthLoadError");
 
 export async function getNetWorth(signal?: AbortSignal): Promise<NetWorthSeries> {
   let response: Response;
@@ -14,7 +15,7 @@ export async function getNetWorth(signal?: AbortSignal): Promise<NetWorthSeries>
     });
   } catch (error) {
     if (isAbortError(error)) throw error;
-    throw new ApiError("transport", defaultMessage);
+    throw new ApiError("transport", defaultMessage());
   }
 
   const contentType = response.headers.get("content-type")?.split(";")[0].trim();
@@ -28,15 +29,15 @@ export async function getNetWorth(signal?: AbortSignal): Promise<NetWorthSeries>
         problem = undefined;
       }
     }
-    throw new ApiError("response", problem?.detail ?? problem?.title ?? defaultMessage, problem);
+    throw new ApiError("response", problem?.detail ?? problem?.title ?? defaultMessage(), problem);
   }
 
   if (contentType !== "application/json") {
-    throw new ApiError("response", defaultMessage);
+    throw new ApiError("response", defaultMessage());
   }
   try {
     return parseNetWorthSeries(await response.json());
   } catch {
-    throw new ApiError("response", defaultMessage);
+    throw new ApiError("response", defaultMessage());
   }
 }

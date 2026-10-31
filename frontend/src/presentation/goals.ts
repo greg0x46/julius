@@ -1,3 +1,4 @@
+import { translate, type Language } from "../i18n/messages";
 import type { Goal, GoalMetric } from "../api/contracts";
 import { compareDecimals, multiplyDecimals } from "./decimal";
 
@@ -11,8 +12,8 @@ export function goalPercent(progress: string): number {
   return compareDecimals(progress, "1") < 0 ? Math.min(99, percent) : percent;
 }
 
-export function goalMonthsLabel(months: number): string {
-  return months === 1 ? "1 mês" : `${months} meses`;
+export function goalMonthsLabel(months: number, language: Language = "pt-BR"): string {
+  return months === 1 ? translate(language, "oneMonth") : translate(language, "manyMonths").replace("{count}", String(months));
 }
 
 /** Open goals first, then reached ones; each group from the smallest target to the largest. */

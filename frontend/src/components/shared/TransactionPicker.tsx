@@ -1,3 +1,5 @@
+import { useTranslation } from "../../i18n/context";
+import type { Language } from "../../i18n/messages";
 import { DownOutlined, SearchOutlined } from "../ui/icons";
 import { Button, Drawer, Input, Select, Spin, Tag, Typography } from "../ui";
 import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
@@ -56,10 +58,6 @@ type Props = {
   search?: { value: string; onChange: (value: string) => void };
 };
 
-const DEFAULT_EMPTY = "Nenhuma transação disponível para vincular.";
-const NO_RESULTS = "Nenhuma transação encontrada.";
-const NO_RESULTS_HINT = "Tente alterar sua busca.";
-const LOADING = "Buscando transações...";
 
 function normalize(text: string): string {
   return text
@@ -69,7 +67,7 @@ function normalize(text: string): string {
 }
 
 /** Every spelling of the amount and the date a person might type. */
-function haystack(transaction: PickerTransaction, timezone: string): string {
+function haystack(transaction: PickerTransaction, timezone: string, language: Language): string {
   const parts: string[] = [
     transaction.description,
     readableName(transaction.description),
@@ -82,7 +80,7 @@ function haystack(transaction: PickerTransaction, timezone: string): string {
   const formatted = formatMoney(transaction.amount, transaction.currency_code ?? "BRL").replace(/^-?R\$\s/, "");
   parts.push(formatted, formatted.replace(/\./g, ""), formatted.replace(/\./g, "").replace(",", "."), transaction.amount);
   if (transaction.date) {
-    parts.push(formatCompactDay(transaction.date, timezone));
+    parts.push(formatCompactDay(transaction.date, timezone, language));
     const date = calendarParts(transaction.date, timezone);
     if (date) {
       const dd = String(date.day).padStart(2, "0");
@@ -128,9 +126,10 @@ function Description({ transaction }: { transaction: PickerTransaction }) {
  * amount at its natural width, so no description can push it out of view.
  */
 function Row({ transaction }: { transaction: PickerTransaction }) {
+  const { language } = useTranslation();
   const timezone = useTimezone();
   const meta = [
-    transaction.date ? formatCompactDay(transaction.date, timezone) : null,
+    transaction.date ? formatCompactDay(transaction.date, timezone, language) : null,
     transaction.account,
     transaction.institution,
     transaction.category,
@@ -151,29 +150,31 @@ function Row({ transaction }: { transaction: PickerTransaction }) {
 
 /** The chosen row inside the closed control: one line, the amount never clipped. */
 function Value({ transaction }: { transaction: PickerTransaction }) {
+  const { language } = useTranslation();
   const timezone = useTimezone();
   return (
     <span className="txn-picker-value">
       <Description transaction={transaction} />
-      {transaction.date && <span className="txn-picker-value-date">{formatCompactDay(transaction.date, timezone)}</span>}
+      {transaction.date && <span className="txn-picker-value-date">{formatCompactDay(transaction.date, timezone, language)}</span>}
       <Amount transaction={transaction} />
     </span>
   );
 }
 
 function Empty({ loading, hasQuery, emptyText }: { loading: boolean; hasQuery: boolean; emptyText: string }) {
+  const { t } = useTranslation();
   if (loading) {
     return (
       <span className="txn-picker-state" role="status">
-        <Spin size="small" /> {LOADING}
+        <Spin size="small" /> {t("searchingTransactions")}
       </span>
     );
   }
   if (hasQuery) {
     return (
       <span className="txn-picker-state" role="status">
-        <span>{NO_RESULTS}</span>
-        <Typography.Text type="secondary">{NO_RESULTS_HINT}</Typography.Text>
+        <span>{t("noTransactionsFound")}</span>
+        <Typography.Text type="secondary">{t("changeYourSearch")}</Typography.Text>
       </span>
     );
   }
@@ -199,14 +200,16 @@ export function TransactionPicker({
   transactions,
   filter,
   onSelect,
-  placeholder = "Selecione uma transação",
-  searchPlaceholder = "Buscar por descrição, valor ou conta...",
+  placeholder,
+  searchPlaceholder,
   loading = false,
   disabled = false,
   allowClear = false,
-  emptyText = DEFAULT_EMPTY,
+  emptyText,
   search,
 }: Props) {
+  const { t, language } = useTranslation();
+  const placeholderText = placeholder ?? t("selectTransaction");
   const compact = useCompactScreen();
   const timezone = useTimezone();
   const [localSearch, setLocalSearch] = useState("");
@@ -216,10 +219,7 @@ export function TransactionPicker({
   const [remembered, setRemembered] = useState<PickerTransaction | null>(null);
 
   const eligible = useMemo(() => (filter ? transactions.filter(filter) : transactions), [transactions, filter]);
-  const indexed = useMemo(
-    () => eligible.map((transaction) => ({ transaction, text: haystack(transaction, timezone) })),
-    [eligible, timezone],
-  );
+  const indexed = useMemo(() => eligible.map((transaction) => ({ transaction, text: haystack(transaction, timezone, language) })), [eligible, timezone, language]);
   const query = search ? search.value : localSearch;
   const setQuery = search ? search.onChange : setLocalSearch;
   const visible = useMemo(
@@ -237,7 +237,7 @@ export function TransactionPicker({
     setRemembered(transaction);
     onSelect(next, transaction);
   };
-  const empty = <Empty loading={loading} hasQuery={query.trim() !== ""} emptyText={emptyText} />;
+  const empty = <Empty loading={loading} hasQuery={query.trim() !== ""} emptyText={emptyText ?? t("noTransactionsToLink")} />;
 
   if (!compact) {
     return (
@@ -248,7 +248,7 @@ export function TransactionPicker({
         classNames={{ popup: { root: "txn-picker-popup" } }}
         style={{ width: "100%" }}
         value={value ?? undefined}
-        placeholder={placeholder}
+        placeholder={placeholderText}
         loading={loading}
         disabled={disabled}
         allowClear={allowClear}
@@ -261,7 +261,7 @@ export function TransactionPicker({
         listItemHeight={56}
         options={visible.map((transaction) => ({ value: transaction.id, label: transaction.description, transaction }))}
         optionRender={(option) => <Row transaction={option.data.transaction} />}
-        labelRender={() => (selected ? <Value transaction={selected} /> : placeholder)}
+        labelRender={() => (selected ? <Value transaction={selected} /> : placeholderText)}
         notFoundContent={empty}
         onChange={(next: string | undefined) => choose(next ?? null)}
         onOpenChange={(open) => {
@@ -291,12 +291,12 @@ export function TransactionPicker({
         disabled={disabled}
         onClick={() => setSheetOpen(true)}
       >
-        <span className="txn-picker-trigger-value">{selected ? <Value transaction={selected} /> : placeholder}</span>
+        <span className="txn-picker-trigger-value">{selected ? <Value transaction={selected} /> : placeholderText}</span>
         {loading ? <Spin size="small" /> : <DownOutlined aria-hidden="true" />}
       </button>
       {clearable && (
-        <Button type="link" size="small" aria-label={`Limpar ${label}`} onClick={() => choose(null)}>
-          Limpar
+        <Button type="link" size="small" aria-label={t("clearNamed", { label })} onClick={() => choose(null)}>
+          {t("clear")}
         </Button>
       )}
       </div>
@@ -307,7 +307,7 @@ export function TransactionPicker({
         visible={visible}
         query={query}
         onQuery={setQuery}
-        searchPlaceholder={searchPlaceholder}
+        searchPlaceholder={searchPlaceholder ?? t("searchTransactionDetails")}
         empty={empty}
         onClose={close}
         onChoose={(next) => {
@@ -347,6 +347,7 @@ function Sheet({
   onClose: () => void;
   onChoose: (id: string | null) => void;
 }) {
+  const { t } = useTranslation();
   const listId = useId();
   const [active, setActive] = useState(0);
   const listRef = useRef<HTMLUListElement>(null);
@@ -400,7 +401,7 @@ function Sheet({
         aria-activedescendant={visible[active] ? optionId(active) : undefined}
         prefix={<SearchOutlined aria-hidden="true" />}
         placeholder={searchPlaceholder}
-        aria-label={`Buscar em ${label}`}
+        aria-label={t("searchIn", { label })}
         value={query}
         onChange={(event) => onQuery(event.target.value)}
         onKeyDown={onKeyDown}

@@ -1,3 +1,4 @@
+import { useTranslation } from "../../i18n/context";
 import { Input } from "../ui";
 import { useId } from "react";
 
@@ -78,15 +79,16 @@ export function MoneyRangeFilter({
   onChange: (min: string | null, max: string | null) => void;
   error?: string | null;
 }) {
+  const { t } = useTranslation();
   const errorId = useId();
   return (
     <div className="money-range">
       <div className="money-range-fields">
         <label className="money-range-field">
-          <span className="money-range-label">De</span>
+          <span className="money-range-label">{t("from")}</span>
           <MoneyInput
             id={`${id}-min`}
-            label="Valor mínimo"
+            label={t("minimumAmount")}
             value={min}
             onChange={(next) => onChange(next, max)}
             describedBy={error ? errorId : undefined}
@@ -94,10 +96,10 @@ export function MoneyRangeFilter({
           />
         </label>
         <label className="money-range-field">
-          <span className="money-range-label">Até</span>
+          <span className="money-range-label">{t("to")}</span>
           <MoneyInput
             id={`${id}-max`}
-            label="Valor máximo"
+            label={t("maximumAmount")}
             value={max}
             onChange={(next) => onChange(min, next)}
             describedBy={error ? errorId : undefined}

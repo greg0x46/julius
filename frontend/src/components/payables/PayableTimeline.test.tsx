@@ -70,3 +70,21 @@ describe("PayableTimeline plan generation", () => {
     expect(generateInstallments).not.toHaveBeenCalled();
   });
 });
+
+it("translates plan controls and validation when the language changes", async () => {
+  const { I18nProvider } = await import("../../i18n/I18nProvider");
+  const { useTranslation } = await import("../../i18n/context");
+  function LanguageSwitch() {
+    const { setLanguage } = useTranslation();
+    return <button onClick={() => setLanguage("en")}>English</button>;
+  }
+  localStorage.removeItem("julius.language");
+  render(<I18nProvider><MemoryRouter><LanguageSwitch /><PayableTimeline payableId="44444444-4444-4444-8444-444444444444" kind="debt" links={[]} search="" onSearchChange={vi.fn()} candidates={[]} isSearching={false} isLinking={false} onLinkTransaction={vi.fn()} onUnlinkTransaction={vi.fn()} /></MemoryRouter></I18nProvider>);
+  await userEvent.click(screen.getByRole("button", { name: "English" }));
+  expect(screen.getByRole("region", { name: "Timeline" })).toBeVisible();
+  const input = screen.getByRole("spinbutton", { name: "Number of installments" });
+  await userEvent.clear(input);
+  await userEvent.click(screen.getByRole("button", { name: "Generate installments" }));
+  expect(screen.getByText("Enter the number of installments.")).toBeVisible();
+  localStorage.removeItem("julius.language");
+});

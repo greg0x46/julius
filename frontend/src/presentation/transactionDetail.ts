@@ -1,17 +1,19 @@
+import { intlLocale } from "../i18n/dateFormats";
+import { translate, type Language } from "../i18n/messages";
+import { calendarParts } from "./dates";
 import { isPositiveDecimal } from "./decimal";
 import type { Category, TransactionItem } from "../api/contracts";
 import type { RecurringCommitmentDraft } from "../components/recurringCommitments/RecurringCommitmentForm";
 import { isZeroDecimal } from "./decimal";
-import { categoryKindLabel } from "./categoryLabels";
-import { calendarParts } from "./dates";
+import { categoryKindName } from "./categoryLabels";
 import { formatBRL, formatSignedMoney } from "./money";
 import { zonedFormatter } from "./timezone";
 
 /** Pure derivations the transaction panel's screens share. */
 
-export function detailValue(item: TransactionItem): string {
+export function detailValue(item: TransactionItem, language: Language = "pt-BR"): string {
   if (!item.effective_money) {
-    return "Valor indisponível";
+    return translate(language, "transferAmountUnavailable");
   }
   return formatSignedMoney(item.effective_money.value, item.classification, item.effective_money.currency_code);
 }
@@ -32,9 +34,9 @@ export function investmentSplit(item: TransactionItem): { transferred: string; r
  * reportable amount comes back as zero, and "R$ 0,00 remaining" would read as
  * a fully-linked line rather than one kept out of the totals.
  */
-export function remainderLabel(item: TransactionItem, remaining: string): string {
-  if (item.inclusion.state === "ignored") return "fora dos totais";
-  const side = item.classification === "inflow" ? "restante nas receitas" : "restante nos gastos";
+export function remainderLabel(item: TransactionItem, remaining: string, language: Language = "pt-BR"): string {
+  if (item.inclusion.state === "ignored") return translate(language, "excludedLower");
+  const side = translate(language, item.classification === "inflow" ? "remainingIncome" : "remainingExpense");
   return `${side}: ${formatBRL(remaining)}`;
 }
 
@@ -52,17 +54,17 @@ export function allowsInvestmentLink(item: TransactionItem): boolean {
   );
 }
 
-export function dateTime(value: string | null, timezone: string): string {
-  if (!value) return "Data não informada";
-  return zonedFormatter(timezone, { dateStyle: "long", timeStyle: "short" }).format(new Date(value));
+export function dateTime(value: string | null, timezone: string, language: Language = "pt-BR"): string {
+  if (!value) return translate(language, "dateNotProvided");
+  return zonedFormatter(timezone, { dateStyle: "long", timeStyle: "short" }, intlLocale(language)).format(new Date(value));
 }
 
 /** "13 set. 2026 · 11:42" — the compact form the identity header uses. */
-export function shortDateTime(value: string | null, timezone: string): string {
-  if (!value) return "Data não informada";
+export function shortDateTime(value: string | null, timezone: string, language: Language = "pt-BR"): string {
+  if (!value) return translate(language, "dateNotProvided");
   const date = new Date(value);
-  const day = zonedFormatter(timezone, { day: "numeric", month: "short", year: "numeric" }).format(date);
-  const time = zonedFormatter(timezone, { hour: "2-digit", minute: "2-digit" }).format(date);
+  const day = zonedFormatter(timezone, { day: "numeric", month: "short", year: "numeric" }, intlLocale(language)).format(date);
+  const time = zonedFormatter(timezone, { hour: "2-digit", minute: "2-digit" }, intlLocale(language)).format(date);
   return `${day} · ${time}`;
 }
 
@@ -81,9 +83,9 @@ export function recurringCommitmentPrefill(item: TransactionItem, timezone: stri
   };
 }
 
-export function installmentLabel(card: TransactionItem["card"]): string | null {
+export function installmentLabel(card: TransactionItem["card"], language: Language = "pt-BR"): string | null {
   if (!card || card.installment_number == null || card.total_installments == null) return null;
-  return `Parcela ${card.installment_number}/${card.total_installments}`;
+  return translate(language, "installmentOf", { number: card.installment_number, total: card.total_installments });
 }
 
 function matchesClassification(kind: Category["kind"], classification: TransactionItem["classification"]): boolean {
@@ -107,7 +109,7 @@ export type CategoryChoice = {
  * Categories the person may pick for this line: active ones on the same
  * side, plus whatever is vigente even if it has since been deactivated.
  */
-export function categoryChoices(categories: Category[], item: TransactionItem): CategoryChoice[] {
+export function categoryChoices(categories: Category[], item: TransactionItem, language: Language = "pt-BR"): CategoryChoice[] {
   const byId = new Map(
     categories
       .filter((category) => category.is_active && matchesClassification(category.kind, item.classification))
@@ -133,7 +135,7 @@ export function categoryChoices(categories: Category[], item: TransactionItem): 
     })
     .map((category) => ({
       value: category.id,
-      label: `${categoryKindLabel[category.kind]}: ${category.name}${category.is_active ? "" : " (inativa)"}`,
+      label: `${categoryKindName(category.kind, language)}: ${category.name}${category.is_active ? "" : translate(language, "inactiveCategory")}`,
       name: category.name,
       kind: category.kind,
       isActive: category.is_active,

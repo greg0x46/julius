@@ -153,3 +153,22 @@ describe("AutomationEntryForm", () => {
     expect(onDelete).toHaveBeenCalledTimes(1);
   });
 });
+
+it("translates category controls and accessible icon and color names", async () => {
+  const { I18nProvider } = await import("../i18n/I18nProvider");
+  const { useTranslation } = await import("../i18n/context");
+  const { CategoryForm } = await import("./categories/CategoryForm");
+  function LanguageSwitch() {
+    const { setLanguage } = useTranslation();
+    return <button onClick={() => setLanguage("en")}>English</button>;
+  }
+  localStorage.removeItem("julius.language");
+  render(<I18nProvider><LanguageSwitch /><CategoryForm open category={null} submitting={false} submitError={null} onSubmit={() => undefined} onCancel={() => undefined} /></I18nProvider>);
+  await userEvent.click(screen.getByRole("button", { name: "English" }));
+  expect(screen.getByRole("dialog", { name: "New category" })).toBeVisible();
+  expect(screen.getByRole("radio", { name: "Shopping cart" })).toBeInTheDocument();
+  expect(screen.getByRole("radio", { name: "Color Blue" })).toBeInTheDocument();
+  await userEvent.click(screen.getByRole("button", { name: "Save" }));
+  expect(screen.getByText("Enter a category name.")).toBeVisible();
+  localStorage.removeItem("julius.language");
+});

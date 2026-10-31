@@ -1,3 +1,4 @@
+import { apiMessage } from "../i18n/apiMessage";
 import { apiFetch } from "./transport";
 import { ApiError, isAbortError } from "./problems";
 
@@ -115,13 +116,13 @@ function parsePreview(value: unknown): ImportPreview {
 }
 
 async function fetchExpecting(
-  path: string, init: RequestInit, expectedStatus: number, fallback = "Não foi possível concluir a importação.",
+  path: string, init: RequestInit, expectedStatus: number, fallback = apiMessage("apiImportFailed"),
 ): Promise<Response> {
   let response: Response;
   try { response = await apiFetch(path, { ...init, headers: { Accept: "application/json", ...init.headers } }); }
   catch (error) {
     if (isAbortError(error)) throw error;
-    throw new ApiError("transport", "Não foi possível comunicar com o servidor.");
+    throw new ApiError("transport", apiMessage("apiCommunication"));
   }
   if (response.status !== expectedStatus) {
     let detail = fallback;
@@ -138,7 +139,7 @@ async function fetchExpecting(
 async function request<T>(path: string, init: RequestInit, expectedStatus: number, parse: (value: unknown) => T): Promise<T> {
   const response = await fetchExpecting(path, init, expectedStatus);
   try { return parse(await response.json()); }
-  catch { throw new ApiError("response", "A resposta do servidor não pôde ser confirmada."); }
+  catch { throw new ApiError("response", apiMessage("apiResponseUnconfirmed")); }
 }
 
 export function previewStatement(file: File, accountId?: string): Promise<ImportPreview> {
@@ -199,13 +200,13 @@ const templateFilename = "modelo-extrato-flash.csv";
  */
 export async function downloadStatementTemplate(): Promise<void> {
   const response = await fetchExpecting(
-    "/api/statement-imports/template", { method: "GET", headers: { Accept: "text/csv" } }, 200, "Não foi possível baixar o modelo.",
+    "/api/statement-imports/template", { method: "GET", headers: { Accept: "text/csv" } }, 200, apiMessage("apiTemplateDownload"),
   );
   let blob: Blob;
   try { blob = await response.blob(); }
   catch (error) {
     if (isAbortError(error)) throw error;
-    throw new ApiError("response", "O modelo não pôde ser baixado.");
+    throw new ApiError("response", apiMessage("apiTemplateUnavailable"));
   }
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");

@@ -1,3 +1,4 @@
+import { useTranslation } from "../../i18n/context";
 import { Skeleton } from "../ui";
 
 import { hasNetWorthValue } from "../../api/contracts";
@@ -11,7 +12,6 @@ import { UnavailableState } from "../AsyncState";
 import { Money } from "../shared/Money";
 import { HomeTile } from "./HomeTile";
 
-const title = "Patrimônio";
 const route = "/patrimonio";
 const sparkWidth = 200;
 const sparkHeight = 36;
@@ -24,12 +24,14 @@ const sparkHeight = 36;
  * said so, never zero.
  */
 export function NetWorthSummaryCard() {
+  const { t, language } = useTranslation();
+  const title = t("netWorth");
   const netWorth = useNetWorth();
 
   if (netWorth.isLoading) {
     return (
       <HomeTile label={title}>
-        <div role="status" aria-label="Carregando o patrimônio">
+        <div role="status" aria-label={t("loadingWealth")}>
           <Skeleton active title={false} paragraph={{ rows: 2 }} />
         </div>
       </HomeTile>
@@ -39,7 +41,7 @@ export function NetWorthSummaryCard() {
     return (
       <HomeTile label={title}>
         <UnavailableState onRetry={() => netWorth.refetch()}>
-          {problemMessage(netWorth.error) ?? "Não foi possível carregar o patrimônio."}
+          {problemMessage(netWorth.error) ?? t("wealthLoadError")}
         </UnavailableState>
       </HomeTile>
     );
@@ -49,13 +51,13 @@ export function NetWorthSummaryCard() {
   if (!hasNetWorthValue(latest)) {
     return (
       <HomeTile label={title} to={route}>
-        <span className="home-tile-note">Indisponível: faltam cotações de câmbio para avaliar todos os saldos.</span>
+        <span className="home-tile-note">{t("wealthRatesUnavailable")}</span>
       </HomeTile>
     );
   }
 
   const trend = netWorthTrend(netWorth.series, latest);
-  const since = trend ? formatDayMonth(trend.since) : null;
+  const since = trend ? formatDayMonth(trend.since, language) : null;
 
   return (
     <ReportCurrencyContext.Provider value={latest.currency_code ?? "BRL"}>
@@ -70,7 +72,7 @@ export function NetWorthSummaryCard() {
               viewBox={`0 0 ${sparkWidth} ${sparkHeight}`}
               preserveAspectRatio="none"
               role="img"
-              aria-label={`Evolução do patrimônio desde ${since}`}
+              aria-label={t("wealthTrendSince").replace("{date}", since ?? "")}
             >
               <polyline
                 points={sparklinePoints(trend.values, sparkWidth, sparkHeight)}
@@ -85,12 +87,12 @@ export function NetWorthSummaryCard() {
           <span className={`home-tile-note ${trend ? "" : "is-optional"}`}>
             {trend ? (
               <>
-                <Money value={trend.change} tone="result" /> desde {since}
+                <Money value={trend.change} tone="result" /> {t("since")} {since}
               </>
             ) : (
-              "Ainda não há histórico suficiente para comparar."
+              t("wealthInsufficientHistory")
             )}
-            {latest.fx?.stale && " Cotações desatualizadas."}
+            {latest.fx?.stale && t("staleRates")}
           </span>
         </span>
       </HomeTile>

@@ -1,3 +1,4 @@
+import { useTranslation } from "../../i18n/context";
 import { ReportValuation } from "../shared/ReportValuation";
 import { Skeleton } from "../ui";
 
@@ -9,7 +10,6 @@ import { UnavailableState } from "../AsyncState";
 import { Money } from "../shared/Money";
 import { HomeTile } from "./HomeTile";
 
-const title = "Pode gastar por dia";
 
 /**
  * What can be spent per day until month-end without the projected balance
@@ -18,6 +18,8 @@ const title = "Pode gastar por dia";
  * hero figure: the first answer to "will I be OK?".
  */
 export function DailyAllowanceCard() {
+  const { t, language } = useTranslation();
+  const title = t("dailyAllowance");
   const timeline = useMonthTimeline();
   const base = timeline.base;
 
@@ -26,13 +28,13 @@ export function DailyAllowanceCard() {
     return (
       <HomeTile label={title} className="home-hero">
         {timeline.isLoading && (
-          <div role="status" aria-label="Carregando o gasto diário disponível">
+          <div role="status" aria-label={t("loadingDailyAllowance")}>
             <Skeleton.Input active block style={{ height: 40 }} />
           </div>
         )}
         {!timeline.isLoading && (
           <UnavailableState onRetry={() => timeline.refetch()}>
-            {problemMessage(timeline.error) ?? "Não foi possível calcular o gasto diário disponível."}
+            {problemMessage(timeline.error) ?? t("dailyAllowanceError")}
           </UnavailableState>
         )}
       </HomeTile>
@@ -41,14 +43,14 @@ export function DailyAllowanceCard() {
 
   return (
     <ReportValuation valuation={timeline.valuation}>
-      <HomeTile label={`${title} até ${formatDayMonth(timeline.monthEnd)}`} className="home-hero">
-        {base.balance_reporting?.status === "stale" && <p role="status">Saldo convertido com cotações desatualizadas.</p>}
+      <HomeTile label={t("dailyAllowanceUntil").replace("{date}", formatDayMonth(timeline.monthEnd, language))} className="home-hero">
+        {base.balance_reporting?.status === "stale" && <p role="status">{t("staleConvertedBalance")}</p>}
         <p className="daily-allowance-value">
           <Money value={dailyAllowance(base.points, base.starting_balance)} tone="neutral" />
-          <span className="daily-allowance-unit"> / dia</span>
+          <span className="daily-allowance-unit">{t("perDay")}</span>
         </p>
         <p className="daily-allowance-note">
-          Já descontando o que está previsto até o fim do mês. Não é orçamento nem reserva.
+          {t("dailyAllowanceHint")}
         </p>
       </HomeTile>
     </ReportValuation>

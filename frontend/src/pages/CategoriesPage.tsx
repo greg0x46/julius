@@ -1,3 +1,4 @@
+import { useTranslation } from "../i18n/context";
 import { Alert, Button } from "../components/ui";
 import { useState } from "react";
 
@@ -11,6 +12,7 @@ import { useCategories } from "../hooks/useCategories";
 import { errorMessage } from "../presentation/errors";
 
 export function CategoriesPage() {
+  const { t } = useTranslation();
   const categories = useCategories();
   const feedback = useFeedback();
   const [formOpen, setFormOpen] = useState(false);
@@ -56,9 +58,9 @@ export function CategoriesPage() {
         });
       }
       setFormOpen(false);
-      feedback.success("Categoria salva");
+      feedback.success(t("categorySaved"));
     } catch (error) {
-      setSaveError(errorMessage(error, "Não foi possível salvar a categoria."));
+      setSaveError(errorMessage(error, t("categorySaveErrorFull")));
     }
   };
 
@@ -67,9 +69,9 @@ export function CategoriesPage() {
     setTogglingCategoryId(category.id);
     try {
       await categories.updateCategory({ categoryId: category.id, write: { is_active: isActive } });
-      feedback.success(isActive ? "Categoria ativada" : "Categoria desativada");
+      feedback.success(isActive ? t("categoryActivated") : t("categoryDeactivated"));
     } catch (error) {
-      const message = errorMessage(error, "Não foi possível atualizar a categoria.");
+      const message = errorMessage(error, t("categoryUpdateError"));
       setActionError(message);
       feedback.error(message);
     } finally {
@@ -79,11 +81,11 @@ export function CategoriesPage() {
 
   return (
     <PageContainer
-      title="Categorias"
-      subTitle="Classifique despesas, receitas e transferências"
+      title={t("categories")}
+      subTitle={t("categoriesSubtitle")}
       compactMobileHeader
       extra={[
-        <PageAction key="new-category" label="Nova categoria" shortLabel="Nova" onClick={openCreate} />,
+        <PageAction key="new-category" label={t("newCategory")} shortLabel={t("newFeminine")} onClick={openCreate} />,
       ]}
     >
       {actionError && (
@@ -100,8 +102,8 @@ export function CategoriesPage() {
         <Alert
           type="error"
           showIcon
-          message="Não foi possível carregar as categorias"
-          description={<Button onClick={() => categories.refetch()}>Tentar novamente</Button>}
+          message={t("categoriesLoadErrorShort")}
+          description={<Button onClick={() => categories.refetch()}>{t("retry")}</Button>}
           style={{ marginBottom: 16 }}
         />
       )}

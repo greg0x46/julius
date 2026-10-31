@@ -1,3 +1,6 @@
+import { dateFormatter } from "../../i18n/dateFormats";
+import { useTranslation } from "../../i18n/context";
+import { translate, type Language } from "../../i18n/messages";
 import type { NetWorthBreakdown, NetWorthPoint } from "../../api/contracts";
 import { SummaryStrip } from "../layout";
 import { Money } from "../shared/Money";
@@ -6,26 +9,27 @@ import { Money } from "../shared/Money";
 // debt or a bill to come is not wealth and has no line here (see
 // internal/networth). The page title already names the figure, so the hero is
 // labelled "Hoje"; the two parts read as plain balances (red only if negative).
-function valuationNote(point: NetWorthPoint): string {
+function valuationNote(point: NetWorthPoint, language: Language): string {
   const rates = Object.keys(point.valuation?.rates ?? {});
   const parts: string[] = [];
   if (rates.length > 0) {
-    parts.push(`Saldos em ${rates.join(", ")} convertidos para reais com o câmbio de ${new Date(point.valuation!.valued_at).toLocaleDateString("pt-BR", { timeZone: "UTC" })}.`);
+    parts.push(translate(language, "netWorthRatesNote", { currencies: rates.join(", "), date: dateFormatter(language, { timeZone: "UTC" }).format(new Date(point.valuation!.valued_at)) }));
   }
-  if (point.valuation_status === "stale") parts.push("Há cotações desatualizadas nesta avaliação.");
+  if (point.valuation_status === "stale") parts.push(translate(language, "netWorthStaleNote"));
   return parts.join(" ");
 }
 
 export function NetWorthBreakdownCard({ point }: { point: NetWorthPoint & NetWorthBreakdown }) {
-  const extra = valuationNote(point);
+  const { t, language } = useTranslation();
+  const extra = valuationNote(point, language);
   return (
     <SummaryStrip
-      label="Hoje"
+      label={t("today")}
       value={<Money value={point.total} tone="balance" size="hero" />}
-      note={`Caixa + Investimentos. Cartão, dívidas e contas futuras não entram: só o que já foi realizado.${extra ? ` ${extra}` : ""}`}
+      note={`${t("cashPlusInvestments")}${extra ? ` ${extra}` : ""}`}
       items={[
-        { label: "Caixa", value: <Money value={point.cash_balance} tone="balance" /> },
-        { label: "Investimentos", value: <Money value={point.investment_balance} tone="balance" /> },
+        { label: t("cash"), value: <Money value={point.cash_balance} tone="balance" /> },
+        { label: t("investmentsLabel"), value: <Money value={point.investment_balance} tone="balance" /> },
       ]}
     />
   );

@@ -1,3 +1,4 @@
+import { useTranslation } from "../../i18n/context";
 import { FeedbackContext, type Confirm } from "./feedbackContext";
 import {
   cloneElement,
@@ -51,6 +52,7 @@ export function Drawer({
   push?: boolean;
   styles?: { body?: CSSProperties };
 }) {
+  const { t } = useTranslation();
   const ref = useRef<HTMLDialogElement>(null);
   const heading = useId();
   const pressedBackdrop = useRef(false);
@@ -107,7 +109,7 @@ export function Drawer({
           </div>
           {extra}
           {closable && (
-            <Button type="text" aria-label="Fechar" onClick={onClose}>
+            <Button type="text" aria-label={t("close")} onClick={onClose}>
               ×
             </Button>
           )}
@@ -382,6 +384,7 @@ function ConfirmDialog({
   options: Confirm;
   close: () => void;
 }) {
+  const { t } = useTranslation();
   const [pending, setPending] = useState(false);
   const [failed, setFailed] = useState(false);
   return (
@@ -394,7 +397,7 @@ function ConfirmDialog({
       footer={
         <>
           <Button disabled={pending} onClick={close}>
-            {options.cancelText ?? "Cancelar"}
+            {options.cancelText ?? t("cancel")}
           </Button>
           <Button
             type="primary"
@@ -412,14 +415,14 @@ function ConfirmDialog({
               }
             }}
           >
-            {options.okText ?? "Confirmar"}
+            {options.okText ?? t("confirm")}
           </Button>
         </>
       }
     >
       {options.content}
       {failed && (
-        <p role="alert">Não foi possível concluir. Tente novamente.</p>
+        <p role="alert">{t("actionFailed")}</p>
       )}
     </Drawer>
   );

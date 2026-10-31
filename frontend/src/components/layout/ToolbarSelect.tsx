@@ -1,3 +1,4 @@
+import { useTranslation } from "../../i18n/context";
 import { Select } from "../ui";
 
 interface ToolbarSelectProps<Value extends string> {
@@ -30,9 +31,11 @@ export function ToolbarSelect<Value extends string>({ id, label, value, options,
 }
 
 export function GroupBySelect<Value extends string>(props: Omit<ToolbarSelectProps<Value>, "label">) {
-  return <ToolbarSelect label="Agrupar por" {...props} />;
+  const { t } = useTranslation();
+  return <ToolbarSelect label={t("groupBy")} {...props} />;
 }
 
 export function SortSelect<Value extends string>(props: Omit<ToolbarSelectProps<Value>, "label">) {
-  return <ToolbarSelect label="Ordenar por" {...props} />;
+  const { t } = useTranslation();
+  return <ToolbarSelect label={t("sortBy")} {...props} />;
 }

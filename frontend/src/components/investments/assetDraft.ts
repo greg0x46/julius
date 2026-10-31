@@ -1,3 +1,4 @@
+import type { MessageKey } from "../../i18n/messages";
 import type {
   InvestmentAssetClass,
   InvestmentAssetClassDefinition,
@@ -43,16 +44,17 @@ export function assetWriteFrom(
   draft: AssetDraft,
   quoteSource: string | null,
   quoteSymbol: string,
+  t: (key: MessageKey) => string,
 ): InvestmentAssetWrite | string {
   const name = draft.name.trim();
   const assetType = (draft.assetType === customAssetType ? draft.customType : draft.assetType).trim();
   const currencyCode = draft.currencyCode.trim().toUpperCase();
-  if (name === "") return "Informe o nome do ativo.";
-  if (draft.assetClass === "") return "Escolha a classe do ativo.";
-  if (assetType === "") return "Informe o tipo do ativo.";
-  if (!/^[A-Z]{3}$/.test(currencyCode)) return "Informe a moeda com três letras, como BRL ou USD.";
+  if (name === "") return t("assetNameRequired");
+  if (draft.assetClass === "") return t("assetClassRequired");
+  if (assetType === "") return t("assetTypeRequired");
+  if (!/^[A-Z]{3}$/.test(currencyCode)) return t("assetCurrencyInvalid");
   if (quoteSource && quoteSymbol === "" && draft.ticker.trim() === "") {
-    return "Informe o código do ativo, como PETR4 ou BTC, para buscar a cotação.";
+    return t("assetTickerForQuote");
   }
   return {
     name,

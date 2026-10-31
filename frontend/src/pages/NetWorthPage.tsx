@@ -1,3 +1,4 @@
+import { useTranslation } from "../i18n/context";
 import { hasNetWorthValue } from "../api/contracts";
 import { ApiError } from "../api/problems";
 import { ReportValuation } from "../components/shared/ReportValuation";
@@ -10,6 +11,7 @@ import { NetWorthChart } from "../components/netWorth/NetWorthChart";
 import { useNetWorth } from "../hooks/useNetWorth";
 
 export function NetWorthPage() {
+  const { t } = useTranslation();
   const netWorth = useNetWorth();
   // A single point has no evolution to plot — a line chart with one dot
   // reads as broken, not "just started". Wait for at least two valued days.
@@ -18,15 +20,13 @@ export function NetWorthPage() {
   const hasUnavailablePoints = netWorth.series.some((point) => point.valuation_status === "unavailable");
 
   // One footnote, under the chart it qualifies.
-  const footnote = `O histórico é recalculado a cada leitura a partir das transações, operações e cotações, então acompanha qualquer correção.${
-    hasStaleRates ? " Há dias avaliados com cotações desatualizadas." : ""
-  }${hasUnavailablePoints ? " Dias sem cotação, sem câmbio ou sem histórico suficiente aparecem como lacunas." : ""}`;
+  const footnote = `${t("netWorthHistoryNote")}${hasStaleRates ? t("netWorthStaleDays") : ""}${hasUnavailablePoints ? t("netWorthGapDays") : ""}`;
 
   return (
-    <Page title="Patrimônio" description="O que você já tem, em caixa e investimentos, ao longo do tempo" compactMobileHeader>
+    <Page title={t("netWorthTitle")} description={t("netWorthDescription")} compactMobileHeader>
       {netWorth.isLoading && (
         // Hero strip, then the chart: the shape of the loaded page.
-        <div className="net-worth-page" role="status" aria-label="Carregando patrimônio">
+        <div className="net-worth-page" role="status" aria-label={t("loadingNetWorth")}>
           <Skeleton active title={{ width: "30%" }} paragraph={{ rows: 2 }} />
           <Skeleton.Node active style={{ width: "100%", height: 260 }}>
             <span />
@@ -37,14 +37,14 @@ export function NetWorthPage() {
         <UnavailableState onRetry={() => netWorth.refetch()}>
           {netWorth.error instanceof ApiError
             ? netWorth.error.message
-            : "Não foi possível carregar o patrimônio"}
+            : t("netWorthLoadFailed")}
         </UnavailableState>
       )}
 
       {!netWorth.isLoading && !netWorth.error && !netWorth.latest && (
         <EmptyState
-          title="Ainda não há patrimônio para mostrar"
-          hint="Conecte um banco ou importe um extrato: o patrimônio é calculado a partir das suas contas."
+          title={t("noNetWorthYet")}
+          hint={t("noNetWorthHint")}
         />
       )}
 
@@ -55,20 +55,20 @@ export function NetWorthPage() {
               <NetWorthBreakdownCard point={netWorth.latest} />
             ) : (
               <EmptyState
-                title="Patrimônio indisponível"
-                hint="Faltam cotações de câmbio para avaliar todos os saldos em reais."
+                title={t("netWorthUnavailable")}
+                hint={t("netWorthUnavailableHint")}
               />
             )}
             {hasSeries ? (
               <NetWorthChart
                 points={netWorth.series}
-                footnote={`Valores em ${netWorth.latest.currency_code ?? "BRL"}, com câmbio de cada dia. ${footnote}`}
+                footnote={t("valuesInCurrency", { currency: netWorth.latest.currency_code ?? "BRL", note: footnote })}
               />
             ) : (
-              <Section title="Evolução do patrimônio">
+              <Section title={t("netWorthEvolution")}>
                 <EmptyState
-                  title="Ainda não há histórico para mostrar"
-                  hint="O gráfico aparece quando há movimentações em pelo menos dois dias."
+                  title={t("noNetWorthHistory")}
+                  hint={t("noNetWorthHistoryHint")}
                 />
               </Section>
             )}

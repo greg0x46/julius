@@ -1,5 +1,6 @@
+import { useTranslation } from "../../i18n/context";
 import type { Payable } from "../../api/contracts";
-import { payableStatusLabel, payableVocabulary, settledPercent } from "../../presentation/payableLabels";
+import { payableStatusLabel, getPayableVocabulary, settledPercent } from "../../presentation/payableLabels";
 import { SummaryStrip } from "../layout";
 import { Money } from "../shared/Money";
 import { StatusTag } from "../shared/StatusTag";
@@ -14,7 +15,8 @@ import { PayableMeter } from "./PayableMeter";
  * start, not stretched).
  */
 export function PayableHeader({ payable }: { payable: Payable }) {
-  const vocab = payableVocabulary[payable.kind];
+  const { t, language } = useTranslation();
+  const vocab = getPayableVocabulary(payable.kind, language);
   const percent = settledPercent(payable.total_amount, payable.settled_amount);
 
   return (
@@ -24,10 +26,10 @@ export function PayableHeader({ payable }: { payable: Payable }) {
       value={<Money value={payable.remaining_amount} tone="neutral" size="hero" />}
       items={[
         { label: vocab.settledColumnLabel, value: <Money value={payable.settled_amount} tone="neutral" /> },
-        { label: "Total", value: <Money value={payable.total_amount} tone="neutral" /> },
+        { label: t("totalLabel"), value: <Money value={payable.total_amount} tone="neutral" /> },
       ]}
     >
-      {payable.status === "settled" && <StatusTag tone="success">{payableStatusLabel[payable.kind].settled}</StatusTag>}
+      {payable.status === "settled" && <StatusTag tone="success">{payableStatusLabel(payable.kind, "settled", language)}</StatusTag>}
       <PayableMeter percent={percent} />
       <span>
         {vocab.settledShareLabel} {percent}%

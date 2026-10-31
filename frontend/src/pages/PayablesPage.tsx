@@ -1,3 +1,4 @@
+import { useTranslation } from "../i18n/context";
 import { Alert, Button } from "../components/ui";
 import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -22,22 +23,10 @@ import { usePayables } from "../hooks/usePayables";
 import { compareDecimals } from "../presentation/decimal";
 import { errorMessage } from "../presentation/errors";
 import { sumBRL } from "../presentation/money";
-import { payableDetailPath, payableVocabulary } from "../presentation/payableLabels";
+import { payableDetailPath, getPayableVocabulary } from "../presentation/payableLabels";
 
 type PayableView = PayableKind | "all";
 type PayableSort = "recent" | "name" | "remaining";
-
-const viewOptions: { label: string; value: PayableView }[] = [
-  { label: "Todas", value: "all" },
-  { label: "Dívidas", value: "debt" },
-  { label: "A receber", value: "receivable" },
-];
-
-const sortOptions: { label: string; value: PayableSort }[] = [
-  { label: "Mais recentes", value: "recent" },
-  { label: "Nome", value: "name" },
-  { label: "Maior valor restante", value: "remaining" },
-];
 
 const comparators: Record<PayableSort, (left: Payable, right: Payable) => number> = {
   recent: (left, right) => right.created_at.localeCompare(left.created_at),
@@ -69,28 +58,34 @@ function remainingTotal(payables: Payable[], kind: PayableKind): string {
  * two figures sit side by side and a single tab shows only its own.
  */
 function PayablesSummary({ view, payables }: { view: PayableView; payables: Payable[] }) {
+  const { language } = useTranslation();
+  const debt = getPayableVocabulary("debt", language);
+  const receivable = getPayableVocabulary("receivable", language);
   const owed = <Money value={remainingTotal(payables, "debt")} tone="neutral" />;
   const toReceive = <Money value={remainingTotal(payables, "receivable")} tone="neutral" />;
   if (view === "all") {
     return (
       <SummaryStrip
         className="payables-summary"
-        label={payableVocabulary.debt.summaryLabel}
+        label={debt.summaryLabel}
         value={owed}
-        items={[{ label: payableVocabulary.receivable.summaryLabel, value: toReceive }]}
+        items={[{ label: receivable.summaryLabel, value: toReceive }]}
       />
     );
   }
   return (
     <SummaryStrip
       className="payables-summary"
-      label={payableVocabulary[view].summaryLabel}
+      label={getPayableVocabulary(view, language).summaryLabel}
       value={view === "debt" ? owed : toReceive}
     />
   );
 }
 
 export function PayablesPage() {
+  const { t, language } = useTranslation();
+  const viewOptions: { label: string; value: PayableView }[] = [{ label: t("allFeminine"), value: "all" }, { label: t("debts"), value: "debt" }, { label: t("receivableKind"), value: "receivable" }];
+  const sortOptions: { label: string; value: PayableSort }[] = [{ label: t("mostRecent"), value: "recent" }, { label: t("name"), value: "name" }, { label: t("largestRemaining"), value: "remaining" }];
   const [searchParams, setSearchParams] = useSearchParams();
   const kindParam = searchParams.get("kind");
   const filter: PayableView = kindParam === "debt" || kindParam === "receivable" ? kindParam : "all";
@@ -134,9 +129,9 @@ export function PayablesPage() {
         initial_remaining_amount: write.initial_remaining_amount,
       });
       setFormOpen(false);
-      feedback.success(formKind === "debt" ? "Dívida criada" : "Conta a receber criada");
+      feedback.success(formKind === "debt" ? t("debtCreated") : t("receivableCreated"));
     } catch (error) {
-      setSaveError(errorMessage(error, "Não foi possível salvar a pendência."));
+      setSaveError(errorMessage(error, t("payableSaveError")));
     }
   };
 
@@ -148,16 +143,16 @@ export function PayablesPage() {
   const createOptions = [
     {
       key: "debt",
-      label: "Nova dívida",
-      description: "Valor que você precisa pagar",
-      icon: payableVocabulary.debt.icon,
+      label: t("debtNew"),
+      description: t("debtDescription"),
+      icon: getPayableVocabulary("debt", language).icon,
       onClick: () => openCreate("debt"),
     },
     {
       key: "receivable",
-      label: "Nova conta a receber",
-      description: "Valor que outra pessoa precisa pagar a você",
-      icon: payableVocabulary.receivable.icon,
+      label: t("receivableNew"),
+      description: t("receivableDescription"),
+      icon: getPayableVocabulary("receivable", language).icon,
       onClick: () => openCreate("receivable"),
     },
   ];
@@ -167,32 +162,32 @@ export function PayablesPage() {
   // no second button repeats it; a kind's tab offers its own, more specific one.
   const empty = nothingYet ? (
     <EmptyState
-      title={filter === "all" ? "Nenhuma pendência ainda" : payableVocabulary[filter].emptyTitle}
-      hint="Registre o que você deve ou tem a receber para acompanhar o quanto já foi quitado."
+      title={filter === "all" ? t("noPayablesYet") : getPayableVocabulary(filter, language).emptyTitle}
+      hint={t("noPayablesHint")}
       action={
         filter === "all" ? undefined : (
-          <Button onClick={() => openCreate(filter)}>{payableVocabulary[filter].newTitle}</Button>
+          <Button onClick={() => openCreate(filter)}>{getPayableVocabulary(filter, language).newTitle}</Button>
         )
       }
     />
   ) : (
-    <EmptyState title="Nada encontrado para essa busca" hint="Tente outro nome." />
+    <EmptyState title={t("nothingForSearch")} hint={t("tryAnotherName")} />
   );
 
   return (
     <Page
-      title="Pendências"
+      title={t("payables")}
       width="narrow"
       compactMobileHeader
-      actions={<CreateActionMenu label="Nova pendência" shortLabel="Nova" options={createOptions} />}
-      tabs={<PageTabs label="Tipo de pendência" options={viewOptions} value={filter} onChange={setFilter} />}
+      actions={<CreateActionMenu label={t("newPayable")} shortLabel={t("newFeminine")} options={createOptions} />}
+      tabs={<PageTabs label={t("payableType")} options={viewOptions} value={filter} onChange={setFilter} />}
     >
       {payables.error && (
         <Alert
           type="error"
           showIcon
-          message="Não foi possível carregar as pendências"
-          action={<Button onClick={() => payables.refetch()}>Tentar novamente</Button>}
+          message={t("payablesLoadError")}
+          action={<Button onClick={() => payables.refetch()}>{t("retry")}</Button>}
           style={{ marginBottom: 16 }}
         />
       )}
@@ -201,12 +196,12 @@ export function PayablesPage() {
 
       {!nothingYet && (
         <ListToolbar
-          label="Controles das pendências"
+          label={t("payableControls")}
           start={
             <SearchField
               id="payables-search"
-              label="Buscar pendências"
-              placeholder="Buscar por nome…"
+              label={t("searchPayables")}
+              placeholder={t("searchByName")}
               value={search}
               onChange={setSearch}
             />

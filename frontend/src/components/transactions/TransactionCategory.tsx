@@ -1,3 +1,4 @@
+import { useTranslation } from "../../i18n/context";
 import type { CSSProperties } from "react";
 
 import type { TransactionItem } from "../../api/contracts";
@@ -12,19 +13,20 @@ import {
  * accent to recognise, not a pill that outshines the description.
  */
 export function TransactionCategory({ item }: { item: TransactionItem }) {
+  const { language } = useTranslation();
   const category = item.internal_category;
   return (
     <span
       className={`transaction-category ${category ? "" : "is-empty"}`}
       style={category ? ({ "--category-color": category.color } as CSSProperties) : undefined}
-      title={category ? internalCategoryOriginLabel(category) : undefined}
+      title={category ? internalCategoryOriginLabel(category, language) : undefined}
     >
       {category && (
         <span className="transaction-category-icon" aria-hidden="true">
           {renderCategoryIcon(category.icon)}
         </span>
       )}
-      <span className="transaction-category-name">{internalCategoryName(item)}</span>
+      <span className="transaction-category-name">{internalCategoryName(item, language)}</span>
     </span>
   );
 }
