@@ -46,7 +46,7 @@ func plannedTransactionToDTO(event projections.PlannedTransaction) plannedTransa
 
 func plannedWindow(r *http.Request) (time.Time, time.Time, error) {
 	today := dates.Day(time.Now().UTC())
-	from, to := today, today.AddDate(1, 0, 0)
+	from, to := today, dates.AddMonths(today, 12)
 	var err error
 	if raw := r.URL.Query().Get("from"); raw != "" {
 		from, err = time.Parse(dateOnlyLayout, raw)
