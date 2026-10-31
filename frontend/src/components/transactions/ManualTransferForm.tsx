@@ -1,10 +1,11 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { Alert, DatePicker, Input, Select, Spin } from "../ui";
-import { calendar } from "../../presentation/calendar";
+import { todayIn } from "../../presentation/timezone";
 import { useState } from "react";
 import { createTransfer, type TransferMovement } from "../../api/transfers";
 import { invalidateAfterTransactionChange } from "../../api/queryKeys";
 import { useAccounts } from "../../hooks/useAccounts";
+import { useTimezone } from "../../hooks/useTimezone";
 import { transferRate } from "../../presentation/transferRate";
 import { FormDrawer } from "../forms/FormDrawer";
 import { FormField } from "../forms/FormField";
@@ -22,7 +23,8 @@ export function ManualTransferForm({ onClose, onCreated }: { onClose: () => void
   const [sent, setSent] = useState("");
   const [received, setReceived] = useState("");
   const [fee, setFee] = useState("");
-  const [date, setDate] = useState(calendar());
+  const timezone = useTimezone();
+  const [date, setDate] = useState(() => todayIn(timezone));
   const [description, setDescription] = useState("Transferência entre contas");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);

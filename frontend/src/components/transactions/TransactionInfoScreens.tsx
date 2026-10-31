@@ -1,6 +1,7 @@
 import { Descriptions, Tag } from "../ui";
 
 import type { TransactionItem } from "../../api/contracts";
+import { useTimezone } from "../../hooks/useTimezone";
 import { internalCategoryOriginLabel } from "../../presentation/categoryLabels";
 import { formatBRL, formatMoney, moneySourceLabel } from "../../presentation/money";
 import { dateTime, installmentLabel, investmentSplit, remainderLabel } from "../../presentation/transactionDetail";
@@ -10,12 +11,13 @@ import { PanelSection } from "../shared/PanelStack";
 
 /** Where and when, plus the history behind the current decisions — read-only. */
 export function TransactionDetailsScreen({ item }: { item: TransactionItem }) {
+  const timezone = useTimezone();
   const split = investmentSplit(item);
   return (
     <>
       <PanelSection title="Quando & onde">
         <Descriptions column={1} size="small" colon={false}>
-          <Descriptions.Item label="Data e hora">{dateTime(item.occurred_at)}</Descriptions.Item>
+          <Descriptions.Item label="Data e hora">{dateTime(item.occurred_at, timezone)}</Descriptions.Item>
           <Descriptions.Item label="Conta">{item.account.name ?? "Conta não informada"}</Descriptions.Item>
           <Descriptions.Item label="Instituição">
             {item.account.institution ?? "Instituição não informada"}
@@ -44,7 +46,7 @@ export function TransactionDetailsScreen({ item }: { item: TransactionItem }) {
           <Descriptions.Item label="Nos totais">
             {item.inclusion.state === "ignored" ? "Não" : "Sim"}
             {item.inclusion.changed_at &&
-              ` · ${inclusionOriginLabel(item.inclusion)} em ${dateTime(item.inclusion.changed_at)}`}
+              ` · ${inclusionOriginLabel(item.inclusion)} em ${dateTime(item.inclusion.changed_at, timezone)}`}
           </Descriptions.Item>
           {split && (
             <Descriptions.Item label="Investimento">

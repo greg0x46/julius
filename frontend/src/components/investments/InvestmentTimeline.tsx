@@ -1,6 +1,7 @@
 import { Skeleton } from "../ui";
 
 import type { InvestmentTransaction } from "../../api/contracts";
+import { useTimezone } from "../../hooks/useTimezone";
 import { formatCompactDay } from "../../presentation/dates";
 import { movementTypeLabel, quotaCount } from "../../presentation/investmentLabels";
 import { UnavailableState } from "../AsyncState";
@@ -24,6 +25,7 @@ export function InvestmentTimeline({
   error: unknown;
   onRetry: () => void;
 }) {
+  const timezone = useTimezone();
   const failed = error !== null && error !== undefined;
   return (
     <Section title="Movimentações">
@@ -46,7 +48,7 @@ export function InvestmentTimeline({
                 key={transaction.id}
                 title={movementTypeLabel(transaction.movement_type)}
                 meta={[
-                  date !== null ? formatCompactDay(date) : "Sem data",
+                  date !== null ? formatCompactDay(date, timezone) : "Sem data",
                   transaction.quantity !== null ? quotaCount(transaction.quantity) : null,
                 ]
                   .filter(Boolean)

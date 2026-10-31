@@ -143,9 +143,11 @@ to `BRL` when absent. GET/PUT `/api/preferences` expose `reference_currency`
 alongside `transactions_period_basis`. The currency must be a canonical
 uppercase ISO 4217 code from the same catalog as `/api/accounts/currencies`,
 excluding `XXX`. Invalid input returns 422 before either preference is written;
-the two writes share a transaction. Older clients may omit the currency to
-preserve the saved preference. The General settings screen offers one searchable
-currency selector and one Save action for both preferences.
+the writes share a transaction. Older clients may omit the currency (or the
+timezone) to preserve the saved preference. The General settings screen offers
+a searchable currency selector, a searchable timezone selector and the card
+month option, with one Save action for all of them. Saving a different timezone
+drops the cached queries that depend on it.
 
 This is a reporting valuation, never a change to the original currency, amount,
 balance or quantity. The existing consolidated BRL base and its eligibility

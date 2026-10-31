@@ -11,18 +11,20 @@ import {
   formatOptionalLocalDay,
 } from "./dates";
 
+const zone = "America/Sao_Paulo";
+
 describe("date presentation", () => {
-  it("formats valid dates in pt-BR local time", () => {
-    expect(formatDate("2026-07-29T12:00:00Z")).toMatch(/\d{2}\/\d{2}\/2026/);
+  it("formats valid dates in pt-BR in the given timezone", () => {
+    expect(formatDate("2026-07-29T12:00:00Z", zone)).toMatch(/\d{2}\/\d{2}\/2026/);
   });
 
   it("handles invalid and absent dates explicitly", () => {
-    expect(formatDate("invalid")).toBe("Data inválida");
-    expect(formatOptionalDate(null)).toBe("Ainda não disponível");
+    expect(formatDate("invalid", zone)).toBe("Data inválida");
+    expect(formatOptionalDate(null, zone)).toBe("Ainda não disponível");
     expect(formatDay("invalid")).toBe("Data inválida");
-    expect(formatLocalDay("invalid")).toBe("Data inválida");
+    expect(formatLocalDay("invalid", zone)).toBe("Data inválida");
     expect(formatOptionalDay(null)).toBe("—");
-    expect(formatOptionalLocalDay(null)).toBe("—");
+    expect(formatOptionalLocalDay(null, zone)).toBe("—");
   });
 
   // A calendar day carries no time of day, so it has to read the same wherever
@@ -33,22 +35,22 @@ describe("date presentation", () => {
     expect(formatDay("2026-04-02T00:30:00Z")).toBe("02/04/2026");
   });
 
-  // An instant is a point in time and has to read as the day it happened
-  // where the reader is: 00:30Z is still the 1st in Brazil. Comparing against
-  // the platform's own local formatting is what pins the *absence* of a
-  // timeZone override — the regression this guards is someone hard-coding UTC
-  // here, which shows up on any runner that isn't itself on UTC.
-  it("reads an instant in the reader's own timezone", () => {
+  // An instant is a point in time and has to read as the day it happened in the
+  // configured zone, whatever zone the machine runs in: 00:30Z is still the 1st
+  // in São Paulo and already the 2nd in Tokyo.
+  it("reads an instant in the given timezone, not the machine's", () => {
     const instant = "2026-04-02T00:30:00Z";
-    expect(formatLocalDay(instant)).toBe(new Date(instant).toLocaleDateString("pt-BR"));
+    expect(formatLocalDay(instant, "America/Sao_Paulo")).toBe("01/04/2026");
+    expect(formatLocalDay(instant, "Asia/Tokyo")).toBe("02/04/2026");
+    expect(formatOptionalLocalDay(instant, "UTC")).toBe("02/04/2026");
   });
 
   it("formats an updated-at instant as a sentence, without seconds", () => {
-    expect(formatOptionalDateTime("2026-09-22T09:00:00Z")).toMatch(
+    expect(formatOptionalDateTime("2026-09-22T09:00:00Z", zone)).toMatch(
       /^\d{2}\/\d{2}\/2026 às \d{2}:\d{2}$/,
     );
-    expect(formatOptionalDateTime(null)).toBe("Ainda não disponível");
-    expect(formatOptionalDateTime("invalid")).toBe("Data inválida");
+    expect(formatOptionalDateTime(null, zone)).toBe("Ainda não disponível");
+    expect(formatOptionalDateTime("invalid", zone)).toBe("Data inválida");
   });
 });
 

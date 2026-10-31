@@ -6,6 +6,7 @@ import { queryKeys } from "../../api/queryKeys";
 import { useMemo } from "react";
 
 import type { Category, TransactionInclusionState, TransactionItem } from "../../api/contracts";
+import { useTimezone } from "../../hooks/useTimezone";
 import { useTransactionReconciliation } from "../../hooks/useTransactionReconciliation";
 import { internalCategoryOriginLabel } from "../../presentation/categoryLabels";
 import { formatDay } from "../../presentation/dates";
@@ -58,6 +59,7 @@ export function TransactionOverviewScreen({
   deleteError: string | null;
   navigate: (screen: TransactionScreen) => void;
 }) {
+  const timezone = useTimezone();
   const ignored = item.inclusion.state === "ignored";
   const transfer = useQuery({ queryKey: queryKeys.transactionTransfer(item.id), queryFn: ({ signal }) => getTransactionTransfer(item.id, signal), retry: false });
   const linked = !!transfer.data || item.totals_eligibility.reason === "linked_transfer";
@@ -71,7 +73,7 @@ export function TransactionOverviewScreen({
   const choices = useMemo(() => categoryChoices(categories, item), [categories, item]);
   const suggestion = suggestedCategory(item, choices);
   const split = investmentSplit(item);
-  const prefill = recurringCommitmentPrefill(item);
+  const prefill = recurringCommitmentPrefill(item, timezone);
   // The row only summarises; the reconcile screen owns the writes.
   const reconciliation = useTransactionReconciliation(item.id, !ignored);
 
@@ -98,7 +100,7 @@ export function TransactionOverviewScreen({
   // Origin and "out of the totals" are facts about the line, so they read as
   // plain text beside the date rather than as coloured tags.
   const when = [
-    shortDateTime(item.occurred_at),
+    shortDateTime(item.occurred_at, timezone),
     item.origin === "manual" ? "Manual" : null,
     item.source_provider === "file" ? "Arquivo" : null,
     ignored ? "Fora dos totais" : null,
