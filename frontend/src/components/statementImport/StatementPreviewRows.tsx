@@ -2,6 +2,7 @@ import { Button, Radio } from "../ui";
 import { useState } from "react";
 
 import type { ImportConflict, ImportRow } from "../../api/statementImports";
+import { useTimezone } from "../../hooks/useTimezone";
 import { formatDate } from "../../presentation/dates";
 import { formatMoney } from "../../presentation/money";
 import { EmptyState } from "../layout";
@@ -29,6 +30,7 @@ function StatementPreviewRow({ row, conflict, filename, decision, onDecision }: 
   decision?: "import" | "ignore";
   onDecision?: (line: number, decision: "import" | "ignore") => void;
 }) {
+  const timezone = useTimezone();
   const currency = row.currency ?? "BRL";
   const tag = row.status === "new" ? null : statusTag[row.status];
   const hasNotes = row.errors.length > 0 || row.warnings.length > 0;
@@ -39,7 +41,7 @@ function StatementPreviewRow({ row, conflict, filename, decision, onDecision }: 
         <span className="statement-row-description">{row.description || "—"}</span>
         <span className="statement-row-meta">
           <span>Linha {row.line_number}</span>
-          <span>{row.occurred_at ? formatDate(row.occurred_at) : "—"}</span>
+          <span>{row.occurred_at ? formatDate(row.occurred_at, timezone) : "—"}</span>
           {row.payment_method && <span>{row.payment_method}</span>}
         </span>
       </div>
@@ -66,7 +68,7 @@ function StatementPreviewRow({ row, conflict, filename, decision, onDecision }: 
               <strong>Transação existente</strong>
               {conflict ? <>
                 {conflict.description !== row.description && <span>{conflict.description}</span>}
-                {conflict.occurred_at !== row.occurred_at && <span>{formatDate(conflict.occurred_at)}</span>}
+                {conflict.occurred_at !== row.occurred_at && <span>{formatDate(conflict.occurred_at, timezone)}</span>}
                 {formatMoney(conflict.amount, conflict.currency) !== formatMoney(row.amount ?? "0", currency) && <span>{formatMoney(conflict.amount, conflict.currency)}</span>}
                 {conflict.payment_method !== row.payment_method && <span>{conflict.payment_method}</span>}
                 <dl><dt>Saldo após</dt><dd>{conflict.balance === null ? "Não informado" : formatMoney(conflict.balance, conflict.currency)}</dd></dl>

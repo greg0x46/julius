@@ -3,12 +3,14 @@ import Table from "./ui/Table";
 import { Link, useNavigate } from "react-router-dom";
 
 import type { SyncRun } from "../api/contracts";
+import { useTimezone } from "../hooks/useTimezone";
 import { formatDate, formatLocalDay } from "../presentation/dates";
 import { ResponsiveList } from "./layout";
 import { SyncStatusBadge } from "./SyncStatusBadge";
 
 const detailsPath = (run: SyncRun) => `/configuracoes/open-banking/sync-runs/${run.id}`;
-const detailsLabel = (run: SyncRun) => `Ver detalhes da sincronização iniciada em ${formatDate(run.started_at)}`;
+const detailsLabel = (run: SyncRun, timezone: string) =>
+  `Ver detalhes da sincronização iniciada em ${formatDate(run.started_at, timezone)}`;
 
 /**
  * One lighter line for a run on a phone: when, and what it moved. Short on
@@ -16,9 +18,9 @@ const detailsLabel = (run: SyncRun) => `Ver detalhes da sincronização iniciada
  * line that wraps to three beside it reads as noise. Updates only when there
  * were some; the accounts count is in the run's detail.
  */
-function runMeta(run: SyncRun): string {
+function runMeta(run: SyncRun, timezone: string): string {
   return [
-    formatLocalDay(run.started_at),
+    formatLocalDay(run.started_at, timezone),
     `${run.transactions_inserted} ${run.transactions_inserted === 1 ? "nova" : "novas"}`,
     run.transactions_updated > 0
       ? `${run.transactions_updated} ${run.transactions_updated === 1 ? "atualizada" : "atualizadas"}`
@@ -36,13 +38,14 @@ function runMeta(run: SyncRun): string {
  */
 export function SyncRunHistory({ runs }: { runs: SyncRun[] }) {
   const navigate = useNavigate();
+  const timezone = useTimezone();
   const columns: Column<SyncRun>[] = [
     {
       title: "Início",
       dataIndex: "started_at",
       render: (_, run) => (
-        <Link aria-label={detailsLabel(run)} to={detailsPath(run)}>
-          <time dateTime={run.started_at}>{formatDate(run.started_at)}</time>
+        <Link aria-label={detailsLabel(run, timezone)} to={detailsPath(run)}>
+          <time dateTime={run.started_at}>{formatDate(run.started_at, timezone)}</time>
         </Link>
       ),
     },
@@ -66,10 +69,10 @@ export function SyncRunHistory({ runs }: { runs: SyncRun[] }) {
       getKey={(run) => run.id}
       row={(run) => ({
         title: run.source_name,
-        meta: runMeta(run),
+        meta: runMeta(run, timezone),
         status: run.status === "completed" ? undefined : <SyncStatusBadge status={run.status} />,
         href: detailsPath(run),
-        ariaLabel: detailsLabel(run),
+        ariaLabel: detailsLabel(run, timezone),
       })}
       wide={
         <Table<SyncRun>

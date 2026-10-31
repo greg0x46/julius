@@ -1,6 +1,8 @@
+import { QueryClient } from "@tanstack/react-query";
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  discardAfterTimezoneChange,
   invalidateAfterAccountClosingDayChange,
   invalidateAfterAutomationRuleChange,
   invalidateAfterGoalChange,
@@ -63,7 +65,6 @@ describe("queryKeys values", () => {
     expect(queryKeys.syncRunsList).toEqual(["sync-runs", "list"]);
     expect(queryKeys.syncRunDetail("r1")).toEqual(["sync-runs", "detail", "r1"]);
     expect(queryKeys.dataSourcesList).toEqual(["data-sources", "list"]);
-    expect(queryKeys.transactionsInvalidTimezoneFor("a1")).toEqual(["transactions", "invalid-timezone", "a1"]);
     expect(queryKeys.authSession).toEqual(["auth-session"]);
     expect(queryKeys.timeline).toEqual(["timeline"]);
     expect(queryKeys.timelineDataRange).toEqual(["timeline-data-range"]);
@@ -274,5 +275,25 @@ describe("invalidation policies", () => {
       [{ queryKey: ["automationRuleConditionOptions"] }],
       [{ queryKey: ["transactions"], refetchType: "none" }],
     ]);
+  });
+});
+
+describe("discardAfterTimezoneChange", () => {
+  it("drops what depends on the zone and keeps the session, preferences and currency list", async () => {
+    const client = new QueryClient();
+    client.setQueryData(queryKeys.authSession, { authenticated: true });
+    client.setQueryData(queryKeys.preferences, { timezone: "UTC" });
+    client.setQueryData(["account-currencies"], []);
+    client.setQueryData(queryKeys.spendingByCategory("UTC"), { items: [] });
+    client.setQueryData(queryKeys.timelineDataRangeFor("UTC"), { from: "2026-01-01", to: "2026-12-31" });
+
+    await discardAfterTimezoneChange(client);
+
+    expect(client.getQueryData(queryKeys.authSession)).toBeDefined();
+    expect(client.getQueryData(queryKeys.preferences)).toBeDefined();
+    expect(client.getQueryData(["account-currencies"])).toBeDefined();
+    expect(client.getQueryData(queryKeys.spendingByCategory("UTC"))).toBeUndefined();
+    expect(client.getQueryData(queryKeys.timelineDataRangeFor("UTC"))).toBeUndefined();
+    client.clear();
   });
 });

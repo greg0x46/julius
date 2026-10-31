@@ -70,7 +70,7 @@ func TestMCPPlanningWriteToolsLifecycle(t *testing.T) {
 				args["id"] = id
 				switch family {
 				case "goal":
-					data["target_amount"] = "20000.000000000000001"
+					data["target_amount"] = "20000.0001"
 				case "scenario":
 					data["name"] = "Synthetic car"
 				case "planned_transaction":

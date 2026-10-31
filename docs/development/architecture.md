@@ -102,9 +102,10 @@ BRL contracts; reference currency is a valuation preference.
    as a separate screen control.
 5. **Share calendar-day rules.** `dates.Day` uses UTC midnight of the caller's
    wall-clock date. `DaysInMonth` supplies timezone-independent calendar month
-   lengths. Reporting buckets first choose the request timezone; bill-cycle
-   calculations deliberately use `time.Local`. Generated plan installments
-   roll months while recurring schedules clamp to month end.
+   lengths and `AddMonths` steps months, clamping to month end. Reporting
+   buckets first choose the request timezone; bill-cycle calculations
+   deliberately use `time.Local`. Generated plan installments and recurring
+   schedules both clamp to month end.
 6. **Keep cross-engine writes atomic.** Pass the caller's `Querier` through
    `ledger.Service` and `ApplyNewTransactionDecisions`; do not open nested
    transactions for categorization, rules or link cleanup. Sync commits each

@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { getTimelineDataRange } from "../api/timeline";
 import { queryKeys } from "../api/queryKeys";
-import { browserTimezone } from "./useTransactions";
+import { useTimezone } from "./useTimezone";
 
 /**
  * The widest window the balance curve can cover. Only the "todo o período"
@@ -10,7 +10,7 @@ import { browserTimezone } from "./useTransactions";
  * selected and the request never leaves.
  */
 export function useTimelineDataRange(enabled: boolean) {
-  const timezone = browserTimezone() ?? "UTC";
+  const timezone = useTimezone();
   const query = useQuery({
     queryKey: queryKeys.timelineDataRangeFor(timezone),
     queryFn: ({ signal }) => getTimelineDataRange(timezone, signal),

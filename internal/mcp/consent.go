@@ -152,19 +152,10 @@ func (o *oauthServer) consent(w http.ResponseWriter, r *http.Request) {
 			reject(w, r, 400, "invalid_scope", "scope_exceeds_request", "scope")
 			return
 		}
-		if o.limited(true) {
-			w.Header().Set("Retry-After", "60")
-			rateLimited(w, r, "oauth_consent_attempts", "window_exceeded")
+		revision, handled, err := o.verifyOwner(w, r)
+		if handled {
 			return
 		}
-		select {
-		case o.hashing <- struct{}{}:
-			defer func() { <-o.hashing }()
-		default:
-			rateLimited(w, r, "oauth_hashing_busy", "busy")
-			return
-		}
-		revision, err := o.store.VerifyOwner(r.Context(), r.PostForm.Get("email"), r.PostForm.Get("password"))
 		if errors.Is(err, auth.ErrCredentials) {
 			httplog.SetAuth(r.Context(), httplog.AuthNone, httplog.AuthRejected)
 			httplog.SetError(r.Context(), "invalid_credentials", "invalid_credentials", "")

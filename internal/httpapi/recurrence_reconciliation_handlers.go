@@ -188,9 +188,9 @@ func reconcilerFor(ctx context.Context, conn *sql.DB, commitment recurrences.Rec
 
 // occurrenceWindow reads the optional from/to query params, defaulting to
 // the trailing months that make reconciliation reviewable (see
-// occurrenceHistoryMonths).
-func occurrenceWindow(r *http.Request) (from, to time.Time, err error) {
-	now := dates.Day(time.Now())
+// occurrenceHistoryMonths), counted from now, the calendar day in the
+// configured zone.
+func occurrenceWindow(r *http.Request, now time.Time) (from, to time.Time, err error) {
 	from = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC).AddDate(0, -occurrenceHistoryMonths, 0)
 	to = time.Date(now.Year(), now.Month(), dates.DaysInMonth(now.Year(), now.Month()), 0, 0, 0, 0, time.UTC)
 
@@ -203,6 +203,9 @@ func occurrenceWindow(r *http.Request) (from, to time.Time, err error) {
 		if to, err = time.Parse(dateOnlyLayout, v); err != nil {
 			return time.Time{}, time.Time{}, errors.New("to inválido")
 		}
+	}
+	if dates.ExceedsMaxSpan(from, to) {
+		return time.Time{}, time.Time{}, errRangeTooLong
 	}
 	if to.Before(from) {
 		return time.Time{}, time.Time{}, errors.New("to não pode ser anterior a from")
@@ -222,7 +225,11 @@ func handleListRecurrenceOccurrences(conn *sql.DB) http.HandlerFunc {
 			recurrenceReconciliationUnavailableProblem(w)
 			return
 		}
-		from, to, err := occurrenceWindow(r)
+		loc, ok := configuredZone(w, r, conn)
+		if !ok {
+			return
+		}
+		from, to, err := occurrenceWindow(r, dayIn(time.Now(), loc))
 		if err != nil {
 			writeProblem(w, 422, "invalid-occurrence-window", "Período inválido", err.Error())
 			return

@@ -14,7 +14,7 @@ func transferProblem(w http.ResponseWriter, err error) {
 	case errors.Is(err, transactions.ErrTransferLinked), errors.Is(err, transactions.ErrInvestmentLinked):
 		writeProblem(w, 409, "transfer-conflict", "Movimentação já vinculada", "Desfaça o vínculo anterior antes de vincular esta transferência.")
 	case errors.Is(err, transactions.ErrInvalidTransfer):
-		writeProblem(w, 422, "invalid-transfer", "Transferência inválida", "Selecione uma saída e uma entrada em contas próprias distintas, nas moedas das contas. Na mesma moeda, os valores devem ser iguais. A tarifa deve ser uma despesa separada em uma dessas contas.")
+		writeProblem(w, 422, "invalid-transfer", "Transferência inválida", "Selecione uma saída e uma entrada em contas próprias distintas, nas moedas das contas. Na mesma moeda, os valores devem ser iguais. A tarifa deve ser uma despesa separada em uma dessas contas. "+invalidAmountDetail+" "+invalidDateDetail)
 	case errors.Is(err, transactions.ErrTransferNotFound), errors.Is(err, transactions.ErrTransactionNotFound), errors.Is(err, transactions.ErrAccountNotFound):
 		writeProblem(w, 404, "transfer-not-found", "Movimentação não encontrada", "")
 	case errors.Is(err, transactions.ErrAccountArchived):
@@ -45,15 +45,19 @@ func handleCreateTransfer(svc *ledger.Service) http.HandlerFunc {
 				transferProblem(w, transactions.ErrInvalidTransfer)
 				return
 			}
-			source, ok1 := req.Source.toManualInput()
-			destination, ok2 := req.Destination.toManualInput()
+			loc, ok := configuredZone(w, r, svc.DB)
+			if !ok {
+				return
+			}
+			source, ok1 := req.Source.toManualInput(loc)
+			destination, ok2 := req.Destination.toManualInput(loc)
 			if !ok1 || !ok2 {
 				transferProblem(w, transactions.ErrInvalidTransfer)
 				return
 			}
 			var fee *transactions.ManualInput
 			if req.Fee != nil {
-				input, ok := req.Fee.toManualInput()
+				input, ok := req.Fee.toManualInput(loc)
 				if !ok || req.Fee.CategoryID != nil {
 					transferProblem(w, transactions.ErrInvalidTransfer)
 					return

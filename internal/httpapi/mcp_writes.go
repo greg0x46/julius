@@ -15,6 +15,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/greg0x46/julius/internal/automation"
@@ -104,7 +105,7 @@ func PreviewMCPWrite(ctx context.Context, q transactions.Querier, in MCPWriteReq
 		if json.Unmarshal(fields["amount"], &amount) != nil || len(amount) > 64 || !plainWriteDecimal.MatchString(amount) || !validWriteID(req.AccountID) || !validOptionalWriteID(req.CategoryID) || len(req.Description) > 1000 {
 			return p, errMCPWriteInput
 		}
-		if _, ok := req.toManualInput(); !ok {
+		if _, ok := req.toManualInput(time.UTC); !ok {
 			return p, errMCPWriteInput
 		}
 		if create && !validManualIdempotencyKey(in.IdempotencyKey) {
@@ -542,7 +543,7 @@ func MCPWriteInputSchema(operation string) any {
 	default:
 		typ = reflect.TypeFor[struct{}]()
 	}
-	schema, err := jsonschema.ForType(typ, &jsonschema.ForOptions{TypeSchemas: map[reflect.Type]*jsonschema.Schema{reflect.TypeFor[investmentDecimal](): {Type: "string", Pattern: plainWriteDecimal.String(), MaxLength: new(64), Description: "Exact native BRL decimal string; no exponent."}, reflect.TypeFor[investmentText](): {Types: []string{"string", "null"}}, reflect.TypeFor[decimal.Decimal](): {Type: "string", Description: "Signed exact decimal string, nonzero, at most 64 characters; no exponent."}}})
+	schema, err := jsonschema.ForType(typ, &jsonschema.ForOptions{TypeSchemas: map[reflect.Type]*jsonschema.Schema{reflect.TypeFor[investmentDecimal](): {Type: "string", Pattern: plainWriteDecimal.String(), MaxLength: new(64), Description: "Exact native BRL decimal string; no exponent."}, reflect.TypeFor[investmentText](): {Types: []string{"string", "null"}}, reflect.TypeFor[decimal.Decimal](): {Type: "string", Description: "Signed exact decimal string, nonzero, at most 64 characters; no exponent; at most 4 decimal places and below 10^13 in absolute value."}}})
 	if err != nil {
 		panic(err)
 	}
@@ -571,7 +572,7 @@ func MCPWriteInputSchema(operation string) any {
 		schema.Required = nil
 	}
 	if operation == "create_goal" || operation == "update_goal" {
-		schema.Properties["target_amount"] = &jsonschema.Schema{Type: "string", Description: "Positive exact BRL decimal string; at most 64 characters, no exponent."}
+		schema.Properties["target_amount"] = &jsonschema.Schema{Type: "string", Description: "Positive exact BRL decimal string; at most 64 characters, no exponent; at most 4 decimal places and below 10^13."}
 		schema.Required = []string{"name", "metric", "target_amount"}
 	}
 	if operation == "create_recurring_commitment" || operation == "update_recurring_commitment" {

@@ -105,10 +105,16 @@ inflows and outflows.
 `category_ids`, `card_numbers`) and `scenario_ids`. Returns `base`,
 `period_totals`, `simulation` and `scenario_impacts`. `simulation` is `base` plus
 the listed scenarios (active scenarios stay in it); each impact is only what
-that scenario adds.
+that scenario adds. A window longer than 100 years (`dates.MaxSpanDays`) is a
+422, because the series is built day by day.
 
 `GET /api/timeline/range` — the widest window the curve covers (from the oldest
 transaction to the last planned installment), used by the "whole period" option.
+Its start is clamped so the window never exceeds 100 years: a stray old date
+(a mistyped year) cannot stretch it, and stored rows are left untouched. The
+other range reads whose cost grows with the span (recurrence occurrences,
+planned projections, investment portfolio and yield, the net-worth series) apply
+the same 100-year cap.
 
 ## Frontend
 

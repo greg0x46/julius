@@ -11,6 +11,7 @@ import (
 	"github.com/greg0x46/julius/internal/goals"
 	"github.com/greg0x46/julius/internal/recurrences"
 	"github.com/greg0x46/julius/internal/scenarios"
+	"github.com/greg0x46/julius/internal/settings"
 	"github.com/greg0x46/julius/internal/transactions"
 )
 
@@ -60,7 +61,11 @@ func previewMCPPlanningWrite(ctx context.Context, q transactions.Querier, p MCPW
 			}
 		}
 		if !create {
-			g, err := goals.Get(ctx, q, in.ID)
+			loc, err := settings.Location(ctx, q)
+			if err != nil {
+				return p, err
+			}
+			g, err := goals.Get(ctx, q, in.ID, loc)
 			if err != nil {
 				return p, err
 			}

@@ -23,7 +23,8 @@ import (
 // through today, oldest first. That is as far back as cash can be rebuilt:
 // before it the balances are not known, and holding them flat would invent a
 // figure, so investments older than the first transaction are not plotted. It
-// is derived on every call and stores nothing. Today is Compute; each earlier
+// is derived on every call and stores nothing. It reaches back at most
+// dates.MaxSpanDays. Today is Compute; each earlier
 // day is rebuilt from the same sources:
 //
 //   - Cash: today's native balances walked backward, reversing every real
@@ -69,6 +70,9 @@ func SeriesWith(ctx context.Context, q Querier, today time.Time, rates valuation
 	if !ok || start.After(yesterday) {
 		return []Point{live}, nil
 	}
+	// A stray old date (a mistyped year) must not stretch the series: it never
+	// reaches back more than dates.MaxSpanDays from today.
+	start = dates.ClampSpanStart(start, todayDay)
 
 	currentCash, err := transactions.CashOnHandByCurrency(ctx, q, nil)
 	if err != nil {

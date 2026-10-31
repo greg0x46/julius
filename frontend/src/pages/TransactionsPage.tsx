@@ -12,7 +12,6 @@ import {
 } from "../api/contracts";
 import { filtersToSearchParams, listFromSearchParams } from "../components/filters/filterUrl";
 import { PeriodNavigator } from "../components/filters/PeriodNavigator";
-import { periodPresets } from "../components/filters/periodPresets";
 import { DataCard, EmptyState, GroupBySelect, Page, PageAction } from "../components/layout";
 import { useCompactScreen } from "../components/shared/useCompactScreen";
 import { useFeedback } from "../components/shared/useFeedback";
@@ -29,6 +28,7 @@ import { useTransactionPanelWrites } from "../components/transactions/useTransac
 import { useAccounts } from "../hooks/useAccounts";
 import { useCategories } from "../hooks/useCategories";
 import { isValidPeriod, usePeriod, type Period } from "../hooks/usePeriod";
+import { useTimezone } from "../hooks/useTimezone";
 import { currentMonthFilters, useTransactions } from "../hooks/useTransactions";
 import { manualTransactionErrorMessage } from "../presentation/manualTransactionErrors";
 
@@ -52,12 +52,12 @@ function periodFromUrl(searchParams: URLSearchParams): Period | null {
   return isValidPeriod(period) ? period : null;
 }
 
-function initialState(searchParams: URLSearchParams, period: Period): {
+function initialState(searchParams: URLSearchParams, period: Period, timezone: string): {
   filters: TransactionFilters;
   groupBy: VisibleGrouping;
   page: number;
 } {
-  const defaults = currentMonthFilters();
+  const defaults = currentMonthFilters(timezone);
   const value = (key: keyof TransactionFilters) => searchParams.get(key);
   // The plural keys are what the page writes; the singular ones keep links
   // minted before filters accepted several values working.
@@ -110,9 +110,10 @@ function ResultsSkeleton() {
 
 export function TransactionsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const { period, setPeriod } = usePeriod(() => periodFromUrl(searchParams));
-  const [state] = useState(() => initialState(searchParams, period));
-  const [initialFilters] = useState(() => currentMonthFilters());
+  const timezone = useTimezone();
+  const { period, setPeriod, presets } = usePeriod(() => periodFromUrl(searchParams));
+  const [state] = useState(() => initialState(searchParams, period, timezone));
+  const [initialFilters] = useState(() => currentMonthFilters(timezone));
   const [filters, setFilters] = useState<TransactionFilters>(state.filters);
   const [groupBy, setGroupBy] = useState<VisibleGrouping>(state.groupBy);
   const [page, setPage] = useState(state.page);
@@ -238,7 +239,7 @@ export function TransactionsPage() {
         <PeriodNavigator
           id="transactions-period"
           value={[filters.date_from, filters.date_to]}
-          presets={periodPresets()}
+          presets={presets}
           onChange={applyPeriod}
           reset={{ preset: "this-month", label: "Este mês" }}
           bare
@@ -250,7 +251,7 @@ export function TransactionsPage() {
         applied={filters}
         emptyValues={initialFilters}
         facets={data?.available_filters ?? facets}
-        facetsLoading={query.isPending && query.timezoneValid}
+        facetsLoading={query.isPending}
         facetsError={query.isError && !data && !facets ? "Não foi possível carregar as opções." : null}
         onRetryFacets={() => query.refetch()}
         lookupError={
@@ -295,7 +296,7 @@ export function TransactionsPage() {
               totals={data.page.total_items === 0 ? [] : data.totals}
               busy={query.isFetching}
             />
-          ) : query.isPending && query.timezoneValid ? (
+          ) : query.isPending ? (
             <section className="data-card-summary" aria-label="Carregando resumo financeiro" aria-busy="true">
               <Skeleton active paragraph={{ rows: 1 }} title={false} />
             </section>
@@ -303,14 +304,7 @@ export function TransactionsPage() {
         }
       >
         {data && <ReportValuation valuation={data}>{null}</ReportValuation>}
-        {!query.timezoneValid && (
-          <Alert
-            type="error"
-            showIcon
-            message="Não foi possível identificar um fuso horário IANA válido."
-          />
-        )}
-        {query.isPending && query.timezoneValid && <ResultsSkeleton />}
+        {query.isPending && <ResultsSkeleton />}
         {query.isError && !data && (
           <Alert
             type="error"

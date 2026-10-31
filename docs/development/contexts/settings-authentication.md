@@ -84,12 +84,32 @@ endpoints. No session: 401; database failure: 503. Static files and `/health`
 are public. The legacy setup/unlock routes are not registered. Writes,
 including login, require the configured Origin and `X-Julius-Request: 1`
 (403 otherwise), with no CORS. `/api` responses get `Cache-Control: no-store`.
-Login and password change share limits of five attempts/minute per email and
-thirty global, in bounded memory, plus one concurrent KDF operation. Excess or
-contention: 429 with `Retry-After`. Credential messages are generic; the KDF
-also runs for a wrong email. Authentication bodies are limited to 4 KiB.
+Login limits budgets of *failed* credential checks (`auth.Limiter`, fixed
+one-minute windows, in bounded memory): five per normalized email plus thirty
+globally. The budget is checked first and only a rejected check is recorded, so
+successful logins never spend it; while it is spent, even correct credentials get
+429 with `Retry-After: 60` without a KDF run. Password change has its own
+budget keyed by a hash of the session token (five per session, thirty overall),
+so unauthenticated guesses cannot block it. One KDF operation runs at a time
+across both; contention also gives 429. Residual trade-off: whoever knows the
+owner email can keep the owner out for as long as they keep failing, and
+thirty failures per minute with any emails spend the global backstop;
+restarting the process clears the in-memory counters (`reset-password` does
+not). Credential messages are generic; the KDF also runs for a wrong email.
+Authentication bodies are limited to 4 KiB.
 Every route, REST or OAuth/MCP, is covered by the access log and security
 events described in "HTTP access log and security events" below.
+
+`httpapi.SecurityHeaders` (wired outermost by `cmd/julius/server.go:publicHandler`)
+sets `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`,
+`Referrer-Policy: same-origin` and a Content-Security-Policy on every response,
+plus `Strict-Transport-Security: max-age=31536000` only when
+`auth.Config.Secure()`. It runs before the handlers, so the stricter OAuth/MCP
+headers set in `internal/mcp` replace the defaults. The CSP is `default-src
+'self'` with the Google Fonts origins for the brand font; the theme bootstrap is
+the external `frontend/public/theme-init.js` because inline scripts are not
+allowed. A frontend change that needs another origin, an inline script or
+`eval` must update the policy and the tests in `cmd/julius/security_headers_test.go`.
 
 ## Frontend
 
@@ -136,6 +156,31 @@ works with SQLite integer flags and Postgres native booleans.
 `TestInitializeScheduleBothDialects` covers startup initialization;
 `TestQuoteSettingsPostgresRoundTrip` covers HTTP schedule writes.
 
+## Calendar timezone
+
+`finance.timezone` is an unencrypted persisted preference, defaulting to
+`America/Sao_Paulo` when absent. It is the zone every calendar day is read in:
+"today", the credit-card cycle, goal projections, the recurrence occurrence
+window, the month of the spending report and the day a manual transaction is
+anchored to (noon of the chosen day in that zone). GET/PUT `/api/preferences`
+expose `timezone` next to `reference_currency`, with the same partial-update
+rule: an omitted field keeps the saved value. The value must be an IANA name
+that `time.LoadLocation` can load; `""` and `Local` are rejected because they
+would make days depend on the host process, while `UTC` is valid. Invalid input
+is a 422 before any preference is written; all three writes share a transaction.
+
+The `timezone` parameter of the reporting, transactions-query and timeline
+endpoints and of the MCP tools is optional: when omitted the configured zone
+applies, and a value that is present but not an IANA name is still rejected. The
+frontend sends the configured zone explicitly.
+
+The process zone (`TZ`) no longer decides calendar days. Three things keep
+their own zone on purpose: the sync schedule (`JULIUS_SYNC_SCHEDULE` without a
+zone uses the process zone), the quote refresh schedule (its own
+`timezone` setting), and the pricing days of investments, which are provider
+days in fixed BRT (`investments.ProviderDay`). Exchange-rate days for report
+valuation are UTC calendar days of the instant the request is served.
+
 ## Financial reference currency
 
 `finance.reference_currency` is an unencrypted persisted preference, defaulting
@@ -143,9 +188,11 @@ to `BRL` when absent. GET/PUT `/api/preferences` expose `reference_currency`
 alongside `transactions_period_basis`. The currency must be a canonical
 uppercase ISO 4217 code from the same catalog as `/api/accounts/currencies`,
 excluding `XXX`. Invalid input returns 422 before either preference is written;
-the two writes share a transaction. Older clients may omit the currency to
-preserve the saved preference. The General settings screen offers one searchable
-currency selector and one Save action for both preferences.
+the writes share a transaction. Older clients may omit the currency (or the
+timezone) to preserve the saved preference. The General settings screen offers
+a searchable currency selector, a searchable timezone selector and the card
+month option, with one Save action for all of them. Saving a different timezone
+drops the cached queries that depend on it.
 
 This is a reporting valuation, never a change to the original currency, amount,
 balance or quantity. The existing consolidated BRL base and its eligibility
@@ -286,9 +333,22 @@ loopback; no forwarded header determines the issuer/resource. See MCP tool refer
 for client setup and synthetic dev validation.
 
 OAuth routes have a per-instance 120/minute global limit and 16 KiB bodies;
-credential verification is limited to five/minute and one concurrent KDF.
-Registration is capped at 1,000 clients per database. These local limits do not
-replace edge abuse controls for publicly exposed deployments.
+`POST /oauth/register` has its own 20/minute bucket instead, so registration
+spam cannot starve the other routes (and the shared one cannot starve it).
+Owner credential verification (consent and write approval share it) has a
+budget of five *failed* checks per minute per instance, checked first and
+spent only by failures, plus one concurrent KDF; the residual lockout
+trade-off is the one described for login above. Registration is capped at
+1,000 clients per database. `oauth_clients.created_at` (migration
+`0009_oauth_client_created_at`; existing rows are dated at migration time,
+SQLite uses a sentinel default for inserts that omit it) drives cleanup: each
+registration first deletes never-authorized clients older than 24 hours and,
+when the cap is reached, the oldest never-authorized one. "Never authorized"
+means no `mcp_authorizations` row (revoked ones count) and no unexpired
+`oauth_grants` row, so an open consent page protects its client; deleting a
+client cascades to its expired grants. If nothing is evictable, registration
+keeps returning 429 `client_registry_full`. These local limits do not replace
+edge abuse controls for publicly exposed deployments.
 
 Tests in `internal/mcp/oauth_test.go` run on SQLite and Postgres: successful
 registration/consent/exchange/discovery, restart, denial, replay and concurrent
@@ -335,9 +395,9 @@ payload or configuration data.
 | --- | --- | --- |
 | `list_accounts` | Optional `page`, `page_size` | `GET /api/accounts`: native bank/card balances, currency, limits and closing metadata, including nullable/unavailable fields. |
 | `list_card_bills` | Required `account_id`; optional pagination | `GET /api/accounts/{id}/bills`: recorded bills in descending due-date order. The open cycle remains in account balance/cycle metadata. |
-| `search_transactions` | Required IANA `timezone`; optional `group_by`, pagination and `filters` | `POST /api/transactions/query`: shared filter DTO and validation; items, category/inclusion decisions, eligibility, all matching native totals and reporting/FX metadata. |
+| `search_transactions` | Optional IANA `timezone` (default: the configured timezone); optional `group_by`, pagination and `filters` | `POST /api/transactions/query`: shared filter DTO and validation; items, category/inclusion decisions, eligibility, all matching native totals and reporting/FX metadata. |
 | `list_categories` | Optional pagination | `GET /api/categories`: includes active and inactive categories with kind, icon and color. |
-| `spending_by_category` | Required IANA `timezone` and `classification` (`outflow`/`inflow`); exactly one of `month=YYYY-MM`, inclusive `date_from`/`date_to`, or `period=all`; optional pagination | `GET /api/transactions/category-breakdown`: real category totals and native/reporting coverage; no scenarios. |
+| `spending_by_category` | Required `classification` (`outflow`/`inflow`); optional IANA `timezone` (default: the configured timezone); exactly one of `month=YYYY-MM`, inclusive `date_from`/`date_to`, or `period=all`; optional pagination | `GET /api/transactions/category-breakdown`: real category totals and native/reporting coverage; no scenarios. |
 
 Pagination defaults to page 1 and 50 items; page is 1–1,000,000 and page size
 1–200. Zero selects the default; negatives and larger values fail explicitly.
@@ -672,9 +732,9 @@ request line. A name outside this set is dropped (`httplog.eventLevels`).
 | `security.rate_limited` | warn | A limiter refused the request (429) | `limiter`, `reason` |
 | `security.invalid_origin` | warn | A state-changing request has a wrong `Origin` or missing `X-Julius-Request` | `reason` |
 
-`limiter` is `auth_attempts` or `auth_hashing_busy` (REST login and password
-change), `oauth_requests`, `oauth_consent_attempts`, `oauth_hashing_busy` or
-`mcp_concurrency`; `reason` is `window_exceeded` or `busy`. For
+`limiter` is `auth_attempts` (REST login), `auth_password_attempts` (password
+change), `auth_hashing_busy` (either), `oauth_requests`, `oauth_register`,
+`oauth_consent_attempts`, `oauth_hashing_busy` or `mcp_concurrency`; `reason` is `window_exceeded` or `busy`. For
 `security.invalid_origin`, `reason` is `origin_mismatch`, `origin_missing`,
 `origin_null` (the header is exactly `null`; MCP and OAuth only) or, for REST
 only, `request_header_missing`. A wrong current password on
@@ -716,7 +776,8 @@ logged, so the log identifies the exact validation:
 | 400 | `invalid_redirect_uri` | `too_long` | `redirect_uris` | - | Over 2048 bytes |
 | 400 | `invalid_redirect_uri` | `scheme_not_allowed` | `redirect_uris` | - | Neither `https` nor `http` |
 | 400 | `invalid_redirect_uri` | `http_non_loopback` | `redirect_uris` | - | `http` to a host other than `127.0.0.1`, `::1` or `localhost` |
-| 429 | `temporarily_unavailable` | `client_registry_full` | - | - | 1,000 clients already registered |
+| 429 | `temporarily_unavailable` | `rate_limited` | - | - | More than 20 requests per minute to this route; also `security.rate_limited` (`oauth_register`, `window_exceeded`) |
+| 429 | `temporarily_unavailable` | `client_registry_full` | - | - | 1,000 clients registered and none can be evicted: all have an authorization or a live grant |
 | 503 | `temporarily_unavailable` | `db_error` | - | - | Insert failed |
 
 Success is 201 with `oauth.client.registered`, which exists only for that
@@ -729,7 +790,7 @@ with `["implicit"]` means the client asked for a grant Julius does not support.
 
 | Status | `error_code` | `error_reason` | Cause |
 |---|---|---|---|
-| 429 | `temporarily_unavailable` | `rate_limited` | 120 requests per minute per process; also `security.rate_limited` (`oauth_requests`, `window_exceeded`) |
+| 429 | `temporarily_unavailable` | `rate_limited` | 120 requests per minute per process, not counting `POST /oauth/register`, which has its own bucket (see its table); also `security.rate_limited` (`oauth_requests`, `window_exceeded`) |
 | 503 | `temporarily_unavailable` | `settings_unavailable` | Authentication setting unreadable |
 | 403 | `access_denied` | `authentication_disabled` | Open mode |
 
@@ -784,7 +845,7 @@ Success is 200 (consent page) with no event.
 | 403 | `access_denied` | `csrf_cookie_missing` | - | Browser binding cookie absent |
 | 403 | `access_denied` | `csrf_mismatch` | - | Cookie does not match the request |
 | 400 | `invalid_request` | `invalid_decision` | `decision` | Neither `allow` nor `deny` |
-| 429 | `temporarily_unavailable` | `rate_limited` | - | 5 verifications per minute (`oauth_consent_attempts`, `window_exceeded`) or one in progress (`oauth_hashing_busy`, `busy`); `security.rate_limited` |
+| 429 | `temporarily_unavailable` | `rate_limited` | - | 5 failed verifications in the last minute (`oauth_consent_attempts`, `window_exceeded`; successes do not count and `Retry-After: 60` is sent) or one in progress (`oauth_hashing_busy`, `busy`); `security.rate_limited` |
 | 401 | `invalid_credentials` | `invalid_credentials` | - | Wrong owner credentials (HTML page); auth `none`/`rejected`; `oauth.credentials.rejected` |
 | 200 | `access_denied` | `user_denied` | - | Explicit denial; callback page; `oauth.consent.denied` |
 | 200 | - | - | - | Granted; callback page; `oauth.consent.granted` |
@@ -871,7 +932,7 @@ Protocol and JSON-RPC errors come from the MCP SDK and carry no `error_code`.
 | 401 | `unauthorized` | `invalid_session` | Unknown, expired, revoked or malformed cookie |
 | 503 | `auth-unavailable` | `auth_unavailable` | Session store failure (also login, logout, password change) |
 | 401 | `unauthorized` | `invalid_credentials` | Wrong password on login (`auth.login.failure`) or wrong current password on `PUT /api/auth/password` (no event) |
-| 429 | `too-many-attempts` | `window_exceeded` | 5 attempts per minute per email or 30 per minute per process on login and password change; `security.rate_limited` (`auth_attempts`) |
+| 429 | `too-many-attempts` | `window_exceeded` | 5 failed logins per minute for the email or 30 per minute per process, or 5 failed current-password checks per minute for the session on password change; successes do not count; `security.rate_limited` (`auth_attempts` for login, `auth_password_attempts` for password change) |
 | 429 | `too-many-attempts` | `busy` | A password hash is already running; `security.rate_limited` (`auth_hashing_busy`) |
 
 Every other `writeProblem(w, status, kind, ...)` in `internal/httpapi` (over

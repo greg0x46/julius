@@ -1,4 +1,5 @@
 import type { SyncFailure } from "../api/contracts";
+import { useTimezone } from "../hooks/useTimezone";
 import { formatDate } from "../presentation/dates";
 import { getFailureStageLabel } from "../presentation/syncStatus";
 import { Section } from "./layout";
@@ -10,6 +11,7 @@ import { Section } from "./layout";
  * does not need a list of red boxes.
  */
 export function SyncFailureList({ failures }: { failures: SyncFailure[] }) {
+  const timezone = useTimezone();
   if (failures.length === 0) {
     return null;
   }
@@ -21,7 +23,7 @@ export function SyncFailureList({ failures }: { failures: SyncFailure[] }) {
             <span className="sync-failure-stage">{getFailureStageLabel(failure.stage)}</span>
             <span>{failure.message}</span>
             <span className="sync-failure-meta">
-              Ocorrida em <time dateTime={failure.occurred_at}>{formatDate(failure.occurred_at)}</time>
+              Ocorrida em <time dateTime={failure.occurred_at}>{formatDate(failure.occurred_at, timezone)}</time>
             </span>
             {failure.external_account_id !== null && (
               <span className="sync-failure-meta">Conta relacionada: {failure.external_account_id}</span>

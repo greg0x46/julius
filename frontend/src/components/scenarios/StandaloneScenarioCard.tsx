@@ -3,7 +3,9 @@ import { CloseOutlined } from "../ui/icons";
 import { Alert, Button, DatePicker, Drawer, Input, Select, Skeleton, Switch } from "../ui";
 import type { Column } from "../ui/Table";
 import Table from "../ui/Table";
-import { calendar, type CalendarDate } from "../../presentation/calendar";
+import type { CalendarDate } from "../../presentation/calendar";
+import { todayIn } from "../../presentation/timezone";
+import { useTimezone } from "../../hooks/useTimezone";
 import { useEffect, useId, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 
@@ -55,10 +57,11 @@ function NewTransactionForm({
   error: string | null;
 }) {
   const id = useId();
+  const timezone = useTimezone();
   const [description, setDescription] = useState("");
   const [kind, setKind] = useState<"income" | "expense">("expense");
   const [amount, setAmount] = useState<string | null>(null);
-  const [projectedAt, setProjectedAt] = useState<CalendarDate>(calendar());
+  const [projectedAt, setProjectedAt] = useState<CalendarDate>(() => todayIn(timezone));
   const [error, setError] = useState<string | null>(null);
   // `submitting` arrives a render late: a second Enter in the same tick would
   // otherwise create the transaction twice.
@@ -85,7 +88,7 @@ function NewTransactionForm({
       if (saved) {
         setDescription("");
         setAmount(null);
-        setProjectedAt(calendar());
+        setProjectedAt(todayIn(timezone));
       }
     } finally {
       inFlight.current = false;

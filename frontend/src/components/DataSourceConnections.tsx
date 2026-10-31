@@ -11,6 +11,7 @@ import { RecordMenu } from "./shared/RecordMenu";
 import { useFeedback } from "./shared/useFeedback";
 import type { useCreateSyncRun } from "../hooks/useCreateSyncRun";
 import { useDataSources } from "../hooks/useDataSources";
+import { useTimezone } from "../hooks/useTimezone";
 import { formatOptionalDateTime } from "../presentation/dates";
 
 function errorMessage(error: unknown, fallback: string): string {
@@ -36,7 +37,7 @@ function latestRunOf(source: DataSource, runs: SyncRun[]): SyncRun | null {
  * last synced. `runs` is undefined while the history is not known, in which
  * case nothing is claimed about the last sync.
  */
-function connectionMeta(source: DataSource, runs: SyncRun[] | undefined): string {
+function connectionMeta(source: DataSource, runs: SyncRun[] | undefined, timezone: string): string {
   const parts: string[] = [];
   if (source.label && source.display_name && source.display_name !== source.label) {
     parts.push(source.display_name);
@@ -44,7 +45,7 @@ function connectionMeta(source: DataSource, runs: SyncRun[] | undefined): string
   if (!source.is_active) parts.push("Pausada");
   if (runs !== undefined) {
     const latest = latestRunOf(source, runs);
-    parts.push(latest ? `Última sincronização ${formatOptionalDateTime(latest.started_at)}` : "Nunca sincronizada");
+    parts.push(latest ? `Última sincronização ${formatOptionalDateTime(latest.started_at, timezone)}` : "Nunca sincronizada");
   }
   return parts.join(" · ");
 }
@@ -71,6 +72,7 @@ export function DataSourceConnections({
   runs?: SyncRun[];
 }) {
   const { state, retry, create, update } = useDataSources();
+  const timezone = useTimezone();
   const feedback = useFeedback();
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<DataSource | null>(null);
@@ -128,7 +130,7 @@ export function DataSourceConnections({
                 onClick={() => openEditing(source)}
               >
                 <span className="connection-row-name">{source.name}</span>
-                <span className="connection-row-meta">{connectionMeta(source, runs)}</span>
+                <span className="connection-row-meta">{connectionMeta(source, runs, timezone)}</span>
               </button>
               <div className="connection-row-controls">
                 <Switch

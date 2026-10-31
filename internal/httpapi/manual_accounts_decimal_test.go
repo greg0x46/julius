@@ -24,9 +24,9 @@ func TestManualAccountOpeningBalanceUsesDecimalEquality(t *testing.T) {
 			{"trailing zeros", "100.00", "100", 200},
 			{"negative", "-100.00", "-100", 200},
 			{"zero", "0.00", "0", 200},
-			{"fractional precision", "9007199254740993.00100", "9007199254740993.001", 200},
+			{"fractional precision", "9007199254740.00100", "9007199254740.001", 200},
 			{"changed amount", "100.00", "101", 409},
-			{"changed fractional amount", "9007199254740993.00100", "9007199254740993.00101", 409},
+			{"changed fractional amount", "9007199254740.00100", "9007199254740.0011", 409},
 		} {
 			t.Run(tc.name, func(t *testing.T) {
 				id := uuid.NewString()

@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getSession } from "../api/auth";
 import { getMCPSettings, revokeMCP, setMCPEnabled, setMCPScope, type MCPConnection, type MCPScope } from "../api/mcpSettings";
 import { queryKeys } from "../api/queryKeys";
+import { useTimezone } from "../hooks/useTimezone";
 import { formatOptionalDateTime } from "../presentation/dates";
 import { UnavailableState } from "./AsyncState";
 import { FormField } from "./forms/FormField";
@@ -71,6 +72,7 @@ function Connection({ connection, onSaved }: { connection: MCPConnection; onSave
   const [scope, setScope] = useState<MCPScope>(connection.scope);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const timezone = useTimezone();
   const name = connection.client_name || "Aplicativo sem nome";
   const active = !connection.revoked_at && !connection.expired;
   const editable = rank(connection.approved_scope) > 0;
@@ -84,10 +86,10 @@ function Connection({ connection, onSaved }: { connection: MCPConnection; onSave
     <li className="mcp-connection">
       <strong>{name}</strong>
       <span className="settings-radio-hint">Identificador: {connection.client_id}</span>
-      <span className="settings-radio-hint">Autorizado em: {formatOptionalDateTime(connection.created_at)}</span>
-      <span className="settings-radio-hint">Último uso: {connection.last_used_at ? formatOptionalDateTime(connection.last_used_at) : "Ainda não utilizado"}</span>
-      <span className="settings-radio-hint">Expira em: {formatOptionalDateTime(connection.expires_at)}</span>
-      {connection.revoked_at ? <span>Revogado em {formatOptionalDateTime(connection.revoked_at)}</span> : connection.expired ? <span>Expirado</span> : null}
+      <span className="settings-radio-hint">Autorizado em: {formatOptionalDateTime(connection.created_at, timezone)}</span>
+      <span className="settings-radio-hint">Último uso: {connection.last_used_at ? formatOptionalDateTime(connection.last_used_at, timezone) : "Ainda não utilizado"}</span>
+      <span className="settings-radio-hint">Expira em: {formatOptionalDateTime(connection.expires_at, timezone)}</span>
+      {connection.revoked_at ? <span>Revogado em {formatOptionalDateTime(connection.revoked_at, timezone)}</span> : connection.expired ? <span>Expirado</span> : null}
       {active && editable ? (
         <FormField label={`Permissões de ${name}`} htmlFor={`mcp-scope-${connection.id}`}>
           <Select id={`mcp-scope-${connection.id}`} value={scope} options={permissions.filter((item) => rank(item.value) <= rank(connection.approved_scope))} disabled={busy} onChange={(value: MCPScope) => setScope(value)} />

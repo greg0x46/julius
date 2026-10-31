@@ -158,3 +158,65 @@ func TestSeedWorksOnAnyDayOfTheYear(t *testing.T) {
 		})
 	}
 }
+
+// A seed on the 29th-31st clamps its month offsets to the last day of the
+// target month: a goal 11 months after Mar 31 is due Feb 28, not Mar 3, and
+// the insurance 3 months after Nov 30 renews in February, not March.
+func TestSeedClampsMonthOffsetsAtMonthEnd(t *testing.T) {
+	for _, tc := range []struct {
+		now            time.Time
+		reserveTarget  string
+		japanTarget    string
+		insuranceMonth int
+	}{
+		{time.Date(2026, 3, 31, 12, 0, 0, 0, time.UTC), "2027-09-30", "2027-02-28", 6},
+		{time.Date(2026, 11, 30, 12, 0, 0, 0, time.UTC), "2028-05-30", "2027-10-30", 2},
+	} {
+		t.Run(tc.now.Format("2006-01-02"), func(t *testing.T) {
+			conn := dbtest.OpenSQLite(t)
+			seed(t, conn, tc.now)
+			h := server(conn)
+
+			var goals struct {
+				Items []struct {
+					Name       string
+					TargetDate string `json:"target_date"`
+				}
+			}
+			if err := json.Unmarshal(get(t, h, "/api/goals"), &goals); err != nil {
+				t.Fatal(err)
+			}
+			targets := map[string]string{}
+			for _, g := range goals.Items {
+				targets[g.Name] = g.TargetDate
+			}
+			if got := targets["Reserva de emergência"]; got != tc.reserveTarget {
+				t.Errorf("Reserva de emergência target = %q, want %q", got, tc.reserveTarget)
+			}
+			if got := targets["Viagem para o Japão"]; got != tc.japanTarget {
+				t.Errorf("Viagem para o Japão target = %q, want %q", got, tc.japanTarget)
+			}
+
+			var recurring []struct {
+				Name        string
+				MonthOfYear *int `json:"month_of_year"`
+			}
+			if err := json.Unmarshal(get(t, h, "/api/recurring-scenarios"), &recurring); err != nil {
+				t.Fatal(err)
+			}
+			found := false
+			for _, r := range recurring {
+				if r.Name != "Seguro do carro" {
+					continue
+				}
+				found = true
+				if r.MonthOfYear == nil || *r.MonthOfYear != tc.insuranceMonth {
+					t.Errorf("Seguro do carro month_of_year = %v, want %d", r.MonthOfYear, tc.insuranceMonth)
+				}
+			}
+			if !found {
+				t.Error("Seguro do carro not seeded")
+			}
+		})
+	}
+}

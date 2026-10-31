@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { getTimeline } from "../api/timeline";
 import type { TimelineParams } from "../api/contracts";
-import { browserTimezone } from "./useTransactions";
+import { useTimezone } from "./useTimezone";
 import { queryKeys } from "../api/queryKeys";
 
 /**
@@ -11,7 +11,8 @@ import { queryKeys } from "../api/queryKeys";
  * range before it knows its own bounds.
  */
 export function useTimeline(params: TimelineParams, enabled = true) {
-  const zonedParams = { ...params, timezone: params.timezone ?? browserTimezone() ?? "UTC" };
+  const timezone = useTimezone();
+  const zonedParams = { ...params, timezone: params.timezone ?? timezone };
   const query = useQuery({
     queryKey: queryKeys.timelineFor(zonedParams),
     queryFn: ({ signal }) => getTimeline(zonedParams, signal),

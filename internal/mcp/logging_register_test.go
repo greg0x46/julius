@@ -16,7 +16,6 @@ const validRedirectField = `"redirect_uris":["https://client.example/callback"]`
 
 func TestRegisterRejectionsAreDiagnosedInTheAccessLine(t *testing.T) {
 	store, _ := setup(t, dbtest.OpenSQLite(t))
-	h, sink := newLogged(t, store)
 	meta := func(extra string) string { return `{` + validRedirectField + `,` + extra + `}` }
 	manyURIs := `["` + strings.Repeat(`https://client.example/cb","`, 10) + `https://client.example/cb"]`
 	longURI := "https://client.example/" + strings.Repeat("a", 2100)
@@ -78,6 +77,8 @@ func TestRegisterRejectionsAreDiagnosedInTheAccessLine(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
+			// A handler per case: every registration attempt spends the 20/min bucket.
+			h, sink := newLogged(t, store)
 			var body io.Reader = strings.NewReader(tc.body)
 			if tc.reader != nil {
 				body = tc.reader
@@ -132,18 +133,7 @@ func TestRegisterRegistryFullIsNotReportedAsRateLimiting(t *testing.T) {
 	conn := dbtest.OpenSQLite(t)
 	store, _ := setup(t, conn)
 	h, sink := newLogged(t, store)
-	tx, err := conn.Begin()
-	if err != nil {
-		t.Fatal(err)
-	}
-	for i := 0; i < 1000; i++ {
-		if _, err = tx.Exec(`INSERT INTO oauth_clients(id,name,redirect_uris) VALUES(?,?,?)`, fmt.Sprintf("synthetic-%d", i), "Synthetic", `[]`); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err = tx.Commit(); err != nil {
-		t.Fatal(err)
-	}
+	fillRegistry(t, conn, true)
 	w := jsonRequest(h, "POST", "/oauth/register", `{`+validRedirectField+`}`, nil)
 	if w.Code != 429 || strings.TrimSpace(w.Body.String()) != `{"error":"temporarily_unavailable"}` {
 		t.Fatalf("registry full: %d %s", w.Code, w.Body)

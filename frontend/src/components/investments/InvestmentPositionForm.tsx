@@ -1,6 +1,7 @@
 import { isPositiveDecimal } from "../../presentation/decimal";
 import { Button, DatePicker, Input, InputNumber, Select } from "../ui";
-import { calendar, type CalendarDate } from "../../presentation/calendar";
+import type { CalendarDate } from "../../presentation/calendar";
+import { todayIn } from "../../presentation/timezone";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import type {
@@ -11,6 +12,7 @@ import type {
   InvestmentPositionWrite,
 } from "../../api/contracts";
 import { useInvestmentAssets } from "../../hooks/useInvestmentAssets";
+import { useTimezone } from "../../hooks/useTimezone";
 import { errorMessage } from "../../presentation/errors";
 import { FormDrawer } from "../forms/FormDrawer";
 import { FormField } from "../forms/FormField";
@@ -32,7 +34,7 @@ type Draft = {
   notes: string;
 };
 
-function blankDraft(accounts: InvestmentAccount[]): Draft {
+function blankDraft(accounts: InvestmentAccount[], timezone: string): Draft {
   return {
     accountId: accounts.find((account) => account.active)?.id ?? "",
     assetId: null,
@@ -42,13 +44,13 @@ function blankDraft(accounts: InvestmentAccount[]): Draft {
     initialQuantity: null,
     initialUnitCost: null,
     initialValue: null,
-    occurredOn: calendar(),
+    occurredOn: todayIn(timezone),
     notes: "",
   };
 }
 
-function draftFrom(position: InvestmentPosition | null, accounts: InvestmentAccount[]): Draft {
-  if (!position) return blankDraft(accounts);
+function draftFrom(position: InvestmentPosition | null, accounts: InvestmentAccount[], timezone: string): Draft {
+  if (!position) return blankDraft(accounts, timezone);
   return {
     accountId: position.account_id,
     assetId: position.asset_id,
@@ -58,7 +60,7 @@ function draftFrom(position: InvestmentPosition | null, accounts: InvestmentAcco
     initialQuantity: null,
     initialUnitCost: null,
     initialValue: null,
-    occurredOn: calendar(),
+    occurredOn: todayIn(timezone),
     notes: position.notes ?? "",
   };
 }
@@ -118,7 +120,8 @@ export function InvestmentPositionForm({
   onUpdate: (write: InvestmentPositionUpdate) => void;
   onCancel: () => void;
 }) {
-  const [draft, setDraft] = useState<Draft>(() => draftFrom(position, accounts));
+  const timezone = useTimezone();
+  const [draft, setDraft] = useState<Draft>(() => draftFrom(position, accounts, timezone));
   const [error, setError] = useState<string | null>(null);
   const [creatingAsset, setCreatingAsset] = useState(false);
   const [assetDraft, setAssetDraft] = useState<AssetDraft>(emptyAssetDraft);
@@ -134,16 +137,16 @@ export function InvestmentPositionForm({
     const reset = open && (!session.current.open || session.current.positionId !== positionId);
     session.current = { open, positionId };
     if (reset) {
-      setDraft(draftFrom(position, accounts));
+      setDraft(draftFrom(position, accounts, timezone));
       setError(null);
       setCreatingAsset(false);
       setAssetDraft(emptyAssetDraft);
       setAssetSearch("");
       setCreatedAsset(null);
     } else if (open && !position) {
-      setDraft((current) => current.accountId ? current : { ...current, accountId: blankDraft(accounts).accountId });
+      setDraft((current) => current.accountId ? current : { ...current, accountId: blankDraft(accounts, timezone).accountId });
     }
-  }, [open, position, accounts]);
+  }, [open, position, accounts, timezone]);
 
   const editableAccounts = useMemo(
     () => accounts.filter((account) => account.active),

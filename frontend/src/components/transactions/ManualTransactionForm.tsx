@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import type { Account, Category, ManualTransactionWrite } from "../../api/contracts";
 import { categoryKindLabel, renderCategoryIcon } from "../../presentation/categoryLabels";
 import { useAccounts } from "../../hooks/useAccounts";
+import { useTimezone } from "../../hooks/useTimezone";
 import { AccountSelect } from "../forms/AccountSelect";
 import { FormDrawer } from "../forms/FormDrawer";
 import { FormField } from "../forms/FormField";
@@ -199,7 +200,8 @@ export function ManualTransactionForm({
   onCancel: () => void;
 }) {
   const defaultAccountId = accounts.find((account) => !account.archived_at)?.id ?? "";
-  const [draft, setDraft] = useState<ManualDraft>(() => blankManualDraft(defaultAccountId));
+  const timezone = useTimezone();
+  const [draft, setDraft] = useState<ManualDraft>(() => blankManualDraft(defaultAccountId, timezone));
   const [issue, setIssue] = useState<ManualIssue | null>(null);
 
   // Every opening starts from a blank draft, on the first account.
@@ -207,7 +209,7 @@ export function ManualTransactionForm({
   if (open !== wasOpen) {
     setWasOpen(open);
     if (open) {
-      setDraft(blankManualDraft(defaultAccountId));
+      setDraft(blankManualDraft(defaultAccountId, timezone));
       setIssue(null);
     }
   }

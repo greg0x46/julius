@@ -537,7 +537,7 @@ func TestDebtTotalOwedOverHTTP(t *testing.T) {
 	if err := conn.QueryRow(`SELECT account_id FROM financial_transactions WHERE id = ?`, creditTxID).Scan(&creditAccountID); err != nil {
 		t.Fatalf("account id: %v", err)
 	}
-	loc := time.Local
+	loc := defaultZone(t)
 	now := time.Now().In(loc)
 	currentClosing := time.Date(now.Year(), now.Month(), 2, 0, 0, 0, 0, loc)
 	if now.Before(currentClosing) {
@@ -584,7 +584,7 @@ func TestDebtTotalOwedOverHTTP(t *testing.T) {
 func TestDebtTotalOwedCalculatesConsideredCreditCardTransactionsByBillOrClosingDate(t *testing.T) {
 	srv, conn := newTestServer(t)
 
-	loc := time.Local
+	loc := defaultZone(t)
 	now := time.Now().In(loc)
 	currentClosing := time.Date(now.Year(), now.Month(), 2, 0, 0, 0, 0, loc)
 	if now.Before(currentClosing) {
@@ -708,7 +708,7 @@ func TestDebtTotalOwedCalculatesConsideredCreditCardTransactionsByBillOrClosingD
 
 func TestDebtTotalOwedReturnsZeroWithoutClosingDate(t *testing.T) {
 	srv, conn := newTestServer(t)
-	loc := time.Local
+	loc := defaultZone(t)
 	now := time.Now().In(loc)
 	txID := insertTransaction(t, conn)
 	setCardDebtTransaction(t, conn, txID, now, "-40.00", "DEBIT", nil)
@@ -1217,8 +1217,8 @@ func TestCategoryBreakdownOverHTTP(t *testing.T) {
 	for _, query := range []string{
 		"timezone=UTC&month=2024-02",
 		"timezone=UTC&classification=inflow",
-		"month=2024-02&classification=inflow",
 		"timezone=Invalid&month=2024-02&classification=inflow",
+		"timezone=Local&month=2024-02&classification=inflow",
 		"timezone=UTC&month=2024-13&classification=inflow",
 		"timezone=UTC&month=2024-2&classification=inflow",
 		"timezone=UTC&month=2024-02&classification=transfer",

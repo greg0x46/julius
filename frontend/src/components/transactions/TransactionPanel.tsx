@@ -10,6 +10,7 @@ import type {
   TransactionItem,
 } from "../../api/contracts";
 import { useRecurringCommitments } from "../../hooks/useRecurringCommitments";
+import { useTimezone } from "../../hooks/useTimezone";
 import { recurringCommitmentPrefill } from "../../presentation/transactionDetail";
 import { InvestmentLinkNewOperationScreen, InvestmentLinkScreen } from "../investments/InvestmentLinkScreen";
 import { RecurringCommitmentFields } from "../recurringCommitments/RecurringCommitmentForm";
@@ -218,6 +219,7 @@ function CreateRecurrenceScreen({
 }) {
   const commitments = useRecurringCommitments();
   const queryClient = useQueryClient();
+  const timezone = useTimezone();
   const [error, setError] = useState<string | null>(null);
 
   const submit = async (write: RecurringCommitmentWrite) => {
@@ -239,7 +241,7 @@ function CreateRecurrenceScreen({
         <RecurringCommitmentFields
           formId={recurrenceFormId}
           commitment={null}
-          initialDraft={recurringCommitmentPrefill(item)}
+          initialDraft={recurringCommitmentPrefill(item, timezone)}
           categories={categories}
           submitError={error}
           submitting={commitments.isSaving}
@@ -275,7 +277,8 @@ function EditManualScreen({
   onSave: (id: string, write: ManualTransactionWrite) => Promise<void>;
   onDone: () => void;
 }) {
-  const [draft, setDraft] = useState<ManualDraft>(() => manualDraftFrom(item, item.account.id));
+  const timezone = useTimezone();
+  const [draft, setDraft] = useState<ManualDraft>(() => manualDraftFrom(item, item.account.id, timezone));
   const [error, setError] = useState<string | null>(null);
   const [issue, setIssue] = useState<ManualIssue | null>(null);
   const submit = async () => {
