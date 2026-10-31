@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
@@ -78,13 +79,22 @@ const codeLifetime = 5 * time.Minute
 
 // Only opaque hashes reach storage. Browser sessions cannot satisfy this gate.
 type oauthServer struct {
-	store            *auth.Store
-	config           auth.Config
-	mu               sync.Mutex
-	window           time.Time
-	requests, logins int
-	hashing          chan struct{}
-	writes           *writeManager
+	store   *auth.Store
+	config  auth.Config
+	hashing chan struct{}
+	writes  *writeManager
+
+	limitersOnce sync.Once
+	// requests covers every /oauth and /.well-known route but registration,
+	// which has its own bucket so it cannot starve the others. credentials is
+	// a budget of failed owner credential checks (consent and write approval).
+	requests, registrations, credentials *auth.Limiter
+}
+
+func (o *oauthServer) limiters() {
+	o.limitersOnce.Do(func() {
+		o.requests, o.registrations, o.credentials = auth.NewLimiter(0, 120), auth.NewLimiter(0, 20), auth.NewLimiter(0, 5)
+	})
 }
 
 type grant struct {
@@ -183,20 +193,30 @@ func knownValues(values, known []string) []string {
 }
 
 func (o *oauthServer) resource() string { return o.config.PublicURL + "/mcp" }
-func (o *oauthServer) limited(login bool) bool {
-	o.mu.Lock()
-	defer o.mu.Unlock()
-	if time.Since(o.window) >= time.Minute {
-		o.window = time.Now()
-		o.requests = 0
-		o.logins = 0
+
+// verifyOwner checks the owner credentials posted to the consent and
+// write-approval forms. While five failed checks have been recorded in the
+// last minute it answers 429 (handled) without checking; only a failure
+// spends that budget, a success never does. One KDF runs at a time.
+func (o *oauthServer) verifyOwner(w http.ResponseWriter, r *http.Request) (revision int, handled bool, err error) {
+	o.limiters()
+	if o.credentials.Blocked("") {
+		w.Header().Set("Retry-After", "60")
+		rateLimited(w, r, "oauth_consent_attempts", "window_exceeded")
+		return 0, true, nil
 	}
-	if login {
-		o.logins++
-		return o.logins > 5
+	select {
+	case o.hashing <- struct{}{}:
+		defer func() { <-o.hashing }()
+	default:
+		rateLimited(w, r, "oauth_hashing_busy", "busy")
+		return 0, true, nil
 	}
-	o.requests++
-	return o.requests > 120
+	revision, err = o.store.VerifyOwner(r.Context(), r.PostForm.Get("email"), r.PostForm.Get("password"))
+	if errors.Is(err, auth.ErrCredentials) {
+		o.credentials.Record("")
+	}
+	return revision, false, err
 }
 
 // oauthReferrerPolicy must stay same-origin: with no-referrer a browser submits
@@ -226,9 +246,14 @@ func (o *oauthServer) routes(transport http.Handler) http.Handler {
 		w.Header().Set("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'")
 		w.Header().Set("X-Frame-Options", "DENY")
 		if r.URL.Path != "/mcp" {
-			if o.limited(false) {
+			o.limiters()
+			bucket, name := o.requests, "oauth_requests"
+			if r.URL.Path == "/oauth/register" {
+				bucket, name = o.registrations, "oauth_register"
+			}
+			if !bucket.Take("") {
 				w.Header().Set("Retry-After", "60")
-				rateLimited(w, r, "oauth_requests", "window_exceeded")
+				rateLimited(w, r, name, "window_exceeded")
 				return
 			}
 			enabled, err := settings.AuthenticationEnabled(r.Context(), o.store.DB)
@@ -398,22 +423,72 @@ func (o *oauthServer) register(w http.ResponseWriter, r *http.Request) {
 	c.Grants = []string{"authorization_code"}
 	c.Responses = []string{"code"}
 	redirects, _ := json.Marshal(c.Redirects)
-	result, err := o.store.DB.ExecContext(r.Context(), `INSERT INTO oauth_clients(id,name,redirect_uris) SELECT ?,?,? WHERE (SELECT COUNT(*) FROM oauth_clients)<1000`, c.ID, c.Name, string(redirects))
+	stored, err := o.storeClient(r.Context(), c.ID, c.Name, string(redirects))
 	if err != nil {
 		o.unavailable(w, r, "db_error")
 		return
 	}
-	n, err := result.RowsAffected()
-	if err != nil {
-		o.unavailable(w, r, "db_error")
-		return
-	}
-	if n != 1 {
+	if !stored {
 		reject(w, r, 429, "temporarily_unavailable", "client_registry_full", "")
 		return
 	}
 	httplog.Event(r.Context(), "oauth.client.registered", slog.String("client_name", c.Name), slog.String("client_id_prefix", c.ID))
 	jsonResponse(w, 201, c)
+}
+
+// maxClients caps the registry; staleClientAge is how long a client that never
+// completed an authorization is kept.
+const (
+	maxClients     = 1000
+	staleClientAge = 24 * time.Hour
+)
+
+// neverAuthorized selects clients (alias c) without any authorization and
+// without a live grant, such as a consent page still open. Takes one parameter:
+// the current time.
+const neverAuthorized = `NOT EXISTS (SELECT 1 FROM mcp_authorizations a WHERE a.client_id=c.id) AND NOT EXISTS (SELECT 1 FROM oauth_grants g WHERE g.client_id=c.id AND g.expires_at>?)`
+
+// storeClient inserts the client and reports whether there was room. Registration
+// is public, so abandoned clients must not fill the registry for good: stale
+// never-authorized clients are pruned first, and a full registry evicts the
+// oldest never-authorized one. A client with any authorization is never removed.
+func (o *oauthServer) storeClient(ctx context.Context, id, name, redirects string) (bool, error) {
+	tx, err := o.store.DB.BeginTx(ctx, nil)
+	if err != nil {
+		return false, err
+	}
+	defer tx.Rollback()
+	now := o.store.Now()
+	if _, err = tx.ExecContext(ctx, `DELETE FROM oauth_clients WHERE id IN (SELECT c.id FROM oauth_clients c WHERE c.created_at<=? AND `+neverAuthorized+`)`, db.FormatTime(now.Add(-staleClientAge)), db.FormatTime(now)); err != nil {
+		return false, err
+	}
+	insert := func() (bool, error) {
+		result, err := tx.ExecContext(ctx, `INSERT INTO oauth_clients(id,name,redirect_uris,created_at) SELECT ?,?,?,? WHERE (SELECT COUNT(*) FROM oauth_clients)<?`, id, name, redirects, db.FormatTime(now), maxClients)
+		if err != nil {
+			return false, err
+		}
+		n, err := result.RowsAffected()
+		return n == 1, err
+	}
+	evict := func() (bool, error) {
+		result, err := tx.ExecContext(ctx, `DELETE FROM oauth_clients WHERE id IN (SELECT c.id FROM oauth_clients c WHERE `+neverAuthorized+` ORDER BY c.created_at,c.id LIMIT 1)`, db.FormatTime(now))
+		if err != nil {
+			return false, err
+		}
+		n, err := result.RowsAffected()
+		return n == 1, err
+	}
+	stored, err := insert()
+	if err == nil && !stored {
+		var evicted bool
+		if evicted, err = evict(); err == nil && evicted {
+			stored, err = insert()
+		}
+	}
+	if err != nil || !stored {
+		return false, err
+	}
+	return true, tx.Commit()
 }
 
 var (
