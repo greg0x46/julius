@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/shopspring/decimal"
+
+	"github.com/greg0x46/julius/internal/dates"
 )
 
 // ReadjustStrategy selects how Readjust regenerates unallocated installments.
@@ -103,7 +105,7 @@ func Readjust(ctx context.Context, conn *sql.DB, scenarioID string, remainingAmo
 	var drafts []GeneratedInstallment
 	switch strategy {
 	case StrategyReduceTerm:
-		drafts, err = reduceTermInstallments(balance, affected, inferCadence(list))
+		drafts, err = reduceTermInstallments(balance, affected, inferCadence(list), anchorDay(affected[0].ProjectedAt, list))
 		if err != nil {
 			return nil, err
 		}
@@ -148,8 +150,10 @@ func Readjust(ctx context.Context, conn *sql.DB, scenarioID string, remainingAmo
 // installment <= the regular amount, so if a previous readjustment's
 // remainder installment is still around, picking "last by date" can lock
 // onto that tiny remainder and blow the count up (e.g. 24 -> 95) instead of
-// the plan's actual installment value.
-func reduceTermInstallments(balance decimal.Decimal, affected []ScenarioTransaction, cadence Cadence) ([]GeneratedInstallment, error) {
+// the plan's actual installment value. A monthly plan keeps falling on
+// anchorDay (see anchorDay), so a first affected installment clamped to a
+// short month does not pull the rest of the plan onto its day.
+func reduceTermInstallments(balance decimal.Decimal, affected []ScenarioTransaction, cadence Cadence, anchorDay int) ([]GeneratedInstallment, error) {
 	referenceAmount := affected[0].Amount
 	for _, st := range affected[1:] {
 		if st.Amount.GreaterThan(referenceAmount) {
@@ -165,13 +169,36 @@ func reduceTermInstallments(balance decimal.Decimal, affected []ScenarioTransact
 	n := len(amounts)
 	installments := make([]GeneratedInstallment, n)
 	for i, amount := range amounts {
+		var projectedAt time.Time
+		if cadence == CadenceMonthly {
+			projectedAt = dates.AddMonthsOnDay(startDate, anchorDay, i)
+		} else {
+			projectedAt = cadence.step(startDate, i)
+		}
 		installments[i] = GeneratedInstallment{
 			Description: fmt.Sprintf("Parcela %d/%d (reajustada)", i+1, n),
 			Amount:      amount,
-			ProjectedAt: cadence.step(startDate, i),
+			ProjectedAt: projectedAt,
 		}
 	}
 	return installments, nil
+}
+
+// anchorDay is the day of the month a plan's monthly installments fall on,
+// recovered from its dates because only the dates are stored. Generation clamps
+// a short month, so a start on the last day of its month may be a clamped
+// date (Feb 28 from the 31st): the largest day anywhere in the plan then
+// gives the anchor, since the unclamped installments sit on it. Any other
+// start day is the anchor itself, which leaves hand-edited dates alone.
+func anchorDay(start time.Time, plan []ScenarioTransaction) int {
+	day := start.Day()
+	if day != dates.DaysInMonth(start.Year(), start.Month()) {
+		return day
+	}
+	for _, st := range plan {
+		day = max(day, st.ProjectedAt.Day())
+	}
+	return day
 }
 
 // inferCadence recovers a plan's cadence from the gaps between its

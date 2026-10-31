@@ -56,7 +56,8 @@ Inventory: [transactions](contexts/transactions.md),
   sums, while `projections` marks any positive linked allocation realized.
   Negative/cancelling allocations distinguish them; the schema does not enforce
   positivity. Preserve this distinction until a deliberate rule change.
-- Plan-generated installments use month rollover; recurrence schedules clamp.
+- Plan-generated installments and recurrence schedules both clamp to the last day
+  of a shorter month (`dates.AddMonths`); stored plans keep their dates.
   Plan sign and allocation-capacity limitations remain documented in the
   [matrix divergences](financial-invariants.md#divergences-and-intended-changes-not-implemented).
   Fixed-amount generation/readjustment uses exact quotient/remainder and rejects
