@@ -27,17 +27,17 @@ func TestGoalsIgnoreUnrelatedForeignCashWithoutRate(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	created, err := goals.Create(ctx, conn, input("1000"))
+	created, err := goals.Create(ctx, conn, input("1000"), time.UTC)
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
 	if created.CurrentValue.String() != "250" {
 		t.Fatalf("current value = %s, want 250", created.CurrentValue)
 	}
-	if _, err := goals.Update(ctx, conn, created.ID, input("2000")); err != nil {
+	if _, err := goals.Update(ctx, conn, created.ID, input("2000"), time.UTC); err != nil {
 		t.Fatalf("Update: %v", err)
 	}
-	if list, err := goals.List(ctx, conn); err != nil || len(list) != 1 {
+	if list, err := goals.List(ctx, conn, time.UTC); err != nil || len(list) != 1 {
 		t.Fatalf("List = %+v, %v", list, err)
 	}
 }

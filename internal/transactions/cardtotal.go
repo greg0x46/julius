@@ -24,16 +24,17 @@ import (
 // locally. This is the single source of truth for "what's currently owed
 // on open credit cards" — every caller that needs that figure (the
 // payables total-owed summary) must go
-// through this function so their numbers agree by construction.
-func CreditCardTransactionTotal(ctx context.Context, q Querier, currencyCode string) (decimal.Decimal, error) {
-	return CreditCardTransactionTotalAt(ctx, q, currencyCode, time.Now(), time.Local)
+// through this function so their numbers agree by construction. loc is the
+// user's calendar zone (the configured timezone setting), never the process
+// zone, so the cycle flips on the user's midnight.
+func CreditCardTransactionTotal(ctx context.Context, q Querier, currencyCode string, loc *time.Location) (decimal.Decimal, error) {
+	return CreditCardTransactionTotalAt(ctx, q, currencyCode, time.Now(), loc)
 }
 
 // CreditCardTransactionTotalAt keeps the clock and location explicit so the
 // cycle rule can be tested at calendar boundaries without changing the
-// production behavior. time.Local is the application's process-configured
-// timezone (for example, the TZ setting); it is intentionally used for
-// local calendar days instead of comparing only UTC dates.
+// production behavior. loc decides which local calendar day "now" is and
+// where each bill's closing day starts, instead of comparing only UTC dates.
 func CreditCardTransactionTotalAt(ctx context.Context, q Querier, currencyCode string, now time.Time, loc *time.Location) (decimal.Decimal, error) {
 	return creditCardTransactionTotalAt(ctx, q, currencyCode, now, loc, nil)
 }

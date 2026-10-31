@@ -13,7 +13,6 @@ import (
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/shopspring/decimal"
 
-	"github.com/greg0x46/julius/internal/dates"
 	"github.com/greg0x46/julius/internal/exchange"
 	"github.com/greg0x46/julius/internal/goals"
 	"github.com/greg0x46/julius/internal/investments"
@@ -92,7 +91,11 @@ func RegisterMCPPlanningTools(server *sdk.Server, conn *sql.DB) {
 		return mcpPortfolio(ctx, conn, in)
 	})
 	addPlanningTool(server, "list_goals", "Goals with current progress and required end-of-month contributions, in BRL. Derived on read; no scenarios. Projection assumes no new contributions, a trailing measured monthly return (zero when null); return_partial discloses incomplete history.", func(ctx context.Context, in mcpPage) (mcpItems[goalDTO], error) {
-		list, err := goals.List(ctx, conn)
+		loc, err := settings.Location(ctx, conn)
+		if err != nil {
+			return mcpItems[goalDTO]{}, err
+		}
+		list, err := goals.List(ctx, conn, loc)
 		if err != nil {
 			return mcpItems[goalDTO]{}, err
 		}
@@ -296,11 +299,15 @@ type mcpWealth struct {
 }
 
 func mcpNetWorth(ctx context.Context, conn *sql.DB, in mcpRange) (mcpWealth, error) {
+	loc, err := settings.Location(ctx, conn)
+	if err != nil {
+		return mcpWealth{}, err
+	}
 	from, to, err := in.days()
-	if err != nil || to.After(dates.Day(time.Now())) {
+	if err != nil || to.After(dayIn(time.Now(), loc)) {
 		return mcpWealth{}, errMCPInput
 	}
-	points, err := networth.Series(ctx, conn, time.Now())
+	points, err := networth.Series(ctx, conn, time.Now().In(loc))
 	if err != nil {
 		return mcpWealth{}, err
 	}
@@ -414,7 +421,7 @@ func mcpEvents(ctx context.Context, conn *sql.DB, in mcpProjectionInput) (mcpIte
 type mcpTimelineInput struct {
 	mcpRange
 	ReferenceDate string   `json:"reference_date" jsonschema:"Cash anchor date, YYYY-MM-DD, as in the application timeline."`
-	Timezone      string   `json:"timezone,omitempty" jsonschema:"IANA timezone for transaction calendar days; default UTC."`
+	Timezone      string   `json:"timezone,omitempty" jsonschema:"IANA timezone for transaction calendar days; default is the configured timezone."`
 	ScenarioIDs   []string `json:"scenario_ids,omitempty" jsonschema:"Explicit additional scenario IDs, maximum 20; empty adds no hypotheticals."`
 }
 type mcpTimeline struct {
@@ -434,16 +441,18 @@ func mcpBuildTimeline(ctx context.Context, conn *sql.DB, in mcpTimelineInput) (m
 	if err != nil {
 		return mcpTimeline{}, errMCPInput
 	}
-	if in.Timezone != "" {
-		if _, err := time.LoadLocation(in.Timezone); err != nil {
-			return mcpTimeline{}, errMCPInput
-		}
+	timezone, err := resolveTimezone(ctx, conn, in.Timezone)
+	if errors.Is(err, errInvalidTimezone) {
+		return mcpTimeline{}, errMCPInput
+	}
+	if err != nil {
+		return mcpTimeline{}, err
 	}
 	ids, err := mcpScenarioIDs(ctx, conn, in.ScenarioIDs)
 	if err != nil {
 		return mcpTimeline{}, err
 	}
-	s, err := timeline.BuildSeries(ctx, conn, timeline.BuildParams{From: from, To: to, ReferenceDate: reference, Timezone: in.Timezone, ScenarioIDs: ids, ScenarioSelection: projections.SelectionExplicit})
+	s, err := timeline.BuildSeries(ctx, conn, timeline.BuildParams{From: from, To: to, ReferenceDate: reference, Timezone: timezone, ScenarioIDs: ids, ScenarioSelection: projections.SelectionExplicit})
 	if err != nil {
 		return mcpTimeline{}, err
 	}

@@ -141,7 +141,11 @@ func decodeGoalRequest(w http.ResponseWriter, r *http.Request) (goals.Input, boo
 
 func handleListGoals(conn *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		list, err := goals.List(r.Context(), conn)
+		loc, ok := configuredZone(w, r, conn)
+		if !ok {
+			return
+		}
+		list, err := goals.List(r.Context(), conn, loc)
 		if err != nil {
 			writeGoalProblem(w, err)
 			return
@@ -160,7 +164,11 @@ func handleCreateGoal(conn *sql.DB) http.HandlerFunc {
 		if !ok {
 			return
 		}
-		goal, err := goals.Create(r.Context(), conn, input)
+		loc, ok := configuredZone(w, r, conn)
+		if !ok {
+			return
+		}
+		goal, err := goals.Create(r.Context(), conn, input, loc)
 		if err != nil {
 			writeGoalProblem(w, err)
 			return
@@ -175,7 +183,11 @@ func handleUpdateGoal(conn *sql.DB) http.HandlerFunc {
 		if !ok {
 			return
 		}
-		goal, err := goals.Update(r.Context(), conn, r.PathValue("id"), input)
+		loc, ok := configuredZone(w, r, conn)
+		if !ok {
+			return
+		}
+		goal, err := goals.Update(r.Context(), conn, r.PathValue("id"), input, loc)
 		if err != nil {
 			writeGoalProblem(w, err)
 			return

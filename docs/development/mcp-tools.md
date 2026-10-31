@@ -19,9 +19,9 @@ tool discovery, JSON-RPC errors and the legacy initialize handshake.
 |---|---|
 | `list_accounts` | Optional `page`, `page_size`; accounts and cards with native balances, credit limits and closing-day metadata |
 | `list_card_bills` | Required `account_id`, optional `page`, `page_size`; recorded card bills (the open bill is the account balance, never fabricated) |
-| `search_transactions` | Required `timezone`; REST query filters, inclusive `YYYY-MM-DD` ranges, `group_by` (`none`, `day`, `week`, `month`, `year`); page totals cover all matches, with explicit eligibility, native totals and reporting coverage/FX |
+| `search_transactions` | Optional IANA `timezone` (default: the configured timezone); REST query filters, inclusive `YYYY-MM-DD` ranges, `group_by` (`none`, `day`, `week`, `month`, `year`); page totals cover all matches, with explicit eligibility, native totals and reporting coverage/FX |
 | `list_categories` | Optional `page`, `page_size`; catalog including inactive categories |
-| `spending_by_category` | Required `timezone`; the REST category-breakdown contract (period, classification) with reporting coverage and FX |
+| `spending_by_category` | Optional IANA `timezone` (default: the configured timezone); the REST category-breakdown contract (period, classification) with reporting coverage and FX |
 | `get_investment_portfolio` | Required `to`, optional `from`, `group_by` (`none`, `account`, `class`), `source` (`manual`, `synced`), `account_id`; positions, period returns, portfolio/group totals, native figures and FX |
 | `get_net_worth` | Required `from`, `to`; realized cash plus investments, daily history within the range and today's `latest` |
 | `list_goals` | Optional `limit`, `offset`; current progress, target-date projection and required monthly contribution in BRL |
@@ -29,7 +29,7 @@ tool discovery, JSON-RPC errors and the legacy initialize handshake.
 | `list_recurring_commitments` | Optional `limit`, `offset`; active and inactive BRL schedules |
 | `list_scenarios` | Optional `limit`, `offset`; scenario IDs, kinds and activation flags; discovery applies nothing |
 | `list_projection_events` | Required `from`, `to`, optional `scenario_ids`, `limit`, `offset`; dated BRL installments/occurrences with realization state |
-| `get_timeline` | Required `from`, `to`, `reference_date`, optional IANA `timezone`, `scenario_ids`; daily cash, income/expense totals, certainty tiers and reporting coverage |
+| `get_timeline` | Required `from`, `to`, `reference_date`, optional IANA `timezone` (default: the configured timezone), `scenario_ids`; daily cash, income/expense totals, certainty tiers and reporting coverage |
 
 All dates are inclusive calendar days (`YYYY-MM-DD`). Net-worth, event and
 timeline windows allow at most 366 days. Net worth cannot extend into the

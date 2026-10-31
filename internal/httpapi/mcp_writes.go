@@ -15,6 +15,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/greg0x46/julius/internal/automation"
@@ -104,7 +105,7 @@ func PreviewMCPWrite(ctx context.Context, q transactions.Querier, in MCPWriteReq
 		if json.Unmarshal(fields["amount"], &amount) != nil || len(amount) > 64 || !plainWriteDecimal.MatchString(amount) || !validWriteID(req.AccountID) || !validOptionalWriteID(req.CategoryID) || len(req.Description) > 1000 {
 			return p, errMCPWriteInput
 		}
-		if _, ok := req.toManualInput(); !ok {
+		if _, ok := req.toManualInput(time.UTC); !ok {
 			return p, errMCPWriteInput
 		}
 		if create && !validManualIdempotencyKey(in.IdempotencyKey) {

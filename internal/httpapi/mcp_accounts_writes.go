@@ -8,12 +8,14 @@ import (
 	"net/http"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/greg0x46/julius/internal/automation"
 	"github.com/greg0x46/julius/internal/ledger"
 	"github.com/greg0x46/julius/internal/money"
 	"github.com/greg0x46/julius/internal/payables"
 	"github.com/greg0x46/julius/internal/scenarios"
+	"github.com/greg0x46/julius/internal/settings"
 	"github.com/greg0x46/julius/internal/transactions"
 	"github.com/shopspring/decimal"
 )
@@ -249,7 +251,7 @@ func previewMCPAccountsWrite(ctx context.Context, q transactions.Querier, p MCPW
 			_ = json.Unmarshal(in.Data, &fields)
 			for i, input := range inputs {
 				raw := fields[[]string{"source", "destination", "fee"}[i]]
-				if _, ok := input.toManualInput(); !ok || !planningWriteAmount(raw, "amount") || input.CategoryID != nil || len(input.Description) > 1000 {
+				if _, ok := input.toManualInput(time.UTC); !ok || !planningWriteAmount(raw, "amount") || input.CategoryID != nil || len(input.Description) > 1000 {
 					return p, errMCPWriteInput
 				}
 				d, err := account(input.AccountID, true, true)
@@ -446,11 +448,15 @@ func executeMCPAccountsWrite(ctx context.Context, conn *sql.DB, approved MCPWrit
 		var req transferWriteRequest
 		_ = json.Unmarshal(in.Data, &req)
 		if req.Source != nil {
-			source, _ := req.Source.toManualInput()
-			destination, _ := req.Destination.toManualInput()
+			var loc *time.Location
+			if loc, err = settings.Location(ctx, tx); err != nil {
+				break
+			}
+			source, _ := req.Source.toManualInput(loc)
+			destination, _ := req.Destination.toManualInput(loc)
 			var fee *transactions.ManualInput
 			if req.Fee != nil {
-				f, _ := req.Fee.toManualInput()
+				f, _ := req.Fee.toManualInput(loc)
 				fee = &f
 			}
 			value, err = ledger.CreateManualTransferWithQuerier(ctx, tx, source, destination, fee, ledger.OnIgnored)

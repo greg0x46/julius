@@ -139,7 +139,11 @@ func handlePayableTotalOwed(conn *sql.DB) http.HandlerFunc {
 			payableUnavailableProblem(w)
 			return
 		}
-		cardBill, err := transactions.CreditCardTransactionTotal(r.Context(), conn, "BRL")
+		loc, ok := configuredZone(w, r, conn)
+		if !ok {
+			return
+		}
+		cardBill, err := transactions.CreditCardTransactionTotal(r.Context(), conn, "BRL", loc)
 		if err != nil {
 			payableUnavailableProblem(w)
 			return

@@ -45,15 +45,19 @@ func handleCreateTransfer(svc *ledger.Service) http.HandlerFunc {
 				transferProblem(w, transactions.ErrInvalidTransfer)
 				return
 			}
-			source, ok1 := req.Source.toManualInput()
-			destination, ok2 := req.Destination.toManualInput()
+			loc, ok := configuredZone(w, r, svc.DB)
+			if !ok {
+				return
+			}
+			source, ok1 := req.Source.toManualInput(loc)
+			destination, ok2 := req.Destination.toManualInput(loc)
 			if !ok1 || !ok2 {
 				transferProblem(w, transactions.ErrInvalidTransfer)
 				return
 			}
 			var fee *transactions.ManualInput
 			if req.Fee != nil {
-				input, ok := req.Fee.toManualInput()
+				input, ok := req.Fee.toManualInput(loc)
 				if !ok || req.Fee.CategoryID != nil {
 					transferProblem(w, transactions.ErrInvalidTransfer)
 					return

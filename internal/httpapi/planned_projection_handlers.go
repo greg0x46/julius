@@ -44,8 +44,7 @@ func plannedTransactionToDTO(event projections.PlannedTransaction) plannedTransa
 	}
 }
 
-func plannedWindow(r *http.Request) (time.Time, time.Time, error) {
-	today := dates.Day(time.Now().UTC())
+func plannedWindow(r *http.Request, today time.Time) (time.Time, time.Time, error) {
 	from, to := today, dates.AddMonths(today, 12)
 	var err error
 	if raw := r.URL.Query().Get("from"); raw != "" {
@@ -71,7 +70,11 @@ func plannedWindow(r *http.Request) (time.Time, time.Time, error) {
 
 func handleListScenarioPlannedTransactions(conn *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		from, to, err := plannedWindow(r)
+		loc, ok := configuredZone(w, r, conn)
+		if !ok {
+			return
+		}
+		from, to, err := plannedWindow(r, dayIn(time.Now(), loc))
 		if errors.Is(err, errRangeTooLong) {
 			invalidScenarioProblem(w, rangeTooLongDetail)
 			return

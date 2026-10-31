@@ -82,7 +82,7 @@ func TestManualTransactionRequestToManualInputEnforcesLimits(t *testing.T) {
 	valid := manualTransactionRequest{
 		AccountID: "account", Description: "Feira", Amount: decimal.RequireFromString("-42.5"), OccurredAt: "2026-03-01",
 	}
-	if _, ok := valid.toManualInput(); !ok {
+	if _, ok := valid.toManualInput(time.UTC); !ok {
 		t.Fatal("a valid request was rejected")
 	}
 	for _, tc := range []struct {
@@ -100,7 +100,7 @@ func TestManualTransactionRequestToManualInputEnforcesLimits(t *testing.T) {
 	} {
 		req := valid
 		tc.mutate(&req)
-		if _, ok := req.toManualInput(); ok {
+		if _, ok := req.toManualInput(time.UTC); ok {
 			t.Errorf("%s: accepted", tc.name)
 		}
 	}
@@ -115,7 +115,7 @@ func TestManualTransactionRequestToManualInputEnforcesLimits(t *testing.T) {
 	} {
 		req := valid
 		tc.mutate(&req)
-		if _, ok := req.toManualInput(); !ok {
+		if _, ok := req.toManualInput(time.UTC); !ok {
 			t.Errorf("%s: rejected", tc.name)
 		}
 	}

@@ -65,7 +65,7 @@ func TestTimelineOverHTTP(t *testing.T) {
 	}
 
 	resp = doJSON(t, http.MethodGet,
-		srv.URL+"/api/timeline?reference_date=2026-08-15&from=2026-08-01&to=2026-08-31", nil)
+		srv.URL+"/api/timeline?reference_date=2026-08-15&from=2026-08-01&to=2026-08-31&timezone=UTC", nil)
 	if resp.StatusCode != 200 {
 		t.Fatalf("get timeline status = %d, want 200", resp.StatusCode)
 	}
@@ -188,7 +188,7 @@ func TestTimelineDataRangeSpansOldestTransactionToLastPlannedInstallment(t *test
 	txID := insertTransaction(t, conn)
 	setCardDebtTransaction(t, conn, txID, time.Date(2024, 3, 7, 0, 0, 0, 0, time.UTC), "-42.00", "DEBIT", nil)
 
-	resp := doJSON(t, http.MethodGet, srv.URL+"/api/timeline/range", nil)
+	resp := doJSON(t, http.MethodGet, srv.URL+"/api/timeline/range?timezone=UTC", nil)
 	if resp.StatusCode != 200 {
 		t.Fatalf("get range status = %d, want 200", resp.StatusCode)
 	}
@@ -220,7 +220,7 @@ func TestTimelineDataRangeSpansOldestTransactionToLastPlannedInstallment(t *test
 	}
 	resp.Body.Close()
 
-	resp = doJSON(t, http.MethodGet, srv.URL+"/api/timeline/range", nil)
+	resp = doJSON(t, http.MethodGet, srv.URL+"/api/timeline/range?timezone=UTC", nil)
 	decodeJSON(t, resp, &body)
 	if body["to"] != lastInstallment {
 		t.Errorf("to = %v, want %s (the last planned installment)", body["to"], lastInstallment)
@@ -265,7 +265,7 @@ func TestTimelineDataRangeUsesReportingTimezone(t *testing.T) {
 	for _, tc := range []struct{ zone, from string }{
 		{"America%2FSao_Paulo", "2026-03-15"},
 		{"UTC", "2026-03-16"},
-		{"", "2026-03-16"},
+		{"", "2026-03-15"}, // the configured zone defaults to America/Sao_Paulo
 	} {
 		resp := doJSON(t, http.MethodGet, srv.URL+"/api/timeline/range?timezone="+tc.zone, nil)
 		if resp.StatusCode != 200 {
