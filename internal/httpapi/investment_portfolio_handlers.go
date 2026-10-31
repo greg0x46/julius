@@ -830,6 +830,10 @@ func handleCreateInvestmentPosition(conn *sql.DB) http.HandlerFunc {
 			writeInvestmentInvalid(w, "Não foi possível ler os dados enviados.")
 			return
 		}
+		loc, ok := configuredZone(w, r, conn)
+		if !ok {
+			return
+		}
 		input := investments.PositionInput{
 			AccountID:       req.AccountID,
 			AssetID:         investmentOptionalID(req.AssetID),
@@ -839,7 +843,7 @@ func handleCreateInvestmentPosition(conn *sql.DB) http.HandlerFunc {
 			InitialQuantity: req.InitialQuantity.orZero(),
 			InitialUnitCost: req.InitialUnitCost.orZero(),
 			InitialValue:    req.InitialValue.pointer(),
-			OccurredOn:      time.Now(),
+			OccurredOn:      time.Now().In(loc), // default "today" in the configured zone
 			Notes:           req.Notes,
 		}
 		if req.AssetType != nil && strings.TrimSpace(*req.AssetType) != "" {

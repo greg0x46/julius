@@ -9,7 +9,6 @@ import (
 
 	"github.com/shopspring/decimal"
 
-	"github.com/greg0x46/julius/internal/dates"
 	"github.com/greg0x46/julius/internal/db"
 	"github.com/greg0x46/julius/internal/money"
 	"github.com/greg0x46/julius/internal/projections"
@@ -44,8 +43,7 @@ func plannedTransactionToDTO(event projections.PlannedTransaction) plannedTransa
 	}
 }
 
-func plannedWindow(r *http.Request) (time.Time, time.Time, error) {
-	today := dates.Day(time.Now().UTC())
+func plannedWindow(r *http.Request, today time.Time) (time.Time, time.Time, error) {
 	from, to := today, today.AddDate(1, 0, 0)
 	var err error
 	if raw := r.URL.Query().Get("from"); raw != "" {
@@ -68,7 +66,11 @@ func plannedWindow(r *http.Request) (time.Time, time.Time, error) {
 
 func handleListScenarioPlannedTransactions(conn *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		from, to, err := plannedWindow(r)
+		loc, ok := configuredZone(w, r, conn)
+		if !ok {
+			return
+		}
+		from, to, err := plannedWindow(r, dayIn(time.Now(), loc))
 		if err != nil {
 			invalidScenarioProblem(w, "Período inválido.")
 			return

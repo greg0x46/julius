@@ -508,8 +508,13 @@ func Query(ctx context.Context, q Querier, query QueryRequest) (Result, error) {
 
 	var cardBalanceIDs map[string]bool
 	if query.Filters.CardBalance {
+		// The cycle follows the request's calendar zone, like the payables total.
+		cardLoc, err := time.LoadLocation(query.Timezone)
+		if err != nil {
+			return Result{}, fmt.Errorf("load timezone %q: %w", query.Timezone, err)
+		}
 		cardBalanceIDs = make(map[string]bool)
-		if _, err := creditCardTransactionTotalAt(ctx, q, "BRL", time.Now(), time.Local, cardBalanceIDs); err != nil {
+		if _, err := creditCardTransactionTotalAt(ctx, q, "BRL", time.Now(), cardLoc, cardBalanceIDs); err != nil {
 			return Result{}, err
 		}
 	}

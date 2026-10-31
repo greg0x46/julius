@@ -128,7 +128,7 @@ func TestMCPPlanningMatchesApplication(t *testing.T) {
 		t.Fatal(err)
 	}
 	target := today.AddDate(1, 0, 0)
-	_, err = goals.Create(ctx, conn, goals.Input{Name: "Synthetic goal", Metric: goals.MetricInvestedValue, TargetAmount: decimal.NewFromInt(20000), TargetDate: &target})
+	_, err = goals.Create(ctx, conn, goals.Input{Name: "Synthetic goal", Metric: goals.MetricInvestedValue, TargetAmount: decimal.NewFromInt(20000), TargetDate: &target}, time.UTC)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -180,7 +180,7 @@ func TestMCPPlanningMatchesApplication(t *testing.T) {
 	}
 
 	cashID := planningCash(t, conn, "BRL", "100")
-	if _, err := transactions.CreateManual(ctx, conn, transactions.ManualInput{AccountID: cashID, Description: "Synthetic deposit", Amount: decimal.NewFromInt(10), OccurredAt: today}); err != nil {
+	if _, err := transactions.CreateManual(ctx, conn, transactions.ManualInput{AccountID: cashID, Description: "Synthetic deposit", Amount: decimal.NewFromInt(10), OccurredAt: today.Add(12 * time.Hour)}); err != nil {
 		t.Fatal(err)
 	}
 	projected := planningCall(t, session, "get_timeline", map[string]any{"from": date, "to": date, "reference_date": date})

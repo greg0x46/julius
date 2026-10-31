@@ -112,7 +112,7 @@ func TestMCPPlanningWriteGoalsAndRecurrences(t *testing.T) {
 		id := planningResultID(t, applyWrite(t, conn, writePreview(t, conn, "create_goal", "", data)))
 		data["target_amount"] = "75000.1234567890123456789"
 		result := applyWrite(t, conn, writePreview(t, conn, "update_goal", id, data))
-		g, err := goals.Get(ctx, conn, id)
+		g, err := goals.Get(ctx, conn, id, time.UTC)
 		if err != nil || !g.TargetAmount.Equal(decimal.RequireFromString(data["target_amount"].(string))) || g.Projection == nil {
 			t.Fatalf("goal: %+v %v", g, err)
 		}
@@ -122,7 +122,7 @@ func TestMCPPlanningWriteGoalsAndRecurrences(t *testing.T) {
 			t.Fatalf("goal derived values differ: %s", result.Data)
 		}
 		applyWrite(t, conn, writePreview(t, conn, "delete_goal", id, map[string]any{}))
-		if _, err = goals.Get(ctx, conn, id); !errors.Is(err, goals.ErrNotFound) {
+		if _, err = goals.Get(ctx, conn, id, time.UTC); !errors.Is(err, goals.ErrNotFound) {
 			t.Fatal("goal survived")
 		}
 		cat, err := categories.Create(ctx, conn, "Synthetic rent", money.Expense, "coffee", "#2a78d6")

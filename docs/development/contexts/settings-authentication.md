@@ -136,6 +136,31 @@ works with SQLite integer flags and Postgres native booleans.
 `TestInitializeScheduleBothDialects` covers startup initialization;
 `TestQuoteSettingsPostgresRoundTrip` covers HTTP schedule writes.
 
+## Calendar timezone
+
+`finance.timezone` is an unencrypted persisted preference, defaulting to
+`America/Sao_Paulo` when absent. It is the zone every calendar day is read in:
+"today", the credit-card cycle, goal projections, the recurrence occurrence
+window, the month of the spending report and the day a manual transaction is
+anchored to (noon of the chosen day in that zone). GET/PUT `/api/preferences`
+expose `timezone` next to `reference_currency`, with the same partial-update
+rule: an omitted field keeps the saved value. The value must be an IANA name
+that `time.LoadLocation` can load; `""` and `Local` are rejected because they
+would make days depend on the host process, while `UTC` is valid. Invalid input
+is a 422 before any preference is written; all three writes share a transaction.
+
+The `timezone` parameter of the reporting, transactions-query and timeline
+endpoints and of the MCP tools is optional: when omitted the configured zone
+applies, and a value that is present but not an IANA name is still rejected. The
+frontend sends the configured zone explicitly.
+
+The process zone (`TZ`) no longer decides calendar days. Three things keep
+their own zone on purpose: the sync schedule (`JULIUS_SYNC_SCHEDULE` without a
+zone uses the process zone), the quote refresh schedule (its own
+`timezone` setting), and the pricing days of investments, which are provider
+days in fixed BRT (`investments.ProviderDay`). Exchange-rate days for report
+valuation are UTC calendar days of the instant the request is served.
+
 ## Financial reference currency
 
 `finance.reference_currency` is an unencrypted persisted preference, defaulting
@@ -335,9 +360,9 @@ payload or configuration data.
 | --- | --- | --- |
 | `list_accounts` | Optional `page`, `page_size` | `GET /api/accounts`: native bank/card balances, currency, limits and closing metadata, including nullable/unavailable fields. |
 | `list_card_bills` | Required `account_id`; optional pagination | `GET /api/accounts/{id}/bills`: recorded bills in descending due-date order. The open cycle remains in account balance/cycle metadata. |
-| `search_transactions` | Required IANA `timezone`; optional `group_by`, pagination and `filters` | `POST /api/transactions/query`: shared filter DTO and validation; items, category/inclusion decisions, eligibility, all matching native totals and reporting/FX metadata. |
+| `search_transactions` | Optional IANA `timezone` (default: the configured timezone); optional `group_by`, pagination and `filters` | `POST /api/transactions/query`: shared filter DTO and validation; items, category/inclusion decisions, eligibility, all matching native totals and reporting/FX metadata. |
 | `list_categories` | Optional pagination | `GET /api/categories`: includes active and inactive categories with kind, icon and color. |
-| `spending_by_category` | Required IANA `timezone` and `classification` (`outflow`/`inflow`); exactly one of `month=YYYY-MM`, inclusive `date_from`/`date_to`, or `period=all`; optional pagination | `GET /api/transactions/category-breakdown`: real category totals and native/reporting coverage; no scenarios. |
+| `spending_by_category` | Required `classification` (`outflow`/`inflow`); optional IANA `timezone` (default: the configured timezone); exactly one of `month=YYYY-MM`, inclusive `date_from`/`date_to`, or `period=all`; optional pagination | `GET /api/transactions/category-breakdown`: real category totals and native/reporting coverage; no scenarios. |
 
 Pagination defaults to page 1 and 50 items; page is 1–1,000,000 and page size
 1–200. Zero selects the default; negatives and larger values fail explicitly.

@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"database/sql"
+	"errors"
 	"net/http"
 	"strings"
 	"time"
@@ -200,12 +201,13 @@ func handleGetTimeline(conn *sql.DB) http.HandlerFunc {
 			invalidTimelineProblem(w, "to não pode ser anterior a from.")
 			return
 		}
-		timezone := query.Get("timezone")
-		if timezone != "" {
-			if _, err := time.LoadLocation(timezone); err != nil {
-				invalidTimelineProblem(w, "timezone inválida.")
-				return
-			}
+		timezone, err := resolveTimezone(r.Context(), conn, query.Get("timezone"))
+		if errors.Is(err, errInvalidTimezone) {
+			invalidTimelineProblem(w, "timezone inválida.")
+			return
+		} else if err != nil {
+			preferencesUnavailableProblem(w)
+			return
 		}
 		baseParams := timeline.BuildParams{
 			Timezone: timezone,
@@ -284,12 +286,13 @@ type timelineRangeDTO struct {
 // ask for a decade of days to be safe.
 func handleGetTimelineDataRange(conn *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		timezone := r.URL.Query().Get("timezone")
-		if timezone != "" {
-			if _, err := time.LoadLocation(timezone); err != nil {
-				invalidTimelineProblem(w, "timezone inválida.")
-				return
-			}
+		timezone, err := resolveTimezone(r.Context(), conn, r.URL.Query().Get("timezone"))
+		if errors.Is(err, errInvalidTimezone) {
+			invalidTimelineProblem(w, "timezone inválida.")
+			return
+		} else if err != nil {
+			preferencesUnavailableProblem(w)
+			return
 		}
 		dataRange, err := timeline.LoadDataRange(r.Context(), conn, time.Now().UTC(), timezone)
 		if err != nil {
