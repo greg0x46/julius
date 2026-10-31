@@ -91,6 +91,17 @@ also runs for a wrong email. Authentication bodies are limited to 4 KiB.
 Every route, REST or OAuth/MCP, is covered by the access log and security
 events described in "HTTP access log and security events" below.
 
+`httpapi.SecurityHeaders` (wired outermost by `cmd/julius/server.go:publicHandler`)
+sets `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`,
+`Referrer-Policy: same-origin` and a Content-Security-Policy on every response,
+plus `Strict-Transport-Security: max-age=31536000` only when
+`auth.Config.Secure()`. It runs before the handlers, so the stricter OAuth/MCP
+headers set in `internal/mcp` replace the defaults. The CSP is `default-src
+'self'` with the Google Fonts origins for the brand font; the theme bootstrap is
+the external `frontend/public/theme-init.js` because inline scripts are not
+allowed. A frontend change that needs another origin, an inline script or
+`eval` must update the policy and the tests in `cmd/julius/security_headers_test.go`.
+
 ## Frontend
 
 `AuthGate` checks the session, including every minute and on focus, and shows
