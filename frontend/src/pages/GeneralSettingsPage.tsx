@@ -20,7 +20,7 @@ function errorMessage(error: unknown, fallback: string): string {
 }
 
 export function GeneralSettingsPage() {
-  const { t, language } = useTranslation();
+  const { t, language, setLanguage } = useTranslation();
   const client = useQueryClient();
   const currencies = useQuery({
     queryKey: ["account-currencies"],
@@ -92,6 +92,18 @@ export function GeneralSettingsPage() {
           </UnavailableState>
         ) : (
           <div className="settings-form">
+            <FormField label={t("language")} htmlFor="language">
+              <Select
+                id="language"
+                value={language}
+                onChange={(next: string) => setLanguage(next === "en" ? "en" : "pt-BR")}
+                style={{ width: "100%" }}
+                options={[
+                  { value: "pt-BR", label: <span lang="pt-BR">Português (Brasil)</span>, searchText: "Português (Brasil)" },
+                  { value: "en", label: <span lang="en">English</span>, searchText: "English" },
+                ]}
+              />
+            </FormField>
             <FormField
               label={t("referenceCurrency")}
               htmlFor="reference-currency"
