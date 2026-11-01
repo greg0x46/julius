@@ -41,6 +41,15 @@ async function ledger(page: Page) {
   return parseTransactionQueryResult(await result.json());
 }
 
+function ledgerState(result: ReturnType<typeof parseTransactionQueryResult>) {
+  // Query confirmation and identity FX fetch timestamps are generated on each read.
+  return {
+    ...result,
+    confirmed_at: undefined,
+    ...(result.fx?.source === "identity" ? { fx: { ...result.fx, fetched_at: undefined } } : {}),
+  };
+}
+
 async function createAccount(page: Page, name: string, opening: string) {
   await page.goto("/contas-e-cartoes");
   await page.getByRole("button", { name: "Nova conta", exact: true }).first().click();
@@ -283,7 +292,7 @@ for (const mobile of [false, true]) {
     await expect(page.getByText("Nenhuma sugestão encontrada", { exact: true })).toBeVisible();
     const saved = await page.request.get("/api/recurring-scenarios");
     expect(await saved.json()).toEqual([expect.objectContaining({ name: "Internet sintética", amount: "100.12", is_active: true })]);
-    expect(await ledger(page)).toEqual(before);
+    expect(ledgerState(await ledger(page))).toEqual(ledgerState(before));
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy();
   });
 }
