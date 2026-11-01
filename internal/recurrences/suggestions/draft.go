@@ -31,6 +31,32 @@ type Draft struct {
 	Warnings   []string
 }
 
+// FromSuggestion resolves discovery evidence from history. Discovery schedules
+// start in the future; the owner supplies the eventual target ID and any missing category.
+func FromSuggestion(candidate recurrences.Suggestion, targetID, categoryID string, history []transactions.Item) (Draft, error) {
+	commitment := candidate.Draft
+	commitment.ID = targetID
+	if categoryID != "" {
+		commitment.CategoryID = categoryID
+	}
+	byID := make(map[string]transactions.Item, len(history))
+	for _, item := range history {
+		byID[item.ID] = item
+	}
+	evidence := make([]Observation, 0, len(candidate.TransactionIDs))
+	for _, id := range candidate.TransactionIDs {
+		item, ok := byID[id]
+		if !ok || item.OccurredAt == nil {
+			return Draft{}, fmt.Errorf("discovery evidence transaction is missing from history")
+		}
+		date := *item.OccurredAt
+		anchor := min(commitment.DayOfMonth, dates.DaysInMonth(date.Year(), date.Month()))
+		occurrence := time.Date(date.Year(), date.Month(), anchor, 0, 0, 0, 0, time.UTC)
+		evidence = append(evidence, Observation{Transaction: item, OccurrenceDate: occurrence})
+	}
+	return Generate(commitment, evidence)
+}
+
 // Generate never saves the rule or its target. Commitment.ID is the eventual
 // scenario ID; saving later must still validate target/category existence.
 func Generate(commitment recurrences.RecurringCommitment, evidence []Observation) (Draft, error) {
@@ -62,8 +88,10 @@ func Generate(commitment recurrences.RecurringCommitment, evidence []Observation
 			return Draft{}, fmt.Errorf("evidence must belong to the target account")
 		}
 		day := dates.Day(observation.OccurrenceDate)
-		if len(commitment.Occurrences(day, day)) != 1 {
-			return Draft{}, fmt.Errorf("evidence date must be an active scheduled occurrence")
+		historical := commitment
+		historical.StartDate, historical.EndDate, historical.IsActive = day, nil, true
+		if len(historical.Occurrences(day, day)) != 1 {
+			return Draft{}, fmt.Errorf("evidence date must follow the proposed calendar")
 		}
 		if !recurrences.MonthKey(day).Equal(recurrences.MonthKey(*item.OccurredAt)) {
 			d.Warnings = appendUnique(d.Warnings, "cross_month_unsupported")

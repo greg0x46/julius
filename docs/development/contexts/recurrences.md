@@ -109,12 +109,17 @@ Synthetic detection, evidence, precision, exclusions, determinism and read-only
 checks live in `discovery_test.go` and `discovery_store_test.go`; the store tests
 run on SQLite and PostgreSQL. HTTP tests pin the draft contract, empty array,
 no-store response and database failure handling.
+
 ### Read-only rule suggestions
 
 `internal/recurrences/suggestions.Generate` accepts a proposed commitment with
 an eventual scenario ID and at least two historical observations. Each observation
-includes its intended occurrence date and the transaction. The schedule must cover
-those dates. This backend service has no discovery algorithm, HTTP route or UI.
+includes its intended occurrence date and the transaction. Dates must follow the
+proposed calendar, but can predate its start. `FromSuggestion` accepts a discovery
+`recurrences.Suggestion`, the eventual target ID, an optional owner-selected
+category and history containing all evidence IDs. A missing category still
+requires owner input. Rule generation and preview are backend services without
+an HTTP route or UI.
 
 Drafts use the existing `automation.Write` contract and remain inactive. Conditions
 are AND-combined: equal descriptions or their longest shared word sequence,
@@ -126,10 +131,14 @@ existing manual category decisions retain precedence when that action is saved
 and applied later. Saving still requires normal target/category existence checks.
 
 `Preview` takes the draft, an occurrence period, complete transaction history for
-the affected calendar months, existing rules/schedules and manual overrides.
+the affected calendar months (including all evidence), existing rules/schedules
+and manual overrides. Missing evidence and duplicate transaction IDs are rejected.
 Include overrides outside the period when they claim loaded transactions. It
 uses the current matcher, cash-movement filter and `Reconciler`; it does not apply
-actions. Results include every supplied transaction's matched/unmatched/ambiguous
+actions. It backtests the proposed calendar as active over the historical period,
+without changing the actual schedule's future start/end or activation. Existing
+competing schedules retain their actual date bounds and activation.
+Results include every supplied transaction's matched/unmatched/ambiguous
 status, failed conditions, reasons and competing rule/scenario IDs, plus the actual
 resolved occurrences. Multiple matches retain the current earliest-match winner
 while requiring review. Matching entries outside discovery evidence are possible

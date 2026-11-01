@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/greg0x46/julius/internal/automation"
+	"github.com/greg0x46/julius/internal/dates"
 	"github.com/greg0x46/julius/internal/recurrences"
 	"github.com/greg0x46/julius/internal/rules"
 	"github.com/greg0x46/julius/internal/transactions"
@@ -63,16 +64,29 @@ func Preview(request PreviewRequest) (PreviewResult, error) {
 	}
 	result := PreviewResult{Warnings: append([]string(nil), d.Warnings...)}
 	var eligible []transactions.Item
+	loaded := make(map[string]bool, len(request.History))
 	for _, item := range request.History {
+		if item.ID == "" || loaded[item.ID] {
+			return PreviewResult{}, fmt.Errorf("preview history must contain distinct transaction IDs")
+		}
+		loaded[item.ID] = true
 		if cashCandidate(item) {
 			eligible = append(eligible, item)
+		}
+	}
+	for _, observation := range d.Evidence {
+		if !loaded[observation.Transaction.ID] {
+			return PreviewResult{}, fmt.Errorf("preview history must include all discovery evidence")
 		}
 	}
 	byScenario := map[string][]recurrences.Override{}
 	for _, override := range request.Overrides {
 		byScenario[override.ScenarioID] = append(byScenario[override.ScenarioID], override)
 	}
-	reconciler := recurrences.NewReconciler(d.Commitment, d.Rule.Conditions, d.Rule.LogicOperator, true, byScenario[d.Commitment.ID], eligible)
+	// Backtest the proposed calendar without moving the actual schedule's start.
+	historical := d.Commitment
+	historical.StartDate, historical.EndDate, historical.IsActive = dates.Day(request.From), nil, true
+	reconciler := recurrences.NewReconciler(historical, d.Rule.Conditions, d.Rule.LogicOperator, true, byScenario[d.Commitment.ID], eligible)
 	result.Occurrences = reconciler.ResolveRange(request.From, request.To)
 	byMonth := map[time.Time]recurrences.Reconciliation{}
 	for _, resolved := range result.Occurrences {

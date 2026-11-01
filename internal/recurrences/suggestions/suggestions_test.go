@@ -356,6 +356,12 @@ func TestPreviewAnnualIncomeUsesOnlyScheduledMonths(t *testing.T) {
 
 func TestGenerateAndPreviewRejectInvalidInputs(t *testing.T) {
 	draft, history := fixture(t)
+	if _, err := suggestions.Preview(request(draft, history[:2])); err == nil {
+		t.Fatal("accepted incomplete preview evidence")
+	}
+	if _, err := suggestions.Preview(request(draft, append(history, history[0]))); err == nil {
+		t.Fatal("accepted duplicate history")
+	}
 	for _, mutate := range []func(*recurrences.RecurringCommitment, *[]suggestions.Observation){
 		func(c *recurrences.RecurringCommitment, _ *[]suggestions.Observation) { c.ID = "" },
 		func(c *recurrences.RecurringCommitment, _ *[]suggestions.Observation) { c.Amount = decimal.Zero },
@@ -384,5 +390,55 @@ func TestGenerateAndPreviewRejectInvalidInputs(t *testing.T) {
 	req.Draft.Rule.Actions = []automation.ActionWrite{{Type: automation.ActionReconcile, ScenarioID: ptr("wrong")}}
 	if _, err := suggestions.Preview(req); err == nil {
 		t.Fatal("accepted wrong target")
+	}
+}
+
+func TestDiscoveredCandidateYieldsHistoricalRulePreview(t *testing.T) {
+	history := []transactions.Item{
+		item("jan", "2026-01-10", "-100", "PIX Fiber Internet 2026-01-10"),
+		item("feb", "2026-02-11", "-101", "PIX Fiber Internet 2026-02-11"),
+		item("mar", "2026-03-10", "-102", "PIX Fiber Internet 2026-03-10"),
+		item("apr", "2026-04-10", "-103", "PIX Fiber Internet 2026-04-10"),
+	}
+	for i := range history {
+		history[i].ProviderStatus = ptr("POSTED")
+	}
+	discovered := recurrences.Detect(history, nil, day("2026-04-30"))
+	if len(discovered) != 1 {
+		t.Fatalf("discovered: %+v", discovered)
+	}
+	candidate := discovered[0]
+	before, _ := json.Marshal(candidate)
+	draft, err := suggestions.FromSuggestion(candidate, "eventual-scenario", "", history)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if draft.Commitment.ID != "eventual-scenario" || !draft.Commitment.StartDate.Equal(day("2026-05-10")) || draft.Rule.Validate() != nil {
+		t.Fatalf("invalid discovered draft: %+v", draft)
+	}
+	req := request(draft, history)
+	req.To = day("2026-04-30")
+	result := preview(t, req)
+	if result.NeedsReview || len(result.Occurrences) != 4 {
+		t.Fatalf("missing backtest: %+v", result)
+	}
+	for i, row := range result.Transactions {
+		if row.Status != "matched" || *result.Occurrences[i].TransactionID != history[i].ID {
+			t.Fatalf("historical match missing: %+v", result)
+		}
+	}
+	after, _ := json.Marshal(candidate)
+	if string(before) != string(after) || !draft.Commitment.StartDate.Equal(day("2026-05-10")) {
+		t.Fatal("backtest moved the actual schedule")
+	}
+	if _, err := suggestions.FromSuggestion(candidate, "target", "", history[:3]); err == nil {
+		t.Fatal("accepted incomplete discovery evidence")
+	}
+	candidate.Draft.CategoryID = ""
+	if _, err := suggestions.FromSuggestion(candidate, "target", "", history); err == nil {
+		t.Fatal("accepted missing schedule category")
+	}
+	if _, err := suggestions.FromSuggestion(candidate, "target", "chosen-category", history); err != nil {
+		t.Fatalf("owner category rejected: %v", err)
 	}
 }
