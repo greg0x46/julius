@@ -916,7 +916,7 @@ starts serialize and incomplete or unmapped schemas fail without activation.
 ## Tables introduced after legacy cutover
 
 These tables start empty during legacy conversion and are created by native
-migrations (`0002_transfer_links`, `0005_goals`); they are absent from the
+migrations (`0002_transfer_links`, `0005_goals`, `0010_recurrence_suggestion_decisions`); they are absent from the
 historical snapshots. Migration `0006_drop_net_worth_snapshots` drops `net_worth_snapshots`
 (wealth is derived on read) and `0005_goals` also drops `investment_portfolios`
 and `investment_position_portfolios`: legacy conversion still copies them into
@@ -952,3 +952,17 @@ No current value or progress is stored; both are recomputed on read.
 | `transaction_id` | TEXT | UUID | identity | Unique existing account movement |
 | `transfer_id` | TEXT | UUID | identity | Transfer annotation |
 | `role` | TEXT | TEXT | label | Source, destination or explicit fee; unique per transfer |
+
+### `recurrence_suggestion_decisions`
+
+Created by native migration `0010_recurrence_suggestion_decisions`; absent from
+legacy sources and empty after conversion. Both dialects use text columns.
+
+| Column | Type | Meaning |
+| --- | --- | --- |
+| `pattern_key` | TEXT PRIMARY KEY | Stable hash of the discovered merchant/account/card pattern and calendar cadence |
+| `state` | TEXT NOT NULL | Owner decision: `dismissed` or `accepted` |
+| `scenario_id` | TEXT NULL | Accepted scenario identity, without a hard FK |
+| `approval_token` | TEXT NULL | Accepted preview fingerprint for safe retries |
+
+Only decisions are stored. Suggestions and reconciliation results are recomputed.

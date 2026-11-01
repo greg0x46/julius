@@ -53,8 +53,8 @@ reads, updates, activation and uncategorized schedule reads on both dialects.
 CSV and manual entries, without FX conversion. No transactions, schedules,
 automation rules or reconciliation decisions are created. The current UTC day
 is the analysis cutoff; identical data and cutoff produce identical ordered
-results and evidence IDs. Discovery is API-only; the recurring page still uses
-manual creation.
+results and evidence IDs. The recurring page exposes these results through **Discover recurrences**, alongside
+manual creation. Dismissed and accepted patterns are hidden persistently.
 
 Heuristics are deliberately conservative:
 
@@ -88,7 +88,8 @@ Heuristics are deliberately conservative:
 
 Each result contains `draft` (the existing recurring write fields),
 `currency_code: "BRL"`, `amount_kind`, exact decimal strings `minimum_amount` and
-`maximum_amount`, `confidence`, `reasons`, `transaction_ids` and `card_number`.
+`maximum_amount`, `confidence`, `reasons`, `transaction_ids`, `card_number`, a stable
+`key` and `evidence` rows (ID, date, description and exact amount).
 The schedule starts at the next anchored occurrence after the cutoff. The latest
 observed description supplies the name. An active category held by a strict
 majority supplies `category_id`; otherwise it is empty and `category_required`
@@ -103,7 +104,10 @@ when either its normalized name matches, or its category matches, its day is
 within three days and its amount lies within 10% of the observed range. This
 also avoids equivalent drafts for renamed schedules. A schedule without an
 account covers any account. Distinct card/account contexts remain distinct
-suggestions. Suggestions are recomputed, never stored or dismissed persistently.
+suggestions. Drafts are recomputed; only dismissal and acceptance decisions are
+stored in `recurrence_suggestion_decisions`, keyed by normalized merchant pattern,
+account, card, direction and cadence. New observations do not revive a dismissed
+pattern. Decision rows contain no foreign keys to real transactions.
 
 Synthetic detection, evidence, precision, exclusions, determinism and read-only
 checks live in `discovery_test.go` and `discovery_store_test.go`; the store tests
@@ -118,8 +122,8 @@ includes its intended occurrence date and the transaction. Dates must follow the
 proposed calendar, but can predate its start. `FromSuggestion` accepts a discovery
 `recurrences.Suggestion`, the eventual target ID, an optional owner-selected
 category and history containing all evidence IDs. A missing category still
-requires owner input. Rule generation and preview are backend services without
-an HTTP route or UI.
+requires owner input. Rule generation and preview remain read-only services. The review endpoint and
+recurrence drawer use them before approval.
 
 Drafts use the existing `automation.Write` contract and remain inactive. Conditions
 are AND-combined: equal descriptions or their longest shared word sequence,
@@ -163,6 +167,49 @@ cross-scenario competition without imposing a new global rule ordering.
 `internal/recurrences/suggestions/suggestions_test.go` covers draft validation,
 exact boundaries, noisy text, false positives, overlaps, eligibility, manual
 precedence, calendar boundaries and repeatable reads without input mutation.
+
+### Review and approval
+
+`POST /api/recurrence-suggestions/review` accepts `key`, `draft` (the recurring
+write contract) and optional `conditions`. Omit conditions to generate them;
+subsequent previews use the edited AND conditions. An active non-transfer
+category is required. The response supplies conditions, a preview token,
+warning codes, `needs_review` and historical rows with status, reasons, failed
+conditions and competing rule/scenario IDs. Each row identifies discovery evidence.
+The review period covers complete months between the first and last observation;
+manual links outside that period are still included when resolving competition.
+
+`POST /api/recurrence-suggestions/accept` accepts `items` (1–100 review requests,
+each including `token`, edited `conditions` and `acknowledge`). It returns a
+result for each item with `key`, `scenario_id`, `status` and `error`. Each item
+uses its own serializable transaction: create the recurring scenario and schedule,
+create an active reconcile-only rule, and record the acceptance receipt. A failed
+item leaves no partial writes and does not undo successful items. Retrying the
+same accepted key and token returns its original scenario ID. No category action
+or retroactive automation pass runs. Ledger rows, balances, categories and manual
+reconciliation decisions remain unchanged. Existing projection and occurrence
+services consume accepted schedules and rules normally.
+
+Approval recomputes discovery and preview against current history, schedules,
+rules and overrides. Changed history or preview rejects the old token; a covered,
+dismissed or no-longer-detected pattern cannot be accepted. An edited proposal
+with an equivalent existing name, direction, cadence and compatible account is
+also rejected. Independent items can be approved together; a new overlap caused
+by an earlier item requires another review. Warnings require acknowledgment;
+cross-month day windows remain unsupported even after acknowledgment. Invalid
+categories, schedules and conditions receive validation feedback. Database errors
+return safe failure messages.
+
+`POST /api/recurrence-suggestions/dismiss` accepts `key` and stores the preference
+without creating a schedule or rule. The UI removes the suggestion after success.
+There is no automatic creation or dismissal undo control in this flow.
+
+`workflow_test.go` tests both dialects for approval, replay, dismissal, stale
+history, active categories, ambiguity, unsupported windows, rollback and ledger
+preservation. HTTP tests cover the review contract and mixed bulk results. Frontend
+tests cover review gating, edits invalidating previews, acknowledgment, individual
+and bulk approval, stale errors and dismissal. Browser journeys approve a real
+suggestion on desktop and mobile and verify unchanged ledger data.
 
 ### Manual reconciliation
 
@@ -243,6 +290,12 @@ with the transaction that reconciled them and the actions Conciliar com… /
 Desconciliar / Voltar ao automático.
 `/transacoes` — "Conciliação" section in the detail drawer.
 
+Discovery on `/recorrencias` shows responsive suggestion cards with evidence,
+estimates, confidence and reasons. Its review drawer reuses the recurring fields
+and condition editor. Changing any field invalidates the preview. Only current,
+valid, acknowledged reviews can be selected for bulk creation. Failed items stay
+visible for another review.
+
 `/automacoes` — a reconcile automation can also apply a category using the same
 conditions. New rules default that optional action to the commitment's
 category; it is editable and clearable. Reconciliation eligibility is unchanged.
@@ -289,11 +342,16 @@ are covered by `internal/httpapi/mcp_planning_writes_test.go` and
 1. Sign in and create a synthetic BRL manual account. Add six posted expenses
    with the same description and amount on the same day of each of the last six
    months, including the current month. Do not use installments or transfers.
-2. Open `/api/recurrence-suggestions` in the authenticated browser. Expect one
-   monthly draft for that account, high confidence and six transaction IDs.
+2. Open `/recorrencias` and choose **Discover recurrences**. Expect one monthly
+   suggestion with high confidence and six historical evidence rows.
 3. Change two amounts within the supported range (maximum no more than twice
-   minimum). Reload the API; expect a variable estimate, medium confidence and
+   minimum). Reload discovery; expect a variable estimate, medium confidence and
    the observed amount range.
-4. Create a recurring commitment with the suggested name, account, direction and
-   cadence. Reload the API; expect that candidate to disappear. Discovery alone
-   must leave the recurrence list, balances and transaction decisions unchanged.
+4. Choose **Review**, select an active category, and choose **Update preview**.
+   Inspect the schedule, conditions and historical matches. Edit a field and
+   verify creation is disabled until another preview succeeds.
+5. Create the recurrence and rule. Expect the suggestion to disappear, one new
+   recurrence and one active reconcile rule, with no historical category changes.
+   Repeat on a narrow viewport. Discovering or previewing alone must create nothing.
+6. With two other synthetic patterns, review both and create the selected items.
+   Alternatively dismiss one and reload discovery; it must remain hidden.
