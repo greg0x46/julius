@@ -256,6 +256,13 @@ func TestPreviewPreservesManualOverridesAndIsReadOnly(t *testing.T) {
 			t.Fatalf("manual decision hidden: %+v", first.Transactions[i])
 		}
 	}
+	req.Rules = []automation.Rule{{ID: "overlap", IsActive: true, LogicOperator: rules.LogicAnd, Conditions: draft.Rule.Conditions}}
+	withOverlap := preview(t, req)
+	for _, row := range withOverlap.Transactions {
+		if row.Status != "unmatched" || !slices.Contains(row.RuleIDs, "overlap") {
+			t.Fatalf("overlap obscured manual precedence: %+v", row)
+		}
+	}
 	// An out-of-window manual claim by another scenario is still a conflict.
 	req.Overrides = []recurrences.Override{{ScenarioID: "other", OccurrenceDate: day("2025-12-31"), State: recurrences.StateLinked, TransactionID: ptr("jan")}}
 	result := preview(t, req)
@@ -286,6 +293,7 @@ func TestGenerateFlagsCalendarBoundaryPatterns(t *testing.T) {
 		anchor                                        int
 	}{
 		{"shifted_payment", "2026-01-31", "2026-03-01", "2026-02-01", "2026-03-01", 1},
+		{"year_boundary", "2026-12-31", "2027-02-01", "2027-01-01", "2027-02-01", 1},
 		{"wrapped_days", "2026-01-31", "2026-02-01", "2026-01-01", "2026-02-01", 1},
 		{"leap_month_end", "2028-01-31", "2028-02-29", "2028-01-31", "2028-02-29", 31},
 	} {
@@ -306,13 +314,43 @@ func TestGenerateFlagsCalendarBoundaryPatterns(t *testing.T) {
 			req := request(draft, history)
 			req.From, req.To = day(tc.occurrence1), day(tc.occurrence2)
 			result := preview(t, req)
-			if tc.name == "shifted_payment" && result.Occurrences[0].Reconciled() {
-				t.Fatal("previous month automatically reconciled February")
+			if (tc.name == "shifted_payment" || tc.name == "year_boundary") && result.Occurrences[0].Reconciled() {
+				t.Fatal("previous month automatically reconciled the next occurrence")
 			}
 			if tc.name == "leap_month_end" && (!result.Occurrences[0].Reconciled() || !result.Occurrences[1].Reconciled() || result.NeedsReview) {
 				t.Fatalf("month end clamping failed: %+v", result)
 			}
 		})
+	}
+}
+
+func TestPreviewAnnualIncomeUsesOnlyScheduledMonths(t *testing.T) {
+	c := commitment()
+	c.Kind, c.Cadence, c.MonthOfYear = recurrences.KindIncome, recurrences.CadenceAnnual, ptr(1)
+	c.StartDate = day("2025-01-01")
+	history := []transactions.Item{
+		item("first", "2025-01-10", "1000", "Annual Benefit"),
+		item("second", "2026-01-11", "1100", "Annual Benefit"),
+		item("off-month", "2026-02-10", "1050", "Annual Benefit"),
+	}
+	for i := range history {
+		history[i].Classification = money.Inflow
+	}
+	draft, err := suggestions.Generate(c, []suggestions.Observation{
+		{Transaction: history[0], OccurrenceDate: day("2025-01-10")},
+		{Transaction: history[1], OccurrenceDate: day("2026-01-10")},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := request(draft, history)
+	req.From, req.To = day("2025-01-01"), day("2026-12-31")
+	result := preview(t, req)
+	if result.NeedsReview || len(result.Occurrences) != 2 || !result.Occurrences[0].Reconciled() || !result.Occurrences[1].Reconciled() {
+		t.Fatalf("annual income: %+v", result)
+	}
+	if row := result.Transactions[2]; row.Status != "unmatched" || !row.MatchesConditions || !slices.Contains(row.Reasons, "no_occurrence_in_month") {
+		t.Fatalf("unscheduled month matched: %+v", row)
 	}
 }
 
