@@ -6,8 +6,8 @@
 
 ## What it is
 
-A cash-flow commitment known in advance (salary, rent), registered manually,
-independent of any specific real transaction, and reconciled against real
+A cash-flow commitment known in advance (salary, rent), registered manually or
+drafted from historical patterns, independent of any specific real transaction, and reconciled against real
 transactions through an automation rule.
 
 ## State vs. ideal
@@ -45,6 +45,69 @@ The commitment store supports both SQLite and native Postgres UUID/boolean
 columns. Nullable schedule categories read as an empty `CategoryID`; writes
 still require a category. `TestCommitmentLifecycleBothDialects` covers creation,
 reads, updates, activation and uncategorized schedule reads on both dialects.
+
+### Historical discovery
+
+`GET /api/recurrence-suggestions` returns read-only BRL drafts from
+`recurrences.Discover`. It reads the shared ledger history, including Pluggy,
+CSV and manual entries, without FX conversion. No transactions, schedules,
+automation rules or reconciliation decisions are created. The current UTC day
+is the analysis cutoff; identical data and cutoff produce identical ordered
+results and evidence IDs. Discovery is API-only; the recurring page still uses
+manual creation.
+
+Heuristics are deliberately conservative:
+
+- Group normalized descriptions by account, card number and cash-flow direction.
+  Normalize case, punctuation, whitespace and full dates (`YYYY-MM-DD` or
+  `DD/MM/YYYY`); retain merchant identifiers. Reject installment metadata and
+  installment-like descriptions before grouping.
+- Use posted, undeleted, included transactions with effective BRL money. Exclude
+  ignored/duplicate decisions, transfer categories, linked transfer principal,
+  investment reconciliations (including partial principal), zero amounts and
+  future entries. Identical same-day amounts in a group count once, with the
+  lexicographically first transaction ID as evidence.
+- Monthly patterns need at least four distinct months, one observation per
+  month, at least 75% coverage and no gap longer than one missing month. The
+  latest observation must be within two calendar months of the cutoff.
+- Annual patterns need at least three consecutive yearly observations in the
+  same month (at least two years of evidence). The latest must be within
+  fourteen calendar months. Two annual payments never suffice.
+- Choose the day anchor with the smallest total calendar deviation, clamping
+  short months; choose the smaller anchor on a tie. Every observation must be
+  within three days. Multiple different purchases in one period and irregular
+  dates reject the group, even when their descriptions match.
+- Use the exact median magnitude as the positive estimate, with observed minimum
+  and maximum amounts as an uncertainty range, not a forecast interval. Reject
+  a maximum above twice the minimum. A range above 2% of the median is
+  `variable`; otherwise it is `fixed`. Fixed patterns with no missing periods,
+  deviations of at most one day and six monthly observations (or three annual
+  observations) receive `high` confidence; others receive `medium`. Confidence
+  is a heuristic label, not a probability. Variable patterns always use medium.
+
+Each result contains `draft` (the existing recurring write fields),
+`currency_code: "BRL"`, `amount_kind`, exact decimal strings `minimum_amount` and
+`maximum_amount`, `confidence`, `reasons`, `transaction_ids` and `card_number`.
+The schedule starts at the next anchored occurrence after the cutoff. The latest
+observed description supplies the name. An active category held by a strict
+majority supplies `category_id`; otherwise it is empty and `category_required`
+explains that the owner must choose one before submitting the draft to
+`POST /api/recurring-scenarios`. Calendar, frequency and amount reason codes
+explain the evidence; `missing_months` marks tolerated gaps.
+
+Transactions explicitly reconciled to recurring scenarios are removed from
+history. Existing schedules, including paused or ended schedules, suppress a
+candidate with the same direction, cadence, annual month and compatible account
+when either its normalized name matches, or its category matches, its day is
+within three days and its amount lies within 10% of the observed range. This
+also avoids equivalent drafts for renamed schedules. A schedule without an
+account covers any account. Distinct card/account contexts remain distinct
+suggestions. Suggestions are recomputed, never stored or dismissed persistently.
+
+Synthetic detection, evidence, precision, exclusions, determinism and read-only
+checks live in `discovery_test.go` and `discovery_store_test.go`; the store tests
+run on SQLite and PostgreSQL. HTTP tests pin the draft contract, empty array,
+no-store response and database failure handling.
 
 ### Manual reconciliation
 
@@ -165,3 +228,17 @@ suppressed as before. Synthetic lifecycle, date/amount/ID validation, month-end
 clamping, orphan cleanup, stale previews, linked-rule conflicts and authorization
 are covered by `internal/httpapi/mcp_planning_writes_test.go` and
 `internal/mcp/planning_writes_test.go` on SQLite and Postgres.
+
+## Validate discovery in dev
+
+1. Sign in and create a synthetic BRL manual account. Add six posted expenses
+   with the same description and amount on the same day of each of the last six
+   months, including the current month. Do not use installments or transfers.
+2. Open `/api/recurrence-suggestions` in the authenticated browser. Expect one
+   monthly draft for that account, high confidence and six transaction IDs.
+3. Change two amounts within the supported range (maximum no more than twice
+   minimum). Reload the API; expect a variable estimate, medium confidence and
+   the observed amount range.
+4. Create a recurring commitment with the suggested name, account, direction and
+   cadence. Reload the API; expect that candidate to disappear. Discovery alone
+   must leave the recurrence list, balances and transaction decisions unchanged.
