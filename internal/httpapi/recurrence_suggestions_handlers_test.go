@@ -103,7 +103,10 @@ func TestRecurrenceSuggestionReviewBulkAndDismiss(t *testing.T) {
 	if len(candidates) != 3 {
 		t.Fatal(candidates)
 	}
-	response = doJSON(t, http.MethodPost, srv.URL+"/api/categories", map[string]any{"name": "Synthetic", "kind": "expense", "icon": "home", "color": "#112233"})
+	response = doJSON(t, http.MethodPost, srv.URL+"/api/categories", map[string]any{"name": "Synthetic", "kind": "expense", "icon": "home", "color": "#495057"})
+	if response.StatusCode != 201 {
+		t.Fatalf("category: %d", response.StatusCode)
+	}
 	var category map[string]any
 	decodeJSON(t, response, &category)
 	items := []map[string]any{}
@@ -113,7 +116,9 @@ func TestRecurrenceSuggestionReviewBulkAndDismiss(t *testing.T) {
 		item := map[string]any{"key": c["key"], "draft": draft}
 		response = doJSON(t, http.MethodPost, srv.URL+"/api/recurrence-suggestions/review", item)
 		if response.StatusCode != 200 {
-			t.Fatalf("review %d", response.StatusCode)
+			var problem map[string]any
+			decodeJSON(t, response, &problem)
+			t.Fatalf("review %d: %+v draft %+v", response.StatusCode, problem, draft)
 		}
 		var review map[string]any
 		decodeJSON(t, response, &review)

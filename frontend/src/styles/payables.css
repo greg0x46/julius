@@ -346,3 +346,9 @@
   width: 12rem;
   max-width: 100%;
 }
+
+.recurrence-suggestion {
+  border-top: 1px solid var(--color-border);
+  padding-block: var(--space-3);
+  overflow-wrap: anywhere;
+}
