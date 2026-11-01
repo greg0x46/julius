@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"reflect"
+	"strconv"
 	"testing"
 	"time"
 
@@ -20,6 +21,55 @@ import (
 	"github.com/greg0x46/julius/internal/transactions"
 	"github.com/shopspring/decimal"
 )
+
+func TestSuggestionReviewEditedDayCoversEvidenceMonthsBothDialects(t *testing.T) {
+	dbtest.Each(t, func(t *testing.T, conn *sql.DB) {
+		ctx := context.Background()
+		now := time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC)
+		category, err := categories.Create(ctx, conn, "Synthetic", money.Expense, "home", "#112233")
+		if err != nil {
+			t.Fatal(err)
+		}
+		account, err := transactions.WriteManualAccount(ctx, conn, "", transactions.ManualAccountInput{Name: "Synthetic", CurrencyCode: "BRL"}, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for month := 0; month < 6; month++ {
+			if _, err := transactions.CreateManual(ctx, conn, transactions.ManualInput{AccountID: account, Description: "Internet", Amount: decimal.NewFromInt(-100), OccurredAt: dates.AddMonths(time.Date(2026, 1, 5, 0, 0, 0, 0, time.UTC), month)}); err != nil {
+				t.Fatal(err)
+			}
+		}
+		candidates, err := suggestions.List(ctx, conn, now)
+		if err != nil || len(candidates) != 1 {
+			t.Fatalf("discovery: %+v %v", candidates, err)
+		}
+		candidate := candidates[0]
+		for _, day := range []int{4, 6} {
+			t.Run(strconv.Itoa(day), func(t *testing.T) {
+				d := candidate.Draft
+				write := recurrences.Write{Name: d.Name, Kind: d.Kind, Amount: d.Amount, CategoryID: category.ID, AccountID: d.AccountID, Cadence: d.Cadence, DayOfMonth: day, StartDate: d.StartDate, IsActive: true}
+				review, err := suggestions.ReviewCandidate(ctx, conn, now, suggestions.Key(candidate), write, nil)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if len(review.History) != 6 || len(review.Preview.Transactions) != 6 || len(review.Preview.Occurrences) != 6 {
+					t.Fatalf("missing historical month: %+v", review)
+				}
+				for _, row := range review.Preview.Transactions {
+					if row.Status != "matched" {
+						t.Fatalf("evidence should match edited calendar: %+v", row)
+					}
+				}
+				for index, occurrence := range review.Preview.Occurrences {
+					expected := time.Date(2026, time.Month(index+1), day, 0, 0, 0, 0, time.UTC)
+					if !occurrence.Occurrence.Date.Equal(expected) || !occurrence.Reconciled() {
+						t.Fatalf("expected reconciled occurrence %s: %+v", expected, occurrence)
+					}
+				}
+			})
+		}
+	})
+}
 
 func TestSuggestionApprovalBothDialects(t *testing.T) {
 	dbtest.Each(t, func(t *testing.T, conn *sql.DB) {

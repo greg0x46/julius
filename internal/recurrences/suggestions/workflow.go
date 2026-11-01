@@ -176,6 +176,8 @@ func ReviewCandidate(ctx context.Context, q recurrences.Querier, now time.Time, 
 			to = o.OccurrenceDate
 		}
 	}
+	from = recurrences.MonthKey(from)
+	to = time.Date(to.Year(), to.Month(), dates.DaysInMonth(to.Year(), to.Month()), 0, 0, 0, 0, time.UTC)
 	previewHistory := make([]transactions.Item, 0)
 	for _, item := range history {
 		if item.OccurredAt != nil && !recurrences.MonthKey(*item.OccurredAt).Before(recurrences.MonthKey(from)) && !recurrences.MonthKey(*item.OccurredAt).After(recurrences.MonthKey(to)) {
