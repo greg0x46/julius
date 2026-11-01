@@ -261,11 +261,11 @@ for (const mobile of [false, true]) {
     if (mobile) await page.setViewportSize({ width: 390, height: 844 });
     await login(page);
     await createAccount(page, "Conta recorrente", "1000");
-    const expense = (await read(page, "/api/categories", parseCategoryList)).find((c) => c.kind === "expense")!;
+    const expense = (await read(page, "/api/categories", parseCategoryList)).find((c) => c.is_active && c.kind === "expense")!;
     const today = new Date();
     for (let offset = -6; offset < 0; offset++) {
       const date = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + offset, 5)).toISOString().slice(0, 10);
-      await transaction(page, "Conta recorrente", "Internet sintética", "100.12", false, expense.name, date);
+      await transaction(page, "Conta recorrente", "Internet sintética", "100.12", false, `Despesa: ${expense.name}`, date);
     }
     const before = await ledger(page);
     await page.goto("/recorrencias");
