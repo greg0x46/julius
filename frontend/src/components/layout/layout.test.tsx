@@ -153,6 +153,21 @@ describe("ListRow", () => {
     );
     expect(screen.getByRole("button", { name: "Abrir" })).toHaveClass("list-row-truncate");
   });
+
+  it("keeps a leading control beside the row button, never inside it", async () => {
+    const onClick = vi.fn();
+    renderInRouter(
+      <ul>
+        <ListRow title="Internet" onClick={onClick} ariaLabel="Abrir Internet" leading={<input type="checkbox" aria-label="Selecionar Internet" />} />
+      </ul>,
+    );
+    const row = screen.getByRole("button", { name: "Abrir Internet" });
+    const checkbox = screen.getByRole("checkbox", { name: "Selecionar Internet" });
+    expect(row.contains(checkbox)).toBe(false);
+    expect(checkbox.closest("li")).toBe(row.closest("li"));
+    await userEvent.click(checkbox);
+    expect(onClick).not.toHaveBeenCalled();
+  });
 });
 
 describe("FilterButton", () => {

@@ -29,6 +29,15 @@ account. Category is not an implicit constraint: uncategorized and differently
 categorized transactions can match the automation rule. Month scoping prevents
 one month's transaction from reconciling another month's occurrence.
 
+On a credit-card account the projected entry is dated like the card's real
+entries: on the bill's due date (`CardDueDates.ProjectedEntryDate`, falling back
+to the occurrence day when the card has no bill history), not on the schedule
+day. Only the projected date moves. The occurrence day stays the event key and
+the date the reconciliation matches on, so a purchase still reconciles the
+occurrence of its own month. `projections.List` reads occurrences up to two
+months before the window for these commitments, since a bill can fall due
+inside the window for a purchase made before it.
+
 `internal/recurrences` — `RecurringCommitment` (`Kind` income/expense, `Amount`,
 `CategoryID`, `AccountID`, `Cadence` monthly/annual, `DayOfMonth`/`MonthOfYear`,
 `StartDate`/`EndDate`, `IsActive`). No matching criteria of its own: occurrences
@@ -290,11 +299,38 @@ with the transaction that reconciled them and the actions Conciliar com… /
 Desconciliar / Voltar ao automático.
 `/transacoes` — "Conciliação" section in the detail drawer.
 
-Discovery on `/recorrencias` shows responsive suggestion cards with evidence,
-estimates, confidence and reasons. Its review drawer reuses the recurring fields
-and condition editor. Changing any field invalidates the preview. Only current,
-valid, acknowledged reviews can be selected for bulk creation. Failed items stay
-visible for another review.
+Discovery on `/recorrencias` opens a block above the list: a flush card shaped like
+the list itself, with a summary line (candidate count and the monthly outflow and
+inflow of the monthly candidates; phones show only the outflow) and the candidates
+below. From `xl` they are a table (name, type, amount, category, recurrence,
+evidence count); below, stacked rows. Amounts use `Money` (outflow in the text
+colour, inflow green); a variable amount shows the average with its observed range.
+Only non-default states carry a `StatusTag`: medium confidence and "Revisada".
+A candidate opens the review drawer from its "Revisar" button (table) or its
+row, which carries a "Revisar ›" cue (stacked). The selection checkbox sits
+beside it and stays disabled until the candidate was reviewed; while nothing is
+reviewed, the summary says how to unlock it (open Revisar). "Select reviewed"
+and "Create selected (n)" are in the card summary on wide screens and in a
+`BottomActionBar` on phones. While that bar shows, `Page` (`hasBottomActionBar`)
+drops the title-row actions, so "Descobrir" and "Nova recorrência" are hidden
+until the reviews are created or reset by refreshing the discovery.
+
+The review drawer (the `form-drawer` skin: full-screen on phones) shows the
+pattern found (confidence, observed range, reasons), the recurring fields, the
+condition editor, the preview with its warnings and acknowledgment, and the
+transactions the rule finds as stacked rows with a status tag (matched and
+ambiguous rows; the months' unrelated transactions are left out, except evidence
+the rule misses). It is the only place with "Dispensar" and the single-candidate
+"Criar recorrência e regra". Opening it already simulates the rule when the
+pattern has a category; without one, the owner picks it and chooses "Atualizar
+prévia". A valid (acknowledged) preview marks the candidate as reviewed, and
+closing the drawer keeps that. A status line names what is pending
+(simulating, category, changed data, warnings to confirm), and the footer's
+primary button is "Atualizar prévia" until the preview is valid, then "Criar
+recorrência e regra". Changing any field invalidates the preview, and
+"Atualizar prévia" simulates again. Only current, valid, acknowledged reviews can be
+selected for bulk creation. Failed items stay visible, with their error above the
+list, for another review.
 
 `/automacoes` — a reconcile automation can also apply a category using the same
 conditions. New rules default that optional action to the commitment's
@@ -343,15 +379,18 @@ are covered by `internal/httpapi/mcp_planning_writes_test.go` and
    with the same description and amount on the same day of each of the last six
    months, including the current month. Do not use installments or transfers.
 2. Open `/recorrencias` and choose **Discover recurrences**. Expect one monthly
-   suggestion with high confidence and six historical evidence rows.
+   candidate with no status tag (high confidence) and "6 transações" as evidence;
+   opening it simulates the rule and lists the six matching transactions.
 3. Change two amounts within the supported range (maximum no more than twice
-   minimum). Reload discovery; expect a variable estimate, medium confidence and
-   the observed amount range.
-4. Choose **Review**, select an active category, and choose **Update preview**.
-   Inspect the schedule, conditions and historical matches. Edit a field and
-   verify creation is disabled until another preview succeeds.
+   minimum). Reload discovery; expect a variable estimate, the "Confiança média"
+   tag and the observed amount range ("varia de … a …").
+4. Open the candidate; when it has no category, select an active one and choose
+   **Update preview**. Inspect the schedule, conditions and matching transactions.
+   Edit a field and verify creation is disabled until another preview succeeds.
 5. Create the recurrence and rule. Expect the suggestion to disappear, one new
    recurrence and one active reconcile rule, with no historical category changes.
    Repeat on a narrow viewport. Discovering or previewing alone must create nothing.
 6. With two other synthetic patterns, review both and create the selected items.
-   Alternatively dismiss one and reload discovery; it must remain hidden.
+   Alternatively dismiss one from its review and reload discovery; it must remain
+   hidden. On a phone the bulk actions appear in the bottom bar once a candidate
+   is reviewed (opened with a valid preview).

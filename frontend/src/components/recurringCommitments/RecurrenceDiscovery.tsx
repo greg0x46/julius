@@ -1,30 +1,45 @@
-import { useRef, useState } from "react";
+import { useEffect, useId, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import type { Category, RecurringCommitmentWrite, RuleCondition } from "../../api/contracts";
-import type { RecurrenceSuggestion, SuggestionApproval, SuggestionReview } from "../../api/contracts/recurrenceSuggestions";
-import { acceptRecurrenceSuggestions, discoverRecurrences, dismissRecurrenceSuggestion, reviewRecurrenceSuggestion } from "../../api/recurringCommitments";
+import type { Category } from "../../api/contracts";
+import type { RecurrenceSuggestion } from "../../api/contracts/recurrenceSuggestions";
+import { acceptRecurrenceSuggestions, discoverRecurrences, dismissRecurrenceSuggestion } from "../../api/recurringCommitments";
 import { invalidateAfterAutomationRuleChange, invalidateAfterRecurringCommitmentChange } from "../../api/queryKeys";
 import { useTranslation } from "../../i18n/context";
-import type { MessageKey } from "../../i18n/messages";
-import { calendar } from "../../presentation/calendar";
 import { errorMessage } from "../../presentation/errors";
-import { formatBRL, formatMoney } from "../../presentation/money";
-import { recurringCommitmentCadenceName, recurringCommitmentKindName } from "../../presentation/recurringCommitmentLabels";
-import { ruleConditionFieldName, ruleConditionOperatorName, summarizeConditions } from "../../presentation/ruleConditionLabels";
-import { DataCard, EmptyState } from "../layout";
-import { Alert, Button, Checkbox, Drawer, Flex } from "../ui";
+import { sumDecimals } from "../../presentation/decimal";
+import { formatBRL } from "../../presentation/money";
+import { recurrenceScheduleLabel, recurrenceScheduleSentence, recurringCommitmentKindName } from "../../presentation/recurringCommitmentLabels";
+import { BottomActionBar, DataCard, DataCardSummary, EmptyState, ResponsiveList } from "../layout";
+import { Money } from "../shared/Money";
+import { StatusTag } from "../shared/StatusTag";
 import { useCompactScreen } from "../shared/useCompactScreen";
-import { ConditionListEditor, type ConditionFieldConfig } from "../shared/ConditionListEditor";
-import { RecurringCommitmentFields } from "./RecurringCommitmentForm";
+import { Alert, Button, Checkbox, Skeleton, Table } from "../ui";
+import type { ColumnsType } from "../ui/Table";
+import { RedoOutlined } from "../ui/icons";
+import { SuggestionReviewDrawer, type Reviewed } from "./SuggestionReviewDrawer";
 
-const reasonKeys: Record<string, MessageKey> = {
-  consistent_calendar: "suggestionCalendarReason", one_observation_per_period: "suggestionPeriodReason", fixed_amount: "suggestionFixedReason", variable_amount: "suggestionVariableReason", missing_months: "suggestionMissingReason", category_required: "suggestionCategoryReason", broad_description: "suggestionBroadReason", unrestricted_account: "suggestionAccountReason", cross_month_unsupported: "suggestionUnsupported", multiple_matches_per_occurrence: "suggestionMultipleReason", existing_overlap: "suggestionOverlapReason", existing_rule_or_scenario_overlap: "suggestionOverlapReason", possible_false_positives: "suggestionFalsePositiveReason", possible_false_positive: "suggestionFalsePositiveReason", conditions_failed: "suggestionConditionsFailed", manual_link_precedence: "suggestionManualReason", manually_taken: "suggestionManualReason", manual_detach: "suggestionManualReason", account_restriction: "suggestionIneligibleReason", ineligible_cash_movement: "suggestionIneligibleReason", no_occurrence_in_month: "suggestionIneligibleReason", missing_date_or_money: "suggestionIneligibleReason", conditions_and_month_match: "suggestionMatched",
-};
+/** What the monthly candidates of one kind add up to; annual ones do not happen every month. */
+function monthlyTotal(candidates: RecurrenceSuggestion[], kind: "income" | "expense"): string | null {
+  const amounts = candidates.filter((c) => c.draft.cadence === "monthly" && c.draft.kind === kind).map((c) => c.draft.amount);
+  return amounts.length > 0 ? sumDecimals(amounts) : null;
+}
 
-type Reviewed = { approval: SuggestionApproval; preview: SuggestionReview };
+const direction = (candidate: RecurrenceSuggestion) => (candidate.draft.kind === "income" ? "inflow" : "outflow");
 
-export function RecurrenceDiscovery({ categories }: { categories: Category[] }) {
+/**
+ * The candidates found in the history, shaped like the Recorrências list
+ * itself: a table from `xl`, stacked rows below. "Revisar" (or the row) opens
+ * the review drawer; the selection checkbox beside it is only enabled once the
+ * candidate was reviewed, and creating (one, or the selected ones) never
+ * happens without that review. The summary says so while nothing is reviewed.
+ *
+ * `onBottomBarChange` tells the page when the phone's bulk bar is showing, so
+ * the page can make room for it (`Page` `hasBottomActionBar`).
+ */
+export function RecurrenceDiscovery({ categories, onBottomBarChange }: { categories: Category[]; onBottomBarChange?: (visible: boolean) => void }) {
   const { t, language } = useTranslation();
+  const compact = useCompactScreen();
+  const headingId = useId();
   const client = useQueryClient();
   const query = useQuery({ queryKey: ["recurrence-suggestions"], queryFn: ({ signal }) => discoverRecurrences(signal), staleTime: 0 });
   const [reviews, setReviews] = useState<Record<string, Reviewed>>({});
@@ -35,6 +50,12 @@ export function RecurrenceDiscovery({ categories }: { categories: Category[] }) 
   const [message, setMessage] = useState<string | null>(null);
   const [hidden, setHidden] = useState<string[]>([]);
   const candidates = (query.data ?? []).filter((c) => !hidden.includes(c.key));
+  const reviewedKeys = candidates.filter((c) => reviews[c.key]).map((c) => c.key);
+  const showBottomBar = compact && reviewedKeys.length > 0;
+  useEffect(() => {
+    onBottomBarChange?.(showBottomBar);
+    return () => onBottomBarChange?.(false);
+  }, [showBottomBar, onBottomBarChange]);
   const reviewed = (key: string, value: Reviewed | null) => {
     if (value) setErrors((current) => { const next = { ...current }; delete next[key]; return next; });
     setReviews((current) => { const next = { ...current }; if (value) next[key] = value; else delete next[key]; return next; });
@@ -60,115 +81,124 @@ export function RecurrenceDiscovery({ categories }: { categories: Category[] }) 
   const dismiss = async (key: string) => {
     if (busy) return;
     setBusy(true);
-    try { await dismissRecurrenceSuggestion(key); setHidden((current) => [...current, key]); reviewed(key, null); await query.refetch(); }
+    try { await dismissRecurrenceSuggestion(key); setHidden((current) => [...current, key]); reviewed(key, null); if (editing?.key === key) setEditing(null); await query.refetch(); }
     catch (error) { setErrors((current) => ({ ...current, [key]: errorMessage(error, t("recurrenceSaveFailed")) })); }
     finally { setBusy(false); }
   };
-  return <DataCard>
-    <Flex vertical gap="middle">
-      <Flex gap="small" wrap align="center">
-        <h2>{t("discoverRecurrences")}</h2>
-        <Button disabled={busy} loading={query.isFetching} onClick={() => { setReviews({}); setSelected([]); setEditing(null); setErrors({}); void query.refetch(); }}>{t("refreshRecurrenceSuggestions")}</Button>
-      </Flex>
-      {message && <p role="status">{message}</p>}
-      {query.isPending && <p role="status">{t("suggestionsLoading")}</p>}
-      {query.isError && <Alert type="error" message={t("suggestionsFailed")} action={<Button onClick={() => void query.refetch()}>{t("retry")}</Button>} />}
-      {!query.isPending && !query.isError && candidates.length === 0 && <EmptyState title={t("suggestionsEmpty")} hint={t("suggestionsEmptyHint")} />}
-      {candidates.length > 0 && <>
-        <p>{t("suggestionApprovalHint")}</p>
-        <Flex gap="small" wrap>
-          <Button disabled={busy || !candidates.some((c) => reviews[c.key])} onClick={() => setSelected(candidates.filter((c) => reviews[c.key]).map((c) => c.key))}>{t("selectReviewed")}</Button>
-          <Button type="primary" disabled={selected.length === 0} loading={busy} onClick={() => void accept(selected)}>{t("createSelectedSuggestions", { count: selected.length })}</Button>
-        </Flex>
-        {candidates.map((candidate) => <section key={candidate.key} className="recurrence-suggestion">
-          <h3>{candidate.draft.name}</h3>
-          <p>{recurringCommitmentKindName(candidate.draft.kind, language)} · {formatBRL(candidate.draft.amount)} · {recurringCommitmentCadenceName(candidate.draft.cadence, language)}{candidate.draft.month_of_year ? ` · ${candidate.draft.month_of_year}` : ""}</p>
-          <p>{t("suggestionSchedule", { day: candidate.draft.day_of_month, date: candidate.draft.start_date })}</p>
-          <p>{t(candidate.confidence === "high" ? "suggestionHighConfidence" : "suggestionMediumConfidence")}. {t("suggestionConfidenceHint")}</p>
-          <p>{t("suggestionAmountRange", { min: formatBRL(candidate.minimum_amount), max: formatBRL(candidate.maximum_amount) })}</p>
-          <ul>{candidate.reasons.map((reason) => <li key={reason}>{t(reasonKeys[reason] ?? "suggestionIneligibleReason")}</li>)}</ul>
-          <details><summary>{t("suggestionEvidence")}</summary><ul>{candidate.evidence.map((row) => <li key={row.id}>{row.date} · {row.description} · {formatBRL(row.amount)}</li>)}</ul></details>
-          {!reviews[candidate.key] && <p>{t("suggestionSelectionHint")}</p>}
-          {errors[candidate.key] && <Alert type="error" message={errors[candidate.key]} />}
-          <Flex gap="small" wrap align="center">
-            <Checkbox aria-label={t("selectSuggestion", { name: candidate.draft.name })} disabled={busy || !reviews[candidate.key]} checked={selected.includes(candidate.key)} onChange={(e) => setSelected((current) => e.target.checked ? [...current, candidate.key] : current.filter((id) => id !== candidate.key))}>{t("select")}</Checkbox>
-            <Button disabled={busy} onClick={() => setEditing(candidate)}>{t("reviewSuggestion")}</Button>
-            <Button disabled={busy} onClick={() => void dismiss(candidate.key)}>{t("dismissSuggestion")}</Button>
-            {reviews[candidate.key] && <Button disabled={busy} onClick={() => void accept([candidate.key])}>{t("createSuggestion")}</Button>}
-          </Flex>
-        </section>)}
-      </>}
-    </Flex>
-    {editing && <SuggestionReviewDrawer key={editing.key} candidate={editing} categories={categories} saved={reviews[editing.key]} error={errors[editing.key]} busy={busy} onReviewed={(r) => reviewed(editing.key, r)} onAccept={() => void accept([editing.key])} onClose={() => setEditing(null)} />}
-  </DataCard>;
-}
+  const refresh = () => { setReviews({}); setSelected([]); setEditing(null); setErrors({}); void query.refetch(); };
 
-function SuggestionReviewDrawer({ candidate, categories, saved, error, busy, onReviewed, onAccept, onClose }: {
-  candidate: RecurrenceSuggestion; categories: Category[]; saved?: Reviewed; error?: string; busy: boolean;
-  onReviewed: (r: Reviewed | null) => void; onAccept: () => void; onClose: () => void;
-}) {
-  const { t, language } = useTranslation();
-  const compact = useCompactScreen();
-  const [preview, setPreview] = useState(saved?.preview ?? null);
-  const [conditions, setConditions] = useState<RuleCondition[] | undefined>(saved?.approval.conditions);
-  const [write, setWrite] = useState(saved?.approval.draft ?? candidate.draft);
-  const [acknowledge, setAcknowledge] = useState(saved?.approval.acknowledge ?? false);
-  const [dirty, setDirty] = useState(!saved);
-  const [loading, setLoading] = useState(false);
-  const [previewError, setPreviewError] = useState<string | null>(null);
-  const version = useRef(0);
-  const draft = saved?.approval.draft ?? candidate.draft;
-  const invalidate = () => { version.current++; setDirty(true); setAcknowledge(false); onReviewed(null); };
-  const eligible = !!saved && !!preview && !dirty && !preview.warnings.includes("cross_month_unsupported") && (!preview.needs_review || acknowledge);
-  const publish = (next: SuggestionReview, nextWrite: RecurringCommitmentWrite, ack: boolean) => {
-    if (!next.warnings.includes("cross_month_unsupported") && (!next.needs_review || ack)) onReviewed({ preview: next, approval: { key: candidate.key, draft: nextWrite, conditions: next.conditions, token: next.token, acknowledge: ack } });
+  const categoryName = (id: string) => id === "" ? "—" : categories.find((category) => category.id === id)?.name ?? t("removedCategory");
+  const evidenceCount = (candidate: RecurrenceSuggestion) => t(candidate.evidence.length === 1 ? "transactionCountOne" : "transactionCountMany", { count: candidate.evidence.length });
+  const variable = (candidate: RecurrenceSuggestion) => candidate.amount_kind === "variable";
+  const range = (candidate: RecurrenceSuggestion) => t("suggestionAmountRangeShort", { min: formatBRL(candidate.minimum_amount), max: formatBRL(candidate.maximum_amount) });
+  const openLabel = (candidate: RecurrenceSuggestion) => t("reviewNamedSuggestion", { name: candidate.draft.name });
+  // Only states worth a tag: a lower confidence, and a review already done.
+  const tags = (candidate: RecurrenceSuggestion, cue?: ReactNode): ReactNode => {
+    const medium = candidate.confidence === "medium";
+    const done = !!reviews[candidate.key];
+    if (!medium && !done && !cue) return undefined;
+    return <span className="recurrence-candidate-tags">
+      {medium && <StatusTag tone="warning">{t("suggestionMediumConfidence")}</StatusTag>}
+      {done && <StatusTag tone="success">{t("suggestionReviewedTag")}</StatusTag>}
+      {cue}
+    </span>;
   };
-  const updatePreview = async (nextWrite: RecurringCommitmentWrite) => {
-    const currentVersion = version.current;
-    setLoading(true); setPreviewError(null); onReviewed(null);
-    try {
-      const next = await reviewRecurrenceSuggestion({ key: candidate.key, draft: nextWrite, conditions });
-      if (version.current !== currentVersion) return;
-      setPreview(next); setConditions(next.conditions); setWrite(nextWrite); setDirty(false); setAcknowledge(false);
-      publish(next, nextWrite, false);
-    } catch (e) { setPreviewError(errorMessage(e, t("recurrenceSaveFailed"))); }
-    finally { setLoading(false); }
-  };
-  const textConfigs: ConditionFieldConfig[] = (["description", "account", "card"] as const).map((field) => ({ field, label: ruleConditionFieldName(field, language), operators: (["contains", "equals"] as const).map((operator) => ({ value: operator, label: ruleConditionOperatorName(operator, language) })) }));
-  const configs: ConditionFieldConfig[] = [...textConfigs,
-    { field: "amount", label: ruleConditionFieldName("amount", language), operators: [], pairOperator: "within_percent", pairFirstLabel: t("expectedAmount"), pairSecondLabel: t("tolerance"), pairSecondSuffix: "%", pairMin: 0 },
-    { field: "day_of_month", label: ruleConditionFieldName("day_of_month", language), operators: [], pairOperator: "day_range", pairFirstLabel: t("fromDay"), pairSecondLabel: t("untilDay"), pairMin: 1, pairMax: 31 },
+  const select = (candidate: RecurrenceSuggestion) => <span className="recurrence-candidate-select">
+    <Checkbox aria-label={t("selectSuggestion", { name: candidate.draft.name })} disabled={busy || !reviews[candidate.key]} checked={selected.includes(candidate.key)} onChange={(e) => setSelected((current) => e.target.checked ? [...current, candidate.key] : current.filter((id) => id !== candidate.key))} />
+  </span>;
+
+  const bulkActions = <>
+    <Button className="recurrence-bulk-action" disabled={busy || reviewedKeys.length === 0} onClick={() => setSelected(reviewedKeys)}>{t("selectReviewed")}</Button>
+    <Button className="recurrence-bulk-action" type="primary" disabled={selected.length === 0} loading={busy} onClick={() => void accept(selected)}>{t("createSelectedSuggestions", { count: selected.length })}</Button>
+  </>;
+  const outflow = monthlyTotal(candidates, "expense");
+  const inflow = monthlyTotal(candidates, "income");
+  const summary = candidates.length > 0 && <DataCardSummary label={t("suggestionsSummaryLabel")} busy={query.isFetching} note={reviewedKeys.length === 0 ? t("suggestionSelectionHint") : undefined}>
+    <div className="recurrence-discovery-summary">
+      <p className="recurrence-discovery-totals">
+        <span className="recurrence-discovery-count">{t(candidates.length === 1 ? "suggestionCountOne" : "suggestionCountMany", { count: candidates.length })}</span>
+        {outflow !== null && <span className="recurrence-discovery-figure">{t("suggestionMonthlyOutflow")} <Money value={outflow} currencyCode="BRL" tone="flow" direction="outflow" /></span>}
+        {inflow !== null && !compact && <span className="recurrence-discovery-figure">{t("suggestionMonthlyInflow")} <Money value={inflow} currencyCode="BRL" tone="flow" direction="inflow" /></span>}
+      </p>
+      {!compact && <div className="recurrence-discovery-bulk">{bulkActions}</div>}
+    </div>
+  </DataCardSummary>;
+
+  const failed = candidates.filter((c) => errors[c.key]);
+  const columns: ColumnsType<RecurrenceSuggestion> = [
+    { title: <span className="visually-hidden">{t("select")}</span>, key: "select", className: "recurrence-candidate-select-cell", render: (_, candidate) => select(candidate) },
+    { title: t("name"), key: "name", render: (_, candidate) => <>
+      <span className="recurrence-candidate-name">{candidate.draft.name}</span>
+      {variable(candidate) && <span className="recurrence-candidate-range">{range(candidate)}</span>}
+    </> },
+    { title: t("type"), key: "kind", render: (_, candidate) => recurringCommitmentKindName(candidate.draft.kind, language) },
+    { title: t("amount"), key: "amount", align: "right", render: (_, candidate) => <Money value={candidate.draft.amount} currencyCode="BRL" tone="flow" direction={direction(candidate)} size="row" /> },
+    { title: t("category"), key: "category", render: (_, candidate) => categoryName(candidate.draft.category_id) },
+    { title: t("recurrence"), key: "recurrence", render: (_, candidate) => recurrenceScheduleLabel(candidate.draft.cadence, candidate.draft.day_of_month, candidate.draft.month_of_year, language) },
+    { title: t("suggestionEvidenceHeader"), key: "evidence", render: (_, candidate) => evidenceCount(candidate) },
+    { title: <span className="visually-hidden">{t("status")}</span>, key: "status", render: (_, candidate) => tags(candidate) },
+    // The visible way in: the row click is only a shortcut.
+    { title: <span className="visually-hidden">{t("reviewSuggestion")}</span>, key: "review", align: "right", render: (_, candidate) => <Button size="small" aria-label={openLabel(candidate)} onClick={() => setEditing(candidate)}>{t("reviewSuggestion")}</Button> },
   ];
-  return <Drawer open title={`${t("reviewSuggestion")}: ${candidate.draft.name}`} width={compact ? "100%" : 640} onClose={busy ? undefined : onClose} rootClassName="form-drawer" footer={<Flex gap="small" wrap>
-    <Button disabled={busy || loading} htmlType="submit" form="suggestion-review-fields" loading={loading}>{t("updateSuggestionPreview")}</Button>
-    <Button disabled={!eligible || busy || loading} onClick={onClose}>{t("suggestionDoneReview")}</Button>
-    <Button type="primary" disabled={!eligible || loading} loading={busy} onClick={onAccept}>{t("createSuggestion")}</Button>
-  </Flex>}>
-    <Flex vertical gap="middle">
-      <p>{t("suggestionCategoryHint")}</p>
-      <div>
-        <RecurringCommitmentFields formId="suggestion-review-fields" onDraftChange={invalidate} commitment={null} initialDraft={{ name: draft.name, kind: draft.kind, amount: draft.amount, categoryId: draft.category_id || null, accountId: draft.account_id ?? "", cadence: draft.cadence, dayOfMonth: draft.day_of_month, monthOfYear: draft.month_of_year, startDate: calendar(draft.start_date), endDate: draft.end_date ? calendar(draft.end_date) : null, isActive: draft.is_active }} categories={categories} submitting={loading || busy} submitError={previewError} onSubmit={(w) => void updatePreview(w)} />
-      </div>
-      <h3>{t("suggestionRuleConditions")}</h3>
-      {conditions && <ConditionListEditor conditions={conditions} onChange={(c) => { invalidate(); setConditions(c); }} fieldConfigs={configs} />}
-      {dirty && <p role="status">{t("suggestionDirty")}</p>}
-      {error && <Alert type="error" message={error} />}
-      {preview && <>
-        <h3>{t("suggestionPreview")}</h3>
-        <p>{summarizeConditions(preview.conditions, "and", language)}</p>
-        {preview.warnings.map((warning) => <Alert key={warning} type="warning" message={t(reasonKeys[warning] ?? "suggestionIneligibleReason")} />)}
-        {preview.needs_review && <Checkbox disabled={dirty || loading || busy} checked={acknowledge} onChange={(e) => { setAcknowledge(e.target.checked); if (e.target.checked) publish(preview, write, true); else onReviewed(null); }}>{t("suggestionAcknowledge")}</Checkbox>}
-        <details open><summary>{t("suggestionEvidence")}</summary>
-          <ul>{preview.history.map((row) => <li key={row.id}>
-            <p>{row.date} · {row.description} · {row.currency_code ? formatMoney(row.amount, row.currency_code) : "—"}</p>
-            <p>{t(row.status === "matched" ? "suggestionMatched" : row.status === "ambiguous" ? "suggestionAmbiguous" : "suggestionUnmatched")}{row.evidence ? ` · ${t("suggestionEvidence")}` : ""}</p>
-            <p>{row.reasons.map((reason) => t(reasonKeys[reason] ?? "suggestionIneligibleReason")).join(" · ")}</p>
-            {row.failed_conditions.length > 0 && <p>{summarizeConditions(row.failed_conditions, "and", language)}</p>}
-            {row.rule_ids.length + row.scenario_ids.length > 0 && <p>{t("suggestionOverlapReason")}: {[...row.rule_ids, ...row.scenario_ids].join(", ")}</p>}
-          </li>)}</ul>
-        </details>
-      </>}
+
+  return <section className="recurrence-discovery" aria-labelledby={headingId}>
+    <header className="recurrence-discovery-header">
+      <h2 id={headingId}>{t("discoverRecurrences")}</h2>
+      <Button icon={<RedoOutlined aria-hidden="true" />} aria-label={t("refreshRecurrenceSuggestions")} disabled={busy} loading={query.isFetching} onClick={refresh}>{compact ? t("refreshRecurrenceSuggestionsShort") : t("refreshRecurrenceSuggestions")}</Button>
       <p>{t("suggestionApprovalHint")}</p>
-    </Flex>
-  </Drawer>;
+    </header>
+    <DataCard flush className="recurrences-card recurrence-discovery-card" summary={summary || undefined}>
+      {(message || query.isError || failed.length > 0) && <div className="recurrence-discovery-notices">
+        {message && <Alert type="success" showIcon message={message} />}
+        {query.isError && <Alert type="error" showIcon message={t("suggestionsFailed")} action={<Button onClick={() => void query.refetch()}>{t("retry")}</Button>} />}
+        {failed.map((candidate) => <Alert key={candidate.key} type="error" showIcon message={<><strong>{candidate.draft.name}</strong>: {errors[candidate.key]}</>} />)}
+      </div>}
+      <ResponsiveList
+        label={t("suggestionsListLabel")}
+        items={candidates}
+        getKey={(candidate) => candidate.key}
+        isLoading={query.isPending}
+        loading={<div className="recurrences-loading" role="status">
+          <p className="recurrence-discovery-loading">{t("suggestionsLoading")}</p>
+          <Skeleton active paragraph={{ rows: 3 }} />
+        </div>}
+        empty={query.isError ? <></> : <EmptyState title={t("suggestionsEmpty")} hint={t("suggestionsEmptyHint")} />}
+        stackBelow="xl"
+        row={(candidate) => ({
+          title: candidate.draft.name,
+          meta: [
+            recurringCommitmentKindName(candidate.draft.kind, language),
+            recurrenceScheduleSentence(candidate.draft.cadence, candidate.draft.day_of_month, candidate.draft.month_of_year, language),
+            // The amount's range tells more than the evidence count when the figure is an average.
+            variable(candidate) ? range(candidate) : evidenceCount(candidate),
+          ].join(" · "),
+          trailing: <Money value={candidate.draft.amount} currencyCode="BRL" tone="flow" direction={direction(candidate)} />,
+          // The row is one tap target; the cue says so, as it has no button of its own.
+          status: tags(candidate, <span className="recurrence-candidate-cue" aria-hidden="true">{t("reviewSuggestion")}</span>),
+          onClick: () => setEditing(candidate),
+          ariaLabel: openLabel(candidate),
+          leading: select(candidate),
+        })}
+        wide={<Table<RecurrenceSuggestion>
+          className="recurrence-candidates-table"
+          aria-label={t("suggestionsListLabel")}
+          columns={columns}
+          dataSource={candidates}
+          rowKey="key"
+          pagination={false}
+          // A click on the row opens the review; the name button is the keyboard way, the checkbox keeps its own meaning.
+          onRow={(candidate) => ({
+            className: "recurrence-candidate-row",
+            onClick: (event) => {
+              if (!event.currentTarget.contains(event.target as HTMLElement)) return;
+              if ((event.target as HTMLElement).closest("button, a, label, input")) return;
+              setEditing(candidate);
+            },
+          })}
+        />}
+      />
+    </DataCard>
+    {showBottomBar && <BottomActionBar>{bulkActions}</BottomActionBar>}
+    {editing && <SuggestionReviewDrawer key={editing.key} candidate={editing} categories={categories} saved={reviews[editing.key]} error={errors[editing.key]} busy={busy} onReviewed={(r) => reviewed(editing.key, r)} onAccept={() => void accept([editing.key])} onDismiss={() => void dismiss(editing.key)} onClose={() => setEditing(null)} />}
+  </section>;
 }

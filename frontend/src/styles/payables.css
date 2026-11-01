@@ -347,8 +347,257 @@
   max-width: 100%;
 }
 
-.recurrence-suggestion {
-  border-top: 1px solid var(--color-border);
-  padding-block: var(--space-3);
+/* ---- Descobrir recorrências ----------------------------------------------
+   The candidates sit in the same flush card as the Recorrências list (its
+   stacked-row rules above apply through `.recurrences-card`). */
+
+.recurrence-discovery {
+  margin-bottom: var(--space-4);
+}
+
+/* Title row (the h2 and the refresh), the one-line hint under it. */
+.recurrence-discovery-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: var(--space-4);
+  row-gap: 0.125rem;
+  margin-bottom: var(--space-3);
+}
+
+.recurrence-discovery-header h2 {
+  grid-column: 1;
+  grid-row: 1;
+  margin: 0;
+  color: var(--color-text);
+  font-size: var(--fs-row);
+  font-weight: 600;
+}
+
+.recurrence-discovery-header > .ui-btn {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.recurrence-discovery-header p {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--fs-body);
+}
+
+.recurrence-discovery-card .data-card-summary {
+  padding-block: var(--space-1);
+}
+
+/* "5 candidatas · Saídas por mês -R$ 2.762,80 · …", the bulk actions at the right on a wide screen. */
+.recurrence-discovery-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-1) var(--space-3);
+  min-height: 40px;
+}
+
+.recurrence-discovery-totals {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  min-width: 0;
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--fs-body);
+}
+
+.recurrence-discovery-count {
+  color: var(--color-text);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.recurrence-discovery-figure {
+  white-space: nowrap;
+}
+
+.recurrence-discovery-figure::before {
+  content: "·";
+  margin-inline: var(--space-2);
+}
+
+.recurrence-discovery-figure .money {
+  font-weight: 500;
+}
+
+.recurrence-discovery-bulk {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* In the phone's bottom bar the two long labels share the row and wrap
+   instead of running off the screen. */
+.bottom-action-bar-row > .recurrence-bulk-action {
+  flex: 1 1 0;
+  min-width: 0;
+  padding-inline: var(--space-3);
+  line-height: 1.25;
+  white-space: normal;
+}
+
+.recurrence-discovery-notices {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--page-gutter);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.recurrence-discovery-loading {
+  margin: 0 0 var(--space-2);
+  color: var(--color-text-secondary);
+}
+
+.recurrence-candidates-table tbody > tr > td {
+  font-size: var(--fs-body);
+}
+
+/* Only the name may wrap: the other cells are short and must not be squeezed
+   into a letter per line when the sidebar leaves the table little room. */
+.recurrence-candidates-table th,
+.recurrence-candidates-table td {
+  white-space: nowrap;
+}
+
+.recurrence-candidates-table tbody > tr > td:nth-child(2) {
+  white-space: normal;
   overflow-wrap: anywhere;
+}
+
+/* The checkbox cell is only the 44px target, pulled into the gutter like a
+   stacked row's leading control. */
+.recurrence-candidates-table .recurrence-candidate-select-cell {
+  padding-block: 0;
+  padding-inline: calc(var(--page-gutter) - 0.75rem) 0;
+}
+
+.recurrence-candidates-table .recurrence-candidate-row {
+  cursor: pointer;
+}
+
+.recurrence-candidate-name {
+  font-weight: 500;
+}
+
+.recurrence-candidate-cue {
+  color: var(--color-primary);
+  font-size: var(--fs-caption);
+  font-weight: 500;
+}
+
+.recurrence-candidate-cue::after {
+  content: " ›";
+}
+
+.recurrence-candidate-range {
+  display: block;
+  color: var(--color-text-secondary);
+  font-size: var(--fs-caption);
+  white-space: nowrap;
+}
+
+.recurrence-candidate-tags {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-1);
+}
+
+.recurrence-candidate-select {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+}
+
+.recurrence-candidate-select .ui-checkbox-wrapper {
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  width: 44px;
+  height: 44px;
+}
+
+.recurrence-candidate-select .ui-checkbox-wrapper:has(input:disabled) {
+  cursor: not-allowed;
+}
+
+.recurrence-candidate-select input[type="checkbox"] {
+  width: 1.125rem;
+  height: 1.125rem;
+  margin: 0;
+}
+
+/* The review drawer: the pattern that was found, then the form fields. */
+.recurrence-review-pattern {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.recurrence-review-pattern p,
+.recurrence-review-pattern ul,
+.recurrence-review-hint {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--fs-body);
+}
+
+.recurrence-review-pattern ul {
+  padding-inline-start: 1.25rem;
+}
+
+/* What unlocks the creation next; neutral until the preview is checked. */
+.recurrence-review-step {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-left: 3px solid var(--color-primary);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: var(--fs-body);
+}
+
+.recurrence-review-step-ready {
+  border-left-color: var(--color-success);
+}
+
+.recurrence-review-confidence {
+  color: var(--color-text);
+  font-weight: 500;
+}
+
+.recurrence-review-dismiss.ui-btn {
+  align-self: flex-start;
+  padding-inline: 0;
+}
+
+/* Three footer actions on a phone: the two secondary ones share a row, the
+   primary one fills the row under them, as the single Salvar does elsewhere. */
+@media (max-width: 47.99rem) {
+  .recurrence-review-footer {
+    flex-wrap: wrap;
+  }
+
+  .recurrence-review-footer .ui-btn {
+    flex: 1 1 calc(50% - var(--space-1));
+    width: auto;
+    height: 44px;
+  }
+
+  .recurrence-review-footer .ui-btn-primary {
+    flex-basis: 100%;
+    order: 1;
+    height: 48px;
+  }
 }

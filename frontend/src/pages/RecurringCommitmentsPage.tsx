@@ -25,6 +25,8 @@ export function RecurringCommitmentsPage() {
   const commitments = useRecurringCommitments();
   const categories = useCategories();
   const [discovering, setDiscovering] = useState(false);
+  // On a phone the discovery's bulk actions sit in a bottom bar, which takes over the title row's actions.
+  const [discoveryBar, setDiscoveryBar] = useState(false);
   const [formOpen, setFormOpen] = useState(
     Boolean((location.state as { prefill?: Partial<RecurringCommitmentDraft> } | null)?.prefill),
   );
@@ -122,9 +124,10 @@ export function RecurringCommitmentsPage() {
       description={t("recurrencesDescription")}
       width="narrow"
       compactMobileHeader
+      hasBottomActionBar={discoveryBar}
       actions={<><Button onClick={() => setDiscovering(true)}>{compact ? t("discoverRecurrencesShort") : t("discoverRecurrences")}</Button><PageAction label={t("newRecurrence")} shortLabel={t("newFeminine")} onClick={openCreate} /></>}
     >
-      {discovering && <RecurrenceDiscovery categories={categories.categories} />}
+      {discovering && <RecurrenceDiscovery categories={categories.categories} onBottomBarChange={setDiscoveryBar} />}
       {actionError && (
         <Alert
           type="error"

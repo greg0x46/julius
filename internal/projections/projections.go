@@ -422,6 +422,29 @@ type occurrenceRealization struct {
 	transactionID *string
 }
 
+// cardReachMonths is how far before the window an occurrence on a credit card
+// can fall and still have its bill due inside it. The Timeline reads real card
+// entries back by the same amount (see timeline.Build).
+const cardReachMonths = 2
+
+// cardAccounts returns the credit-card accounts that some schedule is bound to,
+// reading them only when a schedule names an account at all.
+func cardAccounts(ctx context.Context, q Querier, schedules map[string]scheduleRow) (map[string]bool, error) {
+	named := false
+	for _, loaded := range schedules {
+		named = named || loaded.schedule.AccountID != nil
+	}
+	if !named {
+		return nil, nil
+	}
+	return transactions.CreditAccountIDs(ctx, q)
+}
+
+// listRecurringProjections dates an occurrence on its schedule day, except on a
+// credit card: there it takes the day the Timeline gives the card's real
+// entries (`CardDueDates.ProjectedEntryDate`, the bill's due date), so the
+// projected and the realized cash fall on the same day. The event key and the
+// reconciliation keep the occurrence day, the one the matcher works on.
 func listRecurringProjections(ctx context.Context, q Querier, recurring []scenarios.Scenario, from, to time.Time) ([]PlannedTransaction, error) {
 	if len(recurring) == 0 {
 		return nil, nil
@@ -434,18 +457,38 @@ func listRecurringProjections(ctx context.Context, q Querier, recurring []scenar
 	if err != nil {
 		return nil, err
 	}
+	cards, err := cardAccounts(ctx, q, schedules)
+	if err != nil {
+		return nil, err
+	}
+	onCard := func(schedule recurrences.RecurringSchedule) bool {
+		return schedule.AccountID != nil && cards[*schedule.AccountID]
+	}
+	// A card occurrence before the window can still be paid inside it, so the
+	// occurrences, their decisions and their matches are read that much earlier.
+	scanFrom := from
+	var dueDates transactions.CardDueDates
+	for _, loaded := range schedules {
+		if onCard(loaded.schedule) {
+			scanFrom = dates.AddMonths(from, -cardReachMonths)
+			if dueDates, err = transactions.FetchCardDueDates(ctx, q); err != nil {
+				return nil, err
+			}
+			break
+		}
+	}
 
 	// The manual decisions are read once, for every scenario, over the
 	// widened window ManualLinkReachDays demands. They serve both readers
 	// below: the override layer that wins over the rule, and the matcher's
 	// own input — same rows, one query, so the two can never disagree.
-	overrideFrom := from.AddDate(0, 0, -recurrences.ManualLinkReachDays)
+	overrideFrom := scanFrom.AddDate(0, 0, -recurrences.ManualLinkReachDays)
 	overrideTo := to.AddDate(0, 0, recurrences.ManualLinkReachDays)
 	overrides, err := recurrences.ListOverrides(ctx, q, scenarioIDs, overrideFrom, overrideTo)
 	if err != nil {
 		return nil, err
 	}
-	resolvedByRule, err := resolveAutomaticOccurrences(ctx, q, recurring, schedules, overrides, from, to)
+	resolvedByRule, err := resolveAutomaticOccurrences(ctx, q, recurring, schedules, overrides, scanFrom, to)
 	if err != nil {
 		return nil, err
 	}
@@ -469,8 +512,20 @@ func listRecurringProjections(ctx context.Context, q Querier, recurring []scenar
 		if categoryName == "" {
 			categoryName = noCategoryName
 		}
-		for _, occurrence := range recurrences.OccurrencesInRange(loaded.schedule, from, to) {
+		card := onCard(loaded.schedule)
+		occurrencesFrom := from
+		if card {
+			occurrencesFrom = scanFrom
+		}
+		for _, occurrence := range recurrences.OccurrencesInRange(loaded.schedule, occurrencesFrom, to) {
 			day := dates.Day(occurrence.Date)
+			date := day
+			if card {
+				date = dates.Day(dueDates.ProjectedEntryDate(*loaded.schedule.AccountID, day, nil, false))
+				if date.Before(from) || date.After(to) {
+					continue
+				}
+			}
 			resolution := occurrenceRealization{}
 			if override, ok := manual[day]; ok {
 				resolution = override
@@ -485,7 +540,7 @@ func listRecurringProjections(ctx context.Context, q Querier, recurring []scenar
 				ScenarioID:        scenario.ID,
 				EventKey:          occurrenceEventKey(scenario.ID, day),
 				ScenarioKind:      scenario.Kind,
-				Date:              day,
+				Date:              date,
 				Description:       scenario.Name,
 				Amount:            amount,
 				CategoryID:        loaded.schedule.CategoryID,

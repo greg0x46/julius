@@ -96,8 +96,8 @@ BRL contracts; reference currency is a valuation preference.
 4. **Carry certainty with projected entries.** Timeline tiers are Realized,
    Confirmed, Projected and Hypothetical (`realizado`, `confirmado`, `projetado`,
    `hipotetico`). Card entries move to the bill due date as Confirmed; payable
-   plans are Confirmed, unreconciled recurrences Projected and standalone
-   events Hypothetical. Realized events suppress their projected counterpart.
+   plans are Confirmed, unreconciled recurrences Projected (on a card account,
+   also on the bill due date) and standalone events Hypothetical. Realized events suppress their projected counterpart.
    The chart groups realized/projected readings; it does not expose every tier
    as a separate screen control.
 5. **Share calendar-day rules.** `dates.Day` uses UTC midnight of the caller's
