@@ -5,6 +5,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 
 import type { RecurringCommitment, RecurringCommitmentWrite } from "../api/contracts";
 import { DataCard, EmptyState, Page, PageAction } from "../components/layout";
+import { RecurrenceDiscovery } from "../components/recurringCommitments/RecurrenceDiscovery";
 import { RecurrenceEditExtras } from "../components/recurringCommitments/RecurrenceEditExtras";
 import type { RecurringCommitmentDraft } from "../components/recurringCommitments/RecurringCommitmentForm";
 import { RecurringCommitmentForm } from "../components/recurringCommitments/RecurringCommitmentForm";
@@ -23,6 +24,7 @@ export function RecurringCommitmentsPage() {
   const feedback = useFeedback();
   const commitments = useRecurringCommitments();
   const categories = useCategories();
+  const [discovering, setDiscovering] = useState(false);
   const [formOpen, setFormOpen] = useState(
     Boolean((location.state as { prefill?: Partial<RecurringCommitmentDraft> } | null)?.prefill),
   );
@@ -120,8 +122,9 @@ export function RecurringCommitmentsPage() {
       description={t("recurrencesDescription")}
       width="narrow"
       compactMobileHeader
-      actions={<PageAction label={t("newRecurrence")} shortLabel={t("newFeminine")} onClick={openCreate} />}
+      actions={<><Button onClick={() => setDiscovering(true)}>{compact ? t("discoverRecurrencesShort") : t("discoverRecurrences")}</Button><PageAction label={t("newRecurrence")} shortLabel={t("newFeminine")} onClick={openCreate} /></>}
     >
+      {discovering && <RecurrenceDiscovery categories={categories.categories} />}
       {actionError && (
         <Alert
           type="error"

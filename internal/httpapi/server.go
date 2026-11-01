@@ -197,6 +197,9 @@ func NewServer(db *sql.DB, frontend fs.FS, secrets *settings.Secrets, config aut
 	// segment cannot collide.
 	mux.HandleFunc("GET /api/recurring-scenarios", handleListRecurringCommitments(db))
 	mux.HandleFunc("GET /api/recurrence-suggestions", handleRecurrenceSuggestions(db))
+	mux.HandleFunc("POST /api/recurrence-suggestions/review", handleReviewRecurrenceSuggestion(db))
+	mux.HandleFunc("POST /api/recurrence-suggestions/accept", handleAcceptRecurrenceSuggestions(db))
+	mux.HandleFunc("POST /api/recurrence-suggestions/dismiss", handleDismissRecurrenceSuggestion(db))
 	mux.HandleFunc("POST /api/recurring-scenarios", handleCreateRecurringCommitment(db))
 	mux.HandleFunc("PUT /api/recurring-scenarios/{id}", handleUpdateRecurringCommitment(db))
 	mux.HandleFunc("PATCH /api/recurring-scenarios/{id}", handleSetRecurringCommitmentActive(db))

@@ -269,6 +269,7 @@ type FieldsProps = {
   categories: Category[];
   submitError: string | null;
   onSubmit: (write: RecurringCommitmentWrite) => void;
+  onDraftChange?: () => void;
 };
 
 /**
@@ -285,6 +286,7 @@ export function RecurringCommitmentFields({
   categories,
   submitError,
   submitting = false,
+  onDraftChange,
   onSubmit,
 }: FieldsProps & { submitting?: boolean }) {
   const { t } = useTranslation();
@@ -309,7 +311,7 @@ export function RecurringCommitmentFields({
     >
       <Flex vertical gap="middle">
         {(error ?? submitError) && <Alert type="error" showIcon message={error ?? submitError} />}
-        <RecurringCommitmentFieldset draft={draft} setDraft={setDraft} categories={categories} />
+        <RecurringCommitmentFieldset draft={draft} setDraft={(next) => { onDraftChange?.(); setDraft(next); }} categories={categories} />
       </Flex>
     </form>
   );

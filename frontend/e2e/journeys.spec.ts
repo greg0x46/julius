@@ -41,6 +41,15 @@ async function ledger(page: Page) {
   return parseTransactionQueryResult(await result.json());
 }
 
+function ledgerState(result: ReturnType<typeof parseTransactionQueryResult>) {
+  // Query confirmation and identity FX fetch timestamps are generated on each read.
+  return {
+    ...result,
+    confirmed_at: undefined,
+    ...(result.fx?.source === "identity" ? { fx: { ...result.fx, fetched_at: undefined } } : {}),
+  };
+}
+
 async function createAccount(page: Page, name: string, opening: string) {
   await page.goto("/contas-e-cartoes");
   await page.getByRole("button", { name: "Nova conta", exact: true }).first().click();
@@ -60,7 +69,7 @@ async function select(page: Page, label: string, option: string) {
   await page.getByRole("option", { name: option, exact: true }).click();
 }
 
-async function transaction(page: Page, account: string, description: string, amount: string, inflow = false, category?: string) {
+async function transaction(page: Page, account: string, description: string, amount: string, inflow = false, category?: string, date = "2026-09-15") {
   await page.goto("/transacoes?period=all");
   await page.getByRole("button", { name: "Nova transação", exact: true }).click();
   const form = page.getByRole("dialog", { name: "Nova transação", exact: true });
@@ -68,7 +77,7 @@ async function transaction(page: Page, account: string, description: string, amo
   await form.getByLabel("Descrição", { exact: true }).fill(description);
   if (inflow) await form.getByText("Entrada", { exact: true }).click();
   await form.getByLabel("Valor", { exact: true }).fill(amount);
-  await form.getByLabel("Data", { exact: true }).fill("2026-09-15");
+  await form.getByLabel("Data", { exact: true }).fill(date);
   await form.getByLabel("Data", { exact: true }).press("Tab");
   if (category) await select(page, "Categoria (opcional)", category);
   const response = writeResponse(page, "/api/transactions");
@@ -255,3 +264,35 @@ test("investment contributions and withdrawals preserve bank cash and exclude re
     expect.objectContaining({ kind: "withdrawal", amount: "100.00", occurred_on: "2026-09-15" }),
   ]));
 });
+
+for (const mobile of [false, true]) {
+  test(`discover and approve a recurring commitment (${mobile ? "mobile" : "desktop"})`, async ({ page }) => {
+    if (mobile) await page.setViewportSize({ width: 390, height: 844 });
+    await login(page);
+    await createAccount(page, "Conta recorrente", "1000");
+    const expense = (await read(page, "/api/categories", parseCategoryList)).find((c) => c.is_active && c.kind === "expense")!;
+    const today = new Date();
+    for (let offset = -6; offset < 0; offset++) {
+      const date = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + offset, 5)).toISOString().slice(0, 10);
+      await transaction(page, "Conta recorrente", "Internet sintética", "100.12", false, `Despesa: ${expense.name}`, date);
+    }
+    const before = await ledger(page);
+    await page.goto("/recorrencias");
+    await page.getByRole("button", { name: mobile ? "Descobrir" : "Descobrir recorrências", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Internet sintética", exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Revisar", exact: true }).click();
+    const drawer = page.getByRole("dialog");
+    await drawer.getByRole("button", { name: "Atualizar prévia", exact: true }).click();
+    await expect(drawer.getByRole("button", { name: "Criar recorrência e regra", exact: true })).toBeEnabled();
+    await expect(drawer.getByText("Correspondência encontrada", { exact: false }).first()).toBeVisible();
+    const response = writeResponse(page, "/api/recurrence-suggestions/accept");
+    await drawer.getByRole("button", { name: "Criar recorrência e regra", exact: true }).click();
+    await successful(response);
+    await expect(drawer).not.toBeVisible();
+    await expect(page.getByText("Nenhuma sugestão encontrada", { exact: true })).toBeVisible();
+    const saved = await page.request.get("/api/recurring-scenarios");
+    expect(await saved.json()).toEqual([expect.objectContaining({ name: "Internet sintética", amount: "100.12", is_active: true })]);
+    expect(ledgerState(await ledger(page))).toEqual(ledgerState(before));
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy();
+  });
+}

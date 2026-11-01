@@ -1,3 +1,4 @@
+import { parseRecurrenceSuggestions, parseSuggestionReview, parseSuggestionResults, type SuggestionApproval } from "./contracts/recurrenceSuggestions";
 import { apiMessage } from "../i18n/apiMessage";
 import { apiFetch } from "./transport";
 import {
@@ -198,4 +199,17 @@ export function deleteReconciliation(
     204,
     null,
   );
+}
+
+export function discoverRecurrences(signal?: AbortSignal) {
+  return send("/api/recurrence-suggestions", { method: "GET", signal }, 200, parseRecurrenceSuggestions);
+}
+export function reviewRecurrenceSuggestion(request: Omit<SuggestionApproval, "token" | "acknowledge" | "conditions"> & { conditions?: SuggestionApproval["conditions"] }) {
+  return send("/api/recurrence-suggestions/review", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(request) }, 200, parseSuggestionReview);
+}
+export function acceptRecurrenceSuggestions(items: SuggestionApproval[]) {
+  return send("/api/recurrence-suggestions/accept", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ items }) }, 200, parseSuggestionResults);
+}
+export function dismissRecurrenceSuggestion(key: string) {
+  return send("/api/recurrence-suggestions/dismiss", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ key }) }, 204, null);
 }
