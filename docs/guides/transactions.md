@@ -95,16 +95,18 @@ active category available for each commitment.
 1. Open Recurrences (`/recorrencias`) and choose **Discover recurrences**. Inspect
    each estimate, schedule, confidence, explanation and supporting transactions.
    Confidence describes a historical pattern, not a guarantee of future payments.
-2. Choose **Review**. Edit the name, direction, positive BRL amount, category,
-   account, monthly/annual calendar and date range. Select an active category
-   when the suggestion has none.
-3. Choose **Update preview** to generate reconciliation conditions and see their
-   historical matches. Edit conditions if needed and update the preview again.
-   All conditions must match. Check unmatched evidence, possible false positives
-   and overlaps with existing rules or recurrences. Ambiguity requires explicit
-   acknowledgment; cross-month day windows must be corrected before creation.
-4. Choose **Create recurrence and rule**, or **Finish review** and select reviewed
-   suggestions for **Create selected**. Each accepted item creates its schedule
+2. Choose **Review** on a candidate. The review simulates the rule on its own
+   when the suggestion has a category. When it has none, select an active
+   category and choose **Update preview**. You can also edit the name,
+   direction, positive BRL amount, account, monthly/annual calendar and date
+   range.
+3. Read the transactions the rule finds in the history. Edit fields or
+   conditions if needed and choose **Update preview** again; all conditions must
+   match. Check possible false positives, unmatched evidence and overlaps with
+   existing rules or recurrences. Ambiguity requires explicit acknowledgment;
+   cross-month day windows must be corrected before creation.
+4. Choose **Create recurrence and rule**, or close the review and select the
+   reviewed suggestions for **Create selected**. Each accepted item creates its schedule
    and active reconciliation rule together. Failed items remain for correction;
    successful items appear in the recurrence list.
 5. Choose **Dismiss** for an unwanted pattern. It stays hidden after reloading,

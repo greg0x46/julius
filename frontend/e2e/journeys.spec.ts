@@ -279,10 +279,10 @@ for (const mobile of [false, true]) {
     const before = await ledger(page);
     await page.goto("/recorrencias");
     await page.getByRole("button", { name: mobile ? "Descobrir" : "Descobrir recorrências", exact: true }).click();
-    await expect(page.getByRole("heading", { name: "Internet sintética", exact: true })).toBeVisible();
-    await page.getByRole("button", { name: "Revisar", exact: true }).click();
+    const candidate = page.getByRole("button", { name: "Revisar Internet sintética", exact: true });
+    await expect(candidate).toBeVisible();
+    await candidate.click();
     const drawer = page.getByRole("dialog");
-    await drawer.getByRole("button", { name: "Atualizar prévia", exact: true }).click();
     await expect(drawer.getByRole("button", { name: "Criar recorrência e regra", exact: true })).toBeEnabled();
     await expect(drawer.getByText("Correspondência encontrada", { exact: false }).first()).toBeVisible();
     const response = writeResponse(page, "/api/recurrence-suggestions/accept");
