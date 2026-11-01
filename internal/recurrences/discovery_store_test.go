@@ -160,3 +160,67 @@ func TestDiscoverySyncedAndCSVHistoryBothDialects(t *testing.T) {
 		}
 	})
 }
+
+func TestDiscoveryInstallmentMetadataWithoutCardNumberBothDialects(t *testing.T) {
+	dbtest.Each(t, func(t *testing.T, conn *sql.DB) {
+		ctx := context.Background()
+		account, err := transactions.WriteManualAccount(ctx, conn, "", transactions.ManualAccountInput{Name: "Synthetic", CurrencyCode: "BRL"}, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		cases := []struct {
+			name        string
+			metadata    string
+			installment bool
+		}{
+			{"Subscription absent metadata", "", false},
+			{"Subscription absent number", `{}`, false},
+			{"Subscription empty number", `{"cardNumber":"","totalInstallments":1}`, false},
+			{"Purchase absent number", `{"installmentNumber":1,"totalInstallments":12}`, true},
+			{"Purchase empty number", `{"cardNumber":"","installmentNumber":1,"totalInstallments":12}`, true},
+			{"Purchase total only", `{"totalInstallments":12}`, true},
+			{"Purchase installment only", `{"installmentNumber":1}`, true},
+		}
+		wantInstallment := map[string]bool{}
+		wantSuggestions := map[string]bool{}
+		for _, tc := range cases {
+			if !tc.installment {
+				wantSuggestions[tc.name] = true
+			}
+			for month := 0; month < 6; month++ {
+				id, err := transactions.CreateManual(ctx, conn, transactions.ManualInput{AccountID: account, Description: tc.name, Amount: dec(t, "-100"), OccurredAt: dates.AddMonths(date(t, "2026-01-05"), month)})
+				if err != nil {
+					t.Fatal(err)
+				}
+				if tc.metadata != "" {
+					if _, err := conn.ExecContext(ctx, `UPDATE financial_transactions SET credit_card_metadata = ? WHERE id = ?`, tc.metadata, id); err != nil {
+						t.Fatal(err)
+					}
+				}
+				wantInstallment[id] = tc.installment
+			}
+		}
+		history, err := transactions.History(ctx, conn)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, item := range history {
+			if item.Card != nil || item.IsInstallment != wantInstallment[item.ID] {
+				t.Fatalf("history item %s: card=%+v installment=%v, want nil/%v", item.ID, item.Card, item.IsInstallment, wantInstallment[item.ID])
+			}
+		}
+		suggestions, err := recurrences.Discover(ctx, conn, date(t, "2026-07-01"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(suggestions) != len(wantSuggestions) {
+			t.Fatalf("got %d suggestions, want %d: %+v", len(suggestions), len(wantSuggestions), suggestions)
+		}
+		for _, suggestion := range suggestions {
+			if !wantSuggestions[suggestion.Draft.Name] {
+				t.Fatalf("unexpected suggestion: %+v", suggestion)
+			}
+			delete(wantSuggestions, suggestion.Draft.Name)
+		}
+	})
+}

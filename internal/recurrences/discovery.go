@@ -90,7 +90,7 @@ func Detect(items []transactions.Item, existing []RecurringCommitment, asOf time
 			continue
 		}
 		description := descriptionDate.ReplaceAllString(*item.Description, " ")
-		if installmentDescription.MatchString(description) {
+		if item.IsInstallment || installmentDescription.MatchString(description) {
 			continue
 		}
 		card := ""

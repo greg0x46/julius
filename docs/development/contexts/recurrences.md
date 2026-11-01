@@ -61,7 +61,8 @@ Heuristics are deliberately conservative:
 - Group normalized descriptions by account, card number and cash-flow direction.
   Normalize case, punctuation, whitespace and full dates (`YYYY-MM-DD` or
   `DD/MM/YYYY`); retain merchant identifiers. Reject installment metadata and
-  installment-like descriptions before grouping.
+  installment-like descriptions before grouping. Installment metadata is honored
+  even when the provider omits the card number.
 - Use posted, undeleted, included transactions with effective BRL money. Exclude
   ignored/duplicate decisions, transfer categories, linked transfer principal,
   investment reconciliations (including partial principal), zero amounts and

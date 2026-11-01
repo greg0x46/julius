@@ -144,6 +144,7 @@ type Item struct {
 	InvestmentTransferAmount string
 	ReportableAmount         *string
 	Card                     *CardInfo
+	IsInstallment            bool
 	Inclusion                Inclusion
 	TotalsEligibility        TotalsEligibility
 	GroupKey                 string
