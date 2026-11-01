@@ -43,7 +43,7 @@ const navItems: { path: string; name: MessageKey; icon: ReactNode }[] = [
   { path: "/configuracoes", name: "settings", icon: <SettingOutlined /> },
 ];
 export function App() {
-  const { t, language, setLanguage } = useTranslation();
+  const { t } = useTranslation();
   const { pathname } = useLocation();
   const navigationType = useNavigationType();
   const compact = useCompactScreen();
@@ -101,15 +101,6 @@ export function App() {
             )}
           </span>
         </Link>
-        <select
-          className="app-language-select"
-          aria-label={t("language")}
-          value={language}
-          onChange={(event) => setLanguage(event.target.value === "en" ? "en" : "pt-BR")}
-        >
-          <option value="pt-BR" lang="pt-BR">Português (Brasil)</option>
-          <option value="en" lang="en">English</option>
-        </select>
         <Switch
           className="app-theme-switch"
           aria-label={t("darkTheme")}
