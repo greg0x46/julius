@@ -142,7 +142,7 @@ func Generate(commitment recurrences.RecurringCommitment, evidence []Observation
 		d.Warnings = appendUnique(d.Warnings, "cross_month_unsupported")
 	}
 	firstItem := evidence[0].Transaction
-	accountID, accountName, card, category := firstItem.Account.ID, label(firstItem.Account.Name), "", ""
+	accountID, accountName, card, category := firstItem.Account.ID, accountLabel(firstItem), "", ""
 	if firstItem.Card != nil {
 		card = firstItem.Card.Number
 	}
@@ -154,7 +154,7 @@ func Generate(commitment recurrences.RecurringCommitment, evidence []Observation
 		if item.Account.ID != accountID {
 			accountID = ""
 		}
-		if label(item.Account.Name) != accountName {
+		if accountLabel(item) != accountName {
 			accountName = ""
 		}
 		if item.Card == nil || item.Card.Number != card {
@@ -169,7 +169,7 @@ func Generate(commitment recurrences.RecurringCommitment, evidence []Observation
 	}
 	if accountName != "" {
 		d.Rule.Conditions = append(d.Rule.Conditions, rules.Condition{Field: rules.FieldAccount, Operator: rules.OperatorEquals, Value: accountName})
-		d.Rationale = append(d.Rationale, "account: identical historical account name")
+		d.Rationale = append(d.Rationale, "account: identical historical account label")
 	}
 	if d.Commitment.AccountID == nil {
 		d.Warnings = appendUnique(d.Warnings, "unrestricted_account")
@@ -190,6 +190,13 @@ func label(value *string) string {
 		return ""
 	}
 	return strings.ToLower(strings.TrimSpace(*value))
+}
+
+func accountLabel(item transactions.Item) string {
+	if name := label(item.Account.Name); name != "" {
+		return name
+	}
+	return label(item.Account.Institution)
 }
 
 func sharedDescription(values []string) (string, rules.ConditionOperator) {

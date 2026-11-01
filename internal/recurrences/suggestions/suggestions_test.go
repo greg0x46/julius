@@ -203,6 +203,9 @@ func TestPreviewReportsFalsePositivesMultipleMatchesAndFailures(t *testing.T) {
 	if result.Transactions[4].FailedConditions[0].Field != rules.FieldDescription || result.Transactions[6].FailedConditions[0].Field != rules.FieldDayOfMonth || result.Transactions[7].FailedConditions[0].Field != rules.FieldCard {
 		t.Fatalf("missing explanations: %+v", result.Transactions)
 	}
+	if !slices.Contains(result.Transactions[5].Reasons, "category_action_matches_outside_reconciliation") {
+		t.Fatal("optional category action's wider account scope hidden")
+	}
 }
 
 func TestPreviewExistingRulesAndScenarioCompetition(t *testing.T) {
@@ -346,11 +349,29 @@ func TestPreviewAnnualIncomeUsesOnlyScheduledMonths(t *testing.T) {
 	req := request(draft, history)
 	req.From, req.To = day("2025-01-01"), day("2026-12-31")
 	result := preview(t, req)
-	if result.NeedsReview || len(result.Occurrences) != 2 || !result.Occurrences[0].Reconciled() || !result.Occurrences[1].Reconciled() {
+	if len(result.Occurrences) != 2 || !result.Occurrences[0].Reconciled() || !result.Occurrences[1].Reconciled() {
 		t.Fatalf("annual income: %+v", result)
 	}
 	if row := result.Transactions[2]; row.Status != "unmatched" || !row.MatchesConditions || !slices.Contains(row.Reasons, "no_occurrence_in_month") {
 		t.Fatalf("unscheduled month matched: %+v", row)
+	}
+	if !result.NeedsReview || !slices.Contains(result.Warnings, "category_action_matches_outside_reconciliation") {
+		t.Fatal("optional category action's wider month scope hidden")
+	}
+}
+
+func TestGenerateAccountInstitutionFallback(t *testing.T) {
+	draft, _ := fixture(t)
+	for i := range draft.Evidence {
+		draft.Evidence[i].Transaction.Account.Name = nil
+		draft.Evidence[i].Transaction.Account.Institution = ptr("Institution")
+	}
+	got, err := suggestions.Generate(commitment(), draft.Evidence)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c := condition(t, got, rules.FieldAccount); c.Value != "institution" || c.Operator != rules.OperatorEquals {
+		t.Fatalf("institution condition missing: %+v", c)
 	}
 }
 

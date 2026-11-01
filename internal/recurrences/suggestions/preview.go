@@ -53,8 +53,9 @@ func Preview(request PreviewRequest) (PreviewResult, error) {
 	if request.From.IsZero() || request.To.IsZero() || request.To.Before(request.From) || d.Rule.LogicOperator != rules.LogicAnd {
 		return PreviewResult{}, fmt.Errorf("an ordered review period and an AND draft are required")
 	}
-	target := false
+	target, hasCategoryAction := false, false
 	for _, action := range d.Rule.Actions {
+		hasCategoryAction = hasCategoryAction || action.Type == automation.ActionSetCategory
 		if action.Type == automation.ActionReconcile && action.ScenarioID != nil && *action.ScenarioID == d.Commitment.ID {
 			target = true
 		}
@@ -152,6 +153,11 @@ func Preview(request PreviewRequest) (PreviewResult, error) {
 		}
 		if !hasOccurrence {
 			row.Reasons = append(row.Reasons, "no_occurrence_in_month")
+		}
+		// Category automation has no implicit schedule/account/month restriction.
+		if row.MatchesConditions && hasCategoryAction && !evidence[item.ID] && len(row.Reasons) > 0 {
+			row.Reasons = append(row.Reasons, "category_action_matches_outside_reconciliation")
+			result.Warnings = appendUnique(result.Warnings, "category_action_matches_outside_reconciliation")
 		}
 		if len(row.Reasons) == 0 {
 			row.Status = "matched"
