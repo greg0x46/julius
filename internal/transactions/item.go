@@ -9,6 +9,20 @@ import (
 	"github.com/greg0x46/julius/internal/settings"
 )
 
+// History returns undeleted ledger items without pagination or FX conversion.
+// Classification, inclusion and transfer eligibility use the ordinary ledger rules.
+func History(ctx context.Context, q Querier) ([]Item, error) {
+	views, err := fetchAllViews(ctx, q, QueryRequest{Timezone: "UTC", GroupBy: money.GroupNone})
+	if err != nil {
+		return nil, err
+	}
+	items := make([]Item, len(views))
+	for i, v := range views {
+		items[i] = toItem(v)
+	}
+	return items, nil
+}
+
 // GetItem loads one transaction as the very same Item the list paths produce
 // — every money rule already applied (classification, effective money,
 // totals eligibility), not raw columns.
