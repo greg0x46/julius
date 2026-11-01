@@ -66,8 +66,13 @@ func count(t *testing.T, h http.Handler, path string) int {
 func TestSeedBuildsAnOpenDemo(t *testing.T) {
 	dbtest.Each(t, func(t *testing.T, conn *sql.DB) {
 		// Seed relative to now: the portfolio is valued as of today and treats old quotes as stale.
-		summary := seed(t, conn, time.Now().UTC())
-		if summary.Transactions < 100 || summary.Transfers != 6 || summary.Positions != 4 {
+		now := time.Now().UTC()
+		summary := seed(t, conn, now)
+		wantTransfers := 6
+		if now.Day() < 7 {
+			wantTransfers = 5
+		}
+		if summary.Transactions < 100 || summary.Transfers != wantTransfers || summary.Positions != 4 {
 			t.Fatalf("summary = %+v", summary)
 		}
 
@@ -145,16 +150,25 @@ func TestSeedFillsOnlyAFreshDatabase(t *testing.T) {
 // Month-end and leap days are where date arithmetic breaks, and the demo is
 // re-seeded every day.
 func TestSeedWorksOnAnyDayOfTheYear(t *testing.T) {
-	for _, now := range []time.Time{
-		time.Date(2026, 1, 31, 23, 30, 0, 0, time.UTC),
-		time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC),
-		time.Date(2028, 2, 29, 12, 0, 0, 0, time.UTC),
-		time.Date(2026, 8, 31, 12, 0, 0, 0, time.UTC),
-		time.Date(2026, 12, 31, 12, 0, 0, 0, time.UTC),
-		time.Date(2026, 5, 2, 12, 0, 0, 0, time.UTC),
+	for _, tc := range []struct {
+		now           time.Time
+		wantTransfers int
+	}{
+		{time.Date(2026, 1, 31, 23, 30, 0, 0, time.UTC), 6},
+		{time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC), 5},
+		{time.Date(2028, 2, 29, 12, 0, 0, 0, time.UTC), 6},
+		{time.Date(2026, 8, 31, 12, 0, 0, 0, time.UTC), 6},
+		{time.Date(2026, 12, 31, 12, 0, 0, 0, time.UTC), 6},
+		{time.Date(2026, 5, 2, 12, 0, 0, 0, time.UTC), 5},
+		{time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC), 5},
+		{time.Date(2026, 11, 6, 12, 0, 0, 0, time.UTC), 5},
+		{time.Date(2026, 11, 7, 12, 0, 0, 0, time.UTC), 6},
 	} {
-		t.Run(now.Format("2006-01-02"), func(t *testing.T) {
-			seed(t, dbtest.OpenSQLite(t), now)
+		t.Run(tc.now.Format("2006-01-02"), func(t *testing.T) {
+			summary := seed(t, dbtest.OpenSQLite(t), tc.now)
+			if summary.Transfers != tc.wantTransfers {
+				t.Errorf("transfers = %d, want %d", summary.Transfers, tc.wantTransfers)
+			}
 		})
 	}
 }
