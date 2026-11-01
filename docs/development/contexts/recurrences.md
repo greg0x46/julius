@@ -110,6 +110,60 @@ checks live in `discovery_test.go` and `discovery_store_test.go`; the store test
 run on SQLite and PostgreSQL. HTTP tests pin the draft contract, empty array,
 no-store response and database failure handling.
 
+### Read-only rule suggestions
+
+`internal/recurrences/suggestions.Generate` accepts a proposed commitment with
+an eventual scenario ID and at least two historical observations. Each observation
+includes its intended occurrence date and the transaction. Dates must follow the
+proposed calendar, but can predate its start. `FromSuggestion` accepts a discovery
+`recurrences.Suggestion`, the eventual target ID, an optional owner-selected
+category and history containing all evidence IDs. A missing category still
+requires owner input. Rule generation and preview are backend services without
+an HTTP route or UI.
+
+Drafts use the existing `automation.Write` contract and remain inactive. Conditions
+are AND-combined: equal descriptions or their longest shared word sequence,
+the observed amount midpoint and outward-rounded percentage tolerance, and the
+smallest observed day window. Consistent account labels (name, falling back to
+institution) and card numbers add exact
+conditions. One historical account also restricts the proposed schedule by ID.
+Only a shared active historical category adds an optional `set_category` action;
+existing manual category decisions retain precedence when that action is saved
+and applied later. Saving still requires normal target/category existence checks.
+
+`Preview` takes the draft, an occurrence period, complete transaction history for
+the affected calendar months (including all evidence), existing rules/schedules
+and manual overrides. Missing evidence and duplicate transaction IDs are rejected.
+Include overrides outside the period when they claim loaded transactions. It
+uses the current matcher, cash-movement filter and `Reconciler`; it does not apply
+actions. It backtests the proposed calendar as active over the historical period,
+without changing the actual schedule's future start/end or activation. Existing
+competing schedules retain their actual date bounds and activation.
+Results include every supplied transaction's matched/unmatched/ambiguous
+status, failed conditions, reasons and competing rule/scenario IDs, plus the actual
+resolved occurrences. Multiple matches retain the current earliest-match winner
+while requiring review. Matching entries outside discovery evidence are possible
+false positives, not automatically accepted evidence. Existing active rules are
+reported on condition overlap; existing scenario conflicts use their actual
+resolution and account restrictions. An existing rule reserving the target is
+reported even when inactive.
+Optional category actions also flag condition matches outside reconciliation's
+account or occurrence-month scope, since category automation has no implicit
+schedule restriction. These warnings do not change the recurrence resolution.
+
+Missing or single-word shared descriptions and unrestricted accounts flag broad
+drafts. Wrapped day windows or evidence paid outside its intended occurrence's
+month are unsupported and require review. A wrapping condition is valid in the
+rules engine but does not relax month-scoped reconciliation. Ordinary month-end
+clamping, including leap February, remains supported.
+
+Both operations accept values only and cannot persist financial data, category
+decisions or resolved links. Preview preserves manual links/detachments and reports
+cross-scenario competition without imposing a new global rule ordering.
+`internal/recurrences/suggestions/suggestions_test.go` covers draft validation,
+exact boundaries, noisy text, false positives, overlaps, eligibility, manual
+precedence, calendar boundaries and repeatable reads without input mutation.
+
 ### Manual reconciliation
 
 Manual link eligibility shares `money.BRLLinkIneligibility` with payables:
