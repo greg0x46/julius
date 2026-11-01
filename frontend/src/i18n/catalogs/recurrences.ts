@@ -1,5 +1,6 @@
 export const recurrences = {
   "pt-BR": {
+    refreshRecurrenceSuggestions: "Atualizar descoberta",
     discoverRecurrencesShort: "Descobrir",
     discoverRecurrences: "Descobrir recorrências",
     suggestionsLoading: "Buscando padrões no histórico…",
@@ -98,6 +99,7 @@ export const recurrences = {
     occurrencesTitle: "Ocorrências",
   },
   en: {
+    refreshRecurrenceSuggestions: "Refresh discovery",
     discoverRecurrencesShort: "Discover",
     discoverRecurrences: "Discover recurrences",
     suggestionsLoading: "Looking for historical patterns…",

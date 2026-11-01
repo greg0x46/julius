@@ -66,7 +66,10 @@ export function RecurrenceDiscovery({ categories }: { categories: Category[] }) 
   };
   return <DataCard>
     <Flex vertical gap="middle">
-      <h2>{t("discoverRecurrences")}</h2>
+      <Flex gap="small" wrap align="center">
+        <h2>{t("discoverRecurrences")}</h2>
+        <Button disabled={busy} loading={query.isFetching} onClick={() => { setReviews({}); setSelected([]); setEditing(null); setErrors({}); void query.refetch(); }}>{t("refreshRecurrenceSuggestions")}</Button>
+      </Flex>
       {message && <p role="status">{message}</p>}
       {query.isPending && <p role="status">{t("suggestionsLoading")}</p>}
       {query.isError && <Alert type="error" message={t("suggestionsFailed")} action={<Button onClick={() => void query.refetch()}>{t("retry")}</Button>} />}

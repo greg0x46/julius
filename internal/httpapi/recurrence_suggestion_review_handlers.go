@@ -137,7 +137,7 @@ func handleAcceptRecurrenceSuggestions(conn *sql.DB) http.HandlerFunc {
 				row.ScenarioID, err = suggestions.Accept(r.Context(), conn, time.Now().UTC(), item.Key, write, conditions, item.Token, item.Acknowledge)
 			}
 			if err != nil {
-				httplog.SetError(r.Context(), "recurrence-suggestion")
+				httplog.SetError(r.Context(), "recurrence-suggestion", "", "")
 				row.Status, row.Error = suggestionError(err)
 			}
 			results = append(results, row)

@@ -81,13 +81,21 @@ describe("recurrence discovery", () => {
     expect(screen.getByRole("checkbox", { name: "Selecionar Música para criação" })).toBeDisabled();
     expect(api.acceptRecurrenceSuggestions).toHaveBeenCalledWith(expect.arrayContaining([expect.objectContaining({ key: candidate.key }), expect.objectContaining({ key: second.key })]));
   });
+  it("refreshes discovery and requires another review", async () => {
+    mount(); const drawer = await review();
+    fireEvent.click(within(drawer).getByRole("button", { name: "Concluir revisão" }));
+    expect(screen.getByRole("checkbox", { name: "Selecionar Internet para criação" })).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: "Atualizar descoberta" }));
+    await waitFor(() => expect(api.discoverRecurrences).toHaveBeenCalledTimes(2));
+    expect(screen.getByRole("checkbox", { name: "Selecionar Internet para criação" })).toBeDisabled();
+  });
   it("dismisses an unwanted pattern without creation", async () => {
     mount(); fireEvent.click(await screen.findByRole("button", { name: "Dispensar" }));
     await waitFor(() => expect(api.dismissRecurrenceSuggestion).toHaveBeenCalledWith(candidate.key));
     expect(await screen.findByText("Nenhuma sugestão encontrada")).toBeInTheDocument();
     expect(api.acceptRecurrenceSuggestions).not.toHaveBeenCalled();
   });
-  it("shows loading, empty and retryable load errors", async () => {
+  it("shows loading and empty states", async () => {
     let finish!: (value: RecurrenceSuggestion[]) => void;
     vi.mocked(api.discoverRecurrences).mockReturnValue(new Promise((resolve) => { finish = resolve; }));
     mount(); expect(screen.getByRole("status")).toHaveTextContent("Buscando padrões");
