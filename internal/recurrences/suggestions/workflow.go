@@ -21,9 +21,10 @@ import (
 )
 
 var (
-	ErrStale   = errors.New("suggestion changed; discover and review again")
-	ErrInvalid = errors.New("select an active category and valid schedule and conditions")
-	ErrReview  = errors.New("review ambiguous matches or unsupported conditions")
+	ErrStale     = errors.New("suggestion changed; discover and review again")
+	ErrDuplicate = errors.New("equivalent recurring commitment already exists")
+	ErrInvalid   = errors.New("select an active category and valid schedule and conditions")
+	ErrReview    = errors.New("review ambiguous matches or unsupported conditions")
 )
 
 func digest(value any) string {
@@ -141,6 +142,14 @@ func ReviewCandidate(ctx context.Context, q recurrences.Querier, now time.Time, 
 		return Review{}, err
 	}
 	sort.Slice(existing, func(i, j int) bool { return existing[i].ID < existing[j].ID })
+	proposed := *candidate
+	proposed.Draft = draft.Commitment
+	// An owner-selected category must not merge distinct merchants.
+	proposed.Draft.CategoryID = ""
+	if recurrences.HasCoveringCommitment(proposed, existing) {
+		return Review{}, ErrDuplicate
+	}
+
 	existingRules, err := automation.List(ctx, q)
 	if err != nil {
 		return Review{}, err

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/greg0x46/julius/internal/httplog"
 	"github.com/greg0x46/julius/internal/recurrences/suggestions"
 )
 
@@ -19,6 +20,8 @@ type suggestionReviewRequest struct {
 
 func suggestionError(err error) (int, string) {
 	switch {
+	case errors.Is(err, suggestions.ErrDuplicate):
+		return 409, "Já existe uma recorrência equivalente. Ajuste os dados propostos ou use a recorrência existente."
 	case errors.Is(err, suggestions.ErrStale):
 		return 409, "Os dados desta sugestão mudaram. Atualize a descoberta e revise novamente."
 	case errors.Is(err, suggestions.ErrInvalid):
@@ -134,6 +137,7 @@ func handleAcceptRecurrenceSuggestions(conn *sql.DB) http.HandlerFunc {
 				row.ScenarioID, err = suggestions.Accept(r.Context(), conn, time.Now().UTC(), item.Key, write, conditions, item.Token, item.Acknowledge)
 			}
 			if err != nil {
+				httplog.SetError(r.Context(), "recurrence-suggestion")
 				row.Status, row.Error = suggestionError(err)
 			}
 			results = append(results, row)

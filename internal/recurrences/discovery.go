@@ -292,7 +292,7 @@ func absDay(n int) int {
 func coveredSuggestion(s Suggestion, existing []RecurringCommitment) bool {
 	draft := s.Draft
 	for _, c := range existing {
-		if c.Kind != draft.Kind || c.Cadence != draft.Cadence || (c.AccountID != nil && *c.AccountID != *draft.AccountID) {
+		if c.Kind != draft.Kind || c.Cadence != draft.Cadence || (c.AccountID != nil && draft.AccountID != nil && *c.AccountID != *draft.AccountID) {
 			continue
 		}
 		if c.Cadence == CadenceAnnual && (c.MonthOfYear == nil || *c.MonthOfYear != *draft.MonthOfYear) {
@@ -320,4 +320,9 @@ func SuggestionPattern(s Suggestion) any {
 	}{
 		discoveryKey(s.Draft.Name), s.Draft.AccountID, s.CardNumber, s.Draft.Kind, s.Draft.Cadence, s.Draft.MonthOfYear,
 	}
+}
+
+// HasCoveringCommitment applies discovery's duplicate check to an edited proposal.
+func HasCoveringCommitment(s Suggestion, existing []RecurringCommitment) bool {
+	return coveredSuggestion(s, existing)
 }

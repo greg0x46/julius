@@ -36,6 +36,7 @@ export function RecurrenceDiscovery({ categories }: { categories: Category[] }) 
   const [hidden, setHidden] = useState<string[]>([]);
   const candidates = (query.data ?? []).filter((c) => !hidden.includes(c.key));
   const reviewed = (key: string, value: Reviewed | null) => {
+    if (value) setErrors((current) => { const next = { ...current }; delete next[key]; return next; });
     setReviews((current) => { const next = { ...current }; if (value) next[key] = value; else delete next[key]; return next; });
     if (!value) setSelected((current) => current.filter((id) => id !== key));
   };
@@ -115,7 +116,7 @@ function SuggestionReviewDrawer({ candidate, categories, saved, error, busy, onR
   const version = useRef(0);
   const draft = saved?.approval.draft ?? candidate.draft;
   const invalidate = () => { version.current++; setDirty(true); setAcknowledge(false); onReviewed(null); };
-  const eligible = !!preview && !dirty && !preview.warnings.includes("cross_month_unsupported") && (!preview.needs_review || acknowledge);
+  const eligible = !!saved && !!preview && !dirty && !preview.warnings.includes("cross_month_unsupported") && (!preview.needs_review || acknowledge);
   const publish = (next: SuggestionReview, nextWrite: RecurringCommitmentWrite, ack: boolean) => {
     if (!next.warnings.includes("cross_month_unsupported") && (!next.needs_review || ack)) onReviewed({ preview: next, approval: { key: candidate.key, draft: nextWrite, conditions: next.conditions, token: next.token, acknowledge: ack } });
   };
