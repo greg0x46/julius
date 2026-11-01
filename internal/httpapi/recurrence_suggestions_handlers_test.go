@@ -8,9 +8,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/greg0x46/julius/internal/dates"
 	"github.com/greg0x46/julius/internal/transactions"
-	"github.com/shopspring/decimal"
 )
 
 func TestRecurrenceSuggestionsHTTP(t *testing.T) {

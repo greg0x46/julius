@@ -8,10 +8,11 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/shopspring/decimal"
+
 	"github.com/greg0x46/julius/internal/dates"
 	"github.com/greg0x46/julius/internal/money"
 	"github.com/greg0x46/julius/internal/transactions"
-	"github.com/shopspring/decimal"
 )
 
 // Suggestion is an unpersisted BRL draft. An empty category requires owner input.
