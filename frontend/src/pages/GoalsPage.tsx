@@ -1,3 +1,4 @@
+import { useTranslation } from "../i18n/context";
 import { Alert, Button, Skeleton } from "../components/ui";
 import { useState } from "react";
 
@@ -11,6 +12,7 @@ import { errorMessage } from "../presentation/errors";
 import { sortGoals } from "../presentation/goals";
 
 export function GoalsPage() {
+  const { t } = useTranslation();
   const goals = useGoals();
   const feedback = useFeedback();
   const [formOpen, setFormOpen] = useState(false);
@@ -29,9 +31,9 @@ export function GoalsPage() {
     try {
       await (editing ? goals.updateGoal({ goalId: editing.id, write }) : goals.createGoal(write));
       setFormOpen(false);
-      feedback.success("Salvo");
+      feedback.success(t("saved"));
     } catch (error) {
-      setSaveError(errorMessage(error, "Não foi possível salvar a meta."));
+      setSaveError(errorMessage(error, t("goalSaveError")));
     }
   };
 
@@ -39,9 +41,9 @@ export function GoalsPage() {
     setActionError(null);
     try {
       await goals.deleteGoal(goal.id);
-      feedback.success("Excluído");
+      feedback.success(t("deleted"));
     } catch (error) {
-      const message = errorMessage(error, "Não foi possível excluir a meta.");
+      const message = errorMessage(error, t("goalDeleteError"));
       setActionError(message);
       feedback.error(message);
     }
@@ -53,18 +55,18 @@ export function GoalsPage() {
 
   return (
     <Page
-      title="Metas"
-      description="Acompanhe o quanto falta para chegar aos seus valores-alvo"
+      title={t("goals")}
+      description={t("goalsDescription")}
       width="narrow"
       compactMobileHeader
-      actions={<PageAction label="Nova meta" shortLabel="Nova" onClick={() => openForm(null)} />}
+      actions={<PageAction label={t("newGoal")} shortLabel={t("newFeminine")} onClick={() => openForm(null)} />}
     >
       {goals.error && (
         <Alert
           type="error"
           showIcon
-          message="Não foi possível carregar as metas"
-          action={<Button onClick={() => goals.refetch()}>Tentar novamente</Button>}
+          message={t("goalsLoadErrorShort")}
+          action={<Button onClick={() => goals.refetch()}>{t("retry")}</Button>}
           style={{ marginBottom: 16 }}
         />
       )}
@@ -80,7 +82,7 @@ export function GoalsPage() {
       )}
 
       {goals.isLoading ? (
-        <div className="section" role="status" aria-label="Carregando metas">
+        <div className="section" role="status" aria-label={t("loadingGoals")}>
           <div className="section-body">
             <Skeleton active paragraph={{ rows: 3 }} />
           </div>
@@ -88,8 +90,8 @@ export function GoalsPage() {
       ) : loadFailed ? null : nothingYet ? (
         <div className="section">
           <EmptyState
-            title="Nenhuma meta ainda"
-            hint="Defina um valor-alvo, como chegar a R$ 100 mil investidos, e acompanhe o progresso por aqui."
+            title={t("noGoals")}
+            hint={t("noGoalsHint")}
           />
         </div>
       ) : (
@@ -107,7 +109,7 @@ export function GoalsPage() {
             <span className="goal-add-plus" aria-hidden="true">
               +
             </span>
-            Adicionar nova meta
+            {t("addGoal")}
           </button>
         </div>
       )}

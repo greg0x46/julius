@@ -1,3 +1,4 @@
+import { useTranslation } from "../i18n/context";
 import { Alert, Button, Input } from "./ui";
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -6,6 +7,7 @@ import { FormField } from "./forms/FormField";
 import { invalidateDataSources } from "../api/queryKeys";
 
 export function PluggySettings() {
+  const { t } = useTranslation();
   const client = useQueryClient();
   const [id, setID] = useState("");
   const [secret, setSecret] = useState("");
@@ -26,7 +28,7 @@ export function PluggySettings() {
       if (!response.ok) {
         // Surface the server's own sentence (e.g. the demo-mode 403).
         const problem = (await response.json().catch(() => null)) as { detail?: string } | null;
-        throw new Error(problem?.detail || "Não foi possível salvar as credenciais.");
+        throw new Error(problem?.detail || t("credentialsSaveError"));
       }
       setID("");
       setSecret("");
@@ -34,7 +36,7 @@ export function PluggySettings() {
       setSaved(true);
       void invalidateDataSources(client);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Não foi possível salvar.");
+      setError(err instanceof Error ? err.message : t("saveFailedGeneric"));
     } finally {
       setBusy(false);
     }
@@ -48,10 +50,10 @@ export function PluggySettings() {
       }}
     >
       <p className="settings-radio-hint">
-        Preencha para configurar ou substituir as credenciais. Os valores salvos não são exibidos.
+        {t("credentialsHint")}
       </p>
       {error && <Alert type="error" message={error} />}
-      {saved && <Alert type="success" message="Credenciais salvas." />}
+      {saved && <Alert type="success" message={t("credentialsSaved")} />}
       <FormField label="Client ID" htmlFor="pluggy-client-id">
         <Input id="pluggy-client-id" required value={id} onChange={(e) => setID(e.target.value)} />
       </FormField>
@@ -64,11 +66,11 @@ export function PluggySettings() {
           onChange={(e) => setSecret(e.target.value)}
         />
       </FormField>
-      <FormField label="Item ID de uma nova conexão (opcional)" htmlFor="pluggy-item">
+      <FormField label={t("newConnectionItemId")} htmlFor="pluggy-item">
         <Input id="pluggy-item" value={item} onChange={(e) => setItem(e.target.value)} />
       </FormField>
       <Button htmlType="submit" loading={busy}>
-        Salvar credenciais
+        {t("saveCredentials")}
       </Button>
     </form>
   );

@@ -1,3 +1,5 @@
+import { dateFormatter, formatMonthYear } from "../../i18n/dateFormats";
+import { translate, type Language } from "../../i18n/messages";
 const DAY = 86_400_000;
 
 function parseDate(value: unknown): Date | null {
@@ -7,7 +9,7 @@ function parseDate(value: unknown): Date | null {
     ? date : null;
 }
 
-export function periodNavigation(from: unknown, to: unknown) {
+export function periodNavigation(from: unknown, to: unknown, language: Language = "pt-BR") {
   const start = parseDate(from);
   const end = parseDate(to);
   if (!start || !end || start > end) return null;
@@ -16,11 +18,11 @@ export function periodNavigation(from: unknown, to: unknown) {
   const months = (afterEnd.getUTCFullYear() - start.getUTCFullYear()) * 12
     + afterEnd.getUTCMonth() - start.getUTCMonth();
   const isYear = wholeMonths && months === 12 && start.getUTCMonth() === 0;
-  const unit = isYear ? "ano" : wholeMonths && months === 1 ? "mês" : "período";
-  const format = (date: Date) => date.toLocaleDateString("pt-BR", { timeZone: "UTC" });
+  const unit = isYear ? "Year" : wholeMonths && months === 1 ? "Month" : "Period";
+  const format = (date: Date) => dateFormatter(language, { timeZone: "UTC" }).format(date);
   const label = isYear ? String(start.getUTCFullYear())
     : wholeMonths && months === 1
-      ? start.toLocaleDateString("pt-BR", { month: "long", year: "numeric", timeZone: "UTC" })
+      ? formatMonthYear(language, start)
       : `${format(start)} – ${format(end)}`;
 
   const shift = (direction: -1 | 1): [string, string] | null => {
@@ -40,6 +42,6 @@ export function periodNavigation(from: unknown, to: unknown) {
     if (nextStart.getUTCFullYear() < 1 || nextEnd.getUTCFullYear() > 9999) return null;
     return [nextStart.toISOString().slice(0, 10), nextEnd.toISOString().slice(0, 10)];
   };
-  return { label, previousLabel: `${unit[0].toUpperCase()}${unit.slice(1)} anterior`,
-    nextLabel: `Próximo ${unit}`, previous: shift(-1), next: shift(1) };
+  return { label, previousLabel: translate(language, `previous${unit}` as "previousYear" | "previousMonth" | "previousPeriod"),
+    nextLabel: translate(language, `next${unit}` as "nextYear" | "nextMonth" | "nextPeriod"), previous: shift(-1), next: shift(1) };
 }

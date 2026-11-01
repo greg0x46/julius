@@ -1,3 +1,5 @@
+import { useTranslation } from "../i18n/context";
+import { translate, type Language } from "../i18n/messages";
 import { Alert, Button, Collapse, Input, Skeleton, Switch, Typography } from "./ui";
 import { useEffect, useState } from "react";
 
@@ -37,15 +39,15 @@ function latestRunOf(source: DataSource, runs: SyncRun[]): SyncRun | null {
  * last synced. `runs` is undefined while the history is not known, in which
  * case nothing is claimed about the last sync.
  */
-function connectionMeta(source: DataSource, runs: SyncRun[] | undefined, timezone: string): string {
+function connectionMeta(source: DataSource, runs: SyncRun[] | undefined, timezone: string, language: Language): string {
   const parts: string[] = [];
   if (source.label && source.display_name && source.display_name !== source.label) {
     parts.push(source.display_name);
   }
-  if (!source.is_active) parts.push("Pausada");
+  if (!source.is_active) parts.push(translate(language, "pausedFeminine"));
   if (runs !== undefined) {
     const latest = latestRunOf(source, runs);
-    parts.push(latest ? `Última sincronização ${formatOptionalDateTime(latest.started_at, timezone)}` : "Nunca sincronizada");
+    parts.push(latest ? translate(language, "lastSync").replace("{date}", formatOptionalDateTime(latest.started_at, timezone, language)) : translate(language, "neverSynced"));
   }
   return parts.join(" · ");
 }
@@ -71,6 +73,7 @@ export function DataSourceConnections({
   /** The sync history, to show each connection's last sync; undefined while unknown. */
   runs?: SyncRun[];
 }) {
+  const { t, language } = useTranslation();
   const { state, retry, create, update } = useDataSources();
   const timezone = useTimezone();
   const feedback = useFeedback();
@@ -96,65 +99,65 @@ export function DataSourceConnections({
 
   const addButton = (
     <Button type="link" onClick={openAdding}>
-      Adicionar conexão
+      {t("addConnection")}
     </Button>
   );
 
   return (
-    <Section title="Conexões" trailing={state.kind === "ready" ? addButton : undefined}>
+    <Section title={t("connections")} trailing={state.kind === "ready" ? addButton : undefined}>
       {state.kind === "loading" && (
-        <div role="status" aria-label="Carregando conexões">
+        <div role="status" aria-label={t("loadingConnections")}>
           <Skeleton active paragraph={{ rows: 2 }} />
         </div>
       )}
       {state.kind === "unavailable" && (
         <UnavailableState onRetry={retry}>
-          As conexões estão temporariamente indisponíveis. Isso não significa que não existam.
+          {t("connectionsUnavailable")}
         </UnavailableState>
       )}
       {state.kind === "empty" && (
         <EmptyState
-          title="Nenhuma conexão ainda"
-          hint="Adicione o Item ID de um Item criado no painel do Pluggy para começar a sincronizar."
-          action={<Button onClick={openAdding}>Adicionar conexão</Button>}
+          title={t("noConnectionsYet")}
+          hint={t("noConnectionsHint")}
+          action={<Button onClick={openAdding}>{t("addConnection")}</Button>}
         />
       )}
       {state.kind === "ready" && (
-        <ul className="connection-list" aria-label="Conexões">
+        <ul className="connection-list" aria-label={t("connections")}>
           {state.sources.map((source) => (
             <li key={source.id} className="connection-row">
               <button
                 type="button"
                 className="connection-row-main"
-                aria-label={`Editar ${source.name}`}
+                aria-label={t("editNamed", { name: source.name })}
                 onClick={() => openEditing(source)}
               >
                 <span className="connection-row-name">{source.name}</span>
-                <span className="connection-row-meta">{connectionMeta(source, runs, timezone)}</span>
+                <span className="connection-row-meta">{connectionMeta(source, runs, timezone, language)}</span>
               </button>
               <div className="connection-row-controls">
                 <Switch
-                  aria-label={`Conexão ativa: ${source.name}`}
+                  aria-label={t("activeConnection", { name: source.name })}
                   checked={source.is_active}
                   loading={update.isPending && update.variables?.id === source.id}
                   onChange={(checked) =>
                     update.mutate(
                       { id: source.id, changes: { is_active: checked } },
                       {
-                        onSuccess: () => feedback.success(checked ? "Conexão ativada" : "Conexão pausada"),
+                        onSuccess: () => feedback.success(checked ? t("connectionEnabled") : t("connectionPaused")),
                         onError: (error) =>
-                          feedback.error(errorMessage(error, "Não foi possível atualizar a conexão.")),
+                          feedback.error(errorMessage(error, t("connectionUpdateError"))),
                       },
                     )
                   }
                 />
                 <RecordMenu
-                  label={`Ações de ${source.name}`}
+                  label={t("actionsFor", { name: source.name })}
                   items={[
-                    { key: "edit", label: "Editar", onClick: () => openEditing(source) },
+                    { key: "edit", label: t("edit"), onClick: () => openEditing(source) },
                     {
                       key: "sync",
-                      label: "Sincronizar agora",
+                      label: t("syncNow"),
                       disabled: !source.is_active || sync.state.kind === "submitting",
                       onClick: () => void sync.submit(source.id),
                     },
@@ -170,20 +173,20 @@ export function DataSourceConnections({
         <Alert
           type="error"
           showIcon
-          message={errorMessage(update.error, "Não foi possível atualizar a conexão.")}
+          message={errorMessage(update.error, t("connectionUpdateError"))}
         />
       )}
 
       <NewConnectionSheet
         open={adding}
         submitting={create.isPending}
-        error={create.isError ? errorMessage(create.error, "Não foi possível adicionar a conexão.") : null}
+        error={create.isError ? errorMessage(create.error, t("connectionAddError")) : null}
         onClose={closeAdding}
         onSubmit={(input) =>
           create.mutate(input, {
             onSuccess: () => {
               setAdding(false);
-              feedback.success("Conexão adicionada");
+              feedback.success(t("connectionAdded"));
             },
           })
         }
@@ -192,7 +195,7 @@ export function DataSourceConnections({
         key={editing?.id ?? "none"}
         source={editing}
         submitting={update.isPending}
-        error={update.isError ? errorMessage(update.error, "Não foi possível atualizar a conexão.") : null}
+        error={update.isError ? errorMessage(update.error, t("connectionUpdateError")) : null}
         onClose={closeEditing}
         onSubmit={(label) => {
           if (editing === null) return;
@@ -208,7 +211,7 @@ export function DataSourceConnections({
             {
               onSuccess: () => {
                 setEditing(null);
-                feedback.success("Conexão salva");
+                feedback.success(t("connectionSaved"));
               },
             },
           );
@@ -231,6 +234,7 @@ function NewConnectionSheet({
   onClose: () => void;
   onSubmit: (input: { external_item_id: string; label: string | null }) => void;
 }) {
+  const { t } = useTranslation();
   const [itemId, setItemId] = useState("");
   const [label, setLabel] = useState("");
   const [validation, setValidation] = useState<string | null>(null);
@@ -247,7 +251,7 @@ function NewConnectionSheet({
 
   const submit = () => {
     if (itemId.trim() === "") {
-      setValidation("Informe o Item ID do Pluggy.");
+      setValidation(t("pluggyItemIdRequired"));
       return;
     }
     setValidation(null);
@@ -256,26 +260,26 @@ function NewConnectionSheet({
 
   return (
     <FormDrawer
-      title="Nova conexão"
+      title={t("newConnection")}
       open={open}
       onClose={onClose}
       onSubmit={submit}
       submitting={submitting}
-      submitLabel="Adicionar"
+      submitLabel={t("add")}
       error={validation ?? error}
     >
       <FormField
         label="Item ID (Pluggy)"
         htmlFor="connection-item-id"
-        hint="Crie o Item no painel do Pluggy e cole o Item ID aqui para que ele seja sincronizado junto com os demais."
+        hint={t("pluggyItemHint")}
       >
         <Input id="connection-item-id" value={itemId} onChange={(event) => setItemId(event.target.value)} />
       </FormField>
-      <FormField label="Apelido (opcional)" htmlFor="connection-label">
+      <FormField label={t("optionalNickname")} htmlFor="connection-label">
         <Input
           id="connection-label"
           value={label}
-          placeholder="Ex.: Conta pessoal"
+          placeholder={t("nicknameExample")}
           onChange={(event) => setLabel(event.target.value)}
         />
       </FormField>
@@ -296,12 +300,13 @@ function EditConnectionSheet({
   onClose: () => void;
   onSubmit: (label: string) => void;
 }) {
+  const { t } = useTranslation();
   // The parent keys this sheet by connection, so each one opens from its own nickname.
   const [label, setLabel] = useState(source?.label ?? "");
 
   return (
     <FormDrawer
-      title="Editar conexão"
+      title={t("editConnection")}
       open={source !== null}
       onClose={onClose}
       onSubmit={() => onSubmit(label.trim())}
@@ -309,14 +314,14 @@ function EditConnectionSheet({
       error={error}
     >
       <FormField
-        label="Apelido"
+        label={t("nickname")}
         htmlFor="connection-edit-label"
-        hint="O nome que aparece na lista. Deixe em branco para usar o nome da instituição."
+        hint={t("nicknameHint")}
       >
         <Input
           id="connection-edit-label"
           value={label}
-          placeholder={source?.display_name ?? "Ex.: Conta pessoal"}
+          placeholder={source?.display_name ?? t("nicknameExample")}
           onChange={(event) => setLabel(event.target.value)}
         />
       </FormField>
@@ -325,7 +330,7 @@ function EditConnectionSheet({
         items={[
           {
             key: "technical",
-            label: "Detalhes técnicos",
+            label: t("technicalDetails"),
             children: (
               <div className="connection-technical">
                 <span className="form-field-label">Item ID (Pluggy)</span>

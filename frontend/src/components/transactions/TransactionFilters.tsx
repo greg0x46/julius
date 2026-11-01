@@ -1,3 +1,4 @@
+import { useTranslation } from "../../i18n/context";
 import { Alert, Button, Checkbox } from "../ui";
 import { useMemo, type ReactNode } from "react";
 
@@ -17,7 +18,6 @@ import { QuickFilters } from "../filters/QuickFilters";
 import { SegmentedControl } from "../filters/SegmentedControl";
 import { categoryFilterOptions, renderCategoryIcon } from "../../presentation/categoryLabels";
 import { formatBRL } from "../../presentation/money";
-import { classificationLabel } from "../../presentation/transactionStatus";
 import { useCompactScreen } from "../shared/useCompactScreen";
 
 type Movement = "all" | "inflow" | "outflow";
@@ -78,6 +78,7 @@ export function TransactionFilters({
   onClear: () => void;
   end?: ReactNode;
 }) {
+  const { t, language } = useTranslation();
   const accountOptions = useMemo<FilterOption[]>(
     () =>
       facets?.accounts.map((account) => ({
@@ -86,7 +87,7 @@ export function TransactionFilters({
       })) ?? [],
     [facets],
   );
-  const categoryOptions = useMemo(() => categoryFilterOptions(facets?.categories), [facets]);
+  const categoryOptions = useMemo(() => categoryFilterOptions(facets?.categories, language), [facets, language]);
   // The phone shares one row between search, filters and grouping: a short placeholder fits.
   const compact = useCompactScreen();
 
@@ -94,106 +95,106 @@ export function TransactionFilters({
     () => [
       {
         key: "description",
-        label: "Descrição",
+        label: t("description"),
         type: "text",
         placement: "main",
-        placeholder: compact ? "Buscar…" : "Buscar transações…",
+        placeholder: compact ? t("search") : t("searchTransactions"),
         debounceMs: 300,
-        formatActive: (value) => `Busca: ${String(value)}`,
+        formatActive: (value) => t("searchTerm", { value: String(value) }),
       },
       {
         key: "classification",
-        label: "Movimentação",
+        label: t("movement"),
         type: "segmented",
         placement: "advanced",
         // Shown by the quick toggles under the toolbar instead.
         hideChip: true,
         options: [
-          { value: "all", label: "Todas" },
-          { value: "inflow", label: "Entradas" },
-          { value: "outflow", label: "Saídas" },
+          { value: "all", label: t("allFeminine") },
+          { value: "inflow", label: t("inflows") },
+          { value: "outflow", label: t("outflows") },
         ],
         formatActive: (value) =>
-          classificationLabel[value as "inflow" | "outflow" | "unclassified"],
+          t(value === "inflow" ? "incomeSingular" : value === "outflow" ? "expenseSingular" : "unclassifiedFeminine"),
       },
       {
         key: "credit_card",
-        label: "Cartão de crédito",
+        label: t("creditCard"),
         type: "boolean",
         placement: "advanced",
-        formatActive: () => "Cartão de crédito",
+        formatActive: () => t("creditCard"),
       },
       {
         key: "card_balance",
         // Only what makes up the open bill of each card (see
         // transactions.creditCardTransactionTotalAt) — not future ones.
-        label: "Fatura atual",
+        label: t("currentBillCapitalized"),
         type: "boolean",
         placement: "advanced",
-        formatActive: () => "Fatura atual",
+        formatActive: () => t("currentBillCapitalized"),
       },
       {
         key: "origin",
-        label: "Origem",
+        label: t("origin"),
         type: "segmented",
         placement: "advanced",
         options: [{ value: "manual", label: "Manual" }],
-        formatActive: () => "Origem: manual",
+        formatActive: () => t("originManual"),
       },
       {
         key: "source_provider",
-        label: "Origem",
+        label: t("origin"),
         type: "segmented",
         placement: "advanced",
         options: [
-          { value: "all", label: "Todas" },
-          { value: "file", label: "Arquivo" },
-          { value: "pluggy", label: "Banco" },
+          { value: "all", label: t("allFeminine") },
+          { value: "file", label: t("file") },
+          { value: "pluggy", label: t("bank") },
         ],
-        formatActive: (value) => value === "file" ? "Origem: arquivo" : "Origem: banco",
+        formatActive: (value) => value === "file" ? t("originFile") : t("originBank"),
       },
       {
         key: "account_ids",
-        label: "Conta",
+        label: t("account"),
         type: "multiselect",
         placement: "advanced",
-        placeholder: "Todas as contas",
+        placeholder: t("allAccounts"),
         options: accountOptions,
-        formatActive: chipSummary("contas", "Conta"),
+        formatActive: chipSummary(t("accountCount", { count: "" }).trim(), t("account")),
       },
       {
         key: "category_ids",
-        label: "Categoria",
+        label: t("category"),
         type: "multiselect",
         placement: "advanced",
-        placeholder: "Todas as categorias",
+        placeholder: t("allCategories"),
         options: categoryOptions,
         optionRender: renderCategoryOption,
-        formatActive: chipSummary("categorias", "Categoria"),
+        formatActive: chipSummary(t("categoryCount", { count: "" }).trim(), t("category")),
       },
       {
         key: "uncategorized",
-        label: "Sem categoria",
+        label: t("uncategorized"),
         type: "boolean",
         placement: "advanced",
         hideChip: true,
-        formatActive: () => "Sem categoria",
+        formatActive: () => t("uncategorized"),
       },
       {
         key: "amount_min",
         secondaryKey: "amount_max",
-        label: "Valor",
+        label: t("amount"),
         type: "value-range",
         placement: "advanced",
         formatActive: (_value, values) =>
           values.amount_min && values.amount_max
-            ? `Valor: ${formatBRL(values.amount_min)} a ${formatBRL(values.amount_max)}`
+            ? t("amountBetween", { min: formatBRL(values.amount_min), max: formatBRL(values.amount_max) })
             : values.amount_min
-              ? `Valor: a partir de ${formatBRL(values.amount_min)}`
-              : `Valor: até ${formatBRL(values.amount_max ?? "0")}`,
+              ? t("amountFrom", { min: formatBRL(values.amount_min) })
+              : t("amountUpTo", { max: formatBRL(values.amount_max ?? "0") }),
       },
     ],
-    [accountOptions, categoryOptions, compact],
+    [accountOptions, categoryOptions, compact, t],
   );
 
   const listProps = {
@@ -204,29 +205,29 @@ export function TransactionFilters({
 
   return (
     <ConfigurableFilters
-      label="Filtros de transações"
+      label={t("transactionFilters")}
       end={end}
       shortcuts={
         <QuickFilters
-          label="Atalhos de filtro"
+          label={t("filterShortcuts")}
           items={[
             {
               key: "inflow",
-              label: "Entradas",
+              label: t("inflows"),
               pressed: applied.classification === "inflow",
               onToggle: () =>
                 onApply({ ...applied, classification: applied.classification === "inflow" ? null : "inflow" }),
             },
             {
               key: "outflow",
-              label: "Saídas",
+              label: t("outflows"),
               pressed: applied.classification === "outflow",
               onToggle: () =>
                 onApply({ ...applied, classification: applied.classification === "outflow" ? null : "outflow" }),
             },
             {
               key: "uncategorized",
-              label: "Sem categoria",
+              label: t("uncategorized"),
               pressed: applied.uncategorized === true,
               onToggle: () => onApply({ ...applied, uncategorized: applied.uncategorized === true ? null : true }),
             },
@@ -260,20 +261,20 @@ export function TransactionFilters({
               message={lookupError.message}
               action={
                 <Button size="small" onClick={lookupError.retry}>
-                  Tentar novamente
+                  {t("retry")}
                 </Button>
               }
             />
           )}
-          <FilterSection title="Movimentação">
+          <FilterSection title={t("movement")}>
             <SegmentedControl<Movement>
               id="filter-classification"
-              label="Movimentação"
+              label={t("movement")}
               value={draft.classification === "inflow" || draft.classification === "outflow" ? draft.classification : "all"}
               options={[
-                { value: "all", label: "Todas" },
-                { value: "inflow", label: "Entradas" },
-                { value: "outflow", label: "Saídas" },
+                { value: "all", label: t("allFeminine") },
+                { value: "inflow", label: t("inflows") },
+                { value: "outflow", label: t("outflows") },
               ]}
               onChange={(value) => set("classification", value === "all" ? null : value)}
             />
@@ -284,27 +285,27 @@ export function TransactionFilters({
                 checked={draft.credit_card === true}
                 onChange={(event) => set("credit_card", event.target.checked)}
               >
-                Cartão de crédito
+                {t("creditCard")}
               </Checkbox>
               <Checkbox
                 className="filter-checkbox"
                 checked={draft.card_balance === true}
                 onChange={(event) => set("card_balance", event.target.checked)}
               >
-                Fatura atual
+                {t("currentBillCapitalized")}
               </Checkbox>
             </div>
           </FilterSection>
 
-          <FilterSection title="Organização">
+          <FilterSection title={t("organization")}>
             <SegmentedControl<ImportSource>
               id="filter-source_provider"
-              label="Origem"
+              label={t("origin")}
               value={draft.origin === "manual" ? "manual" : draft.source_provider === "file" || draft.source_provider === "pluggy" ? draft.source_provider : "all"}
               options={[
-                { value: "all", label: "Todas" },
-                { value: "file", label: "Arquivo" },
-                { value: "pluggy", label: "Banco" },
+                { value: "all", label: t("allFeminine") },
+                { value: "file", label: t("file") },
+                { value: "pluggy", label: t("bank") },
                 { value: "manual", label: "Manual" },
               ]}
               onChange={(value) => {
@@ -312,15 +313,15 @@ export function TransactionFilters({
                 set("source_provider", value === "file" || value === "pluggy" ? value : null);
               }}
             />
-            <FilterField id="filter-account_ids" label="Conta">
+            <FilterField id="filter-account_ids" label={t("account")}>
               <FilterCombobox
                 multiple
                 id="filter-account_ids"
-                label="Contas"
-                placeholder="Todas as contas"
-                searchPlaceholder="Buscar conta…"
-                emptyText="Nenhuma conta no período"
-                countLabel={(count) => (count === 1 ? "1 conta selecionada" : `${count} contas selecionadas`)}
+                label={t("accountList")}
+                placeholder={t("allAccounts")}
+                searchPlaceholder={t("searchAccount")}
+                emptyText={t("noAccountsInPeriod")}
+                countLabel={(count) => (t(count === 1 ? "oneAccountSelected" : "manyAccountsSelected", { count }))}
                 options={accountOptions}
                 value={draft.account_ids}
                 onChange={(value) => set("account_ids", value)}
@@ -328,16 +329,16 @@ export function TransactionFilters({
               />
             </FilterField>
             <div className="filter-field-group">
-              <FilterField id="filter-category_ids" label="Categoria">
+              <FilterField id="filter-category_ids" label={t("category")}>
                 <FilterCombobox
                   multiple
                   id="filter-category_ids"
-                  label="Categorias"
-                  placeholder="Todas as categorias"
-                  searchPlaceholder="Buscar categoria…"
-                  emptyText="Nenhuma categoria no período"
+                  label={t("categories")}
+                  placeholder={t("allCategories")}
+                  searchPlaceholder={t("searchCategory")}
+                  emptyText={t("noCategoriesInPeriod")}
                   countLabel={(count) =>
-                    count === 1 ? "1 categoria selecionada" : `${count} categorias selecionadas`
+                    t(count === 1 ? "oneCategorySelected" : "manyCategoriesSelected", { count })
                   }
                   options={categoryOptions}
                   optionRender={renderCategoryOption}
@@ -351,12 +352,12 @@ export function TransactionFilters({
                 checked={draft.uncategorized === true}
                 onChange={(event) => set("uncategorized", event.target.checked)}
               >
-                Sem categoria
+                {t("uncategorized")}
               </Checkbox>
             </div>
           </FilterSection>
 
-          <FilterSection title="Valor">
+          <FilterSection title={t("amount")}>
             <MoneyRangeFilter
               id="filter-amount"
               min={draft.amount_min}

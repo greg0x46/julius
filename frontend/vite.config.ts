@@ -7,7 +7,7 @@ import { configDefaults, defineConfig } from "vitest/config";
 const apiProxyTarget = process.env.JULIUS_DEV_API_URL ?? "http://localhost:8000";
 
 // .ts tests that need the DOM; every other .ts test runs without jsdom.
-const domTsTests = ["src/api/statementImports.test.ts"];
+const domTsTests = ["src/api/statementImports.test.ts", "src/i18n/apiMessage.test.ts"];
 
 function gitValue(...args: string[]): string {
   try {

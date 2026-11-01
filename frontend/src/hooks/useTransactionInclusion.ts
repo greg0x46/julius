@@ -1,3 +1,4 @@
+import { useTranslation } from "../i18n/context";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 
@@ -11,11 +12,12 @@ export interface InclusionTarget {
   state: TransactionInclusionState;
 }
 
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "Não foi possível salvar a decisão.";
+function errorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error ? error.message : fallback;
 }
 
 export function useTransactionInclusion({ onSaved, onFailed }: TransactionWriteCallbacks<InclusionTarget, TransactionInclusionResult> = {}) {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const locked = useRef(false);
   const [pendingTarget, setPendingTarget] = useState<InclusionTarget | null>(null);
@@ -37,14 +39,14 @@ export function useTransactionInclusion({ onSaved, onFailed }: TransactionWriteC
       );
       setAnnouncement(
         state === "ignored"
-          ? "Transação ignorada. Totais atualizados."
+          ? t("ignoredTotalsUpdated")
           : state === "considered"
-            ? "Transação restaurada. Totais atualizados."
-            : "Resultados atualizados.",
+            ? t("restoredTotalsUpdated")
+            : t("resultsUpdated"),
       );
     } catch (error) {
-      setRefreshError(errorMessage(error));
-      setAnnouncement("Alteração salva, atualização dos resultados pendente.");
+      setRefreshError(errorMessage(error, t("decisionSaveErrorFull")));
+      setAnnouncement(t("changeSavedRefreshPending"));
     }
   };
 
@@ -56,7 +58,7 @@ export function useTransactionInclusion({ onSaved, onFailed }: TransactionWriteC
       setFailedWrite(null);
       setWriteError(null);
       setRefreshError(null);
-      setAnnouncement("Salvando decisão da transação…");
+      setAnnouncement(t("savingTransactionDecision"));
       await queryClient.cancelQueries({ queryKey: queryKeys.transactions });
     },
     onSuccess: async (confirmation, target) => {
@@ -66,9 +68,9 @@ export function useTransactionInclusion({ onSaved, onFailed }: TransactionWriteC
     },
     onError: (error, target) => {
       setFailedWrite(target);
-      setWriteError(errorMessage(error));
-      onFailed?.(target, errorMessage(error));
-      setAnnouncement("Falha ao salvar. O último estado confirmado foi mantido.");
+      setWriteError(errorMessage(error, t("decisionSaveErrorFull")));
+      onFailed?.(target, errorMessage(error, t("decisionSaveErrorFull")));
+      setAnnouncement(t("decisionSaveFailedRetained"));
     },
     onSettled: () => {
       locked.current = false;

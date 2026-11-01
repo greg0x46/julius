@@ -1,3 +1,4 @@
+import { useTranslation } from "../i18n/context";
 import { PluggySettings } from "../components/PluggySettings";
 import { SettingsPageContainer as PageContainer } from "../components/SettingsPageContainer";
 import { Collapse, Skeleton } from "../components/ui";
@@ -18,6 +19,7 @@ import { useSyncRunList } from "../hooks/useSyncRunList";
  * page's one action, in the title row.
  */
 export function SyncRunListPage() {
+  const { t } = useTranslation();
   const { state, retry } = useSyncRunList();
   const navigate = useNavigate();
   const compact = useCompactScreen();
@@ -27,8 +29,8 @@ export function SyncRunListPage() {
 
   return (
     <PageContainer
-      title="Open Banking"
-      subTitle="Busque os dados mais recentes de todas as conexões ativas"
+      title={t("openBanking")}
+      subTitle={t("syncListSubtitle")}
       compactMobileHeader
       extra={<SyncNowAction sync={sync} />}
     >
@@ -36,28 +38,28 @@ export function SyncRunListPage() {
         <SyncRunNotice sync={sync} />
         <DataSourceConnections sync={sync} runs={knownRuns} />
         {/* The table runs edge to edge in its section; a phone's rows keep the section's gutter. */}
-        <Section title="Histórico de sincronizações" flush={state.kind === "ready" && !compact}>
+        <Section title={t("syncHistory")} flush={state.kind === "ready" && !compact}>
           {state.kind === "loading" && (
-            <div role="status" aria-label="Carregando histórico">
+            <div role="status" aria-label={t("loadingHistory")}>
               <Skeleton active paragraph={{ rows: 3 }} />
             </div>
           )}
           {state.kind === "empty" && (
             <EmptyState
-              title="Nenhuma sincronização ainda"
-              hint="Sincronize para trazer os dados mais recentes das conexões ativas."
+              title={t("noSyncs")}
+              hint={t("noSyncsHint")}
             />
           )}
           {state.kind === "unavailable" && (
             <UnavailableState onRetry={retry}>
-              O histórico está temporariamente indisponível. Isso não significa que esteja vazio.
+              {t("syncHistoryUnavailable")}
             </UnavailableState>
           )}
           {state.kind === "ready" && <SyncRunHistory runs={state.runs} />}
         </Section>
         <Collapse
           className="sync-credentials"
-          items={[{ key: "credentials", label: "Credenciais da Pluggy", children: <PluggySettings /> }]}
+          items={[{ key: "credentials", label: t("pluggyCredentials"), children: <PluggySettings /> }]}
         />
       </div>
     </PageContainer>

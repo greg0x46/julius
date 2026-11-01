@@ -1,3 +1,4 @@
+import { useTranslation } from "../../i18n/context";
 import { CloseOutlined } from "../ui/icons";
 import { Alert, Button, Drawer } from "../ui";
 import { useEffect, useId, useRef, type FormEvent, type ReactNode } from "react";
@@ -36,13 +37,14 @@ export function FormDrawer({
   title,
   onClose,
   onSubmit,
-  submitLabel = "Salvar",
+  submitLabel,
   submitting = false,
   submitDisabled = false,
   error,
   children,
   width = STANDARD_WIDTH,
 }: FormDrawerProps) {
+  const { t } = useTranslation();
   const compact = useCompactScreen();
   const formId = useId();
   // The alert sits at the top of a body that scrolls on a phone: the error from a
@@ -77,14 +79,14 @@ export function FormDrawer({
             type="text"
             className="form-drawer-close"
             icon={<CloseOutlined />}
-            aria-label="Fechar"
+            aria-label={t("close")}
             onClick={onClose}
           />
         ) : undefined
       }
       footer={
         <div className="form-drawer-footer">
-          {!compact && <Button onClick={onClose}>Cancelar</Button>}
+          {!compact && <Button onClick={onClose}>{t("cancel")}</Button>}
           <Button
             type="primary"
             htmlType="submit"
@@ -93,7 +95,7 @@ export function FormDrawer({
             loading={submitting}
             disabled={submitDisabled}
           >
-            {submitLabel}
+            {submitLabel ?? t("save")}
           </Button>
         </div>
       }

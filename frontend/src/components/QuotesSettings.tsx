@@ -1,3 +1,5 @@
+import { useTranslation } from "../i18n/context";
+import { translate, type Language } from "../i18n/messages";
 import { Alert, Button, Input, Select, Skeleton, Switch, Typography } from "./ui";
 import { useEffect, useState } from "react";
 import type { QuoteLastRefresh, QuoteSchedule } from "../api/contracts";
@@ -22,25 +24,27 @@ const timezones = [
   "UTC",
 ];
 
-function refreshSummary(last: QuoteLastRefresh): string {
-  if (last.status === "failed") return "Não foi possível concluir a atualização. Tente novamente mais tarde.";
-  if (last.assets === 0) return "Nenhum ativo com cotação automática para atualizar.";
-  const priced = `${last.fetched} de ${last.assets} ativos cotados`;
+function refreshSummary(last: QuoteLastRefresh, language: Language): string {
+  const t = (key: Parameters<typeof translate>[1], values?: Record<string, string | number>) => translate(language, key, values);
+  if (last.status === "failed") return t("quoteRefreshFailed");
+  if (last.assets === 0) return t("quoteNoAssets");
+  const priced = t("quotePriced", { fetched: last.fetched, assets: last.assets });
   switch (last.status) {
     case "success":
       return `${priced}.`;
     case "partial":
       return last.deferred > 0
-        ? `${priced}; ${last.failures} falharam; ${last.deferred} adiados porque o provedor limitou as consultas. Tente novamente mais tarde.`
-        : `${priced}; ${last.failures} falharam.`;
+        ? t("quotePartialDeferred", { priced, failures: last.failures, deferred: last.deferred })
+        : t("quotePartial", { priced, failures: last.failures });
     case "deferred":
-      return `${priced}; ${last.deferred} adiados porque o provedor limitou as consultas. Tente novamente mais tarde.`;
+      return t("quoteDeferred", { priced, deferred: last.deferred });
   }
 }
 
 function LastRefresh({ last }: { last: QuoteLastRefresh | null }) {
+  const { t, language } = useTranslation();
   const timezone = useTimezone();
-  if (last === null) return <span>Nenhuma atualização ainda.</span>;
+  if (last === null) return <span>{t("noUpdateYet")}</span>;
   const tone =
     last.status === "failed"
       ? "danger"
@@ -50,14 +54,15 @@ function LastRefresh({ last }: { last: QuoteLastRefresh | null }) {
   return (
     <>
       <span>
-        {formatOptionalDateTime(last.finished_at, timezone)} · {last.trigger === "manual" ? "Manual" : "Agendada"}
+        {formatOptionalDateTime(last.finished_at, timezone, language)} · {last.trigger === "manual" ? t("triggerManual") : t("triggerScheduled")}
       </span>
-      <Typography.Text type={tone}>{refreshSummary(last)}</Typography.Text>
+      <Typography.Text type={tone}>{refreshSummary(last, language)}</Typography.Text>
     </>
   );
 }
 
 export function QuotesSettings() {
+  const { t } = useTranslation();
   const [schedule, setSchedule] = useState<QuoteSchedule | null>(null);
   const [last, setLast] = useState<QuoteLastRefresh | null>(null);
   const [loading, setLoading] = useState(true);
@@ -102,8 +107,8 @@ export function QuotesSettings() {
       if (isAbortError(error)) return;
       setSaveError(
         error instanceof ApiError && error.problem?.status === 422
-          ? "Confira o horário e o fuso horário."
-          : "Não foi possível salvar o agendamento.",
+          ? t("quoteScheduleCheck")
+          : t("quoteScheduleSaveError"),
       );
     } finally {
       setSaving(false);
@@ -128,37 +133,37 @@ export function QuotesSettings() {
   );
 
   return (
-    <Section title="Cotações automáticas">
+    <Section title={t("automaticQuotes")}>
       <div className="settings-form">
         <p className="settings-radio-hint">
-          Os preços das posições com cotação automática são atualizados uma vez por dia no horário escolhido.
+          {t("quotesDailyHint")}
         </p>
         {loading ? (
           <Skeleton active paragraph={{ rows: 2 }} />
         ) : loadError || !schedule ? (
           <UnavailableState onRetry={() => setAttempt((count) => count + 1)}>
-            Não foi possível carregar as configurações de cotação.
+            {t("quoteSettingsLoadError")}
           </UnavailableState>
         ) : (
           <>
             <div className="quotes-last-refresh" aria-live="polite" aria-atomic="true">
-              <span className="form-field-label">Última atualização</span>
+              <span className="form-field-label">{t("lastUpdate")}</span>
               <LastRefresh last={last} />
               {refreshError &&
                 (refreshError === "conflict" ? (
                   <Alert
                     type="info"
                     showIcon
-                    message="Já existe uma atualização em andamento. Aguarde alguns instantes e confira de novo."
+                    message={t("updateInProgress")}
                   />
                 ) : (
-                  <Alert type="error" showIcon message="Não foi possível atualizar as cotações agora." />
+                  <Alert type="error" showIcon message={t("quotesUpdateError")} />
                 ))}
             </div>
             <Button onClick={() => void refresh()} loading={refreshing} aria-busy={refreshing}>
-              {refreshing ? "Atualizando…" : "Atualizar agora"}
+              {refreshing ? t("updatingEllipsis") : t("updateNow")}
             </Button>
-            {refreshing && <p className="settings-radio-hint">Isso pode levar alguns segundos.</p>}
+            {refreshing && <p className="settings-radio-hint">{t("mayTakeSeconds")}</p>}
           </>
         )}
       </div>
@@ -171,9 +176,9 @@ export function QuotesSettings() {
           }}
         >
           <FormField
-            label="Atualizar automaticamente"
+            label={t("updateAutomatically")}
             htmlFor="quotes-enabled"
-            hint="Desligado, os preços só mudam quando você atualizar manualmente."
+            hint={t("updateAutomaticallyHint")}
           >
             <div>
               <Switch
@@ -185,7 +190,7 @@ export function QuotesSettings() {
               />
             </div>
           </FormField>
-          <FormField label="Horário" htmlFor="quotes-time">
+          <FormField label={t("timeLabel")} htmlFor="quotes-time">
             <Input
               id="quotes-time"
               type="time"
@@ -196,7 +201,7 @@ export function QuotesSettings() {
               onChange={(event) => edit({ time: event.target.value })}
             />
           </FormField>
-          <FormField label="Fuso horário" htmlFor="quotes-timezone">
+          <FormField label={t("timeZoneLabel")} htmlFor="quotes-timezone">
             <Select
               id="quotes-timezone"
               showSearch
@@ -207,14 +212,14 @@ export function QuotesSettings() {
             />
           </FormField>
           {saveError && <Alert type="error" showIcon message={saveError} />}
-          {saved && <Alert type="success" showIcon message="Agendamento salvo." />}
+          {saved && <Alert type="success" showIcon message={t("scheduleSaved")} />}
           <Button type="primary" htmlType="submit" loading={saving}>
-            Salvar agendamento
+            {t("saveSchedule")}
           </Button>
         </form>
       )}
       <details className="quotes-advanced">
-        <summary>Provedor de cotações (avançado)</summary>
+        <summary>{t("quoteProviderAdvanced")}</summary>
         <BrapiTokenForm />
       </details>
     </Section>
@@ -223,6 +228,7 @@ export function QuotesSettings() {
 
 // Write-only like PluggySettings: the saved token is never echoed back.
 function BrapiTokenForm() {
+  const { t } = useTranslation();
   const [token, setToken] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -240,12 +246,12 @@ function BrapiTokenForm() {
       if (!response.ok) {
         // Surface the server's own sentence (e.g. the demo-mode 403).
         const problem = (await response.json().catch(() => null)) as { detail?: string } | null;
-        throw new Error(problem?.detail || "Não foi possível salvar o token.");
+        throw new Error(problem?.detail || t("tokenSaveError"));
       }
       setToken("");
       setSaved(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Não foi possível salvar.");
+      setError(err instanceof Error ? err.message : t("saveFailedGeneric"));
     } finally {
       setBusy(false);
     }
@@ -259,13 +265,11 @@ function BrapiTokenForm() {
       }}
     >
       <p className="settings-radio-hint">
-        Por padrão, a cotação automática de posições manuais usa o Yahoo Finance como fonte principal; a brapi (B3) e
-        a CoinGecko (criptomoedas) são usadas quando ele falha. O token da brapi só importa nesse fallback da B3: sem
-        ele, apenas um conjunto restrito de tickers responde. O valor salvo não é exibido novamente.
+        {t("brapiHint")}
       </p>
       {error && <Alert type="error" message={error} />}
-      {saved && <Alert type="success" message="Token salvo." />}
-      <FormField label="Token da brapi (opcional)" htmlFor="quotes-brapi-token">
+      {saved && <Alert type="success" message={t("tokenSaved")} />}
+      <FormField label={t("brapiTokenOptional")} htmlFor="quotes-brapi-token">
         <Input.Password
           id="quotes-brapi-token"
           autoComplete="off"
@@ -274,7 +278,7 @@ function BrapiTokenForm() {
         />
       </FormField>
       <Button htmlType="submit" loading={busy}>
-        Salvar token
+        {t("saveToken")}
       </Button>
     </form>
   );

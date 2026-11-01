@@ -1,3 +1,4 @@
+import { apiMessage } from "../i18n/apiMessage";
 import { apiFetch } from "./transport";
 import {
   parseProblem,
@@ -49,7 +50,7 @@ export function getQuoteSettings(signal?: AbortSignal): Promise<QuoteSettings> {
     "/api/settings/quotes",
     { method: "GET", headers: { Accept: "application/json" }, signal },
     parseQuoteSettings,
-    "Não foi possível carregar as configurações de cotação.",
+    apiMessage("quoteSettingsLoadError"),
   );
 }
 
@@ -58,7 +59,7 @@ export function updateQuoteSchedule(schedule: QuoteSchedule): Promise<void> {
     "/api/settings/quotes",
     { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(schedule) },
     () => undefined,
-    "Não foi possível salvar o agendamento.",
+    apiMessage("quoteScheduleSaveError"),
   );
 }
 
@@ -67,6 +68,6 @@ export function refreshQuotesNow(): Promise<QuoteLastRefresh> {
     "/api/settings/quotes/refresh",
     { method: "POST" },
     parseQuoteLastRefresh,
-    "Não foi possível atualizar as cotações agora.",
+    apiMessage("quotesUpdateError"),
   );
 }

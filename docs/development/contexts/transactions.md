@@ -23,6 +23,9 @@ the entry out of totals, with its own reason (`transfer_category`) and without
 marking it ignored — see the note on reporting exclusions in
 `docs/development/architecture.md` (Ledger, reporting and cash).
 
+The browser language selector supports Portuguese and English for some of this
+area. Translation coverage remains incomplete; see the [frontend reference](../frontend.md).
+
 ## Backend
 
 - `internal/transactions` — `QueryRequest`/`Filters`/`Item`/`Page`/`Group`,

@@ -10,7 +10,9 @@ Not tied to a single context:
 - `frontend/src/components/filters/filterUrl.ts` — filter ⇄ `URLSearchParams`
   (transaction filters, scenario selection).
 - `frontend/src/presentation/money.ts` — money formatting/arithmetic on decimal
-  strings.
+  strings. Currency amounts (`formatMoney`, `formatBRL`) keep the Brazilian
+  format ("R$ 1.234,56") in every UI language on purpose; only chart axis
+  scales (`formatAxisMoney`) and decimals/percentages follow the language.
 - `frontend/src/components/ui/` — local HTML/CSS React controls, SVG icons,
   semantic tables, native dialog panels and browser popovers. `styles/ui.css`
   defines their shared appearance; page styles build on local `ui-*` classes.
@@ -36,3 +38,36 @@ must be added to `domTsTests` (or become `.tsx`); details in
 `frontend/TESTING.md`. Playwright financial journeys run with `npm run test:e2e`
 against disposable SQLite databases; install Chromium first as described there.
 
+
+## Translation catalogs
+
+`frontend/src/i18n/messages.ts` combines the Portuguese (`pt-BR`, default) and
+English (`en`) catalogs. Messages live in one file per area under
+`frontend/src/i18n/catalogs/` (common, settings, accounts, transactions, ...),
+each with both languages side by side. A key belongs to exactly one area; the
+catalog test checks matching keys and placeholders per area. `I18nProvider` wraps the application;
+`useTranslation()` returns `t(key)`, `language` and `setLanguage(language)`.
+Keys are checked by TypeScript. The catalog test checks matching keys.
+Add messages to both languages of the right area and call `t` during rendering for reactive text.
+
+The header selector updates the document `lang` and saves `julius.language`
+in browser storage. Other tabs follow storage changes. Invalid or unavailable
+storage defaults to Portuguese; switching still works when saving is blocked.
+This preference belongs to the browser, independently of authentication.
+
+Every page and shared control is translated: navigation, login, settings,
+Home, accounts, transactions, payables, recurring commitments, automations,
+scenarios, investments, goals, net worth and statement import. Code outside
+React (API client errors) uses `apiMessage(key)` from `i18n/apiMessage.ts`,
+which reads the selected language when the error is created. Presentation
+helpers take an optional `language` argument that defaults to `pt-BR`. Server
+messages (problem details, import warnings, asset class labels) and the user's
+own data stay as the server or the user wrote them. 
+Date and time formats come from `frontend/src/i18n/dateFormats.ts`, which
+defines each language's conventions (Intl locale, day/month order, short month
+names) and cached `Intl` formatters. Use `presentation/dates.ts` (`formatDay`,
+`formatDateOnly`, `formatCompactDay`, ...) and pass the `language` from
+`useTranslation()`; do not build locale-specific date strings or call
+`Intl.DateTimeFormat` with a hard-coded locale. Adding a language means adding
+its entry there. Language does not change financial reference
+currency, stored data or API values.

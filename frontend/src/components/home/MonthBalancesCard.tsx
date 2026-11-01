@@ -1,3 +1,4 @@
+import { useTranslation } from "../../i18n/context";
 import { Skeleton } from "../ui";
 
 import { useMonthTimeline } from "../../hooks/useMonthTimeline";
@@ -8,7 +9,6 @@ import { UnavailableState } from "../AsyncState";
 import { Money } from "../shared/Money";
 import { StatusTag } from "../shared/StatusTag";
 
-const title = "Saldo hoje e projetado até o fim do mês";
 
 /**
  * The two balances that frame the daily allowance: the cash now
@@ -19,6 +19,8 @@ const title = "Saldo hoje e projetado até o fim do mês";
  * notice is the allowance card's, not repeated here.
  */
 export function MonthBalancesCard() {
+  const { t, language } = useTranslation();
+  const title = t("monthlyBalanceTitle");
   const timeline = useMonthTimeline();
   const base = timeline.base;
 
@@ -26,13 +28,13 @@ export function MonthBalancesCard() {
     return (
       <section className="section home-tile home-balances" aria-label={title}>
         {timeline.isLoading && (
-          <div role="status" aria-label="Carregando os saldos do mês">
+          <div role="status" aria-label={t("loadingMonthlyBalances")}>
             <Skeleton.Input active block style={{ height: 40 }} />
           </div>
         )}
         {!timeline.isLoading && (
           <UnavailableState onRetry={() => timeline.refetch()}>
-            {problemMessage(timeline.error) ?? "Não foi possível carregar os saldos do mês."}
+            {problemMessage(timeline.error) ?? t("monthlyBalancesError")}
           </UnavailableState>
         )}
       </section>
@@ -46,14 +48,14 @@ export function MonthBalancesCard() {
       <section className="section home-tile home-balances" aria-label={title}>
         <dl className="home-balances-list">
           <div className="home-balances-item">
-            <dt>Saldo hoje</dt>
+            <dt>{t("balanceToday")}</dt>
             <dd>
               <Money value={base.starting_balance} tone="balance" />
             </dd>
           </div>
           <div className="home-balances-item">
             <dt>
-              Em {formatDayMonth(timeline.monthEnd)} <StatusTag tone="neutral">projetado</StatusTag>
+              {t("onDate").replace("{date}", formatDayMonth(timeline.monthEnd, language))} <StatusTag tone="neutral">{t("projected")}</StatusTag>
             </dt>
             <dd>{last ? <Money value={last.balance} tone="balance" /> : "—"}</dd>
           </div>

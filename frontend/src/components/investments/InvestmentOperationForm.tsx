@@ -1,6 +1,9 @@
+import { useTranslation } from "../../i18n/context";
 import { compareDecimals, isPositiveDecimal } from "../../presentation/decimal";
 import { Alert, Checkbox, DatePicker, Flex, Input, InputNumber, Select } from "../ui";
 import { calendar, type CalendarDate } from "../../presentation/calendar";
+import { todayIn } from "../../presentation/timezone";
+import { useTimezone } from "../../hooks/useTimezone";
 import { useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
 
 import type {
@@ -11,9 +14,7 @@ import type {
   InvestmentPosition,
 } from "../../api/contracts";
 import { isZeroDecimal, multiplyDecimals, subtractDecimals, sumDecimals } from "../../presentation/decimal";
-import { investmentOperationKindLabel } from "../../presentation/investmentWorkspaceLabels";
-import { useTimezone } from "../../hooks/useTimezone";
-import { todayIn } from "../../presentation/timezone";
+import { investmentOperationKindName } from "../../presentation/investmentWorkspaceLabels";
 import { FormDrawer } from "../forms/FormDrawer";
 import { FormField } from "../forms/FormField";
 import { MoneyInput } from "../forms/MoneyInput";
@@ -84,12 +85,9 @@ const tradeKinds: InvestmentOperationKind[] = ["buy", "sell"];
 // An integrated account's cash is the provider's: no cash-only opening
 // balance, and trades only move its manual holdings.
 const integratedKinds: InvestmentOperationKind[] = ["deposit", "withdrawal", "income", "fee", "tax", "buy", "sell", "valuation"];
-const kindOptions = (Object.keys(investmentOperationKindLabel) as InvestmentOperationKind[])
-  .filter((value) => value !== "transfer_out" && value !== "transfer_in")
-  .map((value) => ({
-  value,
-  label: investmentOperationKindLabel[value],
-}));
+const selectableKinds: InvestmentOperationKind[] = [
+  "initial_balance", "deposit", "withdrawal", "buy", "sell", "income", "fee", "tax", "valuation",
+];
 
 function greaterThanZero(value: string | null): boolean {
   return value !== null && isPositiveDecimal(value);
@@ -142,7 +140,9 @@ export function InvestmentOperationFields({
   onSubmitCompound,
   allowedKinds,
 }: FieldsProps) {
+  const { t, language } = useTranslation();
   const timezone = useTimezone();
+  const kindOptions = selectableKinds.map((value) => ({ value, label: investmentOperationKindName(value, language) }));
   const [draft, setDraft] = useState<Draft>(() => draftFrom(operation, accounts, timezone, initial ?? undefined));
   const [error, setError] = useState<string | null>(null);
   const [funding, setFunding] = useState<"deposit" | "income" | null>(null);
@@ -197,27 +197,27 @@ export function InvestmentOperationFields({
 
   const submit = () => {
     if (draft.accountId === "") {
-      setError("Selecione uma conta de investimento.");
+      setError(t("selectInvestmentAccountRequired"));
       return;
     }
     if (needsPosition && draft.positionId === null) {
-      setError("Selecione uma posição para esta movimentação.");
+      setError(t("selectPositionForOperation"));
       return;
     }
     if (isTrade && (!greaterThanZero(draft.quantity) || !greaterThanZero(draft.unitPrice))) {
-      setError("Informe quantidade e preço unitário maiores que zero.");
+      setError(t("quantityPricePositive"));
       return;
     }
     if (!isTrade && draft.kind !== "valuation" && !greaterThanZero(draft.amount)) {
-      setError("Informe um valor maior que zero.");
+      setError(t("positiveAmountRequired"));
       return;
     }
     if (draft.kind === "valuation" && (draft.amount === null || compareDecimals(draft.amount, "0") < 0)) {
-      setError("Informe o valor total atual da posição.");
+      setError(t("valuationTotalRequired"));
       return;
     }
     if (isNegative(draft.fees) || isNegative(draft.taxes)) {
-      setError("Taxas e impostos não podem ser negativos.");
+      setError(t("feesTaxesNegative"));
       return;
     }
     setError(null);
@@ -262,25 +262,21 @@ export function InvestmentOperationFields({
         </div>
       )}
       {draft.kind === "valuation" && (
-        <p className="form-field-hint">
-          Cotação manual: marca o valor atual desta posição nesta data. Em ativos com cotação automática, uma cotação
-          de mercado mais nova passa por cima dela. A rentabilidade permanece desconhecida se não houver base
-          suficiente.
-        </p>
+        <p className="form-field-hint">{t("valuationHint")}</p>
       )}
-      <FormField label="Conta de investimento" htmlFor="investment-operation-account">
+      <FormField label={t("investmentAccountField")} htmlFor="investment-operation-account">
         <Select
           id="investment-operation-account"
           value={draft.accountId || undefined}
           options={accountOptions}
           disabled={isEditing}
-          placeholder="Selecione uma conta de investimento"
+          placeholder={t("selectInvestmentAccountPlaceholder")}
           onChange={(value: string) =>
             setDraft((current) => ({ ...current, accountId: value, positionId: null, kind: initial?.kind ?? "deposit" }))
           }
         />
       </FormField>
-      <FormField label="Tipo" htmlFor="investment-operation-kind">
+      <FormField label={t("type")} htmlFor="investment-operation-kind">
         <Select
           id="investment-operation-kind"
           value={draft.kind}
@@ -293,7 +289,7 @@ export function InvestmentOperationFields({
       </FormField>
       {(needsPosition || draft.kind === "initial_balance") && (
         <FormField
-          label={needsPosition ? "Posição" : "Posição (opcional)"}
+          label={needsPosition ? t("position") : t("positionOptional")}
           htmlFor="investment-operation-position"
         >
           <Select
@@ -301,7 +297,7 @@ export function InvestmentOperationFields({
             value={draft.positionId ?? undefined}
             options={positionOptions}
             allowClear={!needsPosition}
-            placeholder={needsPosition ? "Selecione uma posição" : "Movimentação só de caixa"}
+            placeholder={needsPosition ? t("selectAPosition") : t("cashOnlyMovement")}
             showSearch
             optionFilterProp="label"
             onChange={(value: string | undefined) =>
@@ -310,20 +306,19 @@ export function InvestmentOperationFields({
           />
         </FormField>
       )}
-      <FormField label="Data" htmlFor="investment-operation-date">
+      <FormField label={t("date")} htmlFor="investment-operation-date">
         <DatePicker
           id="investment-operation-date"
           style={{ width: "100%" }}
           value={draft.occurredOn}
           allowClear={false}
-          format="DD/MM/YYYY"
           onChange={(value) => value && setDraft((current) => ({ ...current, occurredOn: value }))}
         />
       </FormField>
       {isTrade ? (
         <>
           <div className="investment-form-pair">
-            <FormField label="Quantidade" htmlFor="investment-operation-quantity">
+            <FormField label={t("quantityLabel")} htmlFor="investment-operation-quantity">
               <InputNumber
                 id="investment-operation-quantity"
                 style={{ width: "100%" }}
@@ -335,7 +330,7 @@ export function InvestmentOperationFields({
                 onChange={(value) => setDecimal("quantity", value)}
               />
             </FormField>
-            <FormField label="Preço unitário" htmlFor="investment-operation-unit-price">
+            <FormField label={t("unitPriceLabel")} htmlFor="investment-operation-unit-price">
               <InputNumber
                 id="investment-operation-unit-price"
                 style={{ width: "100%" }}
@@ -350,9 +345,9 @@ export function InvestmentOperationFields({
             </FormField>
           </div>
           <FormField
-            label="Valor bruto (opcional)"
+            label={t("grossAmountOptional")}
             htmlFor="investment-operation-amount"
-            hint="Se vazio, é calculado por quantidade × preço."
+            hint={t("grossAmountHint")}
           >
             <MoneyInput
               id="investment-operation-amount"
@@ -362,7 +357,7 @@ export function InvestmentOperationFields({
             />
           </FormField>
           <div className="investment-form-pair">
-            <FormField label="Taxas (opcional)" htmlFor="investment-operation-fees">
+            <FormField label={t("feesOptional")} htmlFor="investment-operation-fees">
               <MoneyInput
                 id="investment-operation-fees"
                 min="0"
@@ -370,7 +365,7 @@ export function InvestmentOperationFields({
                 onChange={(value) => setMoney("fees", value)}
               />
             </FormField>
-            <FormField label="Impostos (opcional)" htmlFor="investment-operation-taxes">
+            <FormField label={t("taxesOptional")} htmlFor="investment-operation-taxes">
               <MoneyInput
                 id="investment-operation-taxes"
                 min="0"
@@ -382,7 +377,7 @@ export function InvestmentOperationFields({
         </>
       ) : (
         <FormField
-          label={draft.kind === "valuation" ? "Valor total atual" : "Valor"}
+          label={draft.kind === "valuation" ? t("currentTotalValue") : t("amount")}
           htmlFor="investment-operation-amount"
         >
           <MoneyInput
@@ -396,20 +391,16 @@ export function InvestmentOperationFields({
       {isTrade && draft.kind === "buy" && !isEditing && onSubmitCompound && (
         <Flex vertical gap="small">
           <Checkbox checked={funding !== null} onChange={(event) => setFunding(event.target.checked ? "deposit" : null)}>
-            Registrar entrada de dinheiro junto com a compra
+            {t("recordCashWithPurchase")}
           </Checkbox>
-          {funding && <Select aria-label="Origem do dinheiro" value={funding} onChange={setFunding}
-            options={[{ value: "deposit", label: "Aporte e compra" }, { value: "income", label: "Rendimento reinvestido" }]} />}
+          {funding && <Select aria-label={t("cashSource")} value={funding} onChange={setFunding}
+            options={[{ value: "deposit", label: t("contributionAndPurchase") }, { value: "income", label: t("reinvestedYield") }]} />}
         </Flex>
       )}
       {integrated && (
-        <p className="form-field-hint">
-          O caixa e as posições da instituição continuam sendo informados por ela. Compras, vendas e cotações valem
-          só para as suas posições manuais; aportes, resgates e rendimentos registram o evento para os relatórios e
-          a conciliação.
-        </p>
+        <p className="form-field-hint">{t("integratedAccountHint")}</p>
       )}
-      <FormField label="Observações (opcional)" htmlFor="investment-operation-notes">
+      <FormField label={t("notesOptional")} htmlFor="investment-operation-notes">
         <Input.TextArea
           id="investment-operation-notes"
           rows={3}
@@ -417,7 +408,7 @@ export function InvestmentOperationFields({
           onChange={(event) => setDraft((current) => ({ ...current, notes: event.target.value }))}
         />
       </FormField>
-      {isEditing && <p className="form-field-hint">Ao salvar, as quantidades, os custos e o caixa são recalculados.</p>}
+      {isEditing && <p className="form-field-hint">{t("recalculationHint")}</p>}
     </>
   );
 
@@ -450,11 +441,12 @@ export function InvestmentOperationForm({
   submitting: boolean;
   onCancel: () => void;
 }) {
+  const { t } = useTranslation();
   const isEditing = fields.operation !== null;
   const submitRef = useRef<(() => void) | null>(null);
   return (
     <FormDrawer
-      title={isEditing ? "Editar movimentação manual" : "Registrar movimentação"}
+      title={isEditing ? t("editManualOperation") : t("recordOperation")}
       open={open}
       onClose={onCancel}
       onSubmit={() => submitRef.current?.()}

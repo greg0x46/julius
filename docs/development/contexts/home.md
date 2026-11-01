@@ -30,6 +30,9 @@ together with the `/api/timeline` aggregations only it consumed
 `year_over_year`, `category_evolution`). Recover them from git history if the
 retrospective comes back.
 
+The browser language selector supports Portuguese and English for some of this
+area. Translation coverage remains incomplete; see the [frontend reference](../frontend.md).
+
 ## Backend
 
 `internal/timeline` — `Series{Points, Entries, StartingBalance, LowestBalance,

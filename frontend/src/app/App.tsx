@@ -20,27 +20,30 @@ import { useTheme } from "./theme";
 import julius from "../assets/julius.png";
 import { SkipLink } from "../components/SkipLink";
 import { useCompactScreen } from "../components/shared/useCompactScreen";
+import { useTranslation } from "../i18n/context";
+import type { MessageKey } from "../i18n/messages";
 
-const navItems: { path: string; name: string; icon: ReactNode }[] = [
-  { path: "/", name: "Início", icon: <HomeOutlined /> },
-  { path: "/transacoes", name: "Transações", icon: <TransactionOutlined /> },
+const navItems: { path: string; name: MessageKey; icon: ReactNode }[] = [
+  { path: "/", name: "home", icon: <HomeOutlined /> },
+  { path: "/transacoes", name: "transactions", icon: <TransactionOutlined /> },
   {
     path: "/contas-e-cartoes",
-    name: "Contas e cartões",
+    name: "accounts",
     icon: <BankOutlined />,
   },
-  { path: "/pendencias", name: "Pendências", icon: <WalletOutlined /> },
-  { path: "/recorrencias", name: "Recorrências", icon: <RedoOutlined /> },
-  { path: "/investimentos", name: "Investimentos", icon: <RiseOutlined /> },
-  { path: "/metas", name: "Metas", icon: <AimOutlined /> },
+  { path: "/pendencias", name: "payables", icon: <WalletOutlined /> },
+  { path: "/recorrencias", name: "recurrences", icon: <RedoOutlined /> },
+  { path: "/investimentos", name: "investments", icon: <RiseOutlined /> },
+  { path: "/metas", name: "goals", icon: <AimOutlined /> },
   {
     path: "/patrimonio",
-    name: "Patrimônio",
+    name: "netWorth",
     icon: <FundOutlined />,
   },
-  { path: "/configuracoes", name: "Configurações", icon: <SettingOutlined /> },
+  { path: "/configuracoes", name: "settings", icon: <SettingOutlined /> },
 ];
 export function App() {
+  const { t, language, setLanguage } = useTranslation();
   const { pathname } = useLocation();
   const navigationType = useNavigationType();
   const compact = useCompactScreen();
@@ -52,7 +55,7 @@ export function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname]);
   const navigation = (
-    <nav aria-label="Navegação principal">
+    <nav aria-label={t("navigation")}>
       <ul className="app-navigation">
         {navItems.map((item) => {
           const active =
@@ -67,7 +70,7 @@ export function App() {
                 onClick={() => setMenuOpen(false)}
               >
                 {item.icon}
-                <span>{item.name}</span>
+                <span>{t(item.name)}</span>
               </Link>
             </li>
           );
@@ -82,7 +85,7 @@ export function App() {
         {compact && (
           <Button
             type="text"
-            aria-label="Abrir navegação"
+            aria-label={t("openNavigation")}
             aria-expanded={menuOpen}
             onClick={() => setMenuOpen(true)}
           >
@@ -94,13 +97,22 @@ export function App() {
           <span className="app-brand-text">
             <span className="app-brand-title">Julius</span>
             {!compact && (
-              <span className="app-brand-subtitle">De graça !?</span>
+              <span className="app-brand-subtitle">{t("brandSubtitle")}</span>
             )}
           </span>
         </Link>
+        <select
+          className="app-language-select"
+          aria-label={t("language")}
+          value={language}
+          onChange={(event) => setLanguage(event.target.value === "en" ? "en" : "pt-BR")}
+        >
+          <option value="pt-BR" lang="pt-BR">Português (Brasil)</option>
+          <option value="en" lang="en">English</option>
+        </select>
         <Switch
           className="app-theme-switch"
-          aria-label="Tema escuro"
+          aria-label={t("darkTheme")}
           checked={theme === "dark"}
           onChange={(dark) => setTheme(dark ? "dark" : "light")}
           checkedChildren={<MoonOutlined />}

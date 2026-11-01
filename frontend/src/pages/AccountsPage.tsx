@@ -1,3 +1,4 @@
+import { useTranslation } from "../i18n/context";
 import { PlusOutlined, UploadOutlined } from "../components/ui/icons";
 import { Alert, Button } from "../components/ui";
 import { useState } from "react";
@@ -12,6 +13,7 @@ import { EmptyState, Page, PageAction, Section } from "../components/layout";
 import { useAccounts } from "../hooks/useAccounts";
 
 export function AccountsPage() {
+  const { t } = useTranslation();
   const [creating, setCreating] = useState(false);
   const accounts = useAccounts();
   const navigate = useNavigate();
@@ -29,17 +31,17 @@ export function AccountsPage() {
   const importAction = (
     <PageAction
       icon={<UploadOutlined aria-hidden="true" />}
-      label="Importar extrato"
-      shortLabel="Importar"
+      label={t("importStatement")}
+      shortLabel={t("import")}
       onClick={() => navigate("/contas-e-cartoes/importar")}
     />
   );
 
   return (
     <Page
-      title="Contas e cartões"
-      description="Saldos e detalhes das suas contas bancárias e cartões"
-      actions={<><PageAction icon={<PlusOutlined aria-hidden="true" />} label="Nova conta" shortLabel="Nova" onClick={() => setCreating(true)} />{importAction}</>}
+      title={t("accounts")}
+      description={t("accountsDescription")}
+      actions={<><PageAction icon={<PlusOutlined aria-hidden="true" />} label={t("newAccount")} shortLabel={t("newFeminine")} onClick={() => setCreating(true)} />{importAction}</>}
       className="accounts-page"
       width="narrow"
       compactMobileHeader
@@ -49,19 +51,19 @@ export function AccountsPage() {
         <Alert
           type="error"
           showIcon
-          message="Não foi possível carregar as contas"
-          action={<Button onClick={() => accounts.refetch()}>Tentar novamente</Button>}
+          message={t("accountsLoadError")}
+          action={<Button onClick={() => accounts.refetch()}>{t("retry")}</Button>}
           style={{ marginBottom: 16 }}
         />
       )}
       {hasNoAccounts ? (
         // One block instead of an empty "Contas bancárias" and an empty
         // "Cartões de crédito" stacked: with nothing at all, say it once.
-        <Section title="Contas">
+        <Section title={t("accountList")}>
           <EmptyState
-            title="Nenhuma conta ainda"
-            hint="Crie uma conta manual, importe um extrato ou conecte um banco em Configurações."
-            action={<Button onClick={() => setCreating(true)}>Nova conta</Button>}
+            title={t("noAccountsYet")}
+            hint={t("noAccountsHint")}
+            action={<Button onClick={() => setCreating(true)}>{t("newAccount")}</Button>}
           />
         </Section>
       ) : (

@@ -1,3 +1,4 @@
+import { translate, type Language } from "../i18n/messages";
 import { compareDecimals, divideDecimalFloor, roundDecimal, subtractDecimals, sumDecimals } from "./decimal";
 
 /**
@@ -43,8 +44,8 @@ export function formatSignedMoney(
   return `${sign}${formatMoney(unsigned, currencyCode)}`;
 }
 
-export const moneySourceLabel = (source: "account_currency" | "transaction_currency") =>
-  source === "account_currency" ? "Valor na moeda da conta" : "Valor original";
+export const moneySourceLabel = (source: "account_currency" | "transaction_currency", language: Language = "pt-BR") =>
+  translate(language, source === "account_currency" ? "accountCurrencyAmount" : "originalAmount");
 
 /** Exact arithmetic; cents are a display boundary, not an accumulation unit. */
 export const sumBRL = sumDecimals;

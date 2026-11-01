@@ -238,3 +238,23 @@ describe("GoalsPage", () => {
     await waitFor(() => expect(goalsApi.deleteGoal).toHaveBeenCalledWith(goal().id));
   });
 });
+
+it("updates goal controls and validation when switched to English", async () => {
+  const { I18nProvider } = await import("../i18n/I18nProvider");
+  const { useTranslation } = await import("../i18n/context");
+  function LanguageSwitch() {
+    const { setLanguage } = useTranslation();
+    return <button onClick={() => setLanguage("en")}>English</button>;
+  }
+  vi.mocked(goalsApi.listGoals).mockResolvedValue([goal()]);
+  localStorage.removeItem("julius.language");
+  render(<I18nProvider><MemoryRouter><QueryTestProvider><LanguageSwitch /><GoalsPage /></QueryTestProvider></MemoryRouter></I18nProvider>);
+  await screen.findByRole("region", { name: "Cem mil investidos" });
+  await userEvent.click(screen.getByRole("button", { name: "English" }));
+  expect(screen.getByRole("heading", { name: "Goals" })).toBeVisible();
+  expect(screen.getByRole("progressbar", { name: "Progress for Cem mil investidos" })).toBeInTheDocument();
+  await userEvent.click(screen.getByRole("button", { name: "New goal" }));
+  await userEvent.click(screen.getByRole("button", { name: "Save" }));
+  expect(screen.getByText("Enter a goal name.")).toBeVisible();
+  localStorage.removeItem("julius.language");
+});

@@ -1,13 +1,13 @@
+import { translate, type Language } from "../i18n/messages";
 import { DollarOutlined, WalletOutlined } from "../components/ui/icons";
 import type { ReactNode } from "react";
 
 import type { Payable, PayableKind, PayableStatus } from "../api/contracts";
 import { floorPercent } from "./decimal";
 
-export const payableStatusLabel: Record<PayableKind, Record<PayableStatus, string>> = {
-  debt: { open: "Aberta", settled: "Quitada" },
-  receivable: { open: "Aberta", settled: "Recebida" },
-};
+export function payableStatusLabel(kind: PayableKind, status: PayableStatus, language: Language = "pt-BR"): string {
+  return translate(language, status === "open" ? "payableOpen" : kind === "debt" ? "debtPaidOff" : "receivableReceived");
+}
 
 // payableVocabulary centralizes the one directional difference between a
 // debt ("pagamento" wording) and a receivable ("recebimento" wording) — see
@@ -42,52 +42,29 @@ export interface PayableVocabulary {
   deleteTitle: string;
 }
 
-export const payableVocabulary: Record<PayableKind, PayableVocabulary> = {
-  debt: {
-    icon: <WalletOutlined aria-hidden="true" />,
-    kindLabel: "Dívida",
-    settledColumnLabel: "Pago",
-    settledShareLabel: "pago",
-    heroLabel: "Restante a pagar",
-    emptyTitle: "Nenhuma dívida ainda",
-    summaryLabel: "Você deve",
-    planNoun: "plano de pagamento",
-    onTrackMessage: "Em dia com o plano de pagamento até hoje.",
-    noPlanMessage: "Esta dívida ainda não tem um plano de pagamento.",
-    createPlanButtonText: "Criar plano de pagamento",
-    generateFromRemainingText: "Gerar parcelas a partir do valor restante da dívida",
-    addActionLabel: "Adicionar pagamento",
-    deallocateDescription:
-      "A parcela deixa de contar esse valor como pago; a transação em si permanece vinculada à dívida.",
-    newTitle: "Nova dívida",
-    editTitle: "Editar dívida",
-    nameFieldPlaceholder: "Ex.: Financiamento do carro",
-    nameRequiredError: "Informe um nome para a dívida.",
-    deleteTitle: "Excluir dívida",
-  },
-  receivable: {
-    icon: <DollarOutlined aria-hidden="true" />,
-    kindLabel: "A receber",
-    settledColumnLabel: "Recebido",
-    settledShareLabel: "recebido",
-    heroLabel: "Restante a receber",
-    emptyTitle: "Nenhuma conta a receber ainda",
-    summaryLabel: "Te devem",
-    planNoun: "plano de recebimento",
-    onTrackMessage: "Em dia com o plano de recebimento até hoje.",
-    noPlanMessage: "Esta conta a receber ainda não tem um plano de recebimento.",
-    createPlanButtonText: "Criar plano de recebimento",
-    generateFromRemainingText: "Gerar parcelas a partir do valor restante da conta a receber",
-    addActionLabel: "Adicionar recebimento",
-    deallocateDescription:
-      "A parcela deixa de contar esse valor como recebido; a transação em si permanece vinculada à conta a receber.",
-    newTitle: "Nova conta a receber",
-    editTitle: "Editar conta a receber",
-    nameFieldPlaceholder: "Ex.: Empréstimo para Ana",
-    nameRequiredError: "Informe um nome para a conta a receber.",
-    deleteTitle: "Excluir conta a receber",
-  },
-};
+export function getPayableVocabulary(kind: PayableKind, language: Language = "pt-BR"): PayableVocabulary {
+  return {
+    icon: kind === "debt" ? <WalletOutlined aria-hidden="true" /> : <DollarOutlined aria-hidden="true" />,
+    kindLabel: translate(language, kind === "debt" ? "debtKind" : "receivableKind"),
+    settledColumnLabel: translate(language, kind === "debt" ? "debtSettled" : "receivableSettled"),
+    settledShareLabel: translate(language, kind === "debt" ? "debtSettledLower" : "receivableSettledLower"),
+    heroLabel: translate(language, kind === "debt" ? "debtRemaining" : "receivableRemaining"),
+    emptyTitle: translate(language, kind === "debt" ? "debtEmpty" : "receivableEmpty"),
+    summaryLabel: translate(language, kind === "debt" ? "debtSummary" : "receivableSummary"),
+    planNoun: translate(language, kind === "debt" ? "debtPlanNoun" : "receivablePlanNoun"),
+    onTrackMessage: translate(language, kind === "debt" ? "debtOnTrack" : "receivableOnTrack"),
+    noPlanMessage: translate(language, kind === "debt" ? "debtNoPlan" : "receivableNoPlan"),
+    createPlanButtonText: translate(language, kind === "debt" ? "debtCreatePlan" : "receivableCreatePlan"),
+    generateFromRemainingText: translate(language, kind === "debt" ? "debtGenerate" : "receivableGenerate"),
+    addActionLabel: translate(language, kind === "debt" ? "debtAddAction" : "receivableAddAction"),
+    deallocateDescription: translate(language, kind === "debt" ? "debtDeallocate" : "receivableDeallocate"),
+    newTitle: translate(language, kind === "debt" ? "debtNew" : "receivableNew"),
+    editTitle: translate(language, kind === "debt" ? "debtEdit" : "receivableEdit"),
+    nameFieldPlaceholder: translate(language, kind === "debt" ? "debtNameExample" : "receivableNameExample"),
+    nameRequiredError: translate(language, kind === "debt" ? "debtNameRequired" : "receivableNameRequired"),
+    deleteTitle: translate(language, kind === "debt" ? "debtDelete" : "receivableDelete"),
+  };
+}
 
 /** The detail route of a payable; the kind rides along so the detail loads the right list cache. */
 export function payableDetailPath(payable: Payable): string {

@@ -1,3 +1,4 @@
+import { useTranslation } from "../../i18n/context";
 import { Alert, Skeleton } from "../ui";
 import { Link } from "react-router-dom";
 
@@ -33,28 +34,29 @@ export function AccountRecentTransactions({
   onInclusion?: (id: string, state: TransactionInclusionState) => void;
   pendingTransactionId?: string | null;
 }) {
+  const { t } = useTranslation();
   const layout = useRowLayout();
   const failed = error !== null && error !== undefined;
   return (
     <Section
-      title="Últimas transações"
+      title={t("recentTransactions")}
       className="account-recent-transactions"
       trailing={<Link className="touch-link" to={`/transacoes?account_ids=${encodeURIComponent(accountId)}`}>
-          Ver todas
+          {t("seeAll")}
         </Link>}
     >
       {failed && (
-        <Alert type="error" showIcon message="Não foi possível carregar as transações desta conta." />
+        <Alert type="error" showIcon message={t("accountTransactionsLoadError")} />
       )}
       {isLoading ? (
-        <div role="status" aria-label="Carregando últimas transações">
+        <div role="status" aria-label={t("loadingRecentTransactions")}>
           <Skeleton active paragraph={{ rows: 3 }} title={false} />
         </div>
       ) : transactions.length === 0 ? (
         failed ? null : (
           <EmptyState
-            title="Nenhuma transação nesta conta"
-            hint="As transações sincronizadas ou importadas aparecem aqui."
+            title={t("noAccountTransactions")}
+            hint={t("noAccountTransactionsHint")}
           />
         )
       ) : (

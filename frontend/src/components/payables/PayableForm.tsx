@@ -1,9 +1,10 @@
+import { useTranslation } from "../../i18n/context";
 import { compareDecimals, isPositiveDecimal } from "../../presentation/decimal";
 import { Input } from "../ui";
 import { useEffect, useState } from "react";
 
 import type { Payable, PayableKind } from "../../api/contracts";
-import { payableVocabulary } from "../../presentation/payableLabels";
+import { getPayableVocabulary } from "../../presentation/payableLabels";
 import { FormDrawer } from "../forms/FormDrawer";
 import { FormField } from "../forms/FormField";
 import { MoneyInput } from "../forms/MoneyInput";
@@ -39,7 +40,8 @@ export function PayableForm({
   onSubmit: (write: { name: string; total_amount: string; initial_remaining_amount: string | null }) => void;
   onCancel: () => void;
 }) {
-  const vocab = payableVocabulary[kind];
+  const { t, language } = useTranslation();
+  const vocab = getPayableVocabulary(kind, language);
   const [draftState, setDraftState] = useState<Draft>(() => draftFrom(payable));
   const [error, setError] = useState<string | null>(null);
   const isEditing = payable !== null;
@@ -57,16 +59,16 @@ export function PayableForm({
       return;
     }
     if (draftState.totalAmount === null || !isPositiveDecimal(draftState.totalAmount)) {
-      setError("Informe um valor total maior que zero.");
+      setError(t("payableTotalPositive"));
       return;
     }
     if (!isEditing && draftState.initialRemainingAmount !== null) {
       if (compareDecimals(draftState.initialRemainingAmount, "0") < 0) {
-        setError("O valor restante inicial não pode ser negativo.");
+        setError(t("initialRemainingNegative"));
         return;
       }
       if (compareDecimals(draftState.initialRemainingAmount, draftState.totalAmount) > 0) {
-        setError("O valor restante inicial não pode ser maior que o valor total.");
+        setError(t("initialRemainingExceedsTotal"));
         return;
       }
     }
@@ -87,7 +89,7 @@ export function PayableForm({
       submitting={submitting}
       error={error ?? submitError}
     >
-      <FormField label="Nome" htmlFor="payable-name">
+      <FormField label={t("name")} htmlFor="payable-name">
         <Input
           id="payable-name"
           value={draftState.name}
@@ -96,7 +98,7 @@ export function PayableForm({
         />
       </FormField>
 
-      <FormField label="Valor total" htmlFor="payable-total-amount">
+      <FormField label={t("totalAmount")} htmlFor="payable-total-amount">
         <MoneyInput
           id="payable-total-amount"
           min="0"
@@ -107,16 +109,16 @@ export function PayableForm({
 
       {!isEditing && (
         <FormField
-          label="Valor restante inicial (opcional)"
+          label={t("initialRemainingOptional")}
           htmlFor="payable-initial-remaining-amount"
-          hint="Informe só se parte já foi quitada; sem isso, vale o valor total."
+          hint={t("initialRemainingHint")}
         >
           <MoneyInput
             id="payable-initial-remaining-amount"
             min="0"
             value={draftState.initialRemainingAmount}
             onChange={(value) => setDraftState((current) => ({ ...current, initialRemainingAmount: value }))}
-            placeholder="Padrão: igual ao valor total"
+            placeholder={t("defaultsToTotal")}
           />
         </FormField>
       )}

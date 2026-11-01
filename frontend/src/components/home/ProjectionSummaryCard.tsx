@@ -1,3 +1,4 @@
+import { useTranslation } from "../../i18n/context";
 import { ReportValuation } from "../shared/ReportValuation";
 import { QuestionCircleOutlined } from "../ui/icons";
 import { Popover, Skeleton } from "../ui";
@@ -33,19 +34,18 @@ function lowestPoint(points: TimelineDayPoint[]): TimelineDayPoint | null {
  * is selected — the same basis as "Resultado do período".
  */
 function ChartHelp() {
+  const { t } = useTranslation();
   return (
     <Popover
       trigger="click"
       placement="bottomRight"
       content={
         <p className="projection-summary-help">
-          Saldo realizado até hoje e, daí em diante, o que já está previsto, incluindo cenários ativos. Os círculos
-          nomeiam os maiores eventos previstos (fatura, parcela, recorrência). Selecione um dia até hoje para ver
-          as transações dele.
+          {t("chartHelp")}
         </p>
       }
     >
-      <button type="button" className="projection-summary-help-button" aria-label="Como ler este gráfico">
+      <button type="button" className="projection-summary-help-button" aria-label={t("howToReadChart")}>
         <QuestionCircleOutlined aria-hidden="true" />
       </button>
     </Popover>
@@ -54,12 +54,13 @@ function ChartHelp() {
 
 /** One figure of the strip above the chart: label, balance, and the day it refers to as quiet secondary text. */
 function BalanceFigure({ label, value, date }: { label: string; value: string; date?: string }) {
+  const { language } = useTranslation();
   return (
     <div className="balance-strip-item">
       <dt>{label}</dt>
       <dd>
         <Money value={value} tone="balance" size="row" />
-        {date !== undefined && <span className="balance-strip-date">{formatDateOnly(date)}</span>}
+        {date !== undefined && <span className="balance-strip-date">{formatDateOnly(date, language)}</span>}
       </dd>
     </div>
   );
@@ -76,8 +77,9 @@ function hasNoActivity(series: { starting_balance: string; points: TimelineDayPo
 
 /** Same blocks as the loaded card — the figures, then the plot — so nothing jumps when it arrives. */
 function ProjectionSkeleton() {
+  const { t } = useTranslation();
   return (
-    <div role="status" aria-label="Carregando o saldo">
+    <div role="status" aria-label={t("loadingBalance")}>
       <Skeleton active title={false} paragraph={{ rows: 2 }} />
       <Skeleton.Node active style={{ width: "100%", height: 240 }}>
         <span />
@@ -87,6 +89,7 @@ function ProjectionSkeleton() {
 }
 
 export function ProjectionSummaryCard({ period }: { period: Period }) {
+  const { t, language } = useTranslation();
   const navigate = useNavigate();
   const compact = useCompactScreen();
   const { timeline, base, bounds, wholePeriod, referenceDate, isLoading, error, retry } = useHomeProjection(period);
@@ -97,7 +100,7 @@ export function ProjectionSummaryCard({ period }: { period: Period }) {
   // future to warn about, so there the card answers the question the period
   // actually poses: how low did it get?
   const lowest = base ? (finalPoint ? base.lowest_balance : lowestPoint(base.points)) : null;
-  const lowestTitle = finalPoint ? "Menor saldo previsto" : "Menor saldo no período";
+  const lowestTitle = finalPoint ? t("lowestProjectedBalance") : t("lowestPeriodBalance");
   // Each figure is shown once above the fold: today's cash and the month-end
   // balance are the top band's, and a forecast that goes negative already says
   // its lowest point in the alert. What is left here is what nothing else says.
@@ -118,34 +121,34 @@ export function ProjectionSummaryCard({ period }: { period: Period }) {
 
   return (
     <ReportValuation valuation={timeline.valuation}>
-    <Section title="Evolução do saldo" trailing={<ChartHelp />}>
+    <Section title={t("balanceTrend")} trailing={<ChartHelp />}>
       {isLoading && <ProjectionSkeleton />}
       {error && !isLoading && (
-        <UnavailableState onRetry={retry}>{problemMessage(error) ?? "Não foi possível carregar o saldo."}</UnavailableState>
+        <UnavailableState onRetry={retry}>{problemMessage(error) ?? t("balanceLoadError")}</UnavailableState>
       )}
 
       {!isLoading && !error && base && bounds && hasNoActivity(base) && (
         <EmptyState
-          title="Ainda não há saldo para mostrar"
-          hint="Conecte um banco ou importe um extrato para acompanhar a evolução do saldo."
+          title={t("noBalanceYet")}
+          hint={t("noBalanceHint")}
         />
       )}
 
       {!isLoading && !error && base && bounds && !hasNoActivity(base) && (
         <div className="projection-summary">
-          {base.balance_reporting?.status === "stale" && <p role="status">Saldo convertido com cotações desatualizadas.</p>}
+          {base.balance_reporting?.status === "stale" && <p role="status">{t("staleConvertedBalance")}</p>}
           {/* The global control already names the chosen window, so spelling it
               out again would only repeat it — except under "todo o
               período", where the bounds come from the database and are
               worth showing. */}
           {wholePeriod && (
-            <p className="projection-summary-period">{periodNavigation(bounds.from, bounds.to)?.label}</p>
+            <p className="projection-summary-period">{periodNavigation(bounds.from, bounds.to, language)?.label}</p>
           )}
           {(shownLowest || shownFinal) && (
             <dl className={`balance-strip ${longestFigure > 13 ? "is-long" : ""}`}>
               {shownLowest && <BalanceFigure label={lowestTitle} value={shownLowest.balance} date={shownLowest.date} />}
               {shownFinal && (
-                <BalanceFigure label="Saldo no fim do período" value={shownFinal.balance} date={shownFinal.date} />
+                <BalanceFigure label={t("endOfPeriodBalance")} value={shownFinal.balance} date={shownFinal.date} />
               )}
             </dl>
           )}

@@ -1,3 +1,4 @@
+import type { Language } from "../i18n/messages";
 import { formatAxisMoney } from "./chartAxis";
 
 /**
@@ -8,8 +9,8 @@ import { formatAxisMoney } from "./chartAxis";
  * widest label is one of the data's extremes (the axis rounds outward, which
  * keeps the same number of characters), or "0".
  */
-export function yAxisWidth(values: number[]): number {
-  const labels = [0, ...values].filter(Number.isFinite).map((value) => formatAxisMoney(value));
+export function yAxisWidth(values: number[], language: Language = "pt-BR"): number {
+  const labels = [0, ...values].filter(Number.isFinite).map((value) => formatAxisMoney(value, language));
   const longest = Math.max(...labels.map((label) => label.length));
   return Math.max(32, Math.ceil((longest + 1) * 7) + 8);
 }

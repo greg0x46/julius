@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createAppQueryClient } from "./queryClient";
 import { App } from "./App";
+import { I18nProvider } from "../i18n/I18nProvider";
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -30,4 +31,21 @@ describe("App shell", () => {
     expect(scrollTo).toHaveBeenCalledWith(0, 0);
     expect(screen.getByRole("link", { name: "Metas" })).toHaveAttribute("aria-current", "page");
   });
+});
+
+it("switches navigation and accessibility labels from the header", async () => {
+  vi.spyOn(window, "scrollTo").mockImplementation(() => {});
+  render(
+    <I18nProvider>
+      <QueryClientProvider client={createAppQueryClient()}>
+        <MemoryRouter><App /></MemoryRouter>
+      </QueryClientProvider>
+    </I18nProvider>,
+  );
+  await userEvent.selectOptions(screen.getByRole("combobox", { name: "Idioma" }), "en");
+  expect(screen.getByRole("navigation", { name: "Main navigation" })).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "Goals" })).toHaveAttribute("href", "/metas");
+  expect(screen.getByRole("link", { name: "Skip to content" })).toBeInTheDocument();
+  window.localStorage.removeItem("julius.language");
+  document.documentElement.lang = "pt-BR";
 });

@@ -1,3 +1,4 @@
+import { useTranslation } from "../../i18n/context";
 import { Alert, Button, Skeleton, Switch } from "../ui";
 import { useMemo, useState } from "react";
 
@@ -40,6 +41,7 @@ export function InvestmentPeriodView({
   positionMenu: (position: InvestmentPosition | undefined) => RecordMenuItem[];
   groupMenu: (group: InvestmentPeriodGroup) => RecordMenuItem[];
 }) {
+  const { t, language } = useTranslation();
   const [search, setSearch] = useState("");
   const [showClosed, setShowClosed] = useState(false);
   const query = useInvestmentPortfolioPeriod(request, groupBy);
@@ -52,8 +54,8 @@ export function InvestmentPeriodView({
 
   if (request === null) {
     return (
-      <Section title="Posições">
-        <EmptyState title="Este período ainda não começou" hint="Escolha um período que já tenha começado para ver a carteira." />
+      <Section title={t("positions")}>
+        <EmptyState title={t("periodNotStarted")} hint={t("periodNotStartedHint")} />
       </Section>
     );
   }
@@ -67,7 +69,7 @@ export function InvestmentPeriodView({
   return (
     <>
       {query.isPending && (
-        <div className="section" role="status" aria-label="Carregando investimentos">
+        <div className="section" role="status" aria-label={t("loadingInvestments")}>
           <div className="section-body">
             <Skeleton active paragraph={{ rows: 5 }} />
           </div>
@@ -75,15 +77,15 @@ export function InvestmentPeriodView({
       )}
       {query.isError && !data && (
         <UnavailableState onRetry={() => void query.refetch()}>
-          {problemMessage(query.error) ?? "Não foi possível carregar o período dos investimentos."}
+          {problemMessage(query.error) ?? t("investmentPeriodError")}
         </UnavailableState>
       )}
       {query.isError && data && (
         <Alert
           type="warning"
           showIcon
-          message="Dados possivelmente desatualizados"
-          description={<Button onClick={() => void query.refetch()}>Tentar novamente</Button>}
+          message={t("possiblyStaleData")}
+          description={<Button onClick={() => void query.refetch()}>{t("retry")}</Button>}
           style={{ marginBottom: 16 }}
         />
       )}
@@ -91,17 +93,17 @@ export function InvestmentPeriodView({
         <ReportValuation valuation={data}>
           <InvestmentPeriodSummary data={data} positions={allPositions} updating={updating} />
           <Section
-            title="Posições"
-            trailing={`${data.totals.positions_total} ${data.totals.positions_total === 1 ? "posição" : "posições"}`}
+            title={t("positions")}
+            trailing={t(data.totals.positions_total === 1 ? "positionCountOne" : "positionCountMany", { count: data.totals.positions_total.toLocaleString(language) })}
             className="investment-positions-section"
           >
             <ListToolbar
-              label="Controles das posições"
+              label={t("positionControls")}
               start={
                 <SearchField
                   id="investment-search"
-                  label="Buscar ativo"
-                  placeholder="Nome ou ticker"
+                  label={t("searchAsset")}
+                  placeholder={t("nameOrTicker")}
                   value={search}
                   onChange={setSearch}
                 />
@@ -109,7 +111,7 @@ export function InvestmentPeriodView({
               end={
                 <label className="list-toolbar-switch">
                   <Switch size="small" checked={showClosed} onChange={setShowClosed} />
-                  <span>Mostrar encerradas</span>
+                  <span>{t("showClosed")}</span>
                 </label>
               }
             />
@@ -123,9 +125,9 @@ export function InvestmentPeriodView({
                 groupMenu={groupMenu}
                 empty={
                   <EmptyState
-                    title="Nenhuma posição neste período"
-                    hint="Não há posição com valor ou movimento no período."
-                    action={<Button onClick={onNewPosition}>Nova posição</Button>}
+                    title={t("noPositionsInPeriod")}
+                    hint={t("noPositionsInPeriodHint")}
+                    action={<Button onClick={onNewPosition}>{t("newPosition")}</Button>}
                   />
                 }
               />

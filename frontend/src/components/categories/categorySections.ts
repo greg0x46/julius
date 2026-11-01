@@ -1,10 +1,11 @@
+import { translate, type Language, type MessageKey } from "../../i18n/messages";
 import { fold, type CategoryChoice } from "../../presentation/transactionDetail";
 
 const kindOrder: CategoryChoice["kind"][] = ["expense", "income", "transfer"];
-const kindGroupTitle: Record<CategoryChoice["kind"], string> = {
-  expense: "Despesas",
-  income: "Receitas",
-  transfer: "Transferências",
+const kindGroupTitle: Record<CategoryChoice["kind"], MessageKey> = {
+  expense: "expenseCategories",
+  income: "incomeCategories",
+  transfer: "transferCategories",
 };
 
 export type CategorySection = { key: string; title: string; options: CategoryChoice[] };
@@ -20,11 +21,13 @@ export function categorySections({
   suggestedId,
   recentIds,
   search,
+  language = "pt-BR",
 }: {
   options: CategoryChoice[];
   suggestedId: string | null;
   recentIds: string[];
   search: string;
+  language?: Language;
 }): CategorySection[] {
   const query = fold(search);
   const matches = query ? options.filter((option) => fold(option.name).includes(query)) : options;
@@ -36,17 +39,17 @@ export function categorySections({
     .filter((option): option is CategoryChoice => option !== undefined && option.value !== suggestedId);
 
   const sections: CategorySection[] = [];
-  if (suggested) sections.push({ key: "suggested", title: "Sugeridas", options: [suggested] });
-  if (recent.length > 0) sections.push({ key: "recent", title: "Recentes", options: recent });
+  if (suggested) sections.push({ key: "suggested", title: translate(language, "suggestedCategories"), options: [suggested] });
+  if (recent.length > 0) sections.push({ key: "recent", title: translate(language, "recentCategories"), options: recent });
 
   const kinds = new Set(matches.map((option) => option.kind));
   if (kinds.size > 1) {
     for (const kind of kindOrder) {
       const group = matches.filter((option) => option.kind === kind);
-      if (group.length > 0) sections.push({ key: `all-${kind}`, title: kindGroupTitle[kind], options: group });
+      if (group.length > 0) sections.push({ key: `all-${kind}`, title: translate(language, kindGroupTitle[kind]), options: group });
     }
   } else if (matches.length > 0) {
-    sections.push({ key: "all", title: "Todas", options: matches });
+    sections.push({ key: "all", title: translate(language, "allFeminine"), options: matches });
   }
   return sections;
 }

@@ -1,3 +1,4 @@
+import { useTranslation } from "../../i18n/context";
 import { CheckOutlined, DownOutlined, SearchOutlined } from "../ui/icons";
 import { Button, Drawer, Input, Popover, Spin, type InputRef } from "../ui";
 import {
@@ -63,9 +64,6 @@ function normalize(text: string): string {
     .toLowerCase();
 }
 
-function defaultCountLabel(count: number): string {
-  return count === 1 ? "1 selecionada" : `${count} selecionadas`;
-}
 
 /**
  * The trigger's text: nothing → placeholder; one pick → its name; more →
@@ -95,18 +93,19 @@ function comboboxSummary(
  * the person is done. In single mode a pick closes the list.
  */
 export function FilterCombobox(props: FilterComboboxProps) {
+  const { t } = useTranslation();
   const {
     id,
     label,
     placeholder,
     options: listedOptions,
-    searchPlaceholder = "Buscar…",
+    searchPlaceholder,
     loading = false,
     error = null,
     onRetry,
-    emptyText = "Nenhuma opção disponível",
+    emptyText,
     disabled = false,
-    countLabel = defaultCountLabel,
+    countLabel,
     optionRender,
   } = props;
   const multiple = props.multiple === true;
@@ -137,8 +136,8 @@ export function FilterCombobox(props: FilterComboboxProps) {
     const missing = [...new Set([...committed, ...draft])].filter((value) => !listed.has(value));
     return missing.length === 0
       ? listedOptions
-      : [...listedOptions, ...missing.map((value) => ({ value, label: "Seleção indisponível" }))];
-  }, [listedOptions, committed, draft, loading, error]);
+      : [...listedOptions, ...missing.map((value) => ({ value, label: t("unavailableSelection") }))];
+  }, [listedOptions, committed, draft, loading, error, t]);
   const byValue = useMemo(() => new Map(options.map((option) => [option.value, option])), [options]);
   const selectedOptions = committed.flatMap((value) => {
     const option = byValue.get(value);
@@ -243,20 +242,20 @@ export function FilterCombobox(props: FilterComboboxProps) {
     >
       {loading ? (
         <div className="filter-combobox-state" role="status">
-          <Spin size="small" /> Carregando…
+          <Spin size="small" /> {t("loading")}
         </div>
       ) : error ? (
         <div className="filter-combobox-state" role="alert">
           <span>{error}</span>
           {onRetry && (
             <Button type="link" size="small" onClick={onRetry}>
-              Tentar novamente
+              {t("retry")}
             </Button>
           )}
         </div>
       ) : visible.length === 0 ? (
         <div className="filter-combobox-state">
-          {options.length === 0 ? emptyText : "Nenhum resultado para a busca."}
+          {options.length === 0 ? (emptyText ?? t("noOptionsAvailable")) : t("noSearchResults")}
         </div>
       ) : (
         visible.map((option, index) => {
@@ -297,13 +296,13 @@ export function FilterCombobox(props: FilterComboboxProps) {
         ref={searchRef}
         allowClear
         role="combobox"
-        aria-label={`Buscar em ${label}`}
+        aria-label={t("searchIn", { label })}
         aria-expanded="true"
         aria-controls={listId}
         aria-autocomplete="list"
         aria-activedescendant={activeOption ? optionId(activeOption.value) : undefined}
         prefix={<SearchOutlined aria-hidden="true" />}
-        placeholder={searchPlaceholder}
+        placeholder={searchPlaceholder ?? t("search")}
         value={search}
         onChange={(event) => setSearch(event.target.value)}
         onKeyDown={onSearchKeyDown}
@@ -313,7 +312,7 @@ export function FilterCombobox(props: FilterComboboxProps) {
 
   const counter = multiple && (
     <span className="filter-combobox-count" aria-live="polite">
-      {selectedValues.length > 0 ? countLabel(selectedValues.length) : "Nenhuma seleção"}
+      {selectedValues.length > 0 ? (countLabel?.(selectedValues.length) ?? t(selectedValues.length === 1 ? "selectedOne" : "selectedMany", { count: selectedValues.length })) : t("noSelection")}
     </span>
   );
 
@@ -355,7 +354,7 @@ export function FilterCombobox(props: FilterComboboxProps) {
                 <>
                   {counter}
                   <div className="filter-combobox-sheet-actions">
-                    <Button onClick={() => close()}>Cancelar</Button>
+                    <Button onClick={() => close()}>{t("cancel")}</Button>
                     <Button
                       type="primary"
                       onClick={() => {
@@ -363,7 +362,7 @@ export function FilterCombobox(props: FilterComboboxProps) {
                         close();
                       }}
                     >
-                      Confirmar
+                      {t("confirm")}
                     </Button>
                   </div>
                 </>
@@ -377,7 +376,7 @@ export function FilterCombobox(props: FilterComboboxProps) {
                     close();
                   }}
                 >
-                  Limpar seleção
+                  {t("clearSelection")}
                 </Button>
               )}
             </div>
@@ -411,7 +410,7 @@ export function FilterCombobox(props: FilterComboboxProps) {
             <div className="filter-combobox-popover-footer">
               {counter}
               <Button type="link" size="small" disabled={selectedValues.length === 0} onClick={clearAll}>
-                Limpar
+                {t("clear")}
               </Button>
             </div>
           )}

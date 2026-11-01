@@ -1,3 +1,4 @@
+import { useTranslation } from "../../i18n/context";
 import { formatRatioPercent, ratioDirection } from "../../presentation/investmentPeriod";
 import { Money } from "../shared/Money";
 
@@ -8,6 +9,7 @@ import { Money } from "../shared/Money";
  * part may be left out (null).
  */
 export function InvestmentYieldValue({ gain, rate }: { gain: string | null; rate: string | null }) {
+  const { language } = useTranslation();
   const direction = rate === null ? "zero" : ratioDirection(rate);
   // A loss is a result, not an error: only a gain is coloured.
   const color = direction === "positive" ? "positive" : "neutral";
@@ -15,7 +17,7 @@ export function InvestmentYieldValue({ gain, rate }: { gain: string | null; rate
     <span className="investment-yield">
       {gain !== null && <Money value={gain} tone="result" />}
       {rate !== null && (
-        <span className={`investment-yield-percent money-${color}`}>{formatRatioPercent(rate, { signed: true })}</span>
+        <span className={`investment-yield-percent money-${color}`}>{formatRatioPercent(rate, { signed: true, language })}</span>
       )}
     </span>
   );

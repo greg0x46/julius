@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { periodPresets } from "../components/filters/periodPresets";
 import { periodNavigation } from "../components/filters/periodNavigation";
+import { useTranslation } from "../i18n/context";
 import { useTimezone } from "./useTimezone";
 
 /** A window, in the same shape the transactions filter uses: nulls mean "all of it". */
@@ -87,6 +88,7 @@ export function storePeriod(period: Period, timezone: string): void {
  */
 export function usePeriod(initial?: () => Period | null) {
   const timezone = useTimezone();
+  const { language } = useTranslation();
   const [period, setPeriodState] = useState<Period>(() => {
     const fromCaller = initial?.() ?? null;
     if (fromCaller) {
@@ -100,5 +102,5 @@ export function usePeriod(initial?: () => Period | null) {
     setPeriodState(next);
     storePeriod(next, timezone);
   };
-  return { period, setPeriod, presets: periodPresets(timezone) };
+  return { period, setPeriod, presets: periodPresets(timezone, language) };
 }

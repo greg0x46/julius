@@ -1,3 +1,4 @@
+import { useTranslation } from "../../i18n/context";
 import { Grid } from "../ui";
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
@@ -125,6 +126,7 @@ export function ResponsiveList<T>({
   empty,
   stackBelow = "md",
 }: ResponsiveListProps<T>) {
+  const { t } = useTranslation();
   const compact = useCompactScreen();
   // `lg` is undefined before the first media-query tick: that counts as
   // stacked, like `useCompactScreen`, so a phone never flashes the table.
@@ -132,7 +134,7 @@ export function ResponsiveList<T>({
   const stacked =
     stackBelow === "xl" ? !screens.xl : stackBelow === "lg" ? !screens.lg : compact;
   if (isLoading) return <>{loading}</>;
-  if (items.length === 0) return <>{empty ?? <EmptyState title="Nada por aqui ainda" />}</>;
+  if (items.length === 0) return <>{empty ?? <EmptyState title={t("nothingHereYet")} />}</>;
   if (!stacked) return <>{wide}</>;
   return (
     <ul className="list-rows" aria-label={label}>

@@ -1,3 +1,4 @@
+import { useTranslation } from "../i18n/context";
 import { Alert, Button } from "../components/ui";
 import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -15,6 +16,7 @@ import { useRecurringCommitments } from "../hooks/useRecurringCommitments";
 import { errorMessage } from "../presentation/errors";
 
 export function RecurringCommitmentsPage() {
+  const { t } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
   const compact = useCompactScreen();
@@ -61,9 +63,9 @@ export function RecurringCommitmentsPage() {
       setFormOpen(false);
       setInitialDraft(null);
       if (location.state) navigate(".", { replace: true, state: null });
-      feedback.success(editingCommitment ? "Salvo" : "Recorrência criada");
+      feedback.success(editingCommitment ? t("saved") : t("recurrenceCreated"));
     } catch (error) {
-      setSaveError(errorMessage(error, "Não foi possível salvar a recorrência."));
+      setSaveError(errorMessage(error, t("recurrenceSaveFailed")));
     }
   };
 
@@ -81,7 +83,7 @@ export function RecurringCommitmentsPage() {
     try {
       await commitments.toggleCommitment({ commitmentId: commitment.id, isActive });
     } catch (error) {
-      reportActionError(errorMessage(error, "Não foi possível salvar a recorrência."));
+      reportActionError(errorMessage(error, t("recurrenceSaveFailed")));
     } finally {
       setTogglingCommitmentId(null);
     }
@@ -92,9 +94,9 @@ export function RecurringCommitmentsPage() {
     try {
       await commitments.deleteCommitment(commitment.id);
       setFormOpen(false);
-      feedback.success("Excluído");
+      feedback.success(t("deleted"));
     } catch (error) {
-      const message = errorMessage(error, "Não foi possível excluir a recorrência.");
+      const message = errorMessage(error, t("recurrenceDeleteFailed"));
       // Deleting from the phone's edit drawer: the error must show there, not behind it.
       if (formOpen) setSaveError(message);
       else reportActionError(message);
@@ -105,8 +107,8 @@ export function RecurringCommitmentsPage() {
   // and a second one right under it would only repeat it.
   const empty = (
     <EmptyState
-      title="Nenhuma recorrência ainda"
-      hint="Cadastre salário, aluguel e assinaturas para acompanhar o que se repete a cada mês."
+      title={t("noRecurrencesYet")}
+      hint={t("noRecurrencesHint")}
     />
   );
   // A failed load with nothing to show is not "nothing yet": it only says it failed.
@@ -114,11 +116,11 @@ export function RecurringCommitmentsPage() {
 
   return (
     <Page
-      title="Recorrências"
-      description="Acompanhe salário, aluguel e assinaturas que se repetem"
+      title={t("recurrencesTitle")}
+      description={t("recurrencesDescription")}
       width="narrow"
       compactMobileHeader
-      actions={<PageAction label="Nova recorrência" shortLabel="Nova" onClick={openCreate} />}
+      actions={<PageAction label={t("newRecurrence")} shortLabel={t("newFeminine")} onClick={openCreate} />}
     >
       {actionError && (
         <Alert
@@ -134,8 +136,8 @@ export function RecurringCommitmentsPage() {
         <Alert
           type="error"
           showIcon
-          message="Não foi possível carregar as recorrências"
-          action={<Button onClick={() => commitments.refetch()}>Tentar novamente</Button>}
+          message={t("recurrencesLoadError")}
+          action={<Button onClick={() => commitments.refetch()}>{t("retry")}</Button>}
           style={{ marginBottom: 16 }}
         />
       )}

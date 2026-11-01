@@ -16,6 +16,9 @@ Several connections may exist (one `data_sources` row per Pluggy item, i.e. one
 per bank). All use the same client ID/secret — they are items of the same Pluggy
 application — and each sync run belongs to exactly one connection.
 
+The browser language selector translates some sync history and status labels;
+coverage remains incomplete. See the [frontend reference](../frontend.md).
+
 ## Backend
 
 - `internal/datasources` — connection registry: list/create/rename and

@@ -1,3 +1,4 @@
+import { useTranslation } from "../../i18n/context";
 import {
   useId,
   useRef,
@@ -75,6 +76,7 @@ export function TextInput({
   ref,
   ...props
 }: InputProps) {
+  const { t } = useTranslation();
   const input = useRef<HTMLInputElement>(null);
   const field = (
     <input
@@ -97,7 +99,7 @@ export function TextInput({
     allowClear && props.value && !props.disabled ? (
       <button
         type="button"
-        aria-label="Limpar campo"
+        aria-label={t("clearField")}
         onClick={() => {
           const element = input.current;
           if (!element) return;
@@ -124,16 +126,17 @@ export function TextInput({
   );
 }
 export function Password(props: InputProps) {
+  const { t } = useTranslation();
   const [visible, setVisible] = useState(false);
   return (
     <span className="ui-input-affix-wrapper">
       <TextInput {...props} type={visible ? "text" : "password"} />
       <button
         type="button"
-        aria-label={visible ? "Ocultar senha" : "Mostrar senha"}
+        aria-label={visible ? t("hidePassword") : t("showPassword")}
         onClick={() => setVisible(!visible)}
       >
-        {visible ? "Ocultar" : "Mostrar"}
+        {visible ? t("hide") : t("show")}
       </button>
     </span>
   );

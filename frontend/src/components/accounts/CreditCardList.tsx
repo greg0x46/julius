@@ -1,3 +1,5 @@
+import { dateFormatter } from "../../i18n/dateFormats";
+import { useTranslation } from "../../i18n/context";
 import { Skeleton } from "../ui";
 
 import type { Account } from "../../api/contracts";
@@ -26,10 +28,12 @@ function totalLimit(accounts: Account[]): string {
 
 // Due dates are near-future calendar days, so "10/10" is enough — the year is
 // only spelled out when it is not the current one.
-function dueDayLabel(value: string | null, currentYear: string): string | null {
+function dueDayLabel(value: string | null, currentYear: string, language: "pt-BR" | "en"): string | null {
   if (value === null) return null;
-  const full = formatOptionalDay(value);
-  return full.endsWith(`/${currentYear}`) ? full.slice(0, 5) : full;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return formatOptionalDay(value, language);
+  const year = String(date.getUTCFullYear()) === currentYear ? {} : { year: "numeric" as const };
+  return dateFormatter(language, { day: "2-digit", month: "2-digit", ...year, timeZone: "UTC" }).format(date);
 }
 
 /**
@@ -52,6 +56,7 @@ export function CreditCardList({
   failed?: boolean;
   onOpen: (account: Account) => void;
 }) {
+  const { t, language } = useTranslation();
   const timezone = useTimezone();
   if (failed) return null;
   const currentYear = zonedToday(timezone).slice(0, 4);
@@ -59,32 +64,32 @@ export function CreditCardList({
   const hasBRLCards = accounts.some(isBRL);
   return (
     <Section
-      title="Cartões de crédito"
+      title={t("creditCards")}
       trailing={
         !isLoading && hasBRLCards ? (
           <>
-            {hasForeignCards ? "Limite total em reais" : "Limite total"}{" "}
+            {hasForeignCards ? t("totalLimitBRL") : t("totalLimit")}{" "}
             {formatAccountMoney(totalLimit(accounts), "BRL")}
           </>
         ) : undefined
       }
     >
       {isLoading ? (
-        <div role="status" aria-label="Carregando cartões de crédito">
+        <div role="status" aria-label={t("loadingCreditCards")}>
           <Skeleton active paragraph={{ rows: 2 }} title={false} />
         </div>
       ) : accounts.length === 0 ? (
         <EmptyState
-          title="Nenhum cartão de crédito"
-          hint="Os cartões aparecem aqui quando você conecta um banco em Configurações."
+          title={t("noCreditCards")}
+          hint={t("noCreditCardsHint")}
         />
       ) : (
-        <ul className="list-rows" aria-label="Cartões de crédito">
+        <ul className="list-rows" aria-label={t("creditCards")}>
           {accounts.map((account) => {
-            const due = dueDayLabel(account.balance_due_date, currentYear);
+            const due = dueDayLabel(account.balance_due_date, currentYear, language);
             const dates = [
-              due !== null ? `Vence ${due}` : null,
-              account.closing_day !== null ? `Fecha dia ${account.closing_day}` : null,
+              due !== null ? t("cardDue").replace("{date}", due) : null,
+              account.closing_day !== null ? t("cardCloses").replace("{day}", String(account.closing_day)) : null,
             ].filter((part): part is string => part !== null);
             const available =
               account.available_credit_limit !== null
@@ -96,7 +101,7 @@ export function CreditCardList({
                     usage) is the most useful name a screen reader can get. */}
                 <button type="button" className="card-row" onClick={() => onOpen(account)}>
                   <span className="card-row-line">
-                    <span className="card-row-name">{accountDisplayName(account)}</span>
+                    <span className="card-row-name">{accountDisplayName(account, language)}</span>
                     <AccountMoney
                       value={account.balance}
                       currencyCode={account.currency_code}
@@ -105,8 +110,8 @@ export function CreditCardList({
                     />
                   </span>
                   <span className="card-row-line card-row-meta">
-                    <span title={closingDaySourceHint(account.closing_day_source)}>{dates.join(" · ")}</span>
-                    <span>fatura atual</span>
+                    <span title={closingDaySourceHint(account.closing_day_source, language)}>{dates.join(" · ")}</span>
+                    <span>{t("currentBill")}</span>
                   </span>
                   <CreditUsageMeter ratio={account.credit_usage_ratio} available={available} />
                 </button>

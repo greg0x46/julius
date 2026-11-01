@@ -1,8 +1,9 @@
+import { useTranslation } from "../i18n/context";
 import { Alert, Button, Select } from "../components/ui";
 import { useState } from "react";
 
 import type { Scenario, ScenarioKind, ScenarioTransactionWrite } from "../api/contracts";
-import { scenarioKindLabel } from "../presentation/scenarioLabels";
+import { scenarioKindName } from "../presentation/scenarioLabels";
 import { StandaloneScenarioList } from "../components/scenarios/StandaloneScenarioCard";
 import { StandaloneScenarioForm } from "../components/scenarios/StandaloneScenarioForm";
 import { ListToolbar, PageAction, SearchField } from "../components/layout";
@@ -13,13 +14,14 @@ import { errorMessage } from "../presentation/errors";
 
 /** Search happens here: the list is small and already fully loaded (the kind
  *  filter, unlike search, changes what the server returns). */
-function arrange(scenarios: Scenario[], search: string): Scenario[] {
-  const needle = search.trim().toLocaleLowerCase("pt-BR");
+function arrange(scenarios: Scenario[], search: string, language: string): Scenario[] {
+  const needle = search.trim().toLocaleLowerCase(language);
   if (!needle) return scenarios;
-  return scenarios.filter((scenario) => scenario.name.toLocaleLowerCase("pt-BR").includes(needle));
+  return scenarios.filter((scenario) => scenario.name.toLocaleLowerCase(language).includes(needle));
 }
 
 export function ScenariosPage() {
+  const { t, language } = useTranslation();
   const [kindFilter, setKindFilter] = useState<ScenarioKind | "all">("all");
   const feedback = useFeedback();
   const scenarios = useScenarios({ kind: kindFilter === "all" ? undefined : kindFilter });
@@ -33,9 +35,9 @@ export function ScenariosPage() {
     try {
       await scenarios.createScenario({ name });
       setFormOpen(false);
-      feedback.success("Cenário criado");
+      feedback.success(t("scenarioCreated"));
     } catch (error) {
-      setSaveError(errorMessage(error, "Não foi possível salvar o cenário."));
+      setSaveError(errorMessage(error, t("scenarioSaveError")));
     }
   };
 
@@ -52,10 +54,10 @@ export function ScenariosPage() {
     setActionError(null);
     try {
       await scenarios.deleteScenario(scenario.id);
-      feedback.success("Cenário excluído");
+      feedback.success(t("scenarioDeleted"));
       return null;
     } catch (error) {
-      return errorMessage(error, "Não foi possível excluir o cenário.");
+      return errorMessage(error, t("scenarioDeleteError"));
     }
   };
 
@@ -63,10 +65,10 @@ export function ScenariosPage() {
     setActionError(null);
     try {
       await scenarios.toggleScenario({ scenarioId: scenario.id, isActive });
-      feedback.success(isActive ? "Cenário incluído na projeção" : "Cenário fora da projeção");
+      feedback.success(isActive ? t("scenarioIncluded") : t("scenarioExcluded"));
       return null;
     } catch (error) {
-      return errorMessage(error, "Não foi possível atualizar o cenário.");
+      return errorMessage(error, t("scenarioUpdateError"));
     }
   };
 
@@ -81,11 +83,11 @@ export function ScenariosPage() {
 
   return (
     <PageContainer
-      title="Cenários"
-      subTitle="Simule decisões hipotéticas, como uma viagem ou uma troca de emprego"
+      title={t("scenarios")}
+      subTitle={t("scenariosSubtitle")}
       compactMobileHeader
       extra={[
-        <PageAction key="new-scenario" label="Novo cenário" shortLabel="Novo" onClick={() => setFormOpen(true)} />,
+        <PageAction key="new-scenario" label={t("newScenario")} shortLabel={t("new")} onClick={() => setFormOpen(true)} />,
       ]}
     >
       {actionError && (
@@ -102,8 +104,8 @@ export function ScenariosPage() {
         <Alert
           type="error"
           showIcon
-          message="Não foi possível carregar os cenários"
-          description={<Button onClick={() => scenarios.refetch()}>Tentar novamente</Button>}
+          message={t("scenariosLoadError")}
+          description={<Button onClick={() => scenarios.refetch()}>{t("retry")}</Button>}
           style={{ marginBottom: 16 }}
         />
       )}
@@ -111,26 +113,26 @@ export function ScenariosPage() {
       {/* Nothing to search or filter while there are no scenarios at all (or the list failed to load). */}
       {showToolbar && (
         <ListToolbar
-          label="Controles dos cenários"
+          label={t("scenarioControls")}
           start={
             <SearchField
               id="scenarios-search"
-              label="Buscar cenários"
-              placeholder="Buscar por nome…"
+              label={t("searchScenarios")}
+              placeholder={t("searchByName")}
               value={search}
               onChange={setSearch}
             />
           }
           end={
             <label className="scenario-kind-filter">
-              <span className="scenario-kind-filter-label">Tipo</span>
+              <span className="scenario-kind-filter-label">{t("type")}</span>
               <Select
-                aria-label="Filtrar cenários por tipo"
+                aria-label={t("filterScenariosByType")}
                 value={kindFilter}
                 onChange={setKindFilter}
                 options={[
-                  { value: "all", label: "Todos os tipos" },
-                  ...Object.entries(scenarioKindLabel).map(([value, label]) => ({ value, label })),
+                  { value: "all", label: t("allTypes") },
+                  ...(["debt_plan", "receivable_plan", "standalone", "recurring"] as const).map((value) => ({ value, label: scenarioKindName(value, language) })),
                 ]}
                 popupMatchSelectWidth={false}
               />
@@ -142,7 +144,7 @@ export function ScenariosPage() {
       {/* A failed load shows only the retry: an empty list beside it would say "nothing yet". */}
       {!scenarios.error && (
         <StandaloneScenarioList
-          scenarios={arrange(scenarios.scenarios, search)}
+          scenarios={arrange(scenarios.scenarios, search, language)}
           isLoading={scenarios.isLoading}
           isFiltered={isFiltered}
           onDeleteScenario={removeScenario}

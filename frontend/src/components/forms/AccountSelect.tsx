@@ -1,3 +1,4 @@
+import { useTranslation } from "../../i18n/context";
 import { Select } from "../ui";
 import { useMemo } from "react";
 
@@ -36,23 +37,24 @@ export function AccountSelect({
   value,
   onChange,
   optional = false,
-  placeholder = "Selecione uma conta",
+  placeholder,
   disabled,
   invalid,
 }: AccountSelectProps) {
+  const { t, language } = useTranslation();
   const { accounts, isLoading } = useAccounts();
 
   const options = useMemo(
     () =>
       accounts.filter((account) => !account.archived_at).map((account) => ({
         value: account.id,
-        label: accountDisplayName(account),
+        label: accountDisplayName(account, language),
         secondary: secondaryLine(account),
-        searchText: [accountDisplayName(account), account.institution_name, account.number]
+        searchText: [accountDisplayName(account, language), account.institution_name, account.number]
           .filter(Boolean)
           .join(" "),
       })),
-    [accounts],
+    [accounts, language],
   );
 
   // While accounts load, a preselected id has no label yet; show the
@@ -65,7 +67,7 @@ export function AccountSelect({
       id={id}
       value={shownValue}
       options={options}
-      placeholder={placeholder}
+      placeholder={placeholder ?? t("selectAccount")}
       allowClear={optional}
       loading={isLoading}
       disabled={disabled}

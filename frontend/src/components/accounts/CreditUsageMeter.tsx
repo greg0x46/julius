@@ -1,3 +1,4 @@
+import { useTranslation } from "../../i18n/context";
 import { creditUsagePercent, creditUsageLevel, creditUsageShare } from "../../presentation/accountLabels";
 
 /** Renders how much of a card's limit is committed: one thin fill bar, not the
@@ -9,10 +10,11 @@ import { creditUsagePercent, creditUsageLevel, creditUsageShare } from "../../pr
  *  couldn't be computed (no limit, no balance, or a bank account), so callers
  *  can drop it in unconditionally. */
 export function CreditUsageMeter({ ratio, available }: { ratio: string | null; available?: string }) {
+  const { t, language } = useTranslation();
   if (ratio === null) return null;
   const share = creditUsageShare(ratio);
   const level = creditUsageLevel(ratio);
-  const used = `${creditUsagePercent(ratio)} usado`;
+  const used = t("creditUsed").replace("{percent}", creditUsagePercent(ratio, language));
 
   return (
     <div className="credit-usage-meter">
@@ -20,7 +22,7 @@ export function CreditUsageMeter({ ratio, available }: { ratio: string | null; a
         <span className={`credit-usage-meter-fill is-${level}`} style={{ width: `${share}%` }} />
       </div>
       <span className="credit-usage-meter-caption">
-        {available !== undefined ? `${available} disponível · ${used}` : used}
+        {available !== undefined ? t("creditAvailable").replace("{amount}", available).replace("{used}", used) : used}
       </span>
     </div>
   );

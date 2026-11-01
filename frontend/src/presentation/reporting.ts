@@ -1,8 +1,9 @@
+import { translate, type Language } from "../i18n/messages";
 import { ApiError } from "../api/problems";
 import type { CurrencyTotals, ReportingSummary } from "../api/contracts";
 
-export function reportingLabel(report: ReportingSummary): string {
-  return report.status === "incomplete" ? "Total incompleto" : "Total indisponível";
+export function reportingLabel(report: ReportingSummary, language: Language = "pt-BR"): string {
+  return translate(language, report.status === "incomplete" ? "totalIncomplete" : "totalUnavailable");
 }
 
 export function reportingTotals(report: ReportingSummary | undefined, totals: CurrencyTotals[]): CurrencyTotals | null {

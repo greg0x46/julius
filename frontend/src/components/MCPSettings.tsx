@@ -1,3 +1,5 @@
+import { useTranslation } from "../i18n/context";
+import type { MessageKey } from "../i18n/messages";
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getSession } from "../api/auth";
@@ -11,15 +13,16 @@ import { Section } from "./layout";
 import { Alert, Button, Popconfirm, Select, Skeleton, Switch } from "./ui";
 
 const settingsKey = ["mcp-settings"];
-const permissions: { value: MCPScope; label: string }[] = [
-  { value: "mcp:access", label: "Somente leitura" },
-  { value: "mcp:access mcp:write", label: "Leitura e escrita" },
-  { value: "mcp:access mcp:write mcp:operations", label: "Leitura, escrita e operações" },
+const permissions: { value: MCPScope; label: MessageKey }[] = [
+  { value: "mcp:access", label: "mcpReadOnly" },
+  { value: "mcp:access mcp:write", label: "mcpReadWrite" },
+  { value: "mcp:access mcp:write mcp:operations", label: "mcpOperations" },
 ];
 const rank = (scope: MCPScope) => permissions.findIndex((item) => item.value === scope);
-const label = (scope: MCPScope) => permissions.find((item) => item.value === scope)?.label ?? scope;
+
 
 export function MCPSettings() {
+  const { t } = useTranslation();
   const client = useQueryClient();
   const session = useQuery({ queryKey: queryKeys.authSession, queryFn: ({ signal }) => getSession(signal) });
   const allowed = session.data?.authenticated && session.data.authentication_enabled && !session.data.demo;
@@ -33,35 +36,35 @@ export function MCPSettings() {
     try {
       await setMCPEnabled(enabled);
       await reload();
-      setNotice(enabled ? "Acesso MCP ativado." : "Acesso MCP desativado.");
+      setNotice(enabled ? t("mcpEnabled") : t("mcpDisabled"));
     } catch (error) {
-      setError(error instanceof Error ? error.message : "Não foi possível alterar o acesso MCP.");
+      setError(error instanceof Error ? error.message : t("mcpChangeError"));
     } finally { setSaving(false); }
   };
   return (
-    <Section title="Clientes MCP">
+    <Section title={t("mcpClients")}>
       {session.isLoading ? <Skeleton active /> : session.isError ? (
-        <UnavailableState onRetry={() => void session.refetch()}>Não foi possível consultar o acesso agora.</UnavailableState>
+        <UnavailableState onRetry={() => void session.refetch()}>{t("accessLoadError")}</UnavailableState>
       ) : !allowed ? (
-        <p className="settings-radio-hint">{session.data?.demo ? "O acesso MCP não está disponível na demonstração." : "Ative a autenticação e entre na conta para gerenciar clientes MCP."}</p>
+        <p className="settings-radio-hint">{session.data?.demo ? t("mcpDemo") : t("mcpSignIn")}</p>
       ) : settings.isLoading ? <Skeleton active /> : settings.isError || !settings.data ? (
-        <UnavailableState onRetry={() => void settings.refetch()}>Não foi possível carregar os clientes MCP.</UnavailableState>
+        <UnavailableState onRetry={() => void settings.refetch()}>{t("mcpLoadError")}</UnavailableState>
       ) : (
         <div className="settings-form">
           {settings.data.available ? (
-            <FormField label="Permitir acesso MCP" htmlFor="mcp-enabled" hint="Clientes autorizados podem acessar os dados conforme suas permissões. Desativar bloqueia novas chamadas imediatamente.">
+            <FormField label={t("mcpAllow")} htmlFor="mcp-enabled" hint={t("mcpAllowHint")}>
               <div><Switch id="mcp-enabled" checked={settings.data.enabled} disabled={saving} onChange={(value) => void toggle(value)} aria-describedby="mcp-enabled-hint" /></div>
             </FormField>
-          ) : <Alert type="info" showIcon message="MCP desativado nesta instância" description="O acesso por clientes MCP depende da configuração do servidor." />}
+          ) : <Alert type="info" showIcon message={t("mcpInstanceDisabled")} description={t("mcpInstanceHint")} />}
           {error && <Alert type="error" showIcon message={error} />}
           <div role="status" aria-live="polite">{notice}</div>
-          <p className="settings-radio-hint">Somente leitura permite consultar dados. Leitura e escrita também permite solicitar alterações, e operações inclui sincronizações e atualização de cotações.</p>
-          {settings.data.connections.length === 0 ? <p>Nenhum cliente MCP autorizado.</p> : (
-            <ul className="mcp-connections" aria-label="Clientes MCP autorizados">
+          <p className="settings-radio-hint">{t("mcpScopeHint")}</p>
+          {settings.data.connections.length === 0 ? <p>{t("mcpNoClients")}</p> : (
+            <ul className="mcp-connections" aria-label={t("mcpAuthorizedClients")}>
               {settings.data.connections.map((connection) => <Connection key={`${connection.id}:${connection.scope}:${connection.revoked_at}`} connection={connection} onSaved={async (message) => { await reload(); setNotice(message); }} />)}
             </ul>
           )}
-          <p className="settings-radio-hint">Alterar ou redefinir a senha revoga todos os acessos MCP. Sair encerra apenas a sessão do navegador. Para ampliar as permissões além do consentimento original, autorize o cliente novamente.</p>
+          <p className="settings-radio-hint">{t("mcpPasswordHint")}</p>
         </div>
       )}
     </Section>
@@ -69,37 +72,39 @@ export function MCPSettings() {
 }
 
 function Connection({ connection, onSaved }: { connection: MCPConnection; onSaved: (message: string) => Promise<void> }) {
+  const { t, language } = useTranslation();
+  const timezone = useTimezone();
   const [scope, setScope] = useState<MCPScope>(connection.scope);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const timezone = useTimezone();
-  const name = connection.client_name || "Aplicativo sem nome";
+  const name = connection.client_name || t("unnamedApplication");
   const active = !connection.revoked_at && !connection.expired;
   const editable = rank(connection.approved_scope) > 0;
+  const scopeLabel = permissions.find((item) => item.value === connection.scope)?.label;
   const run = async (action: () => Promise<void>, message: string) => {
     setBusy(true); setError(null);
     try { await action(); await onSaved(message); }
-    catch (error) { setError(error instanceof Error ? error.message : "Não foi possível alterar este cliente."); }
+    catch (error) { setError(error instanceof Error ? error.message : t("mcpClientError")); }
     finally { setBusy(false); }
   };
   return (
     <li className="mcp-connection">
       <strong>{name}</strong>
-      <span className="settings-radio-hint">Identificador: {connection.client_id}</span>
-      <span className="settings-radio-hint">Autorizado em: {formatOptionalDateTime(connection.created_at, timezone)}</span>
-      <span className="settings-radio-hint">Último uso: {connection.last_used_at ? formatOptionalDateTime(connection.last_used_at, timezone) : "Ainda não utilizado"}</span>
-      <span className="settings-radio-hint">Expira em: {formatOptionalDateTime(connection.expires_at, timezone)}</span>
-      {connection.revoked_at ? <span>Revogado em {formatOptionalDateTime(connection.revoked_at, timezone)}</span> : connection.expired ? <span>Expirado</span> : null}
+      <span className="settings-radio-hint">{t("identifier")}:{" "}{connection.client_id}</span>
+      <span className="settings-radio-hint">{t("authorizedAt")}:{" "}{formatOptionalDateTime(connection.created_at, timezone, language)}</span>
+      <span className="settings-radio-hint">{t("lastUsed")}:{" "}{connection.last_used_at ? formatOptionalDateTime(connection.last_used_at, timezone, language) : t("neverUsed")}</span>
+      <span className="settings-radio-hint">{t("expiresAt")}:{" "}{formatOptionalDateTime(connection.expires_at, timezone, language)}</span>
+      {connection.revoked_at ? <span>{t("revokedAt")}{" "}{formatOptionalDateTime(connection.revoked_at, timezone, language)}</span> : connection.expired ? <span>{t("expired")}</span> : null}
       {active && editable ? (
-        <FormField label={`Permissões de ${name}`} htmlFor={`mcp-scope-${connection.id}`}>
-          <Select id={`mcp-scope-${connection.id}`} value={scope} options={permissions.filter((item) => rank(item.value) <= rank(connection.approved_scope))} disabled={busy} onChange={(value: MCPScope) => setScope(value)} />
+        <FormField label={t("permissionsFor", { name: name })} htmlFor={`mcp-scope-${connection.id}`}>
+          <Select id={`mcp-scope-${connection.id}`} value={scope} options={permissions.filter((item) => rank(item.value) <= rank(connection.approved_scope)).map((item) => ({ ...item, label: t(item.label) }))} disabled={busy} onChange={(value: MCPScope) => setScope(value)} />
         </FormField>
-      ) : <span>Permissões: {label(connection.scope)}</span>}
+      ) : <span>{t("permissions")}:{" "}{scopeLabel ? t(scopeLabel) : connection.scope}</span>}
       {error && <Alert type="error" showIcon message={error} />}
       {active && <div className="settings-account-actions">
-        {editable && <Button disabled={busy || scope === connection.scope} loading={busy} onClick={() => void run(() => setMCPScope(connection.id, scope), "Permissões atualizadas.")}>Salvar permissões</Button>}
-        <Popconfirm title={`Revogar o acesso de ${name}?`} description="Este cliente deixará de acessar seus dados imediatamente." okText="Revogar acesso" cancelText="Cancelar" onConfirm={() => run(() => revokeMCP(connection.id), "Acesso revogado.")}>
-          <Button danger disabled={busy} aria-label={`Revogar acesso de ${name}`}>Revogar acesso</Button>
+        {editable && <Button disabled={busy || scope === connection.scope} loading={busy} onClick={() => void run(() => setMCPScope(connection.id, scope), t("permissionsUpdated"))}>{t("savePermissions")}</Button>}
+        <Popconfirm title={t("revokeAccessQuestion", { name: name })} description={t("revokeDescription")} okText={t("revokeAccess")} cancelText={t("cancel")} onConfirm={() => run(() => revokeMCP(connection.id), t("accessRevoked"))}>
+          <Button danger disabled={busy} aria-label={t("revokeAccessFor", { name: name })}>{t("revokeAccess")}</Button>
         </Popconfirm>
       </div>}
     </li>

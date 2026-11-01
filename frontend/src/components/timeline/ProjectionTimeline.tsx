@@ -1,27 +1,24 @@
+import { useTranslation } from "../../i18n/context";
+import type { Language } from "../../i18n/messages";
 import { LinePlot, type PlotMarker } from "../ui/LinePlot";
 
 import type { TimelineEntry, TimelineSeries } from "../../api/contracts";
 import { useReportFormat } from "../../hooks/useReportCurrency";
 import { balanceChartColor } from "../../presentation/chartColors";
 import { selectChartEvents } from "../../presentation/chartEvents";
-import { formatDayMonth } from "../../presentation/dates";
+import { formatDateOnly, formatDayMonth } from "../../presentation/dates";
 import { useCompactScreen } from "../shared/useCompactScreen";
 
-function formatDate(value: string): string {
-  const [year, month, day] = value.split("-");
-  return `${day}/${month}/${year}`;
-}
 
-// Axis ticks only need to place a day in the month: the year is in the period
-// control and in the tooltip.
-function formatShortDate(value: string): string {
-  const [, month, day] = value.split("-");
-  return `${day}/${month}`;
-}
-
-const pastLineName = "Saldo realizado";
-const futureLineName = "Saldo projetado";
-const simulationLineName = "Saldo (simulação)";
+// Internal ids: the visible name comes from the catalog.
+const pastLineName = "past";
+const futureLineName = "future";
+const simulationLineName = "simulation";
+const lineNameKey = {
+  past: "realizedBalance",
+  future: "projectedBalance",
+  simulation: "simulationBalance",
+} as const;
 
 // The past and future halves of the base line share the reference day, so
 // without this the tooltip would list the same balance twice on that one day.
@@ -45,6 +42,7 @@ function tooltipRows(
 const maxTooltipEntries = 4;
 
 function DayEntries({ entries }: { entries: TimelineEntry[] }) {
+  const { t } = useTranslation();
   const format = useReportFormat();
   if (entries.length === 0) return null;
   const ranked = [...entries].sort(
@@ -63,7 +61,7 @@ function DayEntries({ entries }: { entries: TimelineEntry[] }) {
         </li>
       ))}
       {hidden > 0 && (
-        <li className="timeline-chart-tooltip-more">e mais {hidden}</li>
+        <li className="timeline-chart-tooltip-more">{t("andMoreCount", { count: hidden })}</li>
       )}
     </ul>
   );
@@ -80,16 +78,17 @@ function TooltipContent({
   label?: string;
   entriesByDate?: Map<string, TimelineEntry[]>;
 }) {
+  const { t, language } = useTranslation();
   const format = useReportFormat();
   if (!active || !payload || payload.length === 0 || !label) return null;
   const rows = tooltipRows(payload);
   if (rows.length === 0) return null;
   return (
     <div className="timeline-chart-tooltip">
-      <strong>{formatDate(label)}</strong>
+      <strong>{formatDateOnly(label, language)}</strong>
       {rows.map((entry) => (
         <div key={entry.name}>
-          {entry.name}: {format(entry.value)}
+          {t(lineNameKey[entry.name as keyof typeof lineNameKey])}: {format(entry.value)}
         </div>
       ))}
       <DayEntries entries={entriesByDate?.get(label) ?? []} />
@@ -99,8 +98,8 @@ function TooltipContent({
 
 // A window can span a full year of daily points, where "dd/mm" ticks collide;
 // past roughly four months only the month (and its year) is worth reading.
-function tickFormatterFor(pointCount: number): (value: string) => string {
-  if (pointCount <= 120) return formatShortDate;
+function tickFormatterFor(pointCount: number, language: Language): (value: string) => string {
+  if (pointCount <= 120) return (value) => formatDayMonth(value, language);
   return (value: string) => {
     const [year, month] = value.split("-");
     return `${month}/${year.slice(2)}`;
@@ -123,8 +122,9 @@ type LegendItem = {
  * itself; the legend only says what each kind of marker means.
  */
 function ChartLegend({ items }: { items: LegendItem[] }) {
+  const { t } = useTranslation();
   return (
-    <ul className="timeline-chart-legend" aria-label="Legenda do gráfico">
+    <ul className="timeline-chart-legend" aria-label={t("chartLegend")}>
       {items.map((item) => (
         <li key={item.key}>
           <span
@@ -200,6 +200,7 @@ export function ProjectionTimeline({
    */
   onSelectDay?: (date: string) => void;
 }) {
+  const { t, language } = useTranslation();
   const compact = useCompactScreen();
   const data = mergePoints(series, simulation ?? null, referenceDate);
   const activeSeries = simulation ?? series;
@@ -225,6 +226,7 @@ export function ProjectionTimeline({
     referenceDate,
     compact ? 1 : 3,
     negativePoint ? [negativePoint.date] : [],
+    language,
   );
   const markers: PlotMarker[] = [
     ...events.map((event) => ({
@@ -238,7 +240,7 @@ export function ProjectionTimeline({
           {
             date: negativePoint.date,
             value: negativePoint.balance,
-            label: `Negativo ${formatDayMonth(negativePoint.date)}`,
+            label: t("negativeOn", { date: formatDayMonth(negativePoint.date, language) }),
             tone: "negative" as const,
           },
         ]
@@ -246,21 +248,21 @@ export function ProjectionTimeline({
   ];
 
   const legend: LegendItem[] = [];
-  if (hasPast) legend.push({ key: "past", label: "Realizado", color: balanceChartColor.realized, kind: "solid" });
-  if (hasFuture) legend.push({ key: "future", label: "Projetado", color: balanceChartColor.projected, kind: "dashed" });
-  if (simulation) legend.push({ key: "simulation", label: simulationLineName, color: balanceChartColor.simulation, kind: "dashed" });
-  if (events.length > 0) legend.push({ key: "events", label: "Evento", color: balanceChartColor.projected, kind: "ring" });
-  if (negativePoint) legend.push({ key: "negative", label: "Negativo", color: balanceChartColor.lowest, kind: "dot" });
+  if (hasPast) legend.push({ key: "past", label: t("legendRealized"), color: balanceChartColor.realized, kind: "solid" });
+  if (hasFuture) legend.push({ key: "future", label: t("legendProjected"), color: balanceChartColor.projected, kind: "dashed" });
+  if (simulation) legend.push({ key: "simulation", label: t("simulationBalance"), color: balanceChartColor.simulation, kind: "dashed" });
+  if (events.length > 0) legend.push({ key: "events", label: t("legendEvent"), color: balanceChartColor.projected, kind: "ring" });
+  if (negativePoint) legend.push({ key: "negative", label: t("legendNegative"), color: balanceChartColor.lowest, kind: "dot" });
   // The lowest point is marked on the plot; it is named only when no negative marker already stands for it.
-  if (!negativePoint) legend.push({ key: "lowest", label: "Menor saldo", color: balanceChartColor.lowest, kind: "dot" });
+  if (!negativePoint) legend.push({ key: "lowest", label: t("legendLowest"), color: balanceChartColor.lowest, kind: "dot" });
 
   return (
-    <div className="timeline-chart" role="group" aria-label="Saldo ao longo do tempo">
+    <div className="timeline-chart" role="group" aria-label={t("balanceOverTime")}>
       <LinePlot
         dates={data.map((row) => row.date)}
         height={height}
-        label="Saldo ao longo do tempo"
-        formatDate={tickFormatterFor(data.length)}
+        label={t("balanceOverTime")}
+        formatDate={tickFormatterFor(data.length, language)}
         referenceDate={referenceDate}
         lowest={{
           date: activeSeries.lowest_balance.date,
@@ -272,7 +274,7 @@ export function ProjectionTimeline({
             ? [
                 {
                   key: "past",
-                  label: pastLineName,
+                  label: t("realizedBalance"),
                   color: balanceChartColor.realized,
                   step: true,
                   values: data.map((row) => row.pastBalance),
@@ -283,7 +285,7 @@ export function ProjectionTimeline({
             ? [
                 {
                   key: "future",
-                  label: futureLineName,
+                  label: t("projectedBalance"),
                   color: balanceChartColor.projected,
                   step: true,
                   dashed: "5 4",
@@ -295,7 +297,7 @@ export function ProjectionTimeline({
             ? [
                 {
                   key: "simulation",
-                  label: simulationLineName,
+                  label: t("simulationBalance"),
                   color: balanceChartColor.simulation,
                   step: true,
                   dashed: "2 3",

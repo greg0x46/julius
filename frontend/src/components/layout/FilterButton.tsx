@@ -1,3 +1,4 @@
+import { useTranslation } from "../../i18n/context";
 import { FilterOutlined } from "../ui/icons";
 import { Button } from "../ui";
 
@@ -13,16 +14,17 @@ interface FilterButtonProps {
  * to the icon while the count stays.
  */
 export function FilterButton({ activeCount = 0, onClick }: FilterButtonProps) {
-  const name = `Filtros${activeCount ? ` ${activeCount}` : ""}`;
+  const { t } = useTranslation();
+  const name = `${t("filters")}${activeCount ? ` ${activeCount}` : ""}`;
   return (
     <Button
       className="list-toolbar-filter-button"
       aria-label={name}
-      title={`Filtros${activeCount ? ` (${activeCount} ativos)` : ""}`}
+      title={activeCount ? t("activeFiltersTitle", { count: activeCount }) : t("filters")}
       icon={<FilterOutlined aria-hidden="true" />}
       onClick={onClick}
     >
-      <span className="list-toolbar-filter-label">Filtros</span>
+      <span className="list-toolbar-filter-label">{t("filters")}</span>
       {activeCount ? <span className="list-toolbar-filter-count">{activeCount}</span> : null}
     </Button>
   );

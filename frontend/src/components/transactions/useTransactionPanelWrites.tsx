@@ -1,3 +1,4 @@
+import { useTranslation } from "../../i18n/context";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import type { Category, ManualTransactionWrite, TransactionItem } from "../../api/contracts";
@@ -59,6 +60,7 @@ export function useTransactionPanelWrites({
   /** A confirmed write, as the line it produced (see `useSelectedTransaction().patch`). */
   onConfirmed: (id: string, update: (item: TransactionItem) => TransactionItem) => void;
 }) {
+  const { t, language } = useTranslation();
   const feedback = useFeedback();
   const panelOpenRef = useRef(panelOpen);
   useEffect(() => {
@@ -73,7 +75,7 @@ export function useTransactionPanelWrites({
   );
   const inclusion = useTransactionInclusion({
     onSaved: ({ transactionId, state }, result) => {
-      feedback.success(state === "ignored" ? "Transação ignorada" : "Transação considerada nos totais");
+      feedback.success(state === "ignored" ? t("transactionIgnored") : t("transactionIncluded"));
       onConfirmed(transactionId, (item) => ({
         ...item,
         inclusion: { state, changed_at: result.changed_at, origin: "manual", rule_name: null },
@@ -85,12 +87,12 @@ export function useTransactionPanelWrites({
               : item.totals_eligibility,
       }));
     },
-    onFailed: () => failed("Não foi possível salvar a decisão."),
+    onFailed: () => failed(t("decisionSaveErrorFull")),
   });
   const category = useTransactionCategory({
     onSaved: ({ transactionId, categoryId }, result) => {
       const chosen = categoriesById.get(categoryId);
-      feedback.success(chosen ? `Categoria alterada para ${chosen.name}` : "Categoria alterada");
+      feedback.success(chosen ? t("categoryChangedTo", { name: chosen.name }) : t("categoryChanged"));
       if (chosen) {
         onConfirmed(transactionId, (item) => ({
           ...item,
@@ -107,7 +109,7 @@ export function useTransactionPanelWrites({
         }));
       }
     },
-    onFailed: () => failed("Não foi possível salvar a categoria."),
+    onFailed: () => failed(t("categorySaveErrorFull")),
   });
   const manualTransaction = useManualTransaction();
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -115,19 +117,19 @@ export function useTransactionPanelWrites({
   const saveManual = async (transactionId: string, write: ManualTransactionWrite) => {
     try {
       await manualTransaction.update({ transactionId, write });
-      feedback.success("Transação salva");
+      feedback.success(t("transactionSaved"));
     } catch (error) {
-      throw new Error(manualTransactionErrorMessage(error, "save"), { cause: error });
+      throw new Error(manualTransactionErrorMessage(error, "save", language), { cause: error });
     }
   };
   const deleteManual = async (transactionId: string) => {
     setDeleteError(null);
     try {
       await manualTransaction.remove(transactionId);
-      feedback.success("Transação excluída");
+      feedback.success(t("transactionDeleted"));
       onDeleted();
     } catch (error) {
-      setDeleteError(manualTransactionErrorMessage(error, "delete"));
+      setDeleteError(manualTransactionErrorMessage(error, "delete", language));
     }
   };
 
@@ -167,36 +169,36 @@ export function useTransactionPanelWrites({
       {!panelOpen && inclusion.writeError && (
         <RetryAlert
           type="error"
-          message="Não foi possível salvar a decisão"
-          detail={`O último estado confirmado foi mantido. ${inclusion.writeError}`}
-          action="Tentar novamente"
+          message={t("decisionSaveError")}
+          detail={t("lastDecisionPreserved", { error: inclusion.writeError })}
+          action={t("retry")}
           onAction={inclusion.retryWrite}
         />
       )}
       {inclusion.refreshError && (
         <RetryAlert
           type="warning"
-          message="Alteração salva, atualização pendente"
-          detail={`Os resultados anteriores foram preservados. ${inclusion.refreshError}`}
-          action="Atualizar resultados"
+          message={t("savedRefreshPending")}
+          detail={t("previousResultsPreserved", { error: inclusion.refreshError })}
+          action={t("refreshResults")}
           onAction={inclusion.retryRefresh}
         />
       )}
       {!panelOpen && category.writeError && (
         <RetryAlert
           type="error"
-          message="Não foi possível salvar a categoria"
-          detail={`A última categoria confirmada foi mantida. ${category.writeError}`}
-          action="Tentar novamente"
+          message={t("categorySaveError")}
+          detail={t("lastCategoryPreserved", { error: category.writeError })}
+          action={t("retry")}
           onAction={category.retryWrite}
         />
       )}
       {category.refreshError && (
         <RetryAlert
           type="warning"
-          message="Categoria salva, atualização pendente"
-          detail={`Os resultados anteriores foram preservados. ${category.refreshError}`}
-          action="Atualizar resultados"
+          message={t("categorySavedRefreshPending")}
+          detail={t("previousResultsPreserved", { error: category.refreshError })}
+          action={t("refreshResults")}
           onAction={category.retryRefresh}
         />
       )}
