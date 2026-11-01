@@ -196,6 +196,7 @@ func NewServer(db *sql.DB, frontend fs.FS, secrets *settings.Secrets, config aut
 	// so the next route added there would panic at startup. A distinct first
 	// segment cannot collide.
 	mux.HandleFunc("GET /api/recurring-scenarios", handleListRecurringCommitments(db))
+	mux.HandleFunc("GET /api/recurrence-suggestions", handleRecurrenceSuggestions(db))
 	mux.HandleFunc("POST /api/recurring-scenarios", handleCreateRecurringCommitment(db))
 	mux.HandleFunc("PUT /api/recurring-scenarios/{id}", handleUpdateRecurringCommitment(db))
 	mux.HandleFunc("PATCH /api/recurring-scenarios/{id}", handleSetRecurringCommitmentActive(db))

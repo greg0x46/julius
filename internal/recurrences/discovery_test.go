@@ -113,14 +113,14 @@ func TestDiscoveryExclusions(t *testing.T) {
 }
 
 func TestDiscoveryNormalizationDuplicatesAndDeterminism(t *testing.T) {
-	items := discoveryHistory(t, []int{0, 1, 2, 3, 4, 5}, []string{"-100.0001"})
+	items := discoveryHistory(t, []int{0, 1, 2, 3, 4, 5}, []string{"-100.000000000000000001"})
 	for i := range items {
 		s := []string{"utility home", "UTILITY * HOME 2024-02-29", " Utility   HOME "}[i%3]
 		items[i].Description = &s
 	}
 	asOf := date(t, "2024-07-01")
 	want := recurrences.Detect(items, nil, asOf)
-	if len(want) != 1 || want[0].Confidence != "high" || !want[0].Draft.Amount.Equal(dec(t, "100.0001")) {
+	if len(want) != 1 || want[0].Confidence != "high" || !want[0].Draft.Amount.Equal(dec(t, "100.000000000000000001")) {
 		t.Fatalf("got %+v", want)
 	}
 	duplicate := items[0]

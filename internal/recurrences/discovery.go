@@ -229,7 +229,8 @@ func detectGroup(key discoveryGroup, observations []observation, asOf time.Time)
 	}
 	median := amounts[len(amounts)/2]
 	if len(amounts)%2 == 0 {
-		median = median.Add(amounts[len(amounts)/2-1]).Div(decimal.NewFromInt(2))
+		median = median.Add(amounts[len(amounts)/2-1]).Mul(decimal.New(5, -1))
+		median = decimal.RequireFromString(median.String())
 	}
 	amountKind := "fixed"
 	if high.Sub(low).GreaterThan(median.Mul(decimal.RequireFromString("0.02"))) {
