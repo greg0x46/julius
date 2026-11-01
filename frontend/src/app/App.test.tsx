@@ -6,7 +6,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createAppQueryClient } from "./queryClient";
 import { App } from "./App";
-import { I18nProvider } from "../i18n/I18nProvider";
 
 afterEach(() => vi.restoreAllMocks());
 
