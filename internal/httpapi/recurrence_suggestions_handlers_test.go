@@ -80,3 +80,71 @@ func TestRecurrenceSuggestionsHTTP(t *testing.T) {
 		t.Fatalf("database failure status: %d", response.StatusCode)
 	}
 }
+
+func TestRecurrenceSuggestionReviewBulkAndDismiss(t *testing.T) {
+	srv, conn := newTestServer(t)
+	ctx := context.Background()
+	account, err := transactions.WriteManualAccount(ctx, conn, "", transactions.ManualAccountInput{Name: "Synthetic", CurrencyCode: "BRL"}, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	today := dates.Day(time.Now().UTC())
+	anchor := time.Date(today.Year(), today.Month(), 1, 0, 0, 0, 0, time.UTC)
+	for _, name := range []string{"Internet", "Music", "Insurance"} {
+		for n := -5; n <= 0; n++ {
+			if _, err := transactions.CreateManual(ctx, conn, transactions.ManualInput{AccountID: account, Description: name, Amount: decimal.NewFromInt(-100), OccurredAt: dates.AddMonths(anchor, n)}); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	response := doJSON(t, http.MethodGet, srv.URL+"/api/recurrence-suggestions", nil)
+	var candidates []map[string]any
+	decodeJSON(t, response, &candidates)
+	if len(candidates) != 3 {
+		t.Fatal(candidates)
+	}
+	response = doJSON(t, http.MethodPost, srv.URL+"/api/categories", map[string]any{"name": "Synthetic", "kind": "expense", "icon": "home", "color": "#112233"})
+	var category map[string]any
+	decodeJSON(t, response, &category)
+	items := []map[string]any{}
+	for _, c := range candidates {
+		draft := c["draft"].(map[string]any)
+		draft["category_id"] = category["id"]
+		item := map[string]any{"key": c["key"], "draft": draft}
+		response = doJSON(t, http.MethodPost, srv.URL+"/api/recurrence-suggestions/review", item)
+		if response.StatusCode != 200 {
+			t.Fatalf("review %d", response.StatusCode)
+		}
+		var review map[string]any
+		decodeJSON(t, response, &review)
+		if len(review["history"].([]any)) != 18 {
+			t.Fatal(review)
+		}
+		item["token"], item["conditions"], item["acknowledge"] = review["token"], review["conditions"], true
+		items = append(items, item)
+	}
+	// Each item commits independently; a missing category does not block other items.
+	items[1]["draft"].(map[string]any)["category_id"] = ""
+	response = doJSON(t, http.MethodPost, srv.URL+"/api/recurrence-suggestions/accept", map[string]any{"items": items[:2]})
+	var results []map[string]any
+	decodeJSON(t, response, &results)
+	if len(results) != 2 || results[0]["status"] != float64(201) || results[1]["status"] != float64(422) {
+		t.Fatal(results)
+	}
+	response = doJSON(t, http.MethodPost, srv.URL+"/api/recurrence-suggestions/accept", map[string]any{"items": items[:1]})
+	var retry []map[string]any
+	decodeJSON(t, response, &retry)
+	if retry[0]["scenario_id"] != results[0]["scenario_id"] {
+		t.Fatal(retry)
+	}
+	response = doJSON(t, http.MethodPost, srv.URL+"/api/recurrence-suggestions/dismiss", map[string]any{"key": items[2]["key"]})
+	response.Body.Close()
+	if response.StatusCode != 204 {
+		t.Fatal(response.StatusCode)
+	}
+	response = doJSON(t, http.MethodGet, srv.URL+"/api/recurrence-suggestions", nil)
+	decodeJSON(t, response, &candidates)
+	if len(candidates) != 1 {
+		t.Fatal(candidates)
+	}
+}

@@ -307,3 +307,17 @@ func coveredSuggestion(s Suggestion, existing []RecurringCommitment) bool {
 	}
 	return false
 }
+
+// SuggestionPattern identifies a merchant pattern independently of its observations.
+func SuggestionPattern(s Suggestion) any {
+	return struct {
+		Name    string
+		Account *string
+		Card    string
+		Kind    Kind
+		Cadence Cadence
+		Month   *int
+	}{
+		discoveryKey(s.Draft.Name), s.Draft.AccountID, s.CardNumber, s.Draft.Kind, s.Draft.Cadence, s.Draft.MonthOfYear,
+	}
+}

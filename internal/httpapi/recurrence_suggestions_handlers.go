@@ -6,10 +6,11 @@ import (
 	"time"
 
 	"github.com/greg0x46/julius/internal/money"
-	"github.com/greg0x46/julius/internal/recurrences"
+	"github.com/greg0x46/julius/internal/recurrences/suggestions"
 )
 
 type recurrenceSuggestionDTO struct {
+	Key            string                          `json:"key"`
 	Draft          recurringCommitmentWriteRequest `json:"draft"`
 	CurrencyCode   string                          `json:"currency_code"`
 	AmountKind     string                          `json:"amount_kind"`
@@ -23,15 +24,16 @@ type recurrenceSuggestionDTO struct {
 
 func handleRecurrenceSuggestions(conn *sql.DB) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		suggestions, err := recurrences.Discover(r.Context(), conn, time.Now().UTC())
+		candidates, err := suggestions.List(r.Context(), conn, time.Now().UTC())
 		if err != nil {
 			recurringCommitmentUnavailableProblem(w)
 			return
 		}
-		dtos := make([]recurrenceSuggestionDTO, len(suggestions))
-		for i, s := range suggestions {
+		dtos := make([]recurrenceSuggestionDTO, len(candidates))
+		for i, s := range candidates {
 			c := s.Draft
 			dtos[i] = recurrenceSuggestionDTO{
+				Key: suggestions.Key(s),
 				Draft: recurringCommitmentWriteRequest{
 					Name: c.Name, Kind: string(c.Kind), Amount: money.CanonicalDecimal(c.Amount), CategoryID: c.CategoryID,
 					AccountID: c.AccountID, Cadence: string(c.Cadence), DayOfMonth: c.DayOfMonth, MonthOfYear: c.MonthOfYear,

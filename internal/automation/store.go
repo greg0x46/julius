@@ -192,9 +192,21 @@ func Create(ctx context.Context, conn *sql.DB, write Write) (Rule, error) {
 	}
 	defer tx.Rollback()
 
+	rule, err := CreateWithQuerier(ctx, tx, write)
+	if err != nil {
+		return Rule{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return Rule{}, err
+	}
+	return rule, nil
+}
+
+// CreateWithQuerier participates in the caller's transaction.
+func CreateWithQuerier(ctx context.Context, q Querier, write Write) (Rule, error) {
 	now := time.Now().UTC()
 	id := uuid.NewString()
-	_, err = tx.ExecContext(ctx, `
+	_, err := q.ExecContext(ctx, `
 		INSERT INTO automation_rules (id, name, is_active, logic_operator, created_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?)`,
 		id, write.Name, write.IsActive, string(write.LogicOperator), db.FormatTime(now), db.FormatTime(now),
@@ -202,19 +214,16 @@ func Create(ctx context.Context, conn *sql.DB, write Write) (Rule, error) {
 	if err != nil {
 		return Rule{}, err
 	}
-	if err := insertConditions(ctx, tx, id, write.Conditions); err != nil {
+	if err := insertConditions(ctx, q, id, write.Conditions); err != nil {
 		return Rule{}, err
 	}
-	if err := insertActions(ctx, tx, id, write.Actions); err != nil {
+	if err := insertActions(ctx, q, id, write.Actions); err != nil {
 		if db.IsForeignKeyViolation(err) {
 			return Rule{}, ErrInvalidActionTarget
 		}
 		return Rule{}, err
 	}
-	if err := tx.Commit(); err != nil {
-		return Rule{}, err
-	}
-	return Get(ctx, conn, id)
+	return Get(ctx, q, id)
 }
 
 // Update mirrors update_rule: it replaces every condition rather than
