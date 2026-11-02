@@ -4,6 +4,20 @@ Notable changes per release. A section is added by `scripts/update-changelog.sh`
 only when a release is prepared, and the release job publishes that same text as
 the GitHub release notes. Newest release first.
 
+## v0.20.0 — 2026-11-02
+
+### Features
+
+- **recurrences:** Detect recurring transactions from history ([#223](https://github.com/greg0x46/julius/pull/223))
+- **recurrences:** Generate and validate reconciliation rule suggestions ([#224](https://github.com/greg0x46/julius/pull/224))
+- **recurrences:** Review and create suggested recurring commitments ([#225](https://github.com/greg0x46/julius/pull/225))
+- **settings:** Move language selector to general settings ([#226](https://github.com/greg0x46/julius/pull/226))
+
+### Fixes
+
+- **ui:** Keep the password show/hide label on one line ([#227](https://github.com/greg0x46/julius/pull/227))
+- **recurrences:** Make the discovery review obvious and date card recurrences on the bill ([#228](https://github.com/greg0x46/julius/pull/228))
+
 ## v0.19.0 — 2026-11-01
 
 ### Features
