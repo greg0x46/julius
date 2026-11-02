@@ -614,7 +614,7 @@ func Query(ctx context.Context, q Querier, query QueryRequest) (Result, error) {
 }
 
 // cardMetadata is the subset of Pluggy's opaque credit_card_metadata JSON
-// this package reads for display. The key is "cardNumber" (camelCase)
+// this package reads for display and installment detection. Keys use camelCase
 // because package pluggy stores that JSON blob verbatim from Pluggy's wire
 // format — see pluggy.TransactionSnapshot's doc comment. Package categories
 // parses the same blob independently for its own purpose (installment
@@ -626,14 +626,17 @@ type cardMetadata struct {
 	TotalInstallments *int    `json:"totalInstallments"`
 }
 
-func parseCardInfo(raw *string) *CardInfo {
-	if raw == nil {
-		return nil
-	}
+func parseCardMetadata(raw *string) cardMetadata {
 	var meta cardMetadata
-	if err := json.Unmarshal([]byte(*raw), &meta); err != nil {
-		return nil
+	if raw != nil {
+		if err := json.Unmarshal([]byte(*raw), &meta); err != nil {
+			return cardMetadata{}
+		}
 	}
+	return meta
+}
+
+func (meta cardMetadata) cardInfo() *CardInfo {
 	if meta.CardNumber == nil || *meta.CardNumber == "" {
 		return nil
 	}
@@ -646,6 +649,7 @@ func parseCardInfo(raw *string) *CardInfo {
 
 func toItem(v view) Item {
 	r := v.row
+	card := parseCardMetadata(r.creditCardMetadata)
 	item := Item{
 		ReportingDate:  v.effectiveAt,
 		Reporting:      v.reporting,
@@ -672,7 +676,8 @@ func toItem(v view) Item {
 			Origin:    stringOr(r.inclusionOrigin, "manual"),
 			RuleName:  r.inclusionRuleName,
 		},
-		Card:                     parseCardInfo(r.creditCardMetadata),
+		Card:                     card.cardInfo(),
+		IsInstallment:            card.InstallmentNumber != nil || (card.TotalInstallments != nil && *card.TotalInstallments > 1),
 		TotalsEligibility:        TotalsEligibility{Included: v.included, Reason: v.reason},
 		GroupKey:                 v.period.Key,
 		InvestmentTransferAmount: money.CanonicalDecimal(v.investmentTransfer),

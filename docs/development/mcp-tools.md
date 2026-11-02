@@ -28,7 +28,7 @@ tool discovery, JSON-RPC errors and the legacy initialize handshake.
 | `list_payables` | Optional `kind` (`debt`, `receivable`), `limit`, `offset`; actual settled/remaining amounts in BRL, excluding card bills |
 | `list_recurring_commitments` | Optional `limit`, `offset`; active and inactive BRL schedules |
 | `list_scenarios` | Optional `limit`, `offset`; scenario IDs, kinds and activation flags; discovery applies nothing |
-| `list_projection_events` | Required `from`, `to`, optional `scenario_ids`, `limit`, `offset`; dated BRL installments/occurrences with realization state |
+| `list_projection_events` | Required `from`, `to`, optional `scenario_ids`, `limit`, `offset`; dated BRL installments/occurrences with realization state; a card account's recurring occurrence is dated on its bill's due date, which can differ from the day in its `event_key` |
 | `get_timeline` | Required `from`, `to`, `reference_date`, optional IANA `timezone` (default: the configured timezone), `scenario_ids`; daily cash, income/expense totals, certainty tiers and reporting coverage |
 
 All dates are inclusive calendar days (`YYYY-MM-DD`). Net-worth, event and

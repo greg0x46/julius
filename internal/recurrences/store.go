@@ -80,6 +80,18 @@ func Create(ctx context.Context, conn *sql.DB, write Write) (RecurringCommitment
 	}
 	defer tx.Rollback()
 
+	c, err := CreateWithQuerier(ctx, tx, write)
+	if err != nil {
+		return RecurringCommitment{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return RecurringCommitment{}, err
+	}
+	return c, nil
+}
+
+// CreateWithQuerier participates in the caller's transaction.
+func CreateWithQuerier(ctx context.Context, q Querier, write Write) (RecurringCommitment, error) {
 	now := time.Now().UTC()
 	c := RecurringCommitment{
 		ID: uuid.NewString(), Name: write.Name, Kind: write.Kind, Amount: write.Amount,
@@ -87,17 +99,14 @@ func Create(ctx context.Context, conn *sql.DB, write Write) (RecurringCommitment
 		DayOfMonth: write.DayOfMonth, MonthOfYear: write.MonthOfYear, StartDate: write.StartDate,
 		EndDate: write.EndDate, IsActive: write.IsActive, CreatedAt: now, UpdatedAt: now,
 	}
-	if _, err := tx.ExecContext(ctx, `
+	if _, err := q.ExecContext(ctx, `
 		INSERT INTO scenarios (id, kind, name, payable_id, is_active, is_accounting_source, created_at, updated_at)
 		VALUES (?, 'recurring', ?, NULL, ?, ?, ?, ?)`,
 		c.ID, c.Name, c.IsActive, false, db.FormatTime(now), db.FormatTime(now),
 	); err != nil {
 		return RecurringCommitment{}, err
 	}
-	if err := insertSchedule(ctx, tx, c); err != nil {
-		return RecurringCommitment{}, err
-	}
-	if err := tx.Commit(); err != nil {
+	if err := insertSchedule(ctx, q, c); err != nil {
 		return RecurringCommitment{}, err
 	}
 	return c, nil

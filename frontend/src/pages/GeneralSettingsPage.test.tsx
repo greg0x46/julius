@@ -3,6 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
+import { I18nProvider } from "../i18n/I18nProvider";
 import { GeneralSettingsPage } from "./GeneralSettingsPage";
 import { queryKeys } from "../api/queryKeys";
 
@@ -97,5 +98,28 @@ it("saves a new timezone and drops every cache that depends on the zone", async 
   await waitFor(() => expect(client.getQueryData(queryKeys.spendingByCategory("America/Sao_Paulo"))).toBeUndefined());
   // The preferences themselves stay, now with the saved zone.
   expect(client.getQueryData(queryKeys.preferences)).toMatchObject({ timezone: "Asia/Tokyo" });
+  client.clear();
+});
+
+it("switches the interface language from the settings screen", async () => {
+  vi.stubGlobal("fetch", vi.fn<typeof globalThis.fetch>().mockImplementation(async (url) => {
+    if (String(url).endsWith("/accounts/currencies")) return json({ currencies: [{ code: "BRL" }], status: "complete", source: "frankfurter" });
+    return json({ transactions_period_basis: "occurred_at", reference_currency: "BRL", timezone: "America/Sao_Paulo" });
+  }));
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <I18nProvider>
+      <QueryClientProvider client={client}>
+        <MemoryRouter>
+          <GeneralSettingsPage />
+        </MemoryRouter>
+      </QueryClientProvider>
+    </I18nProvider>,
+  );
+  await userEvent.click(await screen.findByRole("combobox", { name: "Idioma" }));
+  await userEvent.click(await screen.findByText("English"));
+  expect(await screen.findByRole("combobox", { name: "Language" })).toBeInTheDocument();
+  window.localStorage.removeItem("julius.language");
+  document.documentElement.lang = "pt-BR";
   client.clear();
 });

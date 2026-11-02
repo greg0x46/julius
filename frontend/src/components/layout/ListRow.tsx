@@ -30,6 +30,12 @@ export interface ListRowProps {
   ariaLabel?: string;
   /** Keep title and meta to one line each, cut with an ellipsis (names and institutions that can run long). */
   truncate?: boolean;
+  /**
+   * A control beside the row, as its sibling and never inside the button
+   * (a selection checkbox): the row stays one tap target for what it opens.
+   * Give the control its own 44px target and accessible name.
+   */
+  leading?: ReactNode;
   className?: string;
 }
 
@@ -49,6 +55,7 @@ export function ListRow({
   href,
   ariaLabel,
   truncate,
+  leading,
   className,
 }: ListRowProps) {
   const body = (
@@ -67,19 +74,24 @@ export function ListRow({
   );
   const classes = ["list-row", truncate && "list-row-truncate", className].filter(Boolean).join(" ");
 
+  const control =
+    href !== undefined ? (
+      <Link to={href} className={classes} aria-label={ariaLabel}>
+        {body}
+      </Link>
+    ) : onClick !== undefined ? (
+      <button type="button" className={classes} aria-label={ariaLabel} onClick={onClick}>
+        {body}
+      </button>
+    ) : (
+      <div className={classes}>{body}</div>
+    );
+
+  if (leading === undefined) return <li className="list-row-item">{control}</li>;
   return (
-    <li className="list-row-item">
-      {href !== undefined ? (
-        <Link to={href} className={classes} aria-label={ariaLabel}>
-          {body}
-        </Link>
-      ) : onClick !== undefined ? (
-        <button type="button" className={classes} aria-label={ariaLabel} onClick={onClick}>
-          {body}
-        </button>
-      ) : (
-        <div className={classes}>{body}</div>
-      )}
+    <li className="list-row-item list-row-item-leading">
+      <span className="list-row-leading">{leading}</span>
+      {control}
     </li>
   );
 }

@@ -37,7 +37,7 @@ const ruleConditionFieldOperators: Record<RuleConditionField, readonly RuleCondi
   day_of_month: ["day_range"],
 };
 
-function parseRuleCondition(value: unknown, allowReconcileFields: boolean): RuleCondition {
+export function parseRuleCondition(value: unknown, allowReconcileFields: boolean): RuleCondition {
   const condition = requiredRecord(value, ["field", "operator", "value"], "Condição inválida.");
   const field = condition.field as RuleConditionField;
   const operator = condition.operator as RuleConditionOperator;

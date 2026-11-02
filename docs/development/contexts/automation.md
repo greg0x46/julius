@@ -67,8 +67,9 @@ category adds `set_category` to the same rule; clearing removes it, preserving
 from the same form. The list displays both action descriptions.
 
 Automatic reconciliation retains its existing eligibility checks, including
-the commitment's category; selecting a different action category does not
-relax those checks.
+cash movement eligibility and the commitment's optional account restriction.
+The commitment's category is not an implicit matching constraint; the rule's
+conditions decide which transactions match.
 
 ## Monetary precision
 

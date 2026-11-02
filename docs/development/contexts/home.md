@@ -45,7 +45,8 @@ sources**: Ledger entries and the unified scenario projection flow
 - **Realized** — a real transaction; a credit-card entry becomes **Confirmed**,
   re-dated to the bill's due date.
 - **Confirmed** — installment of a payable plan (real debt with a planned date).
-- **Projected** — a **non-reconciled** recurrence occurrence. An occurrence
+- **Projected** — a **non-reconciled** recurrence occurrence (on a credit-card
+  account, dated on the bill's due date like the card's real entries). An occurrence
   reconciled against a real transaction produces no entry: the real
   transaction already carries the money (it used to, and the amount was counted
   twice). The candidates an occurrence tries to reconcile are scoped to its

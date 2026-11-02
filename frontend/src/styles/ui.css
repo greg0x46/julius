@@ -134,8 +134,10 @@ svg.ui-icon {
   box-shadow: 0 0 0 4px var(--color-surface);
 }
 .ui-input-affix-wrapper > button {
+  flex-shrink: 0;
   border: 0;
   padding: 6px;
+  white-space: nowrap;
 }
 .ui-select {
   display: inline-block;
@@ -613,14 +615,6 @@ input[type="radio"] {
 }
 .app-header .ui-btn {
   color: white;
-}
-.app-language-select {
-  margin-left: auto;
-  min-width: 0;
-  max-width: 9rem;
-}
-.app-language-select + .app-theme-switch {
-  margin-left: 0;
 }
 .app-theme-switch {
   margin-left: auto;

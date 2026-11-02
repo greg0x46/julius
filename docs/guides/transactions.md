@@ -85,6 +85,40 @@ transaction, or return it to automatic matching. Manual decisions take priority
 over rules. Ignoring a linked transaction releases its link. These schedules
 record expectations; they do not execute payments.
 
+## Discover recurring commitments
+
+Prerequisites: posted BRL history with at least four monthly payments for the
+same merchant and account, or three consecutive annual payments. Installments,
+transfers, ignored transactions and irregular patterns are excluded. Have an
+active category available for each commitment.
+
+1. Open Recurrences (`/recorrencias`) and choose **Discover recurrences**. Inspect
+   each estimate, schedule, confidence, explanation and supporting transactions.
+   Confidence describes a historical pattern, not a guarantee of future payments.
+2. Choose **Review** on a candidate. The review simulates the rule on its own
+   when the suggestion has a category. When it has none, select an active
+   category and choose **Update preview**. You can also edit the name,
+   direction, positive BRL amount, account, monthly/annual calendar and date
+   range.
+3. Read the transactions the rule finds in the history. Edit fields or
+   conditions if needed and choose **Update preview** again; all conditions must
+   match. Check possible false positives, unmatched evidence and overlaps with
+   existing rules or recurrences. Ambiguity requires explicit acknowledgment;
+   cross-month day windows must be corrected before creation.
+4. Choose **Create recurrence and rule**, or close the review and select the
+   reviewed suggestions for **Create selected**. Each accepted item creates its schedule
+   and active reconciliation rule together. Failed items remain for correction;
+   successful items appear in the recurrence list.
+5. Choose **Dismiss** for an unwanted pattern. It stays hidden after reloading,
+   even when more transactions appear for that pattern.
+
+Edits require a fresh preview. If historical data or competing commitments change,
+update discovery and review again. Retrying a successful approval creates no
+second commitment. Discovery and previews create nothing; approval changes no
+existing transaction, category, balance or manual reconciliation decision. The
+new schedule enters projections through the normal recurrence behavior. Historical
+matching is a backtest, not a request to backdate the proposed start date.
+
 ## Import a statement
 
 1. In Accounts and cards, choose **Import statement**. Download the template
