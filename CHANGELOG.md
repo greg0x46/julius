@@ -4,6 +4,12 @@ Notable changes per release. A section is added by `scripts/update-changelog.sh`
 only when a release is prepared, and the release job publishes that same text as
 the GitHub release notes. Newest release first.
 
+## v0.19.0 — 2026-11-01
+
+### Features
+
+- **frontend:** Translate the interface to English with a language selector ([#218](https://github.com/greg0x46/julius/pull/218))
+
 ## v0.18.0 — 2026-10-31
 
 ### Features
