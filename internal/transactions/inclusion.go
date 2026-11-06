@@ -57,6 +57,14 @@ type OnIgnoredHook func(ctx context.Context, q Querier, transactionID string) er
 // rolls back both ingestion and its consequences.
 type UpsertedHook func(ctx context.Context, q Querier, transactionID, accountID string) error
 
+// RemovedHook runs, within the removal's transaction, when ingestion drops a
+// synced transaction the provider no longer reports. successorID is the
+// transaction that replaced it under a new external id, nil when none could be
+// identified. Same boundary rules as UpsertedHook: use q for every effect.
+// Package syncsvc aliases it as TransactionRemovedHook; without one, sync
+// removes nothing.
+type RemovedHook func(ctx context.Context, q Querier, removedID string, successorID *string) error
+
 type inclusionDecision struct {
 	state     money.InclusionState
 	revision  int

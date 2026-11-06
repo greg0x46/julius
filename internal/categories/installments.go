@@ -70,7 +70,7 @@ func findInstallmentGroup(ctx context.Context, q Querier, transactionID string) 
 
 	rows, err := q.QueryContext(ctx,
 		`SELECT id, description, credit_card_metadata FROM financial_transactions
-		 WHERE account_id = ? AND credit_card_metadata IS NOT NULL`,
+		 WHERE account_id = ? AND credit_card_metadata IS NOT NULL AND deleted_at IS NULL`,
 		accountID,
 	)
 	if err != nil {
