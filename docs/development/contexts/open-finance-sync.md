@@ -138,7 +138,8 @@ account and connection:
   is left, which is everything without a successor, is detached like for an
   ignored entry (`ledger.OnIgnored`, `UnlinkTransferForTransaction`).
 - Guards: nothing runs without the hook, on an empty listing, when any record of
-  the listing was rejected, or when more than 50 rows of one account would go
+  the listing was rejected by the provider adapter or local ingestion (including
+  a failed automation hook), or when more than 50 rows of one account would go
   in one sync.
 - Not covered: no `sync_runs` counter or audit event for removals (the log
   line `transactions_removed` is the only trace); a pair whose amount changed

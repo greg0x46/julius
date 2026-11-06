@@ -222,7 +222,9 @@ func (s *Service) Execute(ctx context.Context) error {
 		listing := newAccountListing()
 		err = s.Provider.IterTransactionPages(ctx, record.ExternalID, func(page pluggy.TransactionsPage) error {
 			listing.add(page)
-			return s.processTransactionPage(ctx, accountID, record.ExternalID, page)
+			rejected, err := s.processTransactionPage(ctx, accountID, record.ExternalID, page)
+			listing.partial = listing.partial || rejected
+			return err
 		})
 		if err == nil {
 			// Only a listing read to its last page can say what is gone.
@@ -613,14 +615,16 @@ func (s *Service) incrementAccountsProcessed(ctx context.Context) error {
 		s.SyncRunID)
 }
 
-func (s *Service) processTransactionPage(ctx context.Context, accountID, externalAccountID string, page pluggy.TransactionsPage) error {
+func (s *Service) processTransactionPage(ctx context.Context, accountID, externalAccountID string, page pluggy.TransactionsPage) (bool, error) {
+	rejected := len(page.Rejections) > 0
 	for _, rejection := range page.Rejections {
 		if err := s.recordRejection(ctx, rejection, page.RawImportID, &accountID, &externalAccountID); err != nil {
-			return err
+			return rejected, err
 		}
 	}
 	for _, record := range page.Transactions {
 		if err := s.upsertTransaction(ctx, accountID, record, page.RawImportID); err != nil {
+			rejected = true
 			extID := record.ExternalID
 			code := "internal_error"
 			if errors.Is(err, errAccountMismatch) {
@@ -629,11 +633,11 @@ func (s *Service) processTransactionPage(ctx context.Context, accountID, externa
 			if rerr := s.recordRejection(ctx, pluggy.RejectedRecord{
 				EntityType: "transaction", ExternalID: &extID, Code: code, SafeMessage: SafeMessage(code),
 			}, page.RawImportID, &accountID, &externalAccountID); rerr != nil {
-				return rerr
+				return rejected, rerr
 			}
 		}
 	}
-	return nil
+	return rejected, nil
 }
 
 // errAccountMismatch rejects a record whose (source_id, external_id) already
