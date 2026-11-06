@@ -40,6 +40,7 @@ type Config struct {
 	UnclaimedDeadline     time.Duration
 	Pluggy                pluggy.Config
 	OnTransactionUpserted syncsvc.TransactionUpsertedHook
+	OnTransactionRemoved  syncsvc.TransactionRemovedHook
 }
 
 func (c Config) withDefaults() Config {
@@ -224,7 +225,8 @@ func ProcessClaim(ctx context.Context, conn *sql.DB, secrets *settings.Secrets, 
 	adapter := pluggy.NewAdapter(pluggyConfig, writer, &http.Client{Timeout: pluggyConfig.ConnectTimeout + pluggyConfig.ReadTimeout})
 	service := &syncsvc.Service{
 		DB: conn, Provider: adapter, SyncRunID: syncRunID, SourceID: sourceID,
-		OnTransactionUpserted: cfg.OnTransactionUpserted, WorkerID: workerID,
+		OnTransactionUpserted: cfg.OnTransactionUpserted, OnTransactionRemoved: cfg.OnTransactionRemoved,
+		WorkerID: workerID,
 	}
 	return service.Execute(runCtx)
 }

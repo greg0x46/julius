@@ -78,7 +78,8 @@ coverage remains incomplete. See the [frontend reference](../frontend.md).
 - A new sync of the same record compares `normalized_hash`: equal is `unchanged`
   (nothing is written besides the normalization event); different is `updated`
   and rewrites only the provider's fields. PENDING → POSTED and provider
-  corrections keep the same `id`.
+  corrections keep the same `id`, as long as the provider reports the same
+  `external_id` (see "Pending transactions the provider withdraws").
 - Provider fields (overwritten on update): description, amounts, status,
   `occurred_at`, merchant, source category, provider ids and dates,
   `current_raw_import_id` and `normalized_hash`.
@@ -99,9 +100,52 @@ coverage remains incomplete. See the [frontend reference](../frontend.md).
   under another investment is rejected (`unsafe_investment_association`),
   without changing the existing movement; the other movements continue.
 - Matches between Pluggy, manual entry and file are never merged.
-- Coverage: `internal/syncsvc/ingestion_test.go` and `transaction_retry_test.go`
-  run on SQLite and, with `JULIUS_TEST_POSTGRES_DSN`, on Postgres
+- Coverage: `internal/syncsvc/ingestion_test.go`, `transaction_retry_test.go`
+  and `vanished_test.go` run on SQLite and, with `JULIUS_TEST_POSTGRES_DSN`, on Postgres
   (`internal/db/dbtest`).
+
+## Pending transactions the provider withdraws
+
+A pending entry that settles usually keeps its `external_id`. When the provider
+cannot tell the posted movement is the same one (its date, description or
+amount changed) it withdraws the pending entry and reports a posted one under a
+new id, with nothing linking them. Without a reconciliation both rows would
+count, and what the user attached (manual category, reconciliation, payable
+link) would stay on a row that no longer exists.
+
+After an account's transactions are read to the last page with no rejected
+record, `Service.reconcileVanishedPending` (`internal/syncsvc/vanished.go`)
+compares the ids the provider reported with the stored synced rows of that
+account and connection:
+
+- Only `PENDING` rows dated inside the window the provider answered for (from the
+  day of its oldest reported entry) and absent from the listing are dropped. A
+  `POSTED` row that is missing is kept and only logged: it may come back, and
+  balances and history lean on it.
+- A dropped row gets `deleted_at` (the same soft-delete as a manual entry, so
+  every read already ignores it). Its `external_id` stays reserved: if the
+  provider reports it again, the next sync clears `deleted_at` and records an
+  `updated` outcome.
+- Successor: when exactly one `POSTED` row first seen later has the same
+  direction, currency and amount and a day within three days, and no other
+  dropped row could claim it, it replaces the dropped one. An ambiguous or
+  missing match means no successor.
+- `TransactionRemovedHook` (`ledger.OnSyncedRemoved`) runs in the same database
+  transaction as the soft-delete. With a successor it moves the manual
+  category and manual inclusion (unless the successor has its own manual one)
+  and repoints the transfer pairing, payable link, `scenario_realizations`
+  (reconciliation, settlement, allocation) and investment reconciliation. What
+  is left, which is everything without a successor, is detached like for an
+  ignored entry (`ledger.OnIgnored`, `UnlinkTransferForTransaction`).
+- Guards: nothing runs without the hook, on an empty listing, when any record of
+  the listing was rejected, or when more than 50 rows of one account would go
+  in one sync.
+- Not covered: no `sync_runs` counter or audit event for removals (the log
+  line `transactions_removed` is the only trace); a pair whose amount changed
+  has no successor, so its user decisions stay on the deleted row; and a row the
+  provider reports again is restored without the links that were moved or
+  detached when it was dropped. A category deactivated since the decision leaves
+  that decision on the deleted row too.
 
 ## HTTP routes
 

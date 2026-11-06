@@ -84,6 +84,13 @@ type Provider interface {
 // normalization and all resulting decisions commit or roll back together.
 type TransactionUpsertedHook = transactions.UpsertedHook
 
+// TransactionRemovedHook is called when a sync drops a pending transaction the
+// provider no longer reports (see reconcileVanishedPending), before the row is
+// marked deleted, so what the user attached to it can move to its successor or
+// be detached. It lives on transactions for the same reason as
+// TransactionUpsertedHook.
+type TransactionRemovedHook = transactions.RemovedHook
+
 // Service mirrors SyncService.
 type Service struct {
 	DB                    *sql.DB
@@ -91,6 +98,7 @@ type Service struct {
 	SyncRunID             string
 	SourceID              string
 	OnTransactionUpserted TransactionUpsertedHook
+	OnTransactionRemoved  TransactionRemovedHook
 	// WorkerID is the claim owner; when set, finishing the run fails with
 	// ErrClaimLost if another worker owns it. Empty skips the check.
 	WorkerID string
@@ -211,10 +219,23 @@ func (s *Service) Execute(ctx context.Context) error {
 		}
 
 		extID := record.ExternalID
+		listing := newAccountListing()
 		err = s.Provider.IterTransactionPages(ctx, record.ExternalID, func(page pluggy.TransactionsPage) error {
+			listing.add(page)
 			return s.processTransactionPage(ctx, accountID, record.ExternalID, page)
 		})
-		if err != nil {
+		if err == nil {
+			// Only a listing read to its last page can say what is gone.
+			if rerr := s.reconcileVanishedPending(ctx, accountID, record.ExternalID, listing); rerr != nil {
+				if errors.Is(rerr, ErrClaimLost) {
+					return rerr
+				}
+				log.Printf("transaction_reconcile_failed run_id=%s account=%s: %v", s.SyncRunID, record.ExternalID, rerr)
+				if ferr := s.recordFailure(ctx, pluggy.StageTransactions, "internal_error", nil, &accountID, &extID); ferr != nil {
+					return ferr
+				}
+			}
+		} else {
 			var provErr *pluggy.ProviderError
 			if errors.As(err, &provErr) {
 				code := "account_transactions_failed"
@@ -667,8 +688,11 @@ func (s *Service) upsertTransaction(ctx context.Context, accountID string, snaps
 	}
 
 	var transactionID, existingHash, existingAccountID string
-	if err := tx.QueryRowContext(ctx, `SELECT id, normalized_hash, account_id FROM financial_transactions WHERE source_id = ? AND external_id = ?`,
-		s.SourceID, snapshot.ExternalID).Scan(dbtypes.ID(&transactionID), &existingHash, dbtypes.ID(&existingAccountID)); err != nil {
+	var removed int
+	if err := tx.QueryRowContext(ctx, `
+		SELECT id, normalized_hash, account_id, CASE WHEN deleted_at IS NULL THEN 0 ELSE 1 END
+		FROM financial_transactions WHERE source_id = ? AND external_id = ?`,
+		s.SourceID, snapshot.ExternalID).Scan(dbtypes.ID(&transactionID), &existingHash, dbtypes.ID(&existingAccountID), &removed); err != nil {
 		return err
 	}
 	if existingAccountID != accountID {
@@ -701,6 +725,15 @@ func (s *Service) upsertTransaction(ctx context.Context, accountID string, snaps
 		if err != nil {
 			return err
 		}
+	}
+	// A row dropped by reconcileVanishedPending that the provider reports again
+	// was withdrawn by mistake (or the provider reversed itself): bring it back.
+	// Only sync marks a synced row deleted, so nothing else is undone here.
+	if removed == 1 && !inserted {
+		if _, err := tx.ExecContext(ctx, `UPDATE financial_transactions SET deleted_at = NULL, updated_at = ? WHERE id = ? AND origin = 'synced'`, now, transactionID); err != nil {
+			return err
+		}
+		outcome = "updated"
 	}
 
 	if _, err := tx.ExecContext(ctx, `

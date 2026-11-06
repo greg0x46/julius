@@ -45,7 +45,9 @@ area. Translation coverage remains incomplete; see the [frontend reference](../f
   soft-delete of a manual entry: `transaction_category_events`/
   `transaction_inclusion_events` are append-only with `ON DELETE RESTRICT` to
   `financial_transactions`, so an already categorized or ignored manual row
-  cannot be truly deleted — `DeleteManual` sets `deleted_at` instead, and
+  cannot be truly deleted — `DeleteManual` sets `deleted_at` instead (sync does
+  the same to a pending synced row the provider withdrew, see the Open Finance
+  sync reference), and
   `viewSelect` (the base of every SELECT in this package, including `GetItem`)
   filters on `deleted_at IS NULL`. Manual entries on synced accounts never
   enter the wealth series' balance reconstruction; posted movements on manual accounts do — see Notes.
@@ -186,7 +188,11 @@ bank balance.
 A resync from `PENDING` to `POSTED` retains the row's identity and user-owned
 decisions/links. The same amount still contributes once; a correction replaces
 the previous amount, and replay adds no expense
-(`TestSyncPendingToPostedKeepsIdentityAndUserDecisions`).
+(`TestSyncPendingToPostedKeepsIdentityAndUserDecisions`). If the provider
+instead withdraws the pending entry and reports a posted one under a new
+`external_id`, sync drops the pending row and moves what the user attached onto
+the posted one, so the movement still counts once
+(`TestVanishedPendingHandsItsDecisionsToThePostedSuccessor`).
 
 ## HTTP routes
 
@@ -289,7 +295,9 @@ constraints. Manual investment custody accounts remain a separate model.
 User decisions live in their own tables, which ingestion never rewrites: manual
 category and inclusion (`transaction_category_*`, `transaction_inclusion_*`),
 `payable_transaction_links` and `scenario_realizations`. A provider update
-(PENDING → POSTED, corrections) keeps the entry's `id`. Full policy in
+(PENDING → POSTED, corrections) keeps the entry's `id`; a pending entry the
+provider withdraws is dropped and its user data moves to its successor. Full
+policy in
 [Open Finance sync reference](open-finance-sync.md).
 
 For a manual bank account, native balance is **opening balance + sum of
