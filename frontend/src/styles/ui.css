@@ -473,11 +473,13 @@ input[type="radio"] {
   position: fixed;
   z-index: 3000;
   top: 20px;
-  left: 50%;
-  transform: translateX(-50%);
-  right: auto;
+  left: 0;
+  right: 0;
   bottom: auto;
-  margin: 0;
+  width: fit-content;
+  height: auto;
+  max-width: calc(100vw - 2 * var(--space-4));
+  margin: 0 auto;
   padding: 0;
   border: 0;
   background: transparent;
@@ -487,8 +489,12 @@ input[type="radio"] {
 }
 .ui-messages:popover-open {
   display: grid;
+  align-content: start;
+  justify-items: center;
 }
 .ui-message {
+  height: auto;
+  text-align: center;
   padding: 10px 20px;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
