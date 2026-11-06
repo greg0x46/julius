@@ -171,6 +171,7 @@ func main() {
 		go worker.Run(ctx, conn, secrets, worker.Config{
 			Pluggy:                pluggy.DefaultConfig(),
 			OnTransactionUpserted: automation.NewTransactionHook(ledger.OnIgnored),
+			OnTransactionRemoved:  ledger.OnSyncedRemoved,
 		})
 
 		if scheduled {

@@ -47,7 +47,7 @@ func LoadDataRange(ctx context.Context, q Querier, today time.Time, timezone str
 	from := time.Date(day.Year(), day.Month(), 1, 0, 0, 0, 0, time.UTC)
 	var earliest sql.NullString
 	if err := q.QueryRowContext(ctx, `
-		SELECT MIN(occurred_at) FROM financial_transactions WHERE occurred_at IS NOT NULL`).Scan(dbtypes.Time(&earliest)); err != nil {
+		SELECT MIN(occurred_at) FROM financial_transactions WHERE occurred_at IS NOT NULL AND deleted_at IS NULL`).Scan(dbtypes.Time(&earliest)); err != nil {
 		return DataRange{}, fmt.Errorf("earliest transaction: %w", err)
 	}
 	if earliest.Valid {
