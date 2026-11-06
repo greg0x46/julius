@@ -6,6 +6,7 @@ import {
   useEffect,
   useId,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type CSSProperties,
@@ -451,29 +452,33 @@ export function FeedbackProvider({
     const pending = timers.current;
     return () => pending.forEach(clearTimeout);
   }, []);
-  const notify = (
-    type: string,
-    { content, duration }: { content: string; duration: number },
-  ) => {
-    const id = serial.current++;
-    setMessages((items) => [...items, { id, text: content, type }]);
-    const timer = setTimeout(() => {
-      setMessages((items) => items.filter((item) => item.id !== id));
-      timers.current.delete(timer);
-    }, duration * 1000);
-    timers.current.add(timer);
-  };
+  // The context value must stay referentially stable: consumers list the
+  // feedback API in effect dependencies, and every toast re-renders this
+  // provider, so a fresh object per render would re-fire them in a loop.
+  const api = useMemo(() => {
+    const notify = (
+      type: string,
+      { content, duration }: { content: string; duration: number },
+    ) => {
+      const id = serial.current++;
+      setMessages((items) => [...items, { id, text: content, type }]);
+      const timer = setTimeout(() => {
+        setMessages((items) => items.filter((item) => item.id !== id));
+        timers.current.delete(timer);
+      }, duration * 1000);
+      timers.current.add(timer);
+    };
+    return {
+      modal: { confirm: setConfirmation },
+      message: {
+        success: (options: { content: string; duration: number }) => notify("success", options),
+        error: (options: { content: string; duration: number }) => notify("error", options),
+        info: (options: { content: string; duration: number }) => notify("info", options),
+      },
+    };
+  }, []);
   return (
-    <FeedbackContext.Provider
-      value={{
-        modal: { confirm: setConfirmation },
-        message: {
-          success: (options) => notify("success", options),
-          error: (options) => notify("error", options),
-          info: (options) => notify("info", options),
-        },
-      }}
-    >
+    <FeedbackContext.Provider value={api}>
       {children}
       {createPortal(
         <div ref={toasts} popover="manual" className="ui-messages">
