@@ -21,6 +21,10 @@ import (
 // transaction: a deleted row must not keep carrying a commitment's money.
 func OnSyncedRemoved(ctx context.Context, q transactions.Querier, removedID string, successorID *string) error {
 	if successorID != nil {
+		// Serialize successor decisions and links with inclusion and pairing writes.
+		if _, err := q.ExecContext(ctx, `UPDATE financial_transactions SET id = id WHERE id = ?`, *successorID); err != nil {
+			return err
+		}
 		if err := moveDecisions(ctx, q, removedID, *successorID); err != nil {
 			return err
 		}
@@ -73,15 +77,39 @@ func moveDecisions(ctx context.Context, q transactions.Querier, removedID, succe
 }
 
 // moveLinks repoints every link the removed row holds to the successor. A
-// table where the successor already has a link of its own is left as is, so
-// the removed row's link falls to the detach that follows.
+// table where the successor already has a link of its own is left as is.
+// Ignored successors and conflicting transfer/investment links also leave the
+// removed row's links for the detach that follows.
 func moveLinks(ctx context.Context, q transactions.Querier, removedID, successorID string) error {
+	var ignored int
+	if err := q.QueryRowContext(ctx, `SELECT COUNT(*) FROM transaction_inclusion_decisions WHERE transaction_id = ? AND state = 'ignored'`, successorID).Scan(&ignored); err != nil {
+		return err
+	}
+	if ignored != 0 {
+		return nil
+	}
 	for _, link := range []struct{ table, column string }{
 		{"transfer_transaction_links", "transaction_id"},
 		{"payable_transaction_links", "transaction_id"},
 		{"scenario_realizations", "transaction_id"},
 		{"investment_reconciliations", "financial_transaction_id"},
 	} {
+		var conflictTable, conflictColumn string
+		switch link.table {
+		case "transfer_transaction_links":
+			conflictTable, conflictColumn = "investment_reconciliations", "financial_transaction_id"
+		case "investment_reconciliations":
+			conflictTable, conflictColumn = "transfer_transaction_links", "transaction_id"
+		}
+		if conflictTable != "" {
+			var conflicts int
+			if err := q.QueryRowContext(ctx, `SELECT COUNT(*) FROM `+conflictTable+` WHERE `+conflictColumn+` = ?`, successorID).Scan(&conflicts); err != nil {
+				return err
+			}
+			if conflicts != 0 {
+				continue
+			}
+		}
 		if _, err := q.ExecContext(ctx, `
 			UPDATE `+link.table+` SET `+link.column+` = ? WHERE `+link.column+` = ?
 			AND NOT EXISTS (SELECT 1 FROM `+link.table+` WHERE `+link.column+` = ?)`,

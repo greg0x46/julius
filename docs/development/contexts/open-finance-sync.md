@@ -134,7 +134,9 @@ account and connection:
   transaction as the soft-delete. With a successor it moves the manual
   category and manual inclusion (unless the successor has its own manual one)
   and repoints the transfer pairing, payable link, `scenario_realizations`
-  (reconciliation, settlement, allocation) and investment reconciliation. What
+  (reconciliation, settlement, allocation) and investment reconciliation. An
+  ignored successor receives no links. Existing successor links win, and transfer
+  participants remain mutually exclusive with investment reconciliations. What
   is left, which is everything without a successor, is detached like for an
   ignored entry (`ledger.OnIgnored`, `UnlinkTransferForTransaction`).
 - Guards: nothing runs without the hook, on an empty listing, when any record of
