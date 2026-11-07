@@ -4,6 +4,12 @@ Notable changes per release. A section is added by `scripts/update-changelog.sh`
 only when a release is prepared, and the release job publishes that same text as
 the GitHub release notes. Newest release first.
 
+## v0.20.2 — 2026-11-06
+
+### Fixes
+
+- **sync:** Drop pending transactions the provider withdraws ([#233](https://github.com/greg0x46/julius/pull/233))
+
 ## v0.20.1 — 2026-11-03
 
 ### Fixes
