@@ -4,6 +4,12 @@ Notable changes per release. A section is added by `scripts/update-changelog.sh`
 only when a release is prepared, and the release job publishes that same text as
 the GitHub release notes. Newest release first.
 
+## v0.20.3 — 2026-11-07
+
+### Fixes
+
+- **ui:** Stop toast loop and size toasts on mobile ([#235](https://github.com/greg0x46/julius/pull/235))
+
 ## v0.20.2 — 2026-11-06
 
 ### Fixes
