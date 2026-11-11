@@ -3,6 +3,7 @@ package investments_test
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"testing"
 	"time"
 
@@ -98,6 +99,75 @@ func TestManualMovementsFeedHistoryAndBackfillOnEveryDialect(t *testing.T) {
 		}
 		if from, _ := investments.AssetHeldFrom(ctx, conn, asset.ID); from != nil {
 			t.Fatalf("held from = %v after deleting the purchase, want nil", from)
+		}
+	})
+}
+
+func TestManualMovementRejectsUnitsOnInterestOnEveryDialect(t *testing.T) {
+	dbtest.Each(t, func(t *testing.T, conn *sql.DB) {
+		ctx := context.Background()
+		id := providerHolding(t, conn, equity("7"))
+		original := investments.ManualMovementInput{
+			InvestmentID: id, Kind: investments.ManualMovementBuy, TradeDate: day(10), Quantity: decRef("7"), Amount: dec("259"),
+		}
+		purchase, err := investments.CreateManualMovement(ctx, conn, original)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for name, change := range map[string]func(*investments.ManualMovementInput){
+			"quantity":      func(in *investments.ManualMovementInput) { in.Quantity = decRef("1") },
+			"zero quantity": func(in *investments.ManualMovementInput) { in.Quantity = decRef("0") },
+			"unit price":    func(in *investments.ManualMovementInput) { in.UnitPrice = decRef("1") },
+		} {
+			t.Run(name, func(t *testing.T) {
+				in := original
+				in.Kind, in.Quantity = investments.ManualMovementInterest, nil
+				change(&in)
+				if _, err := investments.CreateManualMovement(ctx, conn, in); !errors.Is(err, investments.ErrInvalidInput) {
+					t.Fatalf("create = %v, want ErrInvalidInput", err)
+				}
+				if _, err := investments.UpdateManualMovement(ctx, conn, purchase.ID, in); !errors.Is(err, investments.ErrInvalidInput) {
+					t.Fatalf("update = %v, want ErrInvalidInput", err)
+				}
+				got, err := investments.ListManualMovements(ctx, conn, id)
+				if err != nil || len(got) != 1 || got[0].Kind != investments.ManualMovementBuy || got[0].Quantity == nil || !got[0].Quantity.Equal(*original.Quantity) {
+					t.Fatalf("movements changed after rejection: %+v, %v", got, err)
+				}
+			})
+		}
+	})
+}
+
+func TestManualMovementRequiresBRLOnEveryDialect(t *testing.T) {
+	dbtest.Each(t, func(t *testing.T, conn *sql.DB) {
+		ctx := context.Background()
+		id := providerHolding(t, conn, equity("7"))
+		in := investments.ManualMovementInput{
+			InvestmentID: id, Kind: investments.ManualMovementBuy, TradeDate: day(10), Quantity: decRef("7"), Amount: dec("259"),
+		}
+		purchase, err := investments.CreateManualMovement(ctx, conn, in)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, currency := range []any{"USD", nil} {
+			if _, err := conn.ExecContext(ctx, `UPDATE financial_investments SET currency_code = ? WHERE id = ?`, currency, id); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := investments.CreateManualMovement(ctx, conn, in); !errors.Is(err, investments.ErrUnsupportedCurrency) {
+				t.Fatalf("currency %v: create = %v, want ErrUnsupportedCurrency", currency, err)
+			}
+			updated := in
+			updated.Amount = dec("100")
+			if _, err := investments.UpdateManualMovement(ctx, conn, purchase.ID, updated); !errors.Is(err, investments.ErrUnsupportedCurrency) {
+				t.Fatalf("currency %v: update = %v, want ErrUnsupportedCurrency", currency, err)
+			}
+			got, err := investments.ListManualMovements(ctx, conn, id)
+			if err != nil || len(got) != 1 || !got[0].Amount.Equal(in.Amount) {
+				t.Fatalf("movements changed after rejection: %+v, %v", got, err)
+			}
+		}
+		if err := investments.DeleteManualMovement(ctx, conn, purchase.ID); err != nil {
+			t.Fatalf("delete foreign holding's movement: %v", err)
 		}
 	})
 }

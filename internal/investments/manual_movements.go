@@ -81,6 +81,9 @@ func (in ManualMovementInput) validate(today time.Time) error {
 		return ErrInvalidInput
 	}
 	if in.Kind == ManualMovementInterest {
+		if in.Quantity != nil || in.UnitPrice != nil {
+			return ErrInvalidInput
+		}
 		return nil
 	}
 	if in.Quantity == nil || !in.Quantity.IsPositive() {
@@ -93,12 +96,15 @@ func (in ManualMovementInput) validate(today time.Time) error {
 }
 
 func requireProviderInvestment(ctx context.Context, q Querier, id string) error {
-	var found string
-	err := q.QueryRowContext(ctx, `SELECT id FROM financial_investments WHERE id = ?`, id).Scan(dbtypes.ID(&found))
+	var currency sql.NullString
+	err := q.QueryRowContext(ctx, `SELECT currency_code FROM financial_investments WHERE id = ?`, id).Scan(&currency)
 	if errors.Is(err, sql.ErrNoRows) {
 		return ErrNotFound
 	}
-	return err
+	if err != nil {
+		return err
+	}
+	return requireBRLAsset(currency.String)
 }
 
 func CreateManualMovement(ctx context.Context, conn *sql.DB, in ManualMovementInput) (ManualMovement, error) {
@@ -136,6 +142,9 @@ func UpdateManualMovement(ctx context.Context, conn *sql.DB, id string, in Manua
 		}
 		if current.InvestmentID != in.InvestmentID {
 			return ErrInvalidInput
+		}
+		if err := requireProviderInvestment(ctx, tx, in.InvestmentID); err != nil {
+			return err
 		}
 		_, err = tx.ExecContext(ctx, `UPDATE manual_investment_movements
 			SET movement_type = ?, direction = ?, trade_date = ?, quantity = ?, unit_price = ?, amount = ?, notes = ?, updated_at = ?

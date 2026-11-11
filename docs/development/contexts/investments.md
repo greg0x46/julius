@@ -33,7 +33,9 @@ A provider holding can also receive **movements the institution never
 reported** (for example, a purchase Open Finance did not send). They are
 recorded on the holding's own page (**Registrar movimentação**) as a purchase,
 a sale or a provento (`BUY`, `SELL`, `INTEREST`), with the date, units, optional
-unit price and the total in reais, costs included
+unit price and the total in reais, costs included. Only holdings explicitly in
+BRL accept these writes; foreign or unknown currencies are rejected on create
+and update. A provento accepts neither units nor a unit price
 (`POST /api/investment-movements`, `PUT`/`DELETE /api/investment-movements/{id}`).
 They live in `manual_investment_movements`, which the sync never writes, so a
 later sync neither changes nor removes them. Every reader of a holding's history
