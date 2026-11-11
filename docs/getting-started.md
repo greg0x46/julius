@@ -5,7 +5,7 @@ optional; you can start with manual accounts and CSV imports.
 
 ## 1. Build
 
-Install Git, Go 1.26.10 or newer, Node.js 24.15+ on the 24.x line or 26+,
+Install Git, Go 1.26.11 or newer, Node.js 24.15+ on the 24.x line or 26+,
 npm, and OpenSSL. Then run:
 
 ```sh

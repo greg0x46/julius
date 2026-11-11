@@ -263,7 +263,7 @@ func loadSyncedSeries(ctx context.Context, q Querier, cache *YieldCache, id stri
 	}
 	rows, err := q.QueryContext(ctx, `
 		SELECT direction, quantity, amount, occurred_at, trade_date
-		FROM financial_investment_transactions WHERE investment_id = ?`, id)
+		FROM `+SyncedMovementsSource+` movements WHERE investment_id = ?`, id)
 	if err != nil {
 		return nil, err
 	}

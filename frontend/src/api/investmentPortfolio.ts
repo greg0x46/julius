@@ -13,6 +13,7 @@ import {
   parseInvestmentPositionList,
   parseInvestmentReconciliation,
   parseInvestmentReconciliationList,
+  parseInvestmentTransaction,
   parseInvestmentSummary,
   parseProblem,
   type InvestmentAccount,
@@ -28,10 +29,12 @@ import {
   type InvestmentPeriodSource,
   type InvestmentPosition,
   type InvestmentPositionUpdate,
+  type InvestmentMovementWrite,
   type InvestmentPositionWrite,
   type InvestmentReconciliation,
   type InvestmentReconciliationWrite,
   type InvestmentSummary,
+  type InvestmentTransaction,
   type Problem,
 } from "./contracts";
 import { ApiError, isAbortError } from "./problems";
@@ -272,6 +275,37 @@ export function updateInvestmentOperation(
 export function deleteInvestmentOperation(operationId: string): Promise<void> {
   return send(
     `/api/investment-operations/${encodeURIComponent(operationId)}`,
+    { method: "DELETE", headers: { Accept: "application/json" } },
+    204,
+    null,
+  );
+}
+
+/** Movements the owner records for a provider holding the provider did not report them for. */
+export function createInvestmentMovement(write: InvestmentMovementWrite): Promise<InvestmentTransaction> {
+  return send(
+    "/api/investment-movements",
+    { method: "POST", headers: json, body: JSON.stringify(write) },
+    201,
+    parseInvestmentTransaction,
+  );
+}
+
+export function updateInvestmentMovement(
+  movementId: string,
+  write: InvestmentMovementWrite,
+): Promise<InvestmentTransaction> {
+  return send(
+    `/api/investment-movements/${encodeURIComponent(movementId)}`,
+    { method: "PUT", headers: json, body: JSON.stringify(write) },
+    200,
+    parseInvestmentTransaction,
+  );
+}
+
+export function deleteInvestmentMovement(movementId: string): Promise<void> {
+  return send(
+    `/api/investment-movements/${encodeURIComponent(movementId)}`,
     { method: "DELETE", headers: { Accept: "application/json" } },
     204,
     null,

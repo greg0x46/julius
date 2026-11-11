@@ -7,6 +7,7 @@ function movement(overrides: Partial<InvestmentTransaction>): InvestmentTransact
   return {
     id: "11111111-1111-4111-8111-111111111111",
     external_id: "ext",
+    origin: "provider",
     movement_type: "BUY",
     direction: "inflow",
     quantity: null,
@@ -14,6 +15,7 @@ function movement(overrides: Partial<InvestmentTransaction>): InvestmentTransact
     amount: "100.00",
     occurred_at: null,
     trade_date: null,
+    notes: null,
     ...overrides,
   };
 }

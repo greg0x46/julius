@@ -131,6 +131,12 @@ func NewServer(db *sql.DB, frontend fs.FS, secrets *settings.Secrets, config aut
 	mux.HandleFunc("PUT /api/investment-operations/{id}", handleUpdateInvestmentOperation(db))
 	mux.HandleFunc("DELETE /api/investment-operations/{id}", handleDeleteInvestmentOperation(db))
 
+	// Movements the provider never reported for one of its own holdings. They
+	// live beside the provider's, which stay read-only.
+	mux.HandleFunc("POST /api/investment-movements", handleCreateInvestmentMovement(db))
+	mux.HandleFunc("PUT /api/investment-movements/{id}", handleUpdateInvestmentMovement(db))
+	mux.HandleFunc("DELETE /api/investment-movements/{id}", handleDeleteInvestmentMovement(db))
+
 	mux.HandleFunc("GET /api/investment-reconciliations", handleListInvestmentReconciliations(db))
 	mux.HandleFunc("POST /api/investment-reconciliations", handleCreateInvestmentReconciliation(db))
 	mux.HandleFunc("DELETE /api/investment-reconciliations/{id}", handleDeleteInvestmentReconciliation(db))

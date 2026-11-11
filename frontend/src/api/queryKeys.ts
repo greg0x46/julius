@@ -132,6 +132,10 @@ export const invalidateAfterLedgerChange = (client: Client) =>
     roots.goals,
   ]);
 
+/** A movement recorded for a provider holding changes its yield and the history of the wealth that holds it. */
+export const invalidateAfterProviderMovementChange = (client: Client) =>
+  invalidateAll(client, [roots.investments, roots.investmentWorkspace, roots.netWorth, roots.goals]);
+
 /** A goal's own write only changes the goals list. */
 export const invalidateAfterGoalChange = (client: Client) => invalidateAll(client, [roots.goals]);
 
