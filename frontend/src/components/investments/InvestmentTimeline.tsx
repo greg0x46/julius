@@ -64,7 +64,9 @@ export function InvestmentTimeline({
                 key={transaction.id}
                 title={movementTypeLabel(transaction.movement_type, language)}
                 meta={[
-                  date !== null ? formatCompactDay(date, timezone, language) : t("noDate"),
+                  date !== null
+                    ? formatCompactDay(transaction.origin === "manual" ? date.slice(0, 10) : date, timezone, language)
+                    : t("noDate"),
                   transaction.quantity !== null ? quotaCount(transaction.quantity, language) : null,
                   transaction.origin === "manual" ? t("manualMovementBadge") : null,
                 ]
