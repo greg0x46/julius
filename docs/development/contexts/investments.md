@@ -29,6 +29,26 @@ it never changes the quantity, cost, source or valuations of a manual
 holding. The UI does not tag or split positions by origin; a synced position
 is read-only and offers only **Ver detalhes**.
 
+A provider holding can also receive **movements the institution never
+reported** (for example, a purchase Open Finance did not send). They are
+recorded on the holding's own page (**Registrar movimentação**) as a purchase,
+a sale or a provento (`BUY`, `SELL`, `INTEREST`), with the date, units, optional
+unit price and the total in reais, costs included
+(`POST /api/investment-movements`, `PUT`/`DELETE /api/investment-movements/{id}`).
+They live in `manual_investment_movements`, which the sync never writes, so a
+later sync neither changes nor removes them. Every reader of a holding's history
+selects from `investments.SyncedMovementsSource`, the union of the provider's
+movements and these, so yield, the period view, `invested` and the wealth
+history treat them like the provider's: a recorded purchase makes the history
+complete, and the days before it count as zero instead of unavailable. It also
+makes the asset need a price from that day on: `AssetHeldFrom` counts the
+earliest recorded purchase of any provider holding of the asset, so the market
+backfill reaches back to it when the asset has automatic quotes. Recorded
+movements are listed with the provider's (`origin: "manual"`), carry a
+**Manual** tag and open their editor; the provider's rows stay read-only. They
+cannot be reconciled with bank entries, and if the institution starts sending the
+same movements they must be deleted by hand, or they count twice.
+
 Manual operations use reais and decimal arithmetic. Purchases fold costs into
 the weighted average cost; sales write off proportional cost. Corrections
 reprocess history and reject negative cash or quantity. Valuations are manual

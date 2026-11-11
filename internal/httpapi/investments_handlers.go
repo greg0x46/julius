@@ -6,6 +6,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -124,7 +125,7 @@ func netContributed(ctx context.Context, conn *sql.DB, investmentIDs []string) (
 	in, args := db.InClause(investmentIDs)
 	rows, err := conn.QueryContext(ctx, `
 		SELECT investment_id, direction, quantity, amount
-		FROM financial_investment_transactions
+		FROM `+investments.SyncedMovementsSource+` movements
 		WHERE investment_id IN (`+in+`)`, args...)
 	if err != nil {
 		return nil, err
@@ -360,6 +361,7 @@ func handleGetInvestment(conn *sql.DB) http.HandlerFunc {
 type investmentTransactionDTO struct {
 	ID           string     `json:"id"`
 	ExternalID   string     `json:"external_id"`
+	Origin       string     `json:"origin"` // "provider" | "manual"
 	MovementType *string    `json:"movement_type"`
 	Direction    *string    `json:"direction"` // "inflow" | "outflow"
 	Quantity     *string    `json:"quantity"`
@@ -367,6 +369,7 @@ type investmentTransactionDTO struct {
 	Amount       *string    `json:"amount"`
 	OccurredAt   *time.Time `json:"occurred_at"`
 	TradeDate    *time.Time `json:"trade_date"`
+	Notes        *string    `json:"notes"`
 }
 
 func handleListInvestmentTransactions(conn *sql.DB) http.HandlerFunc {
@@ -398,10 +401,8 @@ func handleListInvestmentTransactions(conn *sql.DB) http.HandlerFunc {
 
 		result := []investmentTransactionDTO{}
 		for rows.Next() {
-			var (
-				t             investmentTransactionDTO
-				occurredAtRaw sql.NullString
-			)
+			t := investmentTransactionDTO{Origin: "provider"}
+			var occurredAtRaw sql.NullString
 			if err := rows.Scan(dbtypes.ID(&t.ID), dbtypes.ID(&t.ExternalID), &t.MovementType, &t.Direction, dbtypes.Decimal(&t.Quantity), dbtypes.Decimal(&t.Value), dbtypes.Decimal(&t.Amount),
 				dbtypes.Time(&occurredAtRaw), dbtypes.Date(&t.TradeDate)); err != nil {
 				writeProblem(w, 503, "investments-unavailable", "Investimentos temporariamente indisponíveis", "Tente novamente em instantes.")
@@ -417,6 +418,37 @@ func handleListInvestmentTransactions(conn *sql.DB) http.HandlerFunc {
 			writeProblem(w, 503, "investments-unavailable", "Investimentos temporariamente indisponíveis", "Tente novamente em instantes.")
 			return
 		}
+		manual, err := investments.ListManualMovements(r.Context(), conn, investmentID)
+		if err != nil {
+			writeProblem(w, 503, "investments-unavailable", "Investimentos temporariamente indisponíveis", "Tente novamente em instantes.")
+			return
+		}
+		for _, movement := range manual {
+			result = append(result, manualMovementToTransactionDTO(movement))
+		}
+		sortInvestmentTransactions(result)
 		writeJSON(w, http.StatusOK, result)
 	}
+}
+
+// sortInvestmentTransactions orders provider and manual movements together,
+// newest first, by the day the page shows: the provider's instant or the
+// calendar day of a manual one.
+func sortInvestmentTransactions(items []investmentTransactionDTO) {
+	day := func(t investmentTransactionDTO) time.Time {
+		switch {
+		case t.OccurredAt != nil:
+			return *t.OccurredAt
+		case t.TradeDate != nil:
+			return *t.TradeDate
+		}
+		return time.Time{}
+	}
+	sort.SliceStable(items, func(i, j int) bool {
+		a, b := day(items[i]), day(items[j])
+		if !a.Equal(b) {
+			return a.After(b)
+		}
+		return items[i].ID > items[j].ID
+	})
 }

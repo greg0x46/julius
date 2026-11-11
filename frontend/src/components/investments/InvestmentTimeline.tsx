@@ -1,5 +1,5 @@
 import { useTranslation } from "../../i18n/context";
-import { Skeleton } from "../ui";
+import { Button, Skeleton } from "../ui";
 
 import type { InvestmentTransaction } from "../../api/contracts";
 import { useTimezone } from "../../hooks/useTimezone";
@@ -10,27 +10,41 @@ import { EmptyState, ListRow, Section } from "../layout";
 import { Money } from "../shared/Money";
 
 /**
- * The provider's movements as flat rows: type 500 with the date and cotas as
- * the one meta line, the amount 600 on the right. The amount is a plain
- * figure — an aplicação is money leaving the saldo and a resgate money coming
- * back, so a sign or a colour would read as good or bad news it is not.
+ * The movements as flat rows: type 500 with the date and cotas as the one
+ * meta line, the amount 600 on the right. The amount is a plain figure — an
+ * aplicação is money leaving the saldo and a resgate money coming back, so a
+ * sign or a colour would read as good or bad news it is not.
+ *
+ * The provider's rows are read-only. The ones the owner recorded say so in
+ * the meta line and open their editor when tapped.
  */
 export function InvestmentTimeline({
   transactions,
   isLoading,
   error,
   onRetry,
+  onRecord,
+  onEdit,
 }: {
   transactions: InvestmentTransaction[];
   isLoading: boolean;
   error: unknown;
   onRetry: () => void;
+  onRecord: () => void;
+  onEdit: (movement: InvestmentTransaction) => void;
 }) {
   const { t, language } = useTranslation();
   const timezone = useTimezone();
   const failed = error !== null && error !== undefined;
   return (
-    <Section title={t("movementsTitle")}>
+    <Section
+      title={t("movementsTitle")}
+      trailing={
+        <Button size="small" onClick={onRecord}>
+          {t("manualMovementNew")}
+        </Button>
+      }
+    >
       {isLoading ? (
         <div role="status" aria-label={t("loadingMovements")}>
           <Skeleton active paragraph={{ rows: 3 }} title={false} />
@@ -52,10 +66,12 @@ export function InvestmentTimeline({
                 meta={[
                   date !== null ? formatCompactDay(date, timezone, language) : t("noDate"),
                   transaction.quantity !== null ? quotaCount(transaction.quantity, language) : null,
+                  transaction.origin === "manual" ? t("manualMovementBadge") : null,
                 ]
                   .filter(Boolean)
                   .join(" · ")}
                 trailing={transaction.amount !== null ? <Money value={transaction.amount} tone="neutral" /> : "—"}
+                onClick={transaction.origin === "manual" ? () => onEdit(transaction) : undefined}
               />
             );
           })}

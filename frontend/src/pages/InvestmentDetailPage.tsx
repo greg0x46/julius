@@ -6,7 +6,7 @@ import { isUuid } from "../api/contracts";
 import { DetailPage, InvalidDetailPage, Page } from "../components/layout";
 import { InvestmentHeaderCard } from "../components/investments/InvestmentHeaderCard";
 import { InvestmentPositionOperations } from "../components/investments/InvestmentPositionOperations";
-import { InvestmentTimeline } from "../components/investments/InvestmentTimeline";
+import { InvestmentMovementsSection } from "../components/investments/InvestmentMovementsSection";
 import { useInvestmentDetail } from "../hooks/useInvestmentDetail";
 
 const backTo = "/investimentos";
@@ -52,7 +52,8 @@ function ValidInvestmentDetail({ id }: { id: string }) {
         <>
           <InvestmentHeaderCard investment={snapshot} transactions={investment.transactions} />
 
-          <InvestmentTimeline
+          <InvestmentMovementsSection
+            investmentId={id}
             transactions={investment.transactions}
             isLoading={investment.transactionsLoading}
             error={investment.transactionsError}

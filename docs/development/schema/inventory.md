@@ -194,6 +194,7 @@ migrations or tests.
 | `financial_transactions` | [`transactions/query.go`](../../../internal/transactions/query.go) | Provider, CSV and manual ledger entries |
 | `investment_accounts` | [`investments/storage.go`](../../../internal/investments/storage.go) | Local custody accounts |
 | `investment_asset_quote_coverage` | [`investments/quote_coverage.go`](../../../internal/investments/quote_coverage.go) | Quote backfill coverage |
+| `manual_investment_movements` | [`investments/manual_movements.go`](../../../internal/investments/manual_movements.go) | Movements the owner recorded for a provider holding |
 | `investment_asset_quotes` | [`investments/quotes.go`](../../../internal/investments/quotes.go) | Dated unit prices |
 | `investment_assets` | [`investments/assets.go`](../../../internal/investments/assets.go) | Local asset identity and classification |
 | `investment_operations` | [`investments/operations.go`](../../../internal/investments/operations.go) | Manual investment ledger |
@@ -916,7 +917,7 @@ starts serialize and incomplete or unmapped schemas fail without activation.
 ## Tables introduced after legacy cutover
 
 These tables start empty during legacy conversion and are created by native
-migrations (`0002_transfer_links`, `0005_goals`, `0010_recurrence_suggestion_decisions`); they are absent from the
+migrations (`0002_transfer_links`, `0005_goals`, `0010_recurrence_suggestion_decisions`, `0011_manual_investment_movements`); they are absent from the
 historical snapshots. Migration `0006_drop_net_worth_snapshots` drops `net_worth_snapshots`
 (wealth is derived on read) and `0005_goals` also drops `investment_portfolios`
 and `investment_position_portfolios`: legacy conversion still copies them into
@@ -966,3 +967,21 @@ legacy sources and empty after conversion. Both dialects use text columns.
 | `approval_token` | TEXT NULL | Accepted preview fingerprint for safe retries |
 
 Only decisions are stored. Suggestions and reconciliation results are recomputed.
+
+### `manual_investment_movements`
+
+Created by native migration `0011_manual_investment_movements`; absent from
+legacy sources and empty after conversion. The sync never writes it.
+
+| Column | SQLite | Postgres | Meaning |
+| --- | --- | --- | --- |
+| `id` | TEXT | UUID | Identity |
+| `investment_id` | TEXT | UUID | Provider holding (`financial_investments`), `ON DELETE RESTRICT` |
+| `movement_type` | TEXT | TEXT | `BUY`, `SELL` or `INTEREST` (a provento) |
+| `direction` | TEXT | TEXT | `inflow` for a purchase, `outflow` otherwise |
+| `trade_date` | TEXT | DATE | Calendar day of the movement |
+| `quantity` | TEXT | NUMERIC | Units moved; null for a provento |
+| `unit_price` | TEXT | NUMERIC | Optional price per unit, informational |
+| `amount` | TEXT | NUMERIC | Money in reais, costs included; always positive |
+| `notes` | TEXT | TEXT | Optional free text |
+| `created_at` / `updated_at` | TEXT | TIMESTAMPTZ | Instants |

@@ -383,7 +383,7 @@ func (l *portfolioLoader) loadSynced(ctx context.Context) error {
 
 	moves, err := l.q.QueryContext(ctx, `
 		SELECT investment_id, direction, quantity, amount, occurred_at, trade_date
-		FROM financial_investment_transactions`)
+		FROM `+SyncedMovementsSource+` movements`)
 	if err != nil {
 		return err
 	}

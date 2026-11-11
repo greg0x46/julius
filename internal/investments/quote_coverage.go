@@ -104,8 +104,9 @@ func UpsertConnectorQuotes(ctx context.Context, conn *sql.DB, quotes []AssetQuot
 }
 
 // AssetHeldFrom is the first day any manual position of the asset took units
-// in (opening balance, purchase or transfer in): the earliest day the asset
-// needs a price. Nil when no position holds it.
+// in (opening balance, purchase or transfer in), or the owner recorded a
+// purchase of a provider holding of it: the earliest day the asset needs a
+// price. Nil when nothing holds it.
 func AssetHeldFrom(ctx context.Context, q Querier, assetID string) (*time.Time, error) {
 	var first sql.NullString
 	err := q.QueryRowContext(ctx, `
@@ -117,12 +118,74 @@ func AssetHeldFrom(ctx context.Context, q Querier, assetID string) (*time.Time, 
 	if err != nil {
 		return nil, err
 	}
-	if !first.Valid {
-		return nil, nil
+	var heldFrom *time.Time
+	if first.Valid {
+		day, err := parseDate(first.String)
+		if err != nil {
+			return nil, err
+		}
+		heldFrom = &day
 	}
-	day, err := parseDate(first.String)
+	recorded, err := manualPurchaseHeldFrom(ctx, q, assetID)
 	if err != nil {
 		return nil, err
 	}
-	return &day, nil
+	if recorded != nil && (heldFrom == nil || recorded.Before(*heldFrom)) {
+		heldFrom = recorded
+	}
+	return heldFrom, nil
+}
+
+// manualPurchaseHeldFrom is the earliest purchase the owner recorded for a
+// provider holding that belongs to the asset. The sync only prices a holding
+// from the day it first saw it, so a purchase recorded earlier is what makes
+// the market backfill reach back to it.
+func manualPurchaseHeldFrom(ctx context.Context, q Querier, assetID string) (*time.Time, error) {
+	rows, err := q.QueryContext(ctx, `
+		SELECT fi.id, `+syncedHoldingColumns+`, MIN(m.trade_date)
+		FROM manual_investment_movements m
+		JOIN financial_investments fi ON fi.id = m.investment_id
+		WHERE m.direction = 'inflow'
+		GROUP BY fi.id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	type purchase struct {
+		holding SyncedHolding
+		from    *time.Time
+	}
+	var purchases []purchase
+	for rows.Next() {
+		var (
+			id   string
+			row  syncedHoldingRow
+			from *time.Time
+		)
+		if err := rows.Scan(append(append([]any{dbtypes.ID(&id)}, row.dests()...), dbtypes.Date(&from))...); err != nil {
+			return nil, err
+		}
+		holding, err := row.holding()
+		if err != nil {
+			return nil, err
+		}
+		purchases = append(purchases, purchase{holding, from})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	// The pool may hold a single connection: resolve the assets only once the
+	// result set above is drained.
+	rows.Close()
+	var earliest *time.Time
+	for _, p := range purchases {
+		asset, found, err := FindSyncedAsset(ctx, q, p.holding)
+		if err != nil {
+			return nil, err
+		}
+		if found && asset.ID == assetID && p.from != nil && (earliest == nil || p.from.Before(*earliest)) {
+			earliest = p.from
+		}
+	}
+	return earliest, nil
 }

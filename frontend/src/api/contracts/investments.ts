@@ -147,9 +147,15 @@ export const investmentDirections = ["inflow", "outflow"] as const;
 
 export type InvestmentDirection = (typeof investmentDirections)[number];
 
+/** Who recorded a movement: the provider's sync, or the owner for what it never reported. */
+export const investmentTransactionOrigins = ["provider", "manual"] as const;
+
+export type InvestmentTransactionOrigin = (typeof investmentTransactionOrigins)[number];
+
 export interface InvestmentTransaction {
   id: string;
   external_id: string;
+  origin: InvestmentTransactionOrigin;
   movement_type: string | null;
   direction: InvestmentDirection | null;
   quantity: string | null;
@@ -157,11 +163,29 @@ export interface InvestmentTransaction {
   amount: string | null;
   occurred_at: string | null;
   trade_date: string | null;
+  notes: string | null;
+}
+
+/** The kinds a manual movement can have, in the provider's vocabulary. */
+export const investmentMovementKinds = ["BUY", "SELL", "INTEREST"] as const;
+
+export type InvestmentMovementKind = (typeof investmentMovementKinds)[number];
+
+/** `amount` is in reais, costs included; the server derives it from quantity × unit price when absent. */
+export interface InvestmentMovementWrite {
+  investment_id: string;
+  kind: InvestmentMovementKind;
+  trade_date: string;
+  quantity?: string | null;
+  unit_price?: string | null;
+  amount?: string | null;
+  notes?: string | null;
 }
 
 const investmentTransactionKeys = [
   "id",
   "external_id",
+  "origin",
   "movement_type",
   "direction",
   "quantity",
@@ -169,6 +193,7 @@ const investmentTransactionKeys = [
   "amount",
   "occurred_at",
   "trade_date",
+  "notes",
 ] as const;
 
 export function parseInvestmentTransaction(value: unknown): InvestmentTransaction {
@@ -178,7 +203,9 @@ export function parseInvestmentTransaction(value: unknown): InvestmentTransactio
     !isUuid(item.id) ||
     typeof item.external_id !== "string" ||
     item.external_id === "" ||
+    !investmentTransactionOrigins.includes(item.origin as InvestmentTransactionOrigin) ||
     !isNullableString(item.movement_type) ||
+    !isNullableString(item.notes) ||
     !(item.direction === null || investmentDirections.includes(item.direction as InvestmentDirection))
   ) {
     throw new TypeError("Movimentação de investimento inválida.");
@@ -186,6 +213,7 @@ export function parseInvestmentTransaction(value: unknown): InvestmentTransactio
   return {
     id: item.id,
     external_id: item.external_id,
+    origin: item.origin as InvestmentTransactionOrigin,
     movement_type: item.movement_type,
     direction: item.direction as InvestmentDirection | null,
     quantity: nullableDecimal(item.quantity),
@@ -193,6 +221,7 @@ export function parseInvestmentTransaction(value: unknown): InvestmentTransactio
     amount: nullableDecimal(item.amount),
     occurred_at: nullableDate(item.occurred_at),
     trade_date: nullableDate(item.trade_date),
+    notes: item.notes,
   };
 }
 
