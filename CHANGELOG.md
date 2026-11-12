@@ -4,6 +4,13 @@ Notable changes per release. A section is added by `scripts/update-changelog.sh`
 only when a release is prepared, and the release job publishes that same text as
 the GitHub release notes. Newest release first.
 
+## v0.20.4 — 2026-11-09
+
+### Fixes
+
+- **deps:** Bump pgx to 5.12.0 and sqlite to 1.61.1 ([#237](https://github.com/greg0x46/julius/pull/237))
+- **deps:** Bump @tanstack/react-query to 5.106.1 ([#238](https://github.com/greg0x46/julius/pull/238))
+
 ## v0.20.3 — 2026-11-07
 
 ### Fixes
