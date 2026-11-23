@@ -38,7 +38,7 @@ jobs:
       JULIUS_TEST_POSTGRES_DSN: postgres://julius_test:synthetic-test-password@127.0.0.1:5432/julius_test?sslmode=disable
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: go.mod
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
@@ -85,7 +85,7 @@ jobs:
           VITE_APP_VERSION: ${{ github.ref == 'refs/heads/stage' && 'stage' || 'dev' }}
           VITE_APP_COMMIT: ${{ github.sha }}
       # Catches embed breakage on PRs instead of only in the release build.
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         with:
           go-version-file: go.mod
       - name: Build with the embedded frontend
@@ -155,7 +155,7 @@ jobs:
           scripts/changelog-section.sh "$TAG" > notes-body.md
           { cat notes-body.md; printf '\n%s\n' "$GITHUB_SHA"; } > notes.md
 
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+      - uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
         if: steps.version.outputs.tag != ''
         with:
           go-version-file: go.mod
